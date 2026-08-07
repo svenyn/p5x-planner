@@ -25,16 +25,17 @@ const charDef = name => CHARACTERS.find(c => c.n === name);
 const maxRoll = (stat, slot) =>
   slot === 'Space' ? (SUBSTATS[stat].maxRollSpace || SUBSTATS[stat].maxRoll) : SUBSTATS[stat].maxRoll;
 
-function normStat(raw) {
+function normStat(raw, hasPercent) {
   if (!raw) return null;
   const t = String(raw).trim();
-  if (SUBSTATS[t] || t === 'HP Recovery' || t === 'ATK + DEF') return t;
+  const withPercent = s => (hasPercent && FLAT_TO_PERCENT[s]) ? FLAT_TO_PERCENT[s] : s;
+  if (SUBSTATS[t] || t === 'HP Recovery' || t === 'ATK + DEF') return withPercent(t);
   // The in-game filter UI abbreviates with a trailing period ("Ailment Acc.", "Crit
   // Mult.", "Damage Mult.+") — strip that punctuation before alias lookup so those
   // exact in-game labels resolve without needing a separate alias per variant.
   const k = t.toLowerCase().replace(/\s+/g, ' ').replace(/[%+.]+$/, '').trim();
-  for (const s of Object.keys(SUBSTATS)) if (s.toLowerCase() === k) return s;
-  if (STAT_ALIASES[k]) return STAT_ALIASES[k];
+  for (const s of Object.keys(SUBSTATS)) if (s.toLowerCase() === k) return withPercent(s);
+  if (STAT_ALIASES[k]) return withPercent(STAT_ALIASES[k]);
   const pk = k + '%';
   for (const s of Object.keys(SUBSTATS)) if (s.toLowerCase() === pk) return s;
   return null;
@@ -548,14 +549,16 @@ function parseLine(line) {
   const rarity = parseInt(parts[2], 10);
   if (!RARITY[rarity]) return { err: `bad rarity "${parts[2]}"` };
   const level = parseInt(parts[3], 10) || 0;
-  const main = SLOT_INFO[slot].fixed ? SLOT_INFO[slot].mains[0] : normStat(parts[4]);
+  // Moon/Star/Sky only ever have a %-based main (see SLOT_INFO), so a bare "Attack"/
+  // "Defense"/"HP" main always means the % variant there — no value to check.
+  const main = SLOT_INFO[slot].fixed ? SLOT_INFO[slot].mains[0] : normStat(parts[4], true);
   if (!main) return { err: `unknown main stat "${parts[4]}"` };
   const subs = [];
   if (parts[5]) {
     for (const chunk of parts[5].split(',')) {
-      const m = chunk.trim().match(/^(.*?)\s*([\d.]+)\s*%?$/);
+      const m = chunk.trim().match(/^(.*?)\s*([\d.]+)\s*(%)?$/);
       if (!m) continue;
-      const st = normStat(m[1]);
+      const st = normStat(m[1], !!m[3]);
       if (!st) return { err: `unknown substat "${m[1].trim()}"` };
       subs.push({ stat: st, value: parseFloat(m[2]) });
     }

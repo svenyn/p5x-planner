@@ -149,6 +149,15 @@ const PAGE = 'file://' + path.join(__dirname, '..', 'dist', 'p5x-planner.html');
     fail('in-game label "Ailment Acc." resolves', normStat('Ailment Acc.') === 'Ailment Accuracy');
     fail('in-game label "Crit Mult." resolves', normStat('Crit Mult.') === 'Crit Multiplier');
     fail('in-game label "Damage Mult.+" resolves', normStat('Damage Mult.+') === 'Damage Multiplier');
+    // ATK/DEF/HP share one on-screen label ("Attack"/"Defense"/"HP") for both their flat
+    // and %-of-stat forms — only the value's trailing % says which. normStat's 2nd arg
+    // carries that signal; default (no arg) must keep resolving to the flat form so
+    // nothing that already worked changes behaviour.
+    fail('bare "Attack" with no percent hint stays flat ATK', normStat('Attack') === 'ATK');
+    fail('bare "Attack" with a percent hint resolves to ATK%', normStat('Attack', true) === 'ATK%');
+    fail('bare "Defense" with a percent hint resolves to DEF%', normStat('Defense', true) === 'DEF%');
+    fail('bare "HP" with a percent hint resolves to HP%', normStat('HP', true) === 'HP%');
+    fail('a stat with no flat/percent pair ignores the percent hint', normStat('Speed', true) === 'Speed');
     fail('alias Strength -> Power', normSet('strength') === 'Power');
     fail('Ruin is its own set, not aliased away', normSet('Ruin') === 'Ruin' && !!SETS['Ruin']);
     fail('Prudence is its own set', normSet('prudence') === 'Prudence' && !!SETS['Prudence']);
@@ -214,12 +223,16 @@ const PAGE = 'file://' + path.join(__dirname, '..', 'dist', 'p5x-planner.html');
     'Planet | Ruin | 5 | 25 | Speed | EHR 12.3, crit rate 7.9, atk% 10.5, hp% 7.2',
     'Sun | Strength | 4 | 20 | HP | dmg bonus 8.4, sp regen 30, def% 15.6, atk 138',
     'Universe | Departure | 5 | 25 | ATK + DEF | CDMG 20.8, CR 10.4, ATK% 17.2, SPD 8.4',
+    // real in-game labels (screenshot-confirmed): bare "Damage Mult.+"/"HP"/"Defense"/
+    // "Pierce Rate" — HP and Defense here must resolve to the % variant, not flat
+    'Star | Futility | 5 | 25 | Crit Rate | Damage Mult.+ 2.1%, HP 2.9%, Defense 4.1%, Pierce Rate 1.4%',
     'Bogus | Nonsense | 9 | 3 | Whatever | nope 1'
   ].join('\n'));
   await p.click('#bulkAdd');
   await p.waitForTimeout(200);
   const bulkMsg = await p.textContent('#bulkMsg');
-  const parsed = await p.evaluate(() => state.cards.slice(-4).map(c => `${c.slot}/${c.set}/${c.main}/${c.subs.map(s=>s.stat).join('+')}`));
+  const parsed = await p.evaluate(() => state.cards.slice(-5).map(c => `${c.slot}/${c.set}/${c.main}/${c.subs.map(s=>s.stat).join('+')}`));
+  const futilityCard = await p.evaluate(() => state.cards.slice(-5).find(c => c.set === 'Futility'));
 
   // full UI walk: own a character, run optimiser, equip, triage, save
   await p.evaluate(() => { ['Ren Amamiya','Ryuji Sakamoto','Morgana','Kira Kitazato','Yusuke Kitagawa'].forEach(n => state.chars[n].owned = true); renderOpt(); renderRoster(); });
@@ -275,7 +288,13 @@ const PAGE = 'file://' + path.join(__dirname, '..', 'dist', 'p5x-planner.html');
   if (!importCheck.dlgOpen) extraFailures.push('import review dialog did not open');
   if (afterImport.ix1Level !== 25) extraFailures.push(`expected leveled-up card to update to Lv25, got Lv${afterImport.ix1Level}`);
   if (!afterImport.ix2StillAtOldLevel) extraFailures.push('ambiguous row was applied even though the decision defaults to "skip"');
-  if (afterImport.totalCards !== 607) extraFailures.push(`expected 607 cards after import review (604 + 2 pushed + 1 added), got ${afterImport.totalCards}`);
+  if (afterImport.totalCards !== 608) extraFailures.push(`expected 608 cards after import review (605 + 2 pushed + 1 added), got ${afterImport.totalCards}`);
+  if (!futilityCard) extraFailures.push('bulk-pasted Futility card (real in-game labels) did not import at all');
+  else {
+    const subStats = futilityCard.subs.map(s => s.stat).sort().join(',');
+    const expected = ['Damage Multiplier', 'DEF%', 'HP%', 'Resistance Pierce'].sort().join(',');
+    if (subStats !== expected) extraFailures.push(`Futility card resolved substats as "${subStats}", expected "${expected}" (bare "HP"/"Defense" with a % value must resolve to HP%/DEF%, not flat)`);
+  }
 
   const failures = r.checks.filter(c => !c.pass);
   console.log(JSON.stringify({ ...r, bulkMsg, parsed, equippedCount, trRows, dlgOpen,

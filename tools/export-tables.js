@@ -20,6 +20,7 @@ const PAGE = 'file://' + path.join(__dirname, '..', 'dist', 'p5x-planner.html');
     substats: Object.fromEntries(Object.entries(SUBSTATS).map(([k, v]) =>
       [k, { maxRoll: v.maxRoll, maxRollSpace: v.maxRollSpace || v.maxRoll, flat: v.flat }])),
     statAliases: STAT_ALIASES,
+    flatToPercent: FLAT_TO_PERCENT,
     rarity: Object.fromEntries(Object.entries(RARITY).map(([k, v]) =>
       [k, { maxLevel: v.maxLevel, subMin: v.subMin, subMax: v.subMax }])),
     sets: Object.keys(SETS),

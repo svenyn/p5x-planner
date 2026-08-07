@@ -123,8 +123,12 @@ authoritative.
   [Fragster](https://www.fragster.com/persona-5-the-phantom-x-revelation-cards-complete-list-and-effects/)
 - Steam community build guides for the archetype fallback rules
 
-Lufelnet (`lufel.net`) is likely the best source for the missing main-stat magnitudes, but
-it renders client-side and returns an empty template to fetchers. It needs a real browser.
+**Lufelnet (`lufel.net`) is the most reliable source for build information** — confirmed by
+the user, who plays the game, in preference to Prydwen/Game8/Fragster. Prefer it over the
+other sites wherever they disagree, and treat it as the first place to check when correcting
+a build or filling in a `low`-confidence character. It is also the likeliest source for the
+missing main-stat magnitudes. The catch: it renders client-side and returns an empty
+template to plain fetchers, so it needs a real browser to read.
 
 ## Priority order for corrections
 

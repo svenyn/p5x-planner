@@ -2,3 +2,12 @@ node_modules/
 docs/shot-*.png
 *.log
 p5x-planner-save.json
+
+# OCR pipeline: generated output and calibration scratch
+ocr/**/__pycache__/
+ocr/.pytest_cache/
+ocr/cards.json
+ocr/cards-review.json
+ocr/_frames/
+ocr/debug_*.py
+ocr/debug_*.png

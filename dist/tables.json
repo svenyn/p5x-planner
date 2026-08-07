@@ -150,7 +150,14 @@
     "def": "DEF",
     "hp": "HP",
     "hp rec": "HP Recovery",
-    "healing": "HP Recovery"
+    "healing": "HP Recovery",
+    "attack": "ATK",
+    "defense": "DEF"
+  },
+  "flatToPercent": {
+    "ATK": "ATK%",
+    "DEF": "DEF%",
+    "HP": "HP%"
   },
   "rarity": {
     "2": {

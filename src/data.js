@@ -46,8 +46,16 @@ const STAT_ALIASES = {
   'attack multiplier': 'Damage Multiplier', 'dmg mult': 'Damage Multiplier', 'dmg': 'Damage Multiplier',
   'damage mult': 'Damage Multiplier',
   'sp regen': 'SP Recovery', 'sp rec': 'SP Recovery', 'spd': 'Speed',
-  'atk': 'ATK', 'def': 'DEF', 'hp': 'HP', 'hp rec': 'HP Recovery', 'healing': 'HP Recovery'
+  'atk': 'ATK', 'def': 'DEF', 'hp': 'HP', 'hp rec': 'HP Recovery', 'healing': 'HP Recovery',
+  // in-game substat labels are the bare words "Attack"/"Defense", not "ATK"/"DEF"
+  'attack': 'ATK', 'defense': 'DEF'
 };
+
+/* ATK, DEF and HP each exist as both a flat substat and a %-of-stat substat, and the
+   game shows the SAME label ("Attack", "Defense", "HP") for either — only the value
+   next to it carries a '%' to say which. normStat() takes an optional hasPercent flag
+   so a caller who saw a % on the value can resolve to the right one. */
+const FLAT_TO_PERCENT = { ATK: 'ATK%', DEF: 'DEF%', HP: 'HP%' };
 
 const RARITY = {
   5: { name: 'Legendary', color: 'gold',   maxLevel: 25, subMin: 3, subMax: 4, upgrades: 5 },
