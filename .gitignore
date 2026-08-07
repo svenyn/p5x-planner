@@ -4,7 +4,7 @@ docs/shot-*.png
 p5x-planner-save.json
 
 # OCR pipeline: generated output and calibration scratch
-ocr/**/__pycache__/
+**/__pycache__/
 ocr/.pytest_cache/
 ocr/cards.json
 ocr/cards-review.json
