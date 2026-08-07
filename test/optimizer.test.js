@@ -141,6 +141,47 @@ const PAGE = 'file://' + path.join(__dirname, '..', 'dist', 'p5x-planner.html');
     fail('no duplicate character names', new Set(names).size === names.length,
       names.filter((n,i)=>names.indexOf(n)!==i).join(', '));
 
+    // ---- validateCard ----
+    const vGood = { slot:'Star', set:'Hindrance', rarity:5, level:25, main:'Crit Rate',
+      subs:[{stat:'Crit Multiplier',value:16.4},{stat:'Resistance Pierce',value:8.4},{stat:'ATK%',value:14},{stat:'Speed',value:6.6}] };
+    fail('validateCard accepts a well-formed card', validateCard(vGood).length === 0, validateCard(vGood).join('; '));
+    fail('validateCard rejects an illegal main stat for the slot',
+      validateCard(Object.assign({}, vGood, { main: 'SP Recovery' })).length > 0);
+    fail('validateCard rejects a substat that duplicates the main stat',
+      validateCard(Object.assign({}, vGood, { subs: vGood.subs.concat([{ stat: 'Crit Rate', value: 5 }]) })).length > 0);
+    fail('validateCard rejects too many substats for the rarity',
+      validateCard(Object.assign({}, vGood, { rarity: 2 })).length > 0);
+    fail('validateCard rejects a substat value far above its roll ceiling',
+      validateCard(Object.assign({}, vGood, { subs: [{ stat: 'Crit Multiplier', value: 500 }, vGood.subs[1], vGood.subs[2], vGood.subs[3]] })).length > 0);
+
+    // ---- mergeImport ----
+    const cardA = { id:'a1', slot:'Star', set:'Hindrance', rarity:5, level:15, main:'Crit Rate', equipped:null,
+      subs:[{stat:'Crit Multiplier',value:10},{stat:'ATK%',value:8},{stat:'Speed',value:4}] };
+    const leveledUp = Object.assign({}, cardA, { level:25,
+      subs:[{stat:'Crit Multiplier',value:16.4},{stat:'ATK%',value:14},{stat:'Speed',value:6.6},{stat:'Resistance Pierce',value:8.4}] });
+    const r1 = mergeImport([cardA], [leveledUp]);
+    fail('mergeImport treats a monotonic level-up as an update, not a duplicate or a new card',
+      r1.toUpdate.length === 1 && r1.toAdd.length === 0 && r1.ambiguous.length === 0);
+
+    const cardB = Object.assign({}, cardA, { id:'b1' });
+    const exactDup = { slot:'Star', set:'Hindrance', rarity:5, level:15, main:'Crit Rate', equipped:null,
+      subs: cardB.subs.map(s => Object.assign({}, s)) };
+    const r2 = mergeImport([cardB], [exactDup]);
+    fail('mergeImport skips an exact resubmission as a duplicate',
+      r2.duplicates.length === 1 && r2.toAdd.length === 0 && r2.toUpdate.length === 0);
+
+    const cardC = Object.assign({}, cardA, { id:'c1' });
+    const shrunk = { slot:'Star', set:'Hindrance', rarity:5, level:15, main:'Crit Rate', equipped:null,
+      subs:[{stat:'Crit Multiplier',value:2},{stat:'ATK%',value:1},{stat:'Speed',value:0.5}] };
+    const r3 = mergeImport([cardC], [shrunk]);
+    fail('mergeImport flags a value decrease as ambiguous instead of silently overwriting',
+      r3.ambiguous.length === 1 && r3.toUpdate.length === 0 && r3.duplicates.length === 0);
+
+    const brandNew = { slot:'Sky', set:'Departure', rarity:5, level:25, main:'Speed', equipped:null,
+      subs:[{stat:'ATK%',value:10},{stat:'DEF%',value:5},{stat:'HP',value:80}] };
+    const r4 = mergeImport([cardA], [brandNew]);
+    fail('mergeImport adds a card with no fingerprint match as new', r4.toAdd.length === 1);
+
     out.charCount = CHARACTERS.length;
     out.planned = planned;
     return out;
@@ -177,12 +218,52 @@ const PAGE = 'file://' + path.join(__dirname, '..', 'dist', 'p5x-planner.html');
   await p.evaluate(() => { document.getElementById('tSave').click(); });
   await p.waitForTimeout(150);
 
+  // import review dialog: renders ambiguous rows and applies decisions on click
+  await p.click('nav button[data-tab="data"]');
+  const importCheck = await p.evaluate(() => {
+    const ix1 = { id:'ix1', slot:'Moon', set:'Power', rarity:5, level:15, main:'ATK%', equipped:null,
+      subs:[{stat:'Speed',value:2},{stat:'HP',value:60}] };
+    const ix2 = { id:'ix2', slot:'Star', set:'Opulence', rarity:5, level:15, main:'Crit Rate', equipped:null,
+      subs:[{stat:'Crit Multiplier',value:8},{stat:'ATK%',value:6}] };
+    state.cards.push(ix1, ix2);
+    const incomingUpdate = { slot:'Moon', set:'Power', rarity:5, level:25, main:'ATK%', equipped:null,
+      subs:[{stat:'Speed',value:4},{stat:'HP',value:120},{stat:'ATK',value:20}] };
+    const incomingNew = { slot:'Sky', set:'Trust', rarity:4, level:20, main:'DEF%', equipped:null,
+      subs:[{stat:'HP%',value:2},{stat:'DEF',value:20}] };
+    const incomingAmbiguous = { slot:'Star', set:'Opulence', rarity:5, level:15, main:'Crit Rate', equipped:null,
+      subs:[{stat:'Crit Multiplier',value:1},{stat:'ATK%',value:1}] };
+    const result = mergeImport(state.cards, [incomingUpdate, incomingNew, incomingAmbiguous]);
+    renderImportReview(result, []);
+    return {
+      ambiguousShown: document.querySelectorAll('[data-amb]').length,
+      dlgOpen: document.getElementById('dlg').open,
+      toAdd: result.toAdd.length, toUpdate: result.toUpdate.length
+    };
+  });
+  await p.waitForTimeout(150);
+  await p.evaluate(() => { document.getElementById('applyImport').click(); });
+  await p.waitForTimeout(150);
+  const afterImport = await p.evaluate(() => ({
+    ix1Level: (state.cards.find(c => c.id === 'ix1') || {}).level,
+    ix2StillAtOldLevel: (state.cards.find(c => c.id === 'ix2') || {}).level === 15,
+    totalCards: state.cards.length
+  }));
+
+  const extraFailures = [];
+  if (importCheck.toAdd !== 1 || importCheck.toUpdate !== 1 || importCheck.ambiguousShown !== 1)
+    extraFailures.push(`import review classified toAdd=${importCheck.toAdd} toUpdate=${importCheck.toUpdate} ambiguous=${importCheck.ambiguousShown}, expected 1/1/1`);
+  if (!importCheck.dlgOpen) extraFailures.push('import review dialog did not open');
+  if (afterImport.ix1Level !== 25) extraFailures.push(`expected leveled-up card to update to Lv25, got Lv${afterImport.ix1Level}`);
+  if (!afterImport.ix2StillAtOldLevel) extraFailures.push('ambiguous row was applied even though the decision defaults to "skip"');
+  if (afterImport.totalCards !== 607) extraFailures.push(`expected 607 cards after import review (604 + 2 pushed + 1 added), got ${afterImport.totalCards}`);
+
   const failures = r.checks.filter(c => !c.pass);
   console.log(JSON.stringify({ ...r, bulkMsg, parsed, equippedCount, trRows, dlgOpen,
-    optHasLoadout: /Recommended loadout/.test(optText), errs }, null, 2));
+    optHasLoadout: /Recommended loadout/.test(optText), importCheck, afterImport, errs }, null, 2));
   await b.close();
-  if (failures.length || errs.length) {
-    console.error(`\n${failures.length} check(s) failed, ${errs.length} page error(s).`);
+  if (failures.length || errs.length || extraFailures.length) {
+    console.error(`\n${failures.length} check(s) failed, ${errs.length} page error(s), ${extraFailures.length} import-review issue(s).`);
+    extraFailures.forEach(f => console.error(' - ' + f));
     process.exit(1);
   }
   console.log(`\nAll ${r.checks.length} checks passed.`);

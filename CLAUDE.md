@@ -9,9 +9,12 @@ on whom, and which are safe to feed away.
 ```
 npm install          # playwright only, used for tests
 npm run build        # src/ -> dist/p5x-planner.html
-npm test             # build, then run 17 assertions headlessly; exits non-zero on failure
+npm test             # build, then run assertions headlessly; exits non-zero on failure
 npm run scale        # 4000-card synthetic benchmark, compares set policies
 npm run shots        # writes docs/shot-*.png for visual review
+npm run export-tables # build, then write dist/tables.json — the slot/set/substat/alias/
+                       # character vocabulary the OCR pipeline should read instead of
+                       # hand-copying src/data.js
 ```
 
 There is no dev server and no bundler. `dist/p5x-planner.html` must stay a single

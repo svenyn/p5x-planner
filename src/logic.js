@@ -47,6 +47,114 @@ function normSet(raw) {
   return null;
 }
 
+/* ======================== validation ========================
+   Single source of truth for "is this card legal" — used by the bulk paste
+   parser, the single-card form, JSON load, and the merge importer below.
+   A card that fails here never reaches state.cards; the caller decides what
+   to do with the error list. */
+function validateCard(c) {
+  const errs = [];
+  if (!SLOTS.includes(c.slot)) { errs.push(`unknown slot "${c.slot}"`); return errs; }
+  const info = SLOT_INFO[c.slot];
+  const setTable = c.slot === 'Space' ? SPACE_SETS : SETS;
+  if (!setTable[c.set]) errs.push(`"${c.set}" is not a legal set for ${c.slot}`);
+  if (!RARITY[c.rarity]) { errs.push(`bad rarity "${c.rarity}"`); return errs; }
+  const R = RARITY[c.rarity];
+  if (!(Number.isInteger(c.level) && c.level >= 0 && c.level <= R.maxLevel))
+    errs.push(`level must be 0-${R.maxLevel} for ${c.rarity}★`);
+  if (!info.mains.includes(c.main)) errs.push(`"${c.main}" is not a legal main stat for ${c.slot}`);
+  const subs = c.subs || [];
+  if (subs.length < R.subMin || subs.length > R.subMax)
+    errs.push(`${c.rarity}★ cards have ${R.subMin === R.subMax ? R.subMin : R.subMin + '-' + R.subMax} substats, got ${subs.length}`);
+  const seen = new Set();
+  subs.forEach(s => {
+    if (!SUBSTATS[s.stat]) { errs.push(`unknown substat "${s.stat}"`); return; }
+    if (s.stat === c.main) errs.push(`substat "${s.stat}" duplicates the main stat`);
+    if (seen.has(s.stat)) errs.push(`substat "${s.stat}" appears twice`);
+    seen.add(s.stat);
+    const mx = maxRoll(s.stat, c.slot) * 5;
+    if (!(typeof s.value === 'number' && isFinite(s.value) && s.value > 0 && s.value <= mx))
+      errs.push(`${s.stat} value ${s.value} is out of range (max ~${mx.toFixed(1)})`);
+  });
+  return errs;
+}
+
+/* Re-resolve a raw (possibly hand-typed or OCR'd) card object against the
+   canonical tables, the same way the bulk parser does — so JSON coming from
+   outside this app still matches on set/stat aliases. Does not validate. */
+function normalizeCard(rc) {
+  const slot = SLOTS.find(s => s === rc.slot) || rc.slot;
+  const set = normSet(rc.set) || rc.set;
+  const rarity = +rc.rarity;
+  const level = parseInt(rc.level, 10) || 0;
+  const info = SLOT_INFO[slot];
+  const main = (info && info.fixed) ? info.mains[0] : (normStat(rc.main) || rc.main);
+  const subs = (rc.subs || []).map(s => ({ stat: normStat(s.stat) || s.stat, value: +s.value }));
+  const card = { slot, set, rarity, level, main, subs, equipped: rc.equipped || null };
+  if (rc.conf) card.conf = rc.conf;
+  if (rc.src) card.src = rc.src;
+  return card;
+}
+
+/* ======================== import merge ========================
+   Cards have no in-game serial number, so "the same physical card, scanned
+   again" has to be inferred: same slot/set/rarity/main groups candidates,
+   then the nearest existing card by level+substat distance decides whether
+   an incoming card is a duplicate, a level-up, or ambiguous. Ambiguous means
+   a human should look at it — never silently overwritten. */
+function cardFingerprint(c) { return [c.slot, c.set, c.rarity, c.main].join('|'); }
+
+function subFingerprint(subs) { return (subs || []).map(s => s.stat).slice().sort().join('+'); }
+
+function subsClose(a, b, eps) {
+  if (subFingerprint(a) !== subFingerprint(b)) return false;
+  const mapB = {}; b.forEach(s => mapB[s.stat] = s.value);
+  return a.every(s => Math.abs((mapB[s.stat] != null ? mapB[s.stat] : 0) - s.value) <= eps);
+}
+
+/* Every substat the existing card has must still be present, at the same
+   value or higher — upgrades only add roll value, never remove it. The
+   incoming card may have additional substats the old one hadn't rolled yet. */
+function subsMonotonic(oldSubs, newSubs) {
+  const mapNew = {}; (newSubs || []).forEach(s => mapNew[s.stat] = s.value);
+  return (oldSubs || []).every(s => mapNew[s.stat] != null && mapNew[s.stat] >= s.value - 0.05);
+}
+
+function cardDistance(a, b) {
+  let d = Math.abs((a.level || 0) - (b.level || 0)) * 2;
+  const mapA = {}; (a.subs || []).forEach(s => mapA[s.stat] = s.value);
+  const mapB = {}; (b.subs || []).forEach(s => mapB[s.stat] = s.value);
+  const keys = new Set([...Object.keys(mapA), ...Object.keys(mapB)]);
+  keys.forEach(k => { d += Math.abs((mapA[k] || 0) - (mapB[k] || 0)); });
+  return d;
+}
+
+function mergeImport(existingCards, incomingCards) {
+  const pools = new Map();
+  existingCards.forEach(c => {
+    const fp = cardFingerprint(c);
+    if (!pools.has(fp)) pools.set(fp, []);
+    pools.get(fp).push(c);
+  });
+  const toAdd = [], toUpdate = [], duplicates = [], ambiguous = [];
+  incomingCards.forEach(inc => {
+    const pool = pools.get(cardFingerprint(inc));
+    if (!pool || !pool.length) { toAdd.push(inc); return; }
+    let bestIdx = 0, bestD = Infinity;
+    pool.forEach((cand, i) => { const d = cardDistance(cand, inc); if (d < bestD) { bestD = d; bestIdx = i; } });
+    const cand = pool[bestIdx];
+    if ((cand.level || 0) === (inc.level || 0) && subsClose(cand.subs || [], inc.subs || [], 0.05)) {
+      duplicates.push({ existing: cand, incoming: inc });
+    } else if (subsMonotonic(cand.subs || [], inc.subs || []) && (inc.level || 0) >= (cand.level || 0)) {
+      toUpdate.push({ existingId: cand.id, card: inc });
+    } else {
+      ambiguous.push({ existing: cand, incoming: inc });
+    }
+    pool.splice(bestIdx, 1);
+  });
+  return { toAdd, toUpdate, duplicates, ambiguous };
+}
+
 /* ======================== scoring engine ======================== */
 
 /* Raw quality of one card for one character: weighted roll value of its substats,
@@ -414,10 +522,14 @@ function addCard() {
     const v = parseFloat($(`.subVal[data-i="${i}"]`).value);
     if (sel.value && !isNaN(v)) subs.push({ stat: sel.value, value: v });
   });
-  state.cards.push({
-    id: 'c' + (state.nextId++), slot, set: $('#fSet').value, rarity: +$('#fRar').value,
-    level: +$('#fLvl').value || 0, main: $('#fMain').value, subs, equipped: null
-  });
+  const candidate = { slot, set: $('#fSet').value, rarity: +$('#fRar').value,
+    level: +$('#fLvl').value || 0, main: $('#fMain').value, subs };
+  const errs = validateCard(candidate);
+  if (errs.length) { $('#fMsg').innerHTML = `<span style="color:#e87a5c">${esc(errs[0])}</span>`; return; }
+  $('#fMsg').textContent = '';
+  candidate.id = 'c' + (state.nextId++);
+  candidate.equipped = null;
+  state.cards.push(candidate);
   $$('.subVal').forEach(el => el.value = '');
   $('.subVal').focus();
   renderInv();
@@ -433,7 +545,8 @@ function parseLine(line) {
   const rarity = parseInt(parts[2], 10);
   if (!RARITY[rarity]) return { err: `bad rarity "${parts[2]}"` };
   const level = parseInt(parts[3], 10) || 0;
-  const main = SLOT_INFO[slot].fixed ? SLOT_INFO[slot].mains[0] : (normStat(parts[4]) || parts[4].trim());
+  const main = SLOT_INFO[slot].fixed ? SLOT_INFO[slot].mains[0] : normStat(parts[4]);
+  if (!main) return { err: `unknown main stat "${parts[4]}"` };
   const subs = [];
   if (parts[5]) {
     for (const chunk of parts[5].split(',')) {
@@ -444,7 +557,11 @@ function parseLine(line) {
       subs.push({ stat: st, value: parseFloat(m[2]) });
     }
   }
-  return { card: { id: 'c' + (state.nextId++), slot, set, rarity, level, main, subs, equipped: null } };
+  const candidate = { slot, set, rarity, level, main, subs, equipped: null };
+  const errs = validateCard(candidate);
+  if (errs.length) return { err: errs[0] };
+  candidate.id = 'c' + (state.nextId++);
+  return { card: candidate };
 }
 function bulkImport() {
   const lines = $('#bulk').value.split('\n').map(s => s.trim()).filter(Boolean);
@@ -487,13 +604,77 @@ function renderInv() {
       <td class="tiny">${esc(c.main)}</td>
       <td class="tiny muted">${(c.subs || []).map(s => esc(s.stat) + ' ' + s.value).join(' · ')}</td>
       <td class="tiny">${c.equipped ? esc(c.equipped) : '<span class="muted">—</span>'}</td>
-      <td class="right"><button class="sm ghost" data-del="${c.id}">✕</button></td>
+      <td class="right nowrap"><button class="sm ghost" data-edit="${c.id}">Edit</button>
+        <button class="sm ghost" data-del="${c.id}">✕</button></td>
     </tr>`).join('') + '</tbody>';
   if (rows.length > 600) $('#invTable').insertAdjacentHTML('beforeend',
     `<tfoot><tr><td colspan="8" class="tiny muted">Showing the first 600 rows — narrow the filters to see more.</td></tr></tfoot>`);
+  $$('[data-edit]').forEach(b => b.onclick = () => editCard(b.dataset.edit));
   $$('[data-del]').forEach(b => b.onclick = () => {
     state.cards = state.cards.filter(c => c.id !== b.dataset.del); renderInv();
   });
+}
+
+/* Reuses the shared dialog (see editTargets) to edit slot/set/rarity/level/
+   main/substats of an existing card in place, running it through the same
+   validateCard() the importers use so a hand-edit can't introduce a card
+   the rest of the app doesn't recognise as legal. */
+function editCard(id) {
+  const c = state.cards.find(x => x.id === id);
+  if (!c) return;
+  const subOpts = '<option value="">—</option>' + Object.keys(SUBSTATS).map(s => `<option>${s}</option>`).join('');
+  $('#dlgBody').innerHTML = `
+    <h2>Edit card</h2>
+    <div class="row">
+      <div class="field"><label>Slot</label><select id="eSlot">${SLOTS.map(s => `<option ${s === c.slot ? 'selected' : ''}>${s}</option>`).join('')}</select></div>
+      <div class="field"><label>Set</label><select id="eSet"></select></div>
+      <div class="field"><label>Rarity</label><select id="eRar">
+        <option value="5">5★</option><option value="4">4★</option>
+        <option value="3">3★</option><option value="2">2★</option></select></div>
+      <div class="field"><label>Level</label><input id="eLvl" type="number" min="0" max="25" style="width:70px"></div>
+      <div class="field"><label>Main stat</label><select id="eMain"></select></div>
+    </div>
+    <div class="row" style="margin-top:10px" id="eSubs">${[0,1,2,3].map(i => `
+      <div class="field"><label>Substat ${i + 1}</label>
+        <div style="display:flex;gap:5px">
+          <select class="eSubStat" data-i="${i}">${subOpts}</select>
+          <input class="eSubVal" data-i="${i}" type="number" step="0.1" style="width:78px" value="${(c.subs[i] || {}).value != null ? c.subs[i].value : ''}">
+        </div></div>`).join('')}</div>
+    <div id="eErr" class="tiny" style="color:#e87a5c;margin-top:10px"></div>
+    <div class="row" style="margin-top:12px">
+      <button class="primary" id="eSave">Save changes</button>
+      <button class="ghost" id="eDelete">Delete card</button>
+    </div>`;
+  const syncE = () => {
+    const slot = $('#eSlot').value;
+    const src = slot === 'Space' ? SPACE_SETS : SETS;
+    $('#eSet').innerHTML = Object.keys(src).sort().map(s => `<option ${s === c.set ? 'selected' : ''}>${s}</option>`).join('');
+    const info = SLOT_INFO[slot];
+    $('#eMain').innerHTML = info.mains.map(m => `<option ${m === c.main ? 'selected' : ''}>${m}</option>`).join('');
+    $('#eMain').disabled = info.fixed;
+  };
+  $('#eSlot').onchange = syncE; syncE();
+  $('#eRar').value = c.rarity; $('#eLvl').value = c.level;
+  $$('.eSubStat').forEach(sel => { const s = c.subs[+sel.dataset.i]; if (s) sel.value = s.stat; });
+  $('#dlg').showModal();
+  $('#eSave').onclick = () => {
+    const subs = [];
+    $$('.eSubStat').forEach(sel => {
+      const i = sel.dataset.i;
+      const v = parseFloat($(`.eSubVal[data-i="${i}"]`).value);
+      if (sel.value && !isNaN(v)) subs.push({ stat: sel.value, value: v });
+    });
+    const candidate = { slot: $('#eSlot').value, set: $('#eSet').value, rarity: +$('#eRar').value,
+      level: +$('#eLvl').value || 0, main: $('#eMain').value, subs };
+    const errs = validateCard(candidate);
+    if (errs.length) { $('#eErr').textContent = errs[0]; return; }
+    Object.assign(c, candidate);
+    $('#dlg').close(); renderInv(); renderOpt();
+  };
+  $('#eDelete').onclick = () => {
+    state.cards = state.cards.filter(x => x.id !== id);
+    $('#dlg').close(); renderInv(); renderOpt();
+  };
 }
 
 /* ------------------------------ triage ------------------------------ */
@@ -645,14 +826,94 @@ function load(file) {
   fr.onload = () => {
     try {
       const d = JSON.parse(fr.result);
-      state.cards = (d.cards || []).map((c, i) => Object.assign({ id: 'c' + i, subs: [], equipped: null }, c));
+      const good = [], bad = [];
+      (d.cards || []).forEach((rc, i) => {
+        const c = normalizeCard(rc);
+        const errs = validateCard(c);
+        if (errs.length) bad.push(`card ${i + 1}: ${errs[0]}`); else good.push(c);
+      });
+      state.cards = good.map((c, i) => Object.assign({ id: 'c' + i }, c));
       state.nextId = d.nextId || state.cards.length + 1;
       CHARACTERS.forEach(c => { state.chars[c.n] = (d.characters && d.characters[c.n]) || { owned: false, targets: null }; });
       renderInv(); renderRoster(); renderOpt();
-      $('#dataMsg').innerHTML = `Loaded <b>${state.cards.length}</b> cards.`;
+      $('#dataMsg').innerHTML = `Loaded <b>${state.cards.length}</b> cards.` +
+        (bad.length ? ` <span style="color:#e87a5c">${bad.length} skipped</span> — ${esc(bad.slice(0, 3).join('; '))}${bad.length > 3 ? ' …' : ''}` : '');
     } catch (e) { $('#dataMsg').innerHTML = `<span style="color:#e87a5c">Could not read that file: ${esc(e.message)}</span>`; }
   };
   fr.readAsText(file);
+}
+
+/* ------------------------------ import merge (rescans) ------------------------------
+   Unlike load(), which replaces the whole save file, this merges an incremental scan
+   into the current inventory: new cards are added, cards that leveled up since the
+   last scan are updated in place, exact resubmissions are skipped, and anything
+   ambiguous is left for the review dialog rather than silently applied. */
+function importScan(file) {
+  const fr = new FileReader();
+  fr.onload = () => {
+    let raw;
+    try { raw = JSON.parse(fr.result); }
+    catch (e) { $('#dataMsg').innerHTML = `<span style="color:#e87a5c">Could not read that file: ${esc(e.message)}</span>`; return; }
+    const list = Array.isArray(raw) ? raw : (raw.cards || []);
+    const valid = [], invalid = [];
+    list.forEach((rc, i) => {
+      const c = normalizeCard(rc);
+      const errs = validateCard(c);
+      if (errs.length) invalid.push(`card ${i + 1}: ${errs[0]}`); else valid.push(c);
+    });
+    renderImportReview(mergeImport(state.cards, valid), invalid);
+  };
+  fr.readAsText(file);
+}
+
+function renderImportReview(result, invalid) {
+  const cardLine = c => `${esc(c.slot)}/${esc(c.set)} ${c.rarity}★ Lv${c.level} ${esc(c.main)} — ` +
+    (c.subs || []).map(s => esc(s.stat) + ' ' + s.value).join(', ');
+  $('#dlgBody').innerHTML = `
+    <h2>Import review</h2>
+    <p class="tiny muted">
+      <b>${result.toAdd.length}</b> new · <b>${result.toUpdate.length}</b> leveled up ·
+      <b>${result.duplicates.length}</b> already in inventory (skipped) ·
+      <b>${result.ambiguous.length}</b> need a decision · <b>${invalid.length}</b> invalid (skipped)
+    </p>
+    ${invalid.length ? `<div class="notice tiny"><b>Skipped as invalid:</b><br>${invalid.slice(0, 8).map(esc).join('<br>')}${invalid.length > 8 ? ' …' : ''}</div>` : ''}
+    ${result.ambiguous.length ? `
+      <h3 style="margin:14px 0 8px;font-size:13px">Needs a decision</h3>
+      <p class="tiny muted" style="margin:0 0 8px">Same slot/set/rarity/main as a card you already have, but the
+        numbers do not line up as a clean level-up — could be OCR noise on either scan, or a second copy of the
+        same roll. Defaults to skipping the incoming card.</p>
+      <table><thead><tr><th>Existing</th><th>Incoming</th><th>Decision</th></tr></thead><tbody>
+        ${result.ambiguous.map((a, i) => `<tr>
+          <td class="tiny">${cardLine(a.existing)}</td>
+          <td class="tiny">${cardLine(a.incoming)}</td>
+          <td><select class="tiny" data-amb="${i}">
+            <option value="skip">Skip incoming</option>
+            <option value="add">Add as new card</option>
+            <option value="replace">Replace existing</option>
+          </select></td>
+        </tr>`).join('')}
+      </tbody></table>` : ''}
+    <div class="row" style="margin-top:16px">
+      <button class="primary" id="applyImport">Apply</button>
+    </div>`;
+  $('#dlg').showModal();
+  $('#applyImport').onclick = () => {
+    result.toAdd.forEach(c => { c.id = 'c' + (state.nextId++); if (c.equipped === undefined) c.equipped = null; state.cards.push(c); });
+    result.toUpdate.forEach(({ existingId, card }) => {
+      const idx = state.cards.findIndex(x => x.id === existingId);
+      if (idx >= 0) state.cards[idx] = Object.assign({}, state.cards[idx], card, { id: existingId, equipped: state.cards[idx].equipped });
+    });
+    $$('[data-amb]').forEach(sel => {
+      const a = result.ambiguous[+sel.dataset.amb];
+      if (sel.value === 'add') { a.incoming.id = 'c' + (state.nextId++); a.incoming.equipped = null; state.cards.push(a.incoming); }
+      else if (sel.value === 'replace') {
+        const idx = state.cards.findIndex(x => x.id === a.existing.id);
+        if (idx >= 0) state.cards[idx] = Object.assign({}, state.cards[idx], a.incoming, { id: a.existing.id, equipped: state.cards[idx].equipped });
+      }
+    });
+    $('#dlg').close(); renderInv(); renderOpt();
+    $('#dataMsg').textContent = 'Import applied.';
+  };
 }
 function csv() {
   const head = 'slot,set,rarity,level,main,sub1,val1,sub2,val2,sub3,val3,sub4,val4,equipped';
@@ -686,7 +947,9 @@ $('#rsQ').oninput = renderRoster;
 $('#dlSave').onclick = save;
 $('#dlCsv').onclick = csv;
 $('#upSave').onclick = () => $('#fileIn').click();
-$('#fileIn').onchange = e => { if (e.target.files[0]) load(e.target.files[0]); };
+$('#fileIn').onchange = e => { if (e.target.files[0]) load(e.target.files[0]); e.target.value = ''; };
+$('#upImport').onclick = () => $('#fileImport').click();
+$('#fileImport').onchange = e => { if (e.target.files[0]) importScan(e.target.files[0]); e.target.value = ''; };
 $('#wipe').onclick = () => {
   if (!confirm('Clear all cards and character settings? Download a save file first if you want to keep them.')) return;
   state.cards = []; state.nextId = 1;

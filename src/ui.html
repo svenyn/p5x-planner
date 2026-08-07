@@ -187,6 +187,7 @@ dialog::backdrop{background:rgba(0,0,0,.7)}
       <div class="row" style="margin-top:12px">
         <button class="primary" id="fAdd">Add card</button>
         <span class="tiny muted">Tip: press Enter in any substat box to add and reset for the next card.</span>
+        <span id="fMsg" class="tiny"></span>
       </div>
     </div>
 
@@ -282,6 +283,19 @@ dialog::backdrop{background:rgba(0,0,0,.7)}
         <input type="file" id="fileIn" accept=".json" class="hide">
         <button class="ghost" id="dlCsv">Export cards as CSV</button>
         <span id="dataMsg" class="tiny muted"></span>
+      </div>
+    </div>
+    <div class="panel">
+      <h2>Import cards (merge)</h2>
+      <p class="tiny muted" style="margin:0 0 10px">
+        For an incremental scan — new cards found since your last save. Unlike loading a save file
+        above, this merges into your current inventory instead of replacing it: new cards are added,
+        cards that match one you already have but leveled up are updated in place, exact resubmissions
+        are skipped, and anything ambiguous is left for you to decide in a review dialog.
+      </p>
+      <div class="row">
+        <button id="upImport">Import cards file</button>
+        <input type="file" id="fileImport" accept=".json" class="hide">
       </div>
     </div>
     <div class="panel">

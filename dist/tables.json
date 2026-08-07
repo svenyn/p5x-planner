@@ -1,0 +1,291 @@
+{
+  "slots": [
+    "Sun",
+    "Moon",
+    "Star",
+    "Sky",
+    "Space"
+  ],
+  "slotInfo": {
+    "Sun": {
+      "fixed": true,
+      "mains": [
+        "HP"
+      ]
+    },
+    "Moon": {
+      "fixed": false,
+      "mains": [
+        "ATK%",
+        "DEF%",
+        "HP%",
+        "HP Recovery",
+        "Damage Multiplier"
+      ]
+    },
+    "Star": {
+      "fixed": false,
+      "mains": [
+        "ATK%",
+        "DEF%",
+        "HP%",
+        "Crit Rate",
+        "Crit Multiplier",
+        "Ailment Accuracy"
+      ]
+    },
+    "Sky": {
+      "fixed": false,
+      "mains": [
+        "ATK%",
+        "DEF%",
+        "HP%",
+        "Speed",
+        "SP Recovery"
+      ]
+    },
+    "Space": {
+      "fixed": true,
+      "mains": [
+        "ATK + DEF"
+      ]
+    }
+  },
+  "substats": {
+    "ATK": {
+      "maxRoll": 46,
+      "maxRollSpace": 46,
+      "flat": true
+    },
+    "DEF": {
+      "maxRoll": 46,
+      "maxRollSpace": 46,
+      "flat": true
+    },
+    "HP": {
+      "maxRoll": 140,
+      "maxRollSpace": 175,
+      "flat": true
+    },
+    "Speed": {
+      "maxRoll": 2.2,
+      "maxRollSpace": 2.8,
+      "flat": true
+    },
+    "ATK%": {
+      "maxRoll": 3.5,
+      "maxRollSpace": 4.3,
+      "flat": false
+    },
+    "DEF%": {
+      "maxRoll": 5.2,
+      "maxRollSpace": 6.4,
+      "flat": false
+    },
+    "HP%": {
+      "maxRoll": 3.6,
+      "maxRollSpace": 4.4,
+      "flat": false
+    },
+    "Damage Multiplier": {
+      "maxRoll": 2.8,
+      "maxRollSpace": 3.5,
+      "flat": false
+    },
+    "Crit Rate": {
+      "maxRoll": 2,
+      "maxRollSpace": 2.6,
+      "flat": false
+    },
+    "Crit Multiplier": {
+      "maxRoll": 4.1,
+      "maxRollSpace": 5.2,
+      "flat": false
+    },
+    "Ailment Accuracy": {
+      "maxRoll": 4.1,
+      "maxRollSpace": 5.2,
+      "flat": false
+    },
+    "SP Recovery": {
+      "maxRoll": 10,
+      "maxRollSpace": 12.5,
+      "flat": false
+    },
+    "Resistance Pierce": {
+      "maxRoll": 2.1,
+      "maxRollSpace": 2.7,
+      "flat": false
+    }
+  },
+  "statAliases": {
+    "crit dmg": "Crit Multiplier",
+    "crit damage": "Crit Multiplier",
+    "cdmg": "Crit Multiplier",
+    "crit mult": "Crit Multiplier",
+    "cm": "Crit Multiplier",
+    "cr": "Crit Rate",
+    "critrate": "Crit Rate",
+    "crit": "Crit Rate",
+    "effect hit rate": "Ailment Accuracy",
+    "ehr": "Ailment Accuracy",
+    "ail acc": "Ailment Accuracy",
+    "ailment acc": "Ailment Accuracy",
+    "accuracy": "Ailment Accuracy",
+    "penetration": "Resistance Pierce",
+    "pen": "Resistance Pierce",
+    "pierce": "Resistance Pierce",
+    "resistance pierce rate": "Resistance Pierce",
+    "damage bonus": "Damage Multiplier",
+    "dmg bonus": "Damage Multiplier",
+    "attack multiplier": "Damage Multiplier",
+    "dmg mult": "Damage Multiplier",
+    "dmg": "Damage Multiplier",
+    "sp regen": "SP Recovery",
+    "sp rec": "SP Recovery",
+    "spd": "Speed",
+    "atk": "ATK",
+    "def": "DEF",
+    "hp": "HP",
+    "hp rec": "HP Recovery",
+    "healing": "HP Recovery"
+  },
+  "rarity": {
+    "2": {
+      "maxLevel": 10,
+      "subMin": 2,
+      "subMax": 2
+    },
+    "3": {
+      "maxLevel": 15,
+      "subMin": 3,
+      "subMax": 3
+    },
+    "4": {
+      "maxLevel": 20,
+      "subMin": 3,
+      "subMax": 4
+    },
+    "5": {
+      "maxLevel": 25,
+      "subMin": 3,
+      "subMax": 4
+    }
+  },
+  "sets": [
+    "Power",
+    "Control",
+    "Labor",
+    "Peace",
+    "Prosperity",
+    "Worry",
+    "Reconciliation",
+    "Triumph",
+    "Love",
+    "Courage",
+    "Oppression",
+    "Strife",
+    "Defeat",
+    "Opulence",
+    "Renewal",
+    "Victory",
+    "Pleasure",
+    "Truth",
+    "Virtue",
+    "Hindrance",
+    "Ruin",
+    "Prudence"
+  ],
+  "setAliases": {
+    "abundance": "Prosperity",
+    "science": "Truth",
+    "completion": "Renewal",
+    "dominion": "Control",
+    "valor": "Courage",
+    "luxury": "Opulence",
+    "interference": "Hindrance",
+    "strength": "Power"
+  },
+  "spaceSets": [
+    "Creation",
+    "Freedom",
+    "Acceptance",
+    "Awareness",
+    "Departure",
+    "Faith",
+    "Growth",
+    "Harmony",
+    "Integrity",
+    "Meditation",
+    "Nativity",
+    "Resolve",
+    "Trust",
+    "Wisdom",
+    "Hope"
+  ],
+  "characters": [
+    "Ren Amamiya",
+    "Ren Amamiya [Starlight]",
+    "Morgana",
+    "Morgana [Starlight]",
+    "Ann Takamaki",
+    "Ann Takamaki [Starlight]",
+    "Ryuji Sakamoto",
+    "Yusuke Kitagawa",
+    "Makoto Niijima",
+    "Haru Okumura",
+    "Goro Akechi",
+    "Kasumi Yoshizawa",
+    "Futaba Sakura",
+    "Wonder",
+    "Ayaka Sakai",
+    "Chizuko Nagao",
+    "Leo Kamiyama",
+    "Lufel",
+    "Masaki Ashiya",
+    "Minami Miyashita",
+    "Minami Miyashita [Beachflower]",
+    "Miyu Sahara",
+    "Miyu Sahara [Wavecatcher]",
+    "Motoha Arai",
+    "Motoha Arai [Radiance]",
+    "Motoha Arai [Tropical]",
+    "Narumi Nashimoto",
+    "Riko Tanemura",
+    "Riko Tanemura [Tempest]",
+    "Runa Dogenzaka",
+    "Seiji Shiratori",
+    "Shoki Ikenami",
+    "Shoki Ikenami [Notte]",
+    "Shun Kano",
+    "Shun Kano [Pioneer]",
+    "Tomoko Noge",
+    "Tomoko Noge [Seaside]",
+    "Toshiya Sumi",
+    "YUI",
+    "YUI [Prism]",
+    "Yaoling Li",
+    "Yaoling Li [Firecracker]",
+    "Kotone Montagne",
+    "Kotone Montagne [Frostgale]",
+    "Kira Kitazato",
+    "Kiyoshi Kurotani",
+    "Kayo Tomiyama",
+    "Haruna Nishimori",
+    "Justine & Caroline",
+    "Makoto Yuki",
+    "Aigis",
+    "Akihiko Sanada",
+    "Junpei Iori",
+    "Mitsuru Kirijo",
+    "Yukari Takeba",
+    "Fuuka Yamagishi",
+    "Koromaru",
+    "Mio Natsukawa",
+    "Mayumi Hashimoto",
+    "Kumi Katayama",
+    "Ichigo Shikano",
+    "Aran Hirano",
+    "Manaka Nagao"
+  ]
+}

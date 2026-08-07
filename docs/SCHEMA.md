@@ -86,4 +86,43 @@ treat `null` as a card that needs a human to look at the screenshot again.
 
 Expect OCR to confuse visually similar values — `8` and `B`, `5` and `S`, decimal points at
 small font sizes. A cheap sanity filter: a substat value should never exceed roughly five
-times its `maxRoll`, since a card gets at most five upgrade events.
+times its `maxRoll`, since a card gets at most five upgrade events. `validateCard()` in
+`src/logic.js` runs exactly this set of checks (legal slot/set/rarity/level/main, substat
+count for the rarity, no duplicate or main-shadowing substat, the `5×maxRoll` bound) and is
+the single gate all three import paths (bulk paste, JSON load, merge import) run every card
+through — a card that fails it never reaches the inventory.
+
+## Optional fields (schema v2)
+
+Two additional per-card fields are recognised if present, ignored if absent, so v1 files
+keep loading unchanged:
+
+- **`cards[].conf`** — an object of per-field confidence, `0`–`1`, for fields the OCR
+  pipeline was unsure about, e.g. `{ "main": 0.4 }`. Not yet surfaced in the UI.
+- **`cards[].src`** — a string identifying where the card came from (a frame index, a
+  screenshot filename). Useful for tracing a bad card back to the source image.
+
+## Importing a rescan without losing your inventory
+
+Loading a file on the Save/Load tab **replaces** `cards` and `characters` wholesale — it is
+meant for resuming your own previously-downloaded save, not for merging in newly scanned
+cards. For that, the same tab's **Import cards (merge)** control reads a `{ "cards": [...] }`
+file and merges it into the current inventory via `mergeImport()`:
+
+Cards have no in-game serial number, so "the same physical card, scanned again" is inferred
+from `slot` + `set` + `rarity` + `main` (its fingerprint) plus how close its level and
+substat values are to an existing card sharing that fingerprint. An incoming card is
+classified as:
+
+- **new** — no existing card shares its fingerprint. Added as-is.
+- **a level-up** — shares a fingerprint with an existing card, and every substat the
+  existing card already had is present at the same value or higher on the incoming card
+  (upgrades only add roll value). The existing card is updated in place; its `id` and
+  `equipped` are preserved.
+- **a duplicate** — matches an existing card at the same level with the same substat
+  values. Skipped.
+- **ambiguous** — shares a fingerprint but the numbers don't cleanly fit either case above
+  (most often a value decrease, which usually means OCR noise on one of the two scans, but
+  could also be a second copy of an identical roll). Never applied automatically — the
+  Import Review dialog lists it for a manual decision (skip / add as new / replace
+  existing), defaulting to skip.
