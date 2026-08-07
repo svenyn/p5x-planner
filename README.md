@@ -77,6 +77,14 @@ Any portrait that is missing falls back to an element-tinted placeholder, so a p
 is fine. Portraits are loaded relatively, which works when opening the file directly but
 not in the Cowork artifact build, where the placeholders are always used.
 
+**Save / Load** downloads and restores the save file, and merges an incremental scan into
+the inventory you already have. Nothing persists on its own between sessions.
+
+**Scanning cards** is the written procedure for the OCR pipeline in `ocr/` — install,
+capture, calibrate, run, import, and work the review pile, with a table of what each failure
+mode actually means. It is documentation only; the page runs nothing. `docs/shot-howto.png`
+is a render of it.
+
 ## How scoring works
 
 A substat is converted to **roll value** — its magnitude divided by the largest single roll
@@ -112,17 +120,31 @@ src/data.js              game data only — slots, stats, sets, characters
 src/ui.html              markup and CSS
 src/logic.js             scoring engine, optimiser, rendering
 dist/p5x-planner.html    the build output; this is the whole app
-test/optimizer.test.js   17 headless assertions, exits non-zero on failure
+test/optimizer.test.js   36 headless assertions, exits non-zero on failure
 test/scale.js            4000-card benchmark across all four set policies
 test/screenshots.js      renders docs/shot-*.png for visual review
+ocr/                     the OCR pipeline — capture to cards.json
+tools/export-tables.js   exports src/data.js as dist/tables.json for the pipeline
 docs/SCHEMA.md           save-file format
 docs/DATA-SOURCES.md     provenance and what to verify
 CLAUDE.md                working notes for Claude Code
 ```
 
-## Not built yet
+## Scanning cards instead of typing them
 
-Phase 2 is an OCR pipeline that reads card detail panels from a screen recording and writes
-the save-file JSON directly, so a four-thousand-card inventory does not have to be typed.
-It is blocked on real screenshots to calibrate against. The design constraint is that it
-reads pixels only and never sends synthetic input into the game client.
+`ocr/` reads card detail panels out of screenshots or a screen recording and writes the JSON
+the **Save / Load** tab imports. It reads pixels only and never sends synthetic input into
+the game client — input automation is a ban risk on an account worth thousands of cards.
+
+```
+pip install -r ocr/requirements.txt
+npm run export-tables                                    # dist/tables.json, the vocabulary
+python ocr/calibrate.py one-screenshot.png               # once per device
+python ocr/pipeline.py shots/ --rarity 5 --slot Star --out cards.json
+```
+
+Rarity is not printed on the detail panel and the slot is read from the tab strip by colour,
+so a run is scanned one rarity and one slot tab at a time. Cards that read cleanly land in
+`cards.json`; everything ambiguous lands in `cards-review.json` with the frame it came from
+and what went wrong. The full procedure, including what to aim each crop box at and what
+each failure mode means, is the **Scanning cards** tab in the app.
