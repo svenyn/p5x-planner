@@ -29,7 +29,10 @@ function normStat(raw) {
   if (!raw) return null;
   const t = String(raw).trim();
   if (SUBSTATS[t] || t === 'HP Recovery' || t === 'ATK + DEF') return t;
-  const k = t.toLowerCase().replace(/\s+/g, ' ').replace(/[%]$/, '').trim();
+  // The in-game filter UI abbreviates with a trailing period ("Ailment Acc.", "Crit
+  // Mult.", "Damage Mult.+") — strip that punctuation before alias lookup so those
+  // exact in-game labels resolve without needing a separate alias per variant.
+  const k = t.toLowerCase().replace(/\s+/g, ' ').replace(/[%+.]+$/, '').trim();
   for (const s of Object.keys(SUBSTATS)) if (s.toLowerCase() === k) return s;
   if (STAT_ALIASES[k]) return STAT_ALIASES[k];
   const pk = k + '%';

@@ -136,11 +136,13 @@
     "pen": "Resistance Pierce",
     "pierce": "Resistance Pierce",
     "resistance pierce rate": "Resistance Pierce",
+    "pierce rate": "Resistance Pierce",
     "damage bonus": "Damage Multiplier",
     "dmg bonus": "Damage Multiplier",
     "attack multiplier": "Damage Multiplier",
     "dmg mult": "Damage Multiplier",
     "dmg": "Damage Multiplier",
+    "damage mult": "Damage Multiplier",
     "sp regen": "SP Recovery",
     "sp rec": "SP Recovery",
     "spd": "Speed",
@@ -193,6 +195,10 @@
     "Truth",
     "Virtue",
     "Hindrance",
+    "Futility",
+    "Sorrow",
+    "Disappointment",
+    "Change",
     "Ruin",
     "Prudence"
   ],
@@ -221,7 +227,8 @@
     "Resolve",
     "Trust",
     "Wisdom",
-    "Hope"
+    "Hope",
+    "Perseverance"
   ],
   "characters": [
     "Ren Amamiya",

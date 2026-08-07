@@ -387,7 +387,11 @@ const SUBSTATS = {
   'Resistance Pierce':  { flat: false, maxRoll: 2.1,  maxRollSpace: 2.7  }
 };
 
-/* Common aliases from other guide sites, so imported/pasted data still matches. */
+/* Common aliases from other guide sites, so imported/pasted data still matches.
+   'pierce rate' and 'damage mult' are the literal in-game filter-menu labels
+   (confirmed from screenshots, Aug 2026) — the stat itself is still called
+   'Resistance Pierce' / 'Damage Multiplier' internally since that's what the
+   rest of the codebase (scoring, character overrides, tests) references. */
 const STAT_ALIASES = {
   'crit dmg': 'Crit Multiplier', 'crit damage': 'Crit Multiplier', 'cdmg': 'Crit Multiplier',
   'crit mult': 'Crit Multiplier', 'cm': 'Crit Multiplier',
@@ -395,9 +399,10 @@ const STAT_ALIASES = {
   'effect hit rate': 'Ailment Accuracy', 'ehr': 'Ailment Accuracy', 'ail acc': 'Ailment Accuracy',
   'ailment acc': 'Ailment Accuracy', 'accuracy': 'Ailment Accuracy',
   'penetration': 'Resistance Pierce', 'pen': 'Resistance Pierce', 'pierce': 'Resistance Pierce',
-  'resistance pierce rate': 'Resistance Pierce',
+  'resistance pierce rate': 'Resistance Pierce', 'pierce rate': 'Resistance Pierce',
   'damage bonus': 'Damage Multiplier', 'dmg bonus': 'Damage Multiplier',
   'attack multiplier': 'Damage Multiplier', 'dmg mult': 'Damage Multiplier', 'dmg': 'Damage Multiplier',
+  'damage mult': 'Damage Multiplier',
   'sp regen': 'SP Recovery', 'sp rec': 'SP Recovery', 'spd': 'Speed',
   'atk': 'ATK', 'def': 'DEF', 'hp': 'HP', 'hp rec': 'HP Recovery', 'healing': 'HP Recovery'
 };
@@ -456,6 +461,18 @@ const SETS = {
   'Hindrance':      { p2: 'Curse damage +10%',        bonus2: { stat: 'Damage Multiplier', amt: 10 }, elem: 'Curse',
                       p4: 'Curse damage to debuffed foes +20%' },
 
+  /* --- Confirmed directly from the user's own in-game screenshots (Aug 2026), not from
+     a guide — higher confidence than the block above, since these are read straight off
+     the card detail panel (main stat + exact Set Effect text). --- */
+  'Futility':       { p2: 'ATK +12%',                 bonus2: { stat: 'ATK%', amt: 12 },
+                      p4: 'Ailment Accuracy +30% for 2 turns; reapplies after dealing a Technical' },
+  'Sorrow':         { p2: 'ATK +12%',                 bonus2: { stat: 'ATK%', amt: 12 },
+                      p4: 'Damage +20% for 3 turns; reapplies after activating a Highlight' },
+  'Disappointment': { p2: 'ATK +12%',                 bonus2: { stat: 'ATK%', amt: 12 },
+                      p4: "Skill damage +25% when that skill's attribute differs from the last skill used" },
+  'Change':         { p2: 'Electric damage +10%',     bonus2: { stat: 'Damage Multiplier', amt: 10 }, elem: 'Electric',
+                      p4: 'ATK +25% for 2 turns; reapplies after landing a critical hit' },
+
   /* --- Sets that appear in build guides but not in the set list I could verify.
      Their 2-piece effects are unknown, so the optimiser values them at 0 and the
      tool flags them. Correct these against the game and the maths follows. --- */
@@ -492,7 +509,10 @@ const SPACE_SETS = {
   'Resolve':    { pairs: ['Virtue','Labor'],                    note: 'HP thresholds grant damage; or Elucidator DEF shred.' },
   'Trust':      { pairs: ['Renewal','Power','Prosperity'],      note: 'Electric party buff; ATK to allies at battle start; party damage after supporting.' },
   'Wisdom':     { pairs: ['Oppression','Pleasure','Virtue'],    note: 'Malice thresholds; damage from ailment accuracy; ATK after Highlight.' },
-  'Hope':       { pairs: ['Hindrance'],                         note: 'Used on Makoto Yuki builds.' }
+  'Hope':       { pairs: ['Hindrance'],                         note: 'Used on Makoto Yuki builds.' },
+  /* Confirmed from a user screenshot (Aug 2026) — its own Set Effect panel lists at
+     least these two pairings; there may be more not shown on that screen. */
+  'Perseverance': { pairs: ['Change','Sorrow'],                 note: 'Electric damage scales with enemy count, max 32%; or boosts continuous/DoT damage 16%.' }
 };
 
 /* ---- Archetype defaults: main stats and substat weights (0-10) ---------------- */
@@ -653,7 +673,7 @@ const CHARACTERS = [
   { n:'Tomoko Noge', a:'Moko', r:4, e:'Psychokinesis', arch:'Strategist', conf:'high',
     sets:['Prosperity','Power'], space:'Trust', ov:{ w:{'ATK%':9,'HP%':5,'Ailment Accuracy':3} } },
   { n:'Tomoko Noge [Seaside]', a:'Summer Moko', r:5, e:'Psychokinesis', arch:'Healer', conf:'high',
-    sets:['Prosperity','Victory'], space:'Trust',
+    sets:['Prosperity'], space:'Trust',
     ov:{ main:{Moon:'HP Recovery',Star:'Crit Rate',Sky:'ATK%'}, w:{'Crit Rate':8,'ATK%':8,'SP Recovery':7},
          note:'Buffs party Ailment Accuracy. ATK main on Star is also viable — it boosts her healing.' } },
   { n:'Toshiya Sumi', a:'Sepia', r:4, e:'Curse', arch:'ST DPS', conf:'high',
@@ -677,7 +697,7 @@ const CHARACTERS = [
     sets:['Prudence','Victory'], space:'Resolve',
     ov:{ main:{Star:'Crit Multiplier'}, note:'Dual Wind/Ice — Wind mode is the one people play.' } },
   { n:'Kira Kitazato', a:'Messa', r:5, e:'Physical', arch:'ST DPS', conf:'high',
-    sets:['Oppression','Pleasure'], space:'Wisdom',
+    sets:['Oppression'], space:'Wisdom',
     ov:{ main:{Moon:'Damage Multiplier',Star:'ATK%',Sky:'ATK%'},
          w:{'Crit Rate':0,'Crit Multiplier':0,'Damage Multiplier':10,'Ailment Accuracy':8,'ATK%':8},
          bp:'His Rending damage CANNOT crit — skip crit entirely. Target 90% Ailment Accuracy.' } },
@@ -756,7 +776,10 @@ function normStat(raw) {
   if (!raw) return null;
   const t = String(raw).trim();
   if (SUBSTATS[t] || t === 'HP Recovery' || t === 'ATK + DEF') return t;
-  const k = t.toLowerCase().replace(/\s+/g, ' ').replace(/[%]$/, '').trim();
+  // The in-game filter UI abbreviates with a trailing period ("Ailment Acc.", "Crit
+  // Mult.", "Damage Mult.+") — strip that punctuation before alias lookup so those
+  // exact in-game labels resolve without needing a separate alias per variant.
+  const k = t.toLowerCase().replace(/\s+/g, ' ').replace(/[%+.]+$/, '').trim();
   for (const s of Object.keys(SUBSTATS)) if (s.toLowerCase() === k) return s;
   if (STAT_ALIASES[k]) return STAT_ALIASES[k];
   const pk = k + '%';

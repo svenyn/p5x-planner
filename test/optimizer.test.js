@@ -126,9 +126,29 @@ const PAGE = 'file://' + path.join(__dirname, '..', 'dist', 'p5x-planner.html');
     Object.entries(SPACE_SETS).forEach(([k,v]) => v.pairs.forEach(p => { if (!SETS[p]) badPair.push(`${k}->${p}`); }));
     fail('all space pairings reference real sets', badPair.length === 0, badPair.join(' | '));
 
+    // a character's own preferred sets must be able to give them a live 2-piece bonus —
+    // an elemental set that doesn't match the character's element is dead weight and
+    // should never be listed (caught a real data bug: Kira Kitazato listed Pleasure,
+    // which is Psychokinesis-elemental, despite being Physical himself)
+    const deadOwnSets = [];
+    for (const ch of CHARACTERS) {
+      (ch.sets || []).forEach(s => {
+        const def = SETS[s];
+        if (def && def.elem && def.elem !== ch.e) deadOwnSets.push(`${ch.n} (${ch.e}) lists off-element set ${s} (${def.elem})`);
+      });
+    }
+    fail('no character lists an off-element set among their own preferred sets',
+      deadOwnSets.length === 0, deadOwnSets.join(' | '));
+
     // aliases resolve
     fail('alias CDMG resolves', normStat('CDMG') === 'Crit Multiplier');
     fail('alias EHR resolves', normStat('ehr') === 'Ailment Accuracy');
+    // literal in-game filter-menu labels (confirmed from screenshots, Aug 2026) —
+    // trailing-period abbreviations and "Pierce Rate" specifically
+    fail('in-game label "Pierce Rate" resolves', normStat('Pierce Rate') === 'Resistance Pierce');
+    fail('in-game label "Ailment Acc." resolves', normStat('Ailment Acc.') === 'Ailment Accuracy');
+    fail('in-game label "Crit Mult." resolves', normStat('Crit Mult.') === 'Crit Multiplier');
+    fail('in-game label "Damage Mult.+" resolves', normStat('Damage Mult.+') === 'Damage Multiplier');
     fail('alias Strength -> Power', normSet('strength') === 'Power');
     fail('Ruin is its own set, not aliased away', normSet('Ruin') === 'Ruin' && !!SETS['Ruin']);
     fail('Prudence is its own set', normSet('prudence') === 'Prudence' && !!SETS['Prudence']);

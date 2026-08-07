@@ -42,9 +42,15 @@ optimiser works around it by weighting main stats by *priority* rather than magn
 (`weight * 3.0`, plus 10 for an exact target match), which is a reasonable ordering but not
 a real quantity.
 
-### Four-slot sets — medium
+### Four-slot sets — medium, plus four confirmed directly from screenshots
 
-Twenty sets with 2-piece and 4-piece effects, taken from Game8's current English list.
+Twenty sets with 2-piece and 4-piece effects, taken from Game8's current English list, plus
+four more — **Futility**, **Sorrow**, **Disappointment**, **Change** — added from the user's
+own in-game screenshots (Aug 2026) after their account turned out to own real cards in sets
+no guide listed. These four are higher-confidence than the guide-sourced twenty: the main
+stat and Set Effect text were read straight off the card detail panel, not transcribed by a
+third party. `Change` is Electric-elemental like `Renewal` — the game has more than one set
+per element, so this is not a naming collision.
 
 The problem is naming. Game8, Prydwen and Fragster each use different translations of the
 same sets, and Samurai Gamers uses a fourth scheme covering the Chinese, Taiwanese and
@@ -77,11 +83,13 @@ UI flags them:
 
 ### Space cards — medium
 
-Fifteen Space cards. Each grants a conditional effect that keys off whichever 4-piece set is
+Sixteen Space cards. Each grants a conditional effect that keys off whichever 4-piece set is
 active, so a Space card does nothing without a full 4-piece. Game8 lists fourteen with 34
 documented pairings; Fragster lists only eight, so the list may still be incomplete.
 **Hope** is a fifteenth, added from Makoto Yuki's build page, and its pairing with Ruin is
-inferred rather than documented.
+inferred rather than documented. **Perseverance** is a sixteenth, confirmed directly from a
+user screenshot of its own Set Effect panel — that panel listed pairings with `Change` and
+`Sorrow`, but since only two fit on screen there may be more that aren't recorded yet.
 
 ### Characters — mixed, flagged per entry
 
