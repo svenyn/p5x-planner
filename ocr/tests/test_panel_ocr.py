@@ -8,7 +8,7 @@ from pathlib import Path
 import pytest
 from PIL import Image, ImageDraw, ImageFont
 
-from panel_ocr import parse_panel
+from panel_ocr import parse_level, parse_panel
 
 W, H = 900, 700
 FONT_PATH = r"C:\Windows\Fonts\arial.ttf"
@@ -132,6 +132,58 @@ def test_fewer_than_four_substats_leaves_remaining_slots_empty(vocab):
     )
     card, conf, notes = parse_panel(img, regions, vocab, rarity=5, slot="Sky")
     assert len(card["subs"]) == 2
+
+
+@pytest.mark.parametrize("text,expected", [
+    ("Lv.25", (25, True)),
+    ("Lv.0", (0, True)),
+    # what Tesseract actually returns for the two real cases, once the crop is
+    # binarized (Aug 2026 batch): the period is dropped and case wanders
+    ("LV 25", (25, True)),
+    ("v0", (0, True)),
+    # the cap suffix, if the panel ever shows one: the LEVEL is the first
+    # number after the prefix, not the last number in the string
+    ("Lv.12/25", (12, True)),
+    ("Lv.25/25", (25, True)),
+    # the misread that started this: "Lv.25" clipped by a too-narrow crop, the
+    # L+v collapsing into a leading 1. No prefix survives, so it must come back
+    # unanchored — 128 then fails validate_card's range check, whereas silently
+    # returning the leading "1" would have been an in-range, plausible lie.
+    ("128", (128, False)),
+    ("i289", (289, False)),
+    ("", (None, False)),
+    ("Lv.", (None, False)),
+])
+def test_parse_level_anchors_on_the_prefix(text, expected):
+    assert parse_level(text) == expected
+
+
+def test_parse_level_never_reads_a_mangled_prefix_as_the_level():
+    """The dangerous failure mode is not a wild number — validate_card catches
+    those — it's a small in-range one. If the "L" of "Lv.5" is read as a "1",
+    taking the first integer yields 1: a perfectly legal level, silently wrong.
+    Anchoring on the prefix has to consume that digit rather than return it."""
+    assert parse_level("1v.5") == (5, True)
+    assert parse_level("lv.5") == (5, True)
+    assert parse_level("|v.5") == (5, True)
+
+
+def test_unanchored_level_is_flagged_for_review(vocab):
+    """A level read with no recognisable "Lv." in front of it may be plausible
+    and still wrong, so it must reach the review file. pipeline.py routes on
+    notes, not on conf, so the note is what actually does the routing."""
+    img, regions = _build_panel(
+        title="[Futility]", level_text="17", main_label="Crit Rate",
+        subs=[("Damage Mult.+", "2.1%"), ("HP", "2.9%"), ("Defense", "4.1%")],
+    )
+    card, conf, notes = parse_panel(img, regions, vocab, rarity=5, slot="Star")
+    # what the number comes out as doesn't matter (bare digits in a wide box are
+    # exactly the case synthetic OCR is flaky on) — what matters is that it lands
+    # in range, so validate_card would wave it through, and the note is therefore
+    # the only thing standing between a guessed level and the save file.
+    assert card["level"] is not None and 0 <= card["level"] <= 25
+    assert conf["level"] < 1.0
+    assert any('without a readable "Lv." prefix' in n for n in notes)
 
 
 def test_heavens_set_without_a_slot_is_flagged_not_guessed(vocab):

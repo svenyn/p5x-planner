@@ -1,0 +1,81 @@
+"""lufel.net slug -> portrait path, lifted verbatim from the site's own
+`__CHARACTER_SLUG_MAP` global (Aug 2026).
+
+Refresh from a browser console on https://lufel.net/en/character/ with:
+
+    Object.entries(window.__CHARACTER_SLUG_MAP).map(([kr, v]) =>
+      [v.slug, encodeURI('/assets/img/character-cards/' + kr + '.webp')])
+
+Paths stay percent-encoded so this file is pure ASCII and no transcription
+step can corrupt the Korean filenames.
+"""
+_D = "/assets/img/character-cards/"
+
+SLUGS = [
+    ("pinky", _D + "%EB%82%98%EB%A3%A8%EB%AF%B8.webp"),
+    ("joker", _D + "%EB%A0%8C.webp"),
+    ("joker-starlight", _D + "%EB%A0%8C%C2%B7%EB%8C%84%EC%8B%B1%20%EC%8A%A4%ED%83%80.webp"),
+    ("howler", _D + "%EB%A3%A8%EC%9A%B0%EB%82%98.webp"),
+    ("cattle", _D + "%EB%A3%A8%ED%8E%98%EB%A5%B4.webp"),
+    ("leon", _D + "%EB%A0%88%EC%98%A4.webp"),
+    ("skull", _D + "%EB%A5%98%EC%A7%80.webp"),
+    ("wind-tempest", _D + "%EB%A6%AC%EC%BD%94%C2%B7%EB%A7%A4%ED%99%94.webp"),
+    ("cherish", _D + "%EB%A7%88%EC%82%AC%ED%82%A4.webp"),
+    ("turbo", _D + "%EB%A7%88%EC%9C%A0%EB%AF%B8.webp"),
+    ("queen", _D + "%EB%A7%88%EC%BD%94%ED%86%A0.webp"),
+    ("marian", _D + "%EB%AF%B8%EB%82%98%EB%AF%B8.webp"),
+    ("marian-beachflower", _D + "%EB%AF%B8%EB%82%98%EB%AF%B8%C2%B7%EC%97%AC%EB%A6%84.webp"),
+    ("puppet-wavecatcher", _D + "%EB%AF%B8%EC%9C%A0%C2%B7%EC%97%AC%EB%A6%84.webp"),
+    ("mona", _D + "%EB%AA%A8%EB%A5%B4%EA%B0%80%EB%82%98.webp"),
+    ("mona-starlight", _D + "%EB%AA%A8%EB%A5%B4%EA%B0%80%EB%82%98%C2%B7%EB%8C%84%EC%8B%B1%20%EC%8A%A4%ED%83%80.webp"),
+    ("closer", _D + "%EB%AA%A8%ED%86%A0%ED%95%98.webp"),
+    ("closer-tropical", _D + "%EB%AA%A8%ED%86%A0%ED%95%98%C2%B7%EC%97%AC%EB%A6%84.webp"),
+    ("closer-radiance", _D + "%EB%AA%A8%ED%86%A0%ED%95%98%C2%B7%EC%B2%AD%EA%B4%91.webp"),
+    ("anri", _D + "%EC%95%84%EB%9E%80.webp"),
+    ("mont", _D + "%EB%AA%BD%ED%83%80%EB%89%B4.webp"),
+    ("mont-frostgale", _D + "%EB%AA%BD%ED%83%80%EB%89%B4%C2%B7%EB%B0%B1%EC%A1%B0.webp"),
+    ("matoi", _D + "%EB%AF%B8%EC%98%A4.webp"),
+    ("kirijo", _D + "%EB%AF%B8%EC%B8%A0%EB%A3%A8.webp"),
+    ("akihiko", _D + "%EC%82%AC%EB%82%98%EB%8B%A4.webp"),
+    ("luce", _D + "%EC%87%BC%ED%82%A4.webp"),
+    ("luce-notte", _D + "%EC%87%BC%ED%82%A4%C2%B7%EC%95%94%EC%95%BC.webp"),
+    ("soy", _D + "%EC%8A%8C.webp"),
+    ("soy-pioneer", _D + "%EC%8A%8C%C2%B7%ED%94%84%EB%A1%A0%ED%8B%B0%EC%96%B4.webp"),
+    ("fleuret", _D + "%EC%84%B8%EC%9D%B4%EC%A7%80.webp"),
+    ("panther", _D + "%EC%95%88.webp"),
+    ("panther-starlight", _D + "%EC%95%88%C2%B7%EB%8C%84%EC%8B%B1%20%EC%8A%A4%ED%83%80.webp"),
+    ("chord", _D + "%EC%95%84%EC%95%BC%EC%B9%B4.webp"),
+    ("chord-summer", _D + "%EC%95%84%EC%95%BC%EC%B9%B4%C2%B7%EC%97%AC%EB%A6%84.webp"),
+    ("aegis", _D + "%EC%95%84%EC%9D%B4%EA%B8%B0%EC%8A%A4.webp"),
+    ("crow", _D + "%EC%95%84%EC%BC%80%EC%B9%98.webp"),
+    ("rin", _D + "%EC%95%BC%EC%98%A4%EB%A7%81.webp"),
+    ("rin-firecracker", _D + "%EC%95%BC%EC%98%A4%EB%A7%81%C2%B7%EC%82%AC%EC%9E%90%EB%AC%B4.webp"),
+    ("fox", _D + "%EC%9C%A0%EC%8A%A4%EC%BC%80.webp"),
+    ("bui", _D + "YUI.webp"),
+    ("bui-prism", _D + "YUI%C2%B7%EC%8A%A4%ED%85%94%EB%9D%BC.webp"),
+    ("yukari", _D + "%EC%9C%A0%EC%B9%B4%EB%A6%AC.webp"),
+    ("yuki", _D + "%EC%9C%A0%ED%82%A4%EB%AF%B8.webp"),
+    ("makoto", _D + "%EC%9C%A0%ED%82%A4%20%EB%A7%88%EC%BD%94%ED%86%A0.webp"),
+    ("berry", _D + "%EC%9D%B4%EC%B9%98%EA%B3%A0.webp"),
+    ("junpei", _D + "%EC%A4%80%ED%8E%98%EC%9D%B4.webp"),
+    ("koromaru", _D + "%EC%BD%94%EB%A1%9C%EB%A7%88%EB%A3%A8.webp"),
+    ("violet", _D + "%EC%B9%B4%EC%8A%A4%EB%AF%B8.webp"),
+    ("blitz", _D + "%EC%B9%B4%ED%83%80%EC%95%BC%EB%A7%88.webp"),
+    ("messa", _D + "%ED%82%A4%EB%9D%BC.webp"),
+    ("key", _D + "%ED%82%A4%EC%9A%94%EC%8B%9C.webp"),
+    ("moko", _D + "%ED%86%A0%EB%AA%A8%EC%BD%94.webp"),
+    ("moko-seaside", _D + "%ED%86%A0%EB%AA%A8%EC%BD%94%C2%B7%EC%97%AC%EB%A6%84.webp"),
+    ("sepia", _D + "%ED%86%A0%EC%8B%9C%EC%95%BC.webp"),
+    ("noir", _D + "%ED%95%98%EB%A3%A8.webp"),
+    ("riddle", _D + "%ED%95%98%EB%A3%A8%EB%82%98.webp"),
+    ("vino", _D + "%EC%B9%98%EC%A6%88%EC%BD%94.webp"),
+    ("j-c", _D + "J&C.webp"),
+    ("wind", _D + "%EB%A6%AC%EC%BD%94.webp"),
+    ("puppet", _D + "%EB%AF%B8%EC%9C%A0.webp"),
+    ("ange", _D + "%EB%A7%88%EB%82%98%EC%B9%B4.webp"),
+    ("phoebe", _D + "%EC%9C%A0%EC%9A%B0%EB%AF%B8.webp"),
+    ("okyann", _D + "%EC%B9%B4%EC%9A%94.webp"),
+    ("navi", _D + "%ED%9B%84%ED%83%80%EB%B0%94.webp"),
+    ("fuka", _D + "%ED%9B%84%EC%B9%B4.webp"),
+    ("miku", _D + "%EB%AF%B8%EC%BF%A0.webp"),
+]

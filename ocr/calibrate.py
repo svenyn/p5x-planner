@@ -31,14 +31,29 @@ FIELDS = [
 
 # Shown before each drag, so it's clear what to aim at — several of these are
 # not the obvious thing on screen (see panel_ocr.py's module docstring).
+#
+# Two of these hints exist because of real miscalibrations that reached a batch
+# (Aug 2026): a level box fitted to a "Lv.0" card clipped the second digit of
+# every "Lv.25" card and read it as 128, and sub label boxes dragged to the
+# value column swallowed the yellow enhancement bolt, which OCRs as junk glued
+# onto the stat name. Both came from calibrating against one unrepresentative
+# card, so both hints say what the WORST case looks like, not the typical one.
+SUB_LABEL_HINT = ("the substat's NAME only. Stop well before the yellow bolt icon "
+                  "to its right (the 'enhanced' marker, only present on levelled "
+                  "cards) and before the value column — either one bleeding in "
+                  "corrupts short names like 'Speed' and 'HP'")
+
 FIELD_HINTS = {
     "slot_tabs": "the WHOLE Space/Sun/Moon/Star/Sky tab strip, top-left "
                  "(read by colour, not text — one tab is highlighted red)",
     "title": "the set name in the Set Effect box, lower right, e.g. '[Futility]' "
              "— NOT the big stylized title at the top, which OCR cannot read",
-    "level": "the 'Lv.25' text",
+    "level": "the 'Lv.25' text. Calibrate this on a TWO-DIGIT level and leave "
+             "clear margin on both sides — a box fitted snugly to 'Lv.0' clips "
+             "the second digit and misreads every maxed card",
     "main_label": "the name of the first stat, the one with its own icon "
                   "(e.g. 'Crit Rate') — not its number",
+    **{f"sub{i}_label": SUB_LABEL_HINT for i in range(1, 5)},
 }
 
 

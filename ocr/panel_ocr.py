@@ -44,6 +44,9 @@ _DIGIT_FIX = {"O": "0", "o": "0", "l": "1", "I": "1", "S": "5", "s": "5", "B": "
 _LABEL_CONFIG = "--psm 7"
 _VALUE_CONFIG = "--psm 7 -c tessedit_char_whitelist=0123456789.,/%"
 
+# Panel text is near-white on near-black; nothing legible sits between.
+_BINARIZE_THRESHOLD = 150
+
 
 def crop_fraction(image, box):
     w, h = image.size
@@ -51,11 +54,31 @@ def crop_fraction(image, box):
     return image.crop((int(x0 * w), int(y0 * h), int(x1 * w), int(y1 * h)))
 
 
-def ocr_text(image, box, config, upscale=1):
+def binarize(crop, threshold=_BINARIZE_THRESHOLD):
+    """Hard black/white threshold, which rescues the small slanted level font.
+
+    The level text is drawn with heavy anti-aliasing at ~37px tall; upscaling
+    alone leaves Tesseract guessing at the soft edges and it read a real
+    "Lv.25" as "128" (Aug 2026 batch). Flattening to two levels first makes
+    the same crop read as "LV 25". Polarity is preserved rather than inverted,
+    so this is safe on light-background renders (the synthetic test panels)
+    as well as on the game's dark one.
+    """
+    a = np.asarray(crop.convert("L"))
+    return Image.fromarray(np.where(a > threshold, 255, 0).astype(np.uint8))
+
+
+def ocr_text(image, box, config, upscale=1, binary=False):
     """`upscale` enlarges the crop before OCR. Tesseract wants roughly 30px of
     cap height and degrades badly below that — the level field's small slanted
-    "Lv.0" was read as "9" at native size but resolves correctly at 3x."""
+    "Lv.0" was read as "9" at native size but resolves correctly at 3x.
+
+    `binary` applies binarize() first (see there), on the native-resolution
+    crop, so it isn't fighting interpolated edge pixels.
+    """
     crop = crop_fraction(image, box)
+    if binary:
+        crop = binarize(crop)
     if upscale != 1:
         crop = crop.resize((crop.width * upscale, crop.height * upscale), Image.LANCZOS)
     return pytesseract.image_to_string(crop, config=config).strip()
@@ -84,23 +107,41 @@ def parse_number(text):
     return None
 
 
+# "Lv" followed by the number, tolerating the prefix's usual misreads: the L
+# comes back as 1/l/i/| about as often as itself, and the v occasionally as y.
+# Anchoring on the prefix is what makes the digits unambiguous — see parse_level.
+_LEVEL_RE = re.compile(r"[li1|!]?\s*[vy]\s*[.,:;]?\s*(\d+)", re.I)
+
+
 def parse_level(text):
-    """First integer in e.g. "Lv.25" / "Lv.0" / "Lv.25/25".
+    """Parses e.g. "Lv.25" / "Lv.0" / "Lv.25/25". Returns (level, anchored).
 
     Read with the plain label config, NOT the digits-only whitelist: forcing
     Tesseract to emit only digits over the "Lv." prefix makes it mangle those
     letters into a spurious digit (a real misread — "Lv.0" came back as "9"
     against a real screenshot, silently turning every level-0 card into a
-    level-9 one). Letting the letters through and pulling the digits out here
-    is both simpler and correct.
+    level-9 one).
+
+    But letting the letters through and taking the first integer isn't safe
+    either, because the prefix itself can *become* a leading digit: a real
+    "Lv.25" read as "128" (Aug 2026 batch) — the L+v collapsing into a 1. So
+    match the prefix explicitly and take the digits that follow it. That also
+    gets "Lv.12/25" right, where the first number is the level and the second
+    is the cap.
+
+    `anchored` says whether the prefix was found. When it wasn't, the digits
+    could be anything at all — including a mangled prefix being read as the
+    level — so the caller must treat the value as unverified rather than
+    trusting it. The fallback takes the LAST run of digits, not the first,
+    because in this layout the number always trails the prefix.
     """
     t = text or ""
-    m = re.search(r"\d+", t)
-    if m:
-        return int(m.group())
-    fixed = "".join(_DIGIT_FIX.get(c, c) for c in t)
-    m = re.search(r"\d+", fixed)
-    return int(m.group()) if m else None
+    for candidate in (t, "".join(_DIGIT_FIX.get(c, c) for c in t)):
+        m = _LEVEL_RE.search(candidate)
+        if m:
+            return int(m.group(1)), True
+    m = re.findall(r"\d+", t)
+    return (int(m[-1]), False) if m else (None, False)
 
 
 def strip_trailing_number(text):
@@ -201,11 +242,18 @@ def parse_panel(image, regions, vocab, rarity=None, slot=None):
         slot = None
         conf["slot"] = 0.0
 
-    level_text = ocr_text(image, regions["level"], _LABEL_CONFIG, upscale=3)  # see parse_level
-    level = parse_level(level_text)
-    conf["level"] = 1.0 if level is not None else 0.0
+    # binary=True: the level font is the one field Tesseract cannot read reliably
+    # from the anti-aliased original — see binarize() and parse_level().
+    level_text = ocr_text(image, regions["level"], _LABEL_CONFIG, upscale=3, binary=True)
+    level, anchored = parse_level(level_text)
+    conf["level"] = 1.0 if anchored else (0.4 if level is not None else 0.0)
     if level is None:
         notes.append(f'could not parse a level from "{level_text}"')
+    elif not anchored:
+        # digits with no readable "Lv." in front of them: the prefix may itself
+        # have been read as part of the number, so this can be plausible and
+        # still wrong. Always send it to review rather than trusting it.
+        notes.append(f'read level {level} from "{level_text}" without a readable "Lv." prefix')
 
     if slot == "Sun":
         main, main_conf = "HP", 1.0
