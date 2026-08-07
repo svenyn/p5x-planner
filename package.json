@@ -1,0 +1,16 @@
+{
+  "name": "p5x-revelation-planner",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Read-only build tracker and Revelation Card recommender for Persona 5: The Phantom X",
+  "scripts": {
+    "build": "node build.js",
+    "test": "npm run build && node test/optimizer.test.js",
+    "scale": "npm run build && node test/scale.js",
+    "shots": "npm run build && node test/screenshots.js",
+    "open": "npm run build && echo \"open dist/p5x-planner.html in a browser\""
+  },
+  "devDependencies": {
+    "playwright": "^1.40.0"
+  }
+}

@@ -1,0 +1,1414 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>P5X Revelation Planner</title>
+</head><body>
+<style>
+:root{
+  --bg:#0b0b0d; --panel:#141419; --panel2:#1c1c23; --line:#2c2c36;
+  --ink:#f2f2f4; --dim:#9a9aa6; --dim2:#6e6e7a;
+  --red:#e6274a; --red-dim:#7a1528; --gold:#e8b64c; --purple:#a86fd0; --blue:#4c8fe8;
+  --ok:#3fbf7f;
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);
+  font:14px/1.5 "Segoe UI",-apple-system,system-ui,sans-serif;-webkit-font-smoothing:antialiased}
+h1,h2,h3{margin:0;font-weight:700;letter-spacing:-.01em}
+a{color:var(--red)}
+button{font:inherit;cursor:pointer;border:1px solid var(--line);background:var(--panel2);
+  color:var(--ink);border-radius:6px;padding:7px 12px;transition:.12s}
+button:hover{border-color:var(--red);background:#26262f}
+button.primary{background:var(--red);border-color:var(--red);color:#fff;font-weight:600}
+button.primary:hover{background:#ff3557}
+button.ghost{background:transparent}
+button.sm{padding:3px 8px;font-size:12px}
+input,select,textarea{font:inherit;background:#0f0f13;color:var(--ink);
+  border:1px solid var(--line);border-radius:6px;padding:6px 9px;outline:none}
+input:focus,select:focus,textarea:focus{border-color:var(--red)}
+table{width:100%;border-collapse:collapse}
+th{text-align:left;font-size:11px;text-transform:uppercase;letter-spacing:.06em;
+  color:var(--dim2);font-weight:600;padding:8px 10px;border-bottom:1px solid var(--line);
+  position:sticky;top:0;background:var(--panel);z-index:2}
+td{padding:7px 10px;border-bottom:1px solid #1e1e26;vertical-align:middle}
+tr:hover td{background:#16161c}
+
+header{background:linear-gradient(180deg,#17171d,#0e0e12);border-bottom:1px solid var(--line);
+  padding:14px 20px;display:flex;align-items:center;gap:16px;flex-wrap:wrap;
+  position:sticky;top:0;z-index:20}
+header .logo{font-size:17px;font-weight:800}
+header .logo em{color:var(--red);font-style:normal}
+nav{display:flex;gap:4px;margin-left:auto;flex-wrap:wrap}
+nav button{border:none;background:transparent;color:var(--dim);padding:7px 13px;border-radius:6px;font-weight:600}
+nav button:hover{color:var(--ink);background:#20202a}
+nav button.on{background:var(--red);color:#fff}
+main{padding:20px;max-width:1500px;margin:0 auto}
+.panel{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:16px;margin-bottom:16px}
+.panel > h2{font-size:14px;text-transform:uppercase;letter-spacing:.07em;color:var(--dim);margin-bottom:12px}
+.row{display:flex;gap:10px;flex-wrap:wrap;align-items:flex-end}
+.field{display:flex;flex-direction:column;gap:4px}
+.field label{font-size:11px;text-transform:uppercase;letter-spacing:.05em;color:var(--dim2);font-weight:600}
+.muted{color:var(--dim)}
+.tiny{font-size:12px}
+.mono{font-family:ui-monospace,"Cascadia Code",Consolas,monospace}
+.scroll{max-height:62vh;overflow:auto;border:1px solid var(--line);border-radius:8px}
+
+.tag{display:inline-block;padding:1px 7px;border-radius:20px;font-size:11px;font-weight:600;
+  border:1px solid var(--line);background:#202029;color:var(--dim);white-space:nowrap}
+.tag.r5{color:#f0c260;border-color:#6b5220;background:#2a2213}
+.tag.r4{color:#c08ae8;border-color:#4d3163;background:#241a2e}
+.tag.r3{color:#6fa6ee;border-color:#294466;background:#141e2b}
+.tag.r2{color:#9a9aa6;border-color:#33333d;background:#1b1b22}
+.tag.conf-high{color:var(--ok);border-color:#1d5c3d;background:#10241a}
+.tag.conf-med{color:var(--gold);border-color:#5c4a1d;background:#241f10}
+.tag.conf-low{color:#e87a5c;border-color:#6b3524;background:#2a1712}
+.tag.hit{color:var(--ok);border-color:#1d5c3d;background:#10241a}
+.tag.miss{color:#e87a5c;border-color:#6b3524;background:#2a1712}
+
+.grid{display:grid;gap:10px}
+.cards{grid-template-columns:repeat(auto-fill,minmax(215px,1fr))}
+.cc{background:var(--panel2);border:1px solid var(--line);border-radius:9px;padding:11px;cursor:pointer;transition:.12s}
+.cc:hover{border-color:var(--red)}
+.cc.owned{border-left:3px solid var(--red)}
+.cc .nm{font-weight:700;font-size:14px}
+.cc .al{color:var(--dim2);font-size:12px}
+.cc .mt{display:flex;gap:5px;margin-top:7px;flex-wrap:wrap}
+
+.slot{display:inline-flex;align-items:center;justify-content:center;min-width:34px;height:20px;
+  padding:0 6px;border-radius:5px;font-size:10px;font-weight:800;letter-spacing:.04em;
+  text-transform:uppercase;background:#242430;color:var(--dim)}
+.slot.Sun{background:#3a2a10;color:#f0c260}
+.slot.Moon{background:#1b2438;color:#7fa8e8}
+.slot.Star{background:#332040;color:#c08ae8}
+.slot.Sky{background:#123028;color:#4fc79a}
+.slot.Space{background:#3a1520;color:#f07a92}
+
+.loadout{display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:10px}
+.lo{background:var(--panel2);border:1px solid var(--line);border-radius:9px;padding:12px}
+.lo.empty{border-style:dashed;opacity:.55}
+.lo h4{margin:0 0 6px;font-size:13px;display:flex;align-items:center;gap:7px;flex-wrap:wrap}
+.stat-tile{min-width:130px}
+.lo .sub{display:flex;justify-content:space-between;align-items:baseline;gap:8px;flex-wrap:wrap;
+  font-size:12px;padding:3px 0;border-bottom:1px dotted #26262f}
+.lo .sub > span:first-child{flex:0 0 auto}
+.lo .sub b{text-align:right}
+.lo .sub b{font-weight:600}
+.lo .sub.good b{color:var(--ok)}
+.lo .sub.bad{opacity:.45}
+.score{font-family:ui-monospace,monospace;font-weight:700}
+.bar{height:5px;border-radius:3px;background:#24242e;overflow:hidden;margin-top:4px}
+.bar>i{display:block;height:100%;background:linear-gradient(90deg,var(--red-dim),var(--red))}
+
+.wgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(190px,1fr));gap:8px}
+.wrow{display:flex;align-items:center;gap:8px;background:#0f0f14;border:1px solid var(--line);
+  border-radius:6px;padding:5px 8px}
+.wrow span{flex:1;font-size:12px}
+.wrow input{width:52px;padding:3px 6px;text-align:center}
+
+.notice{background:#1a1218;border:1px solid #4a2030;border-left:3px solid var(--red);
+  border-radius:7px;padding:10px 13px;font-size:13px;margin-bottom:12px}
+.notice.info{background:#101a1c;border-color:#1d4a52;border-left-color:#3fbfbf}
+dialog{background:var(--panel);color:var(--ink);border:1px solid var(--line);border-radius:12px;
+  padding:20px;max-width:820px;width:94%;max-height:88vh}
+dialog::backdrop{background:rgba(0,0,0,.7)}
+.hide{display:none!important}
+.right{text-align:right}
+.nowrap{white-space:nowrap}
+</style>
+
+<header>
+  <div class="logo">P5<em>X</em> &nbsp;Revelation Planner</div>
+  <span class="tiny muted" id="stamp"></span>
+  <nav>
+    <button data-tab="opt" class="on">Optimise</button>
+    <button data-tab="inv">Inventory</button>
+    <button data-tab="triage">Triage</button>
+    <button data-tab="roster">Roster</button>
+    <button data-tab="data">Save / Load</button>
+  </nav>
+</header>
+
+<main>
+  <div id="nodata" class="notice hide">
+    No cards yet. Add a few on the <b>Inventory</b> tab, or load a save file on the <b>Save / Load</b> tab.
+  </div>
+
+  <!-- ===================== OPTIMISE ===================== -->
+  <section id="tab-opt">
+    <div class="panel">
+      <div class="row">
+        <div class="field" style="min-width:250px">
+          <label>Character</label>
+          <select id="optChar"></select>
+        </div>
+        <div class="field">
+          <label>Card pool</label>
+          <select id="optPool">
+            <option value="all">All cards</option>
+            <option value="free">Only unequipped cards</option>
+          </select>
+        </div>
+        <div class="field">
+          <label>Minimum rarity</label>
+          <select id="optRarity">
+            <option value="5">5★ only</option>
+            <option value="4">4★ and up</option>
+            <option value="2">Everything</option>
+          </select>
+        </div>
+        <div class="field">
+          <label>Set policy</label>
+          <select id="optPolicy">
+            <option value="pref">Honour preferred sets</option>
+            <option value="force4">Force preferred 4-piece</option>
+            <option value="any4">Best complete 4-piece</option>
+            <option value="stats">Pure stat maximum</option>
+          </select>
+        </div>
+        <div class="field">
+          <label title="How much a 4-piece set effect is worth relative to raw substats. Raise it if you think set effects matter more than the optimiser assumes.">4-piece value</label>
+          <input id="optP4" type="number" value="55" min="0" max="300" step="5" style="width:75px">
+        </div>
+        <button class="primary" id="optRun">Recommend</button>
+      </div>
+      <div id="optNotes" style="margin-top:12px"></div>
+    </div>
+    <div id="optOut"></div>
+  </section>
+
+  <!-- ===================== INVENTORY ===================== -->
+  <section id="tab-inv" class="hide">
+    <div class="panel">
+      <h2>Add a card</h2>
+      <div class="row">
+        <div class="field"><label>Slot</label><select id="fSlot"></select></div>
+        <div class="field"><label>Set</label><select id="fSet"></select></div>
+        <div class="field"><label>Rarity</label><select id="fRar">
+          <option value="5">5★</option><option value="4">4★</option>
+          <option value="3">3★</option><option value="2">2★</option></select></div>
+        <div class="field"><label>Level</label><input id="fLvl" type="number" value="0" min="0" max="25" style="width:70px"></div>
+        <div class="field"><label>Main stat</label><select id="fMain"></select></div>
+      </div>
+      <div class="row" style="margin-top:10px" id="fSubs"></div>
+      <div class="row" style="margin-top:12px">
+        <button class="primary" id="fAdd">Add card</button>
+        <span class="tiny muted">Tip: press Enter in any substat box to add and reset for the next card.</span>
+      </div>
+    </div>
+
+    <div class="panel">
+      <h2>Bulk paste</h2>
+      <p class="tiny muted" style="margin:0 0 8px">
+        One card per line:
+        <code class="mono">Slot | Set | Rarity | Level | Main stat | sub value, sub value, ...</code><br>
+        Example: <code class="mono">Star | Hindrance | 5 | 25 | Crit Rate | Crit Multiplier 12.4, ATK% 8.7, Speed 4.2, Pierce 3.9</code><br>
+        Stat names are matched loosely — CDMG, EHR, SPD, Pen and similar all resolve correctly.
+      </p>
+      <textarea id="bulk" rows="7" style="width:100%" class="mono" placeholder="Paste lines here..."></textarea>
+      <div class="row" style="margin-top:10px">
+        <button class="primary" id="bulkAdd">Import lines</button>
+        <span id="bulkMsg" class="tiny muted"></span>
+      </div>
+    </div>
+
+    <div class="panel">
+      <h2>Cards <span class="muted" id="invCount"></span></h2>
+      <div class="row" style="margin-bottom:10px">
+        <div class="field"><label>Slot</label><select id="flSlot"><option value="">Any</option></select></div>
+        <div class="field"><label>Set</label><select id="flSet"><option value="">Any</option></select></div>
+        <div class="field"><label>Rarity</label><select id="flRar">
+          <option value="">Any</option><option value="5">5★</option><option value="4">4★</option>
+          <option value="3">3★</option><option value="2">2★</option></select></div>
+        <div class="field"><label>Search</label><input id="flQ" placeholder="stat, set, character..."></div>
+        <button class="ghost" id="flClear">Clear</button>
+      </div>
+      <div class="scroll"><table id="invTable"></table></div>
+    </div>
+  </section>
+
+  <!-- ===================== TRIAGE ===================== -->
+  <section id="tab-triage" class="hide">
+    <div class="panel">
+      <h2>Keep or feed</h2>
+      <p class="tiny muted" style="margin:0 0 10px">
+        Every card is scored against every character you own, and rated by its best match.
+        With a large inventory this is the fastest way to find what is safe to feed away.
+      </p>
+      <div class="row">
+        <div class="field"><label>Rate against</label><select id="trScope">
+          <option value="owned">Characters I own</option>
+          <option value="all">All characters</option></select></div>
+        <div class="field"><label>Show</label><select id="trShow">
+          <option value="worst">Worst first (feed candidates)</option>
+          <option value="best">Best first (keepers)</option></select></div>
+        <div class="field"><label>Minimum rarity</label><select id="trRar">
+          <option value="2">Everything</option><option value="4">4★ and up</option>
+          <option value="5">5★ only</option></select></div>
+        <button class="primary" id="trRun">Rate inventory</button>
+      </div>
+      <div id="trSummary" style="margin-top:12px"></div>
+    </div>
+    <div class="panel hide" id="trPanel">
+      <div class="scroll"><table id="trTable"></table></div>
+    </div>
+  </section>
+
+  <!-- ===================== ROSTER ===================== -->
+  <section id="tab-roster" class="hide">
+    <div class="panel">
+      <div class="row">
+        <div class="field"><label>Show</label><select id="rsFilter">
+          <option value="all">All characters</option>
+          <option value="owned">Owned only</option>
+          <option value="low">Unverified builds only</option></select></div>
+        <div class="field"><label>Search</label><input id="rsQ" placeholder="name or element"></div>
+        <span class="tiny muted" id="rsCount"></span>
+      </div>
+    </div>
+    <div class="notice info tiny">
+      <b>Confidence flags.</b> <span class="tag conf-high">high</span> means a full published build exists.
+      <span class="tag conf-med">med</span> means sources conflicted or were vague.
+      <span class="tag conf-low">low</span> means no build has been published and the targets are archetype
+      defaults I generated — treat those as a starting point, not gospel. Every target is editable.
+    </div>
+    <div class="grid cards" id="rsGrid"></div>
+  </section>
+
+  <!-- ===================== DATA ===================== -->
+  <section id="tab-data" class="hide">
+    <div class="panel">
+      <h2>Save your work</h2>
+      <p class="tiny muted" style="margin:0 0 10px">
+        This tool keeps nothing between sessions on its own — download a save file when you are done,
+        and load it back next time. The file is plain JSON, so the OCR pipeline can write it directly.
+      </p>
+      <div class="row">
+        <button class="primary" id="dlSave">Download save file</button>
+        <button id="upSave">Load save file</button>
+        <input type="file" id="fileIn" accept=".json" class="hide">
+        <button class="ghost" id="dlCsv">Export cards as CSV</button>
+        <span id="dataMsg" class="tiny muted"></span>
+      </div>
+    </div>
+    <div class="panel">
+      <h2>Schema</h2>
+      <p class="tiny muted" style="margin:0 0 8px">This is the shape the OCR pipeline needs to produce.</p>
+      <pre class="mono tiny" style="background:#0f0f13;border:1px solid var(--line);border-radius:8px;padding:12px;overflow:auto">{
+  "version": 1,
+  "cards": [
+    { "id": "c1", "slot": "Star", "set": "Hindrance", "rarity": 5, "level": 25,
+      "main": "Crit Rate", "equipped": "Ren Amamiya",
+      "subs": [ { "stat": "Crit Multiplier", "value": 12.4 },
+                { "stat": "ATK%", "value": 8.7 } ] }
+  ],
+  "characters": { "Ren Amamiya": { "owned": true, "targets": { } } }
+}</pre>
+    </div>
+    <div class="panel">
+      <h2>Where this data came from, and what to distrust</h2>
+      <p class="tiny muted" style="margin:0 0 8px">
+        Everything here was assembled from community guides in August 2026, not from the game client.
+        Four things are worth knowing before you trust a recommendation:
+      </p>
+      <ol class="tiny muted" style="margin:0;padding-left:18px;line-height:1.7">
+        <li><b>Guide sites use different set names.</b> Game8 and Prydwen translate the same sets
+            differently, and Fragster uses a third scheme. Confirmed equivalences are handled on import
+            (Strength is Power, Abundance is Prosperity, and so on), but two names —
+            <b>Ruin</b> and <b>Prudence</b> — could not be matched to anything, so they are listed as
+            separate sets with unknown 2-piece effects.</li>
+        <li><b>Main stat magnitudes are not published anywhere.</b> No source lists what a main stat is
+            actually worth at level 25, so the optimiser weights main stats by priority rather than by
+            real numbers.</li>
+        <li><b>Substat roll values come from a single source</b> and were never checked against the
+            client. If a number looks wrong, it may be.</li>
+        <li><b>Twenty-five characters have no published build.</b> They carry archetype defaults I
+            generated and are flagged <span class="tag conf-low">low</span> on the Roster tab.</li>
+      </ol>
+      <p class="tiny muted" style="margin:8px 0 0">
+        All of it is editable, and all of it gets much better the moment it is checked against real
+        screenshots from your own game.
+      </p>
+    </div>
+    <div class="panel">
+      <h2>Danger zone</h2>
+      <button id="wipe">Clear everything</button>
+    </div>
+  </section>
+</main>
+
+<dialog id="dlg"><div id="dlgBody"></div>
+  <div class="row" style="margin-top:16px;justify-content:flex-end">
+    <button onclick="document.getElementById('dlg').close()">Close</button>
+  </div>
+</dialog>
+
+<script>
+/* P5X Revelation Card data — extracted from community sources, Aug 2026.
+   Slot names: Sun / Moon / Star / Sky (aka Planet) / Space (aka Universe). */
+
+const SLOTS = ['Sun', 'Moon', 'Star', 'Sky', 'Space'];
+
+const SLOT_INFO = {
+  Sun:   { fixed: true,  mains: ['HP'],        note: 'Main stat is always flat HP.' },
+  Moon:  { fixed: false, mains: ['ATK%', 'DEF%', 'HP%', 'HP Recovery', 'Damage Multiplier'] },
+  Star:  { fixed: false, mains: ['ATK%', 'DEF%', 'HP%', 'Crit Rate', 'Crit Multiplier', 'Ailment Accuracy'] },
+  Sky:   { fixed: false, mains: ['ATK%', 'DEF%', 'HP%', 'Speed', 'SP Recovery'] },
+  Space: { fixed: true,  mains: ['ATK + DEF'], note: 'Main stat is always flat ATK + flat DEF.' }
+};
+
+/* Substat pool. maxRoll = highest single-roll magnitude at 5-star, used to convert
+   a raw value into "roll value" so different stats are comparable. */
+const SUBSTATS = {
+  'ATK':                { flat: true,  maxRoll: 46,   maxRollSpace: 46   },
+  'DEF':                { flat: true,  maxRoll: 46,   maxRollSpace: 46   },
+  'HP':                 { flat: true,  maxRoll: 140,  maxRollSpace: 175  },
+  'Speed':              { flat: true,  maxRoll: 2.2,  maxRollSpace: 2.8  },
+  'ATK%':               { flat: false, maxRoll: 3.5,  maxRollSpace: 4.3  },
+  'DEF%':               { flat: false, maxRoll: 5.2,  maxRollSpace: 6.4  },
+  'HP%':                { flat: false, maxRoll: 3.6,  maxRollSpace: 4.4  },
+  'Damage Multiplier':  { flat: false, maxRoll: 2.8,  maxRollSpace: 3.5  },
+  'Crit Rate':          { flat: false, maxRoll: 2.0,  maxRollSpace: 2.6  },
+  'Crit Multiplier':    { flat: false, maxRoll: 4.1,  maxRollSpace: 5.2  },
+  'Ailment Accuracy':   { flat: false, maxRoll: 4.1,  maxRollSpace: 5.2  },
+  'SP Recovery':        { flat: false, maxRoll: 10.0, maxRollSpace: 12.5 },
+  'Resistance Pierce':  { flat: false, maxRoll: 2.1,  maxRollSpace: 2.7  }
+};
+
+/* Common aliases from other guide sites, so imported/pasted data still matches. */
+const STAT_ALIASES = {
+  'crit dmg': 'Crit Multiplier', 'crit damage': 'Crit Multiplier', 'cdmg': 'Crit Multiplier',
+  'crit mult': 'Crit Multiplier', 'cm': 'Crit Multiplier',
+  'cr': 'Crit Rate', 'critrate': 'Crit Rate', 'crit': 'Crit Rate',
+  'effect hit rate': 'Ailment Accuracy', 'ehr': 'Ailment Accuracy', 'ail acc': 'Ailment Accuracy',
+  'ailment acc': 'Ailment Accuracy', 'accuracy': 'Ailment Accuracy',
+  'penetration': 'Resistance Pierce', 'pen': 'Resistance Pierce', 'pierce': 'Resistance Pierce',
+  'resistance pierce rate': 'Resistance Pierce',
+  'damage bonus': 'Damage Multiplier', 'dmg bonus': 'Damage Multiplier',
+  'attack multiplier': 'Damage Multiplier', 'dmg mult': 'Damage Multiplier', 'dmg': 'Damage Multiplier',
+  'sp regen': 'SP Recovery', 'sp rec': 'SP Recovery', 'spd': 'Speed',
+  'atk': 'ATK', 'def': 'DEF', 'hp': 'HP', 'hp rec': 'HP Recovery', 'healing': 'HP Recovery'
+};
+
+const RARITY = {
+  5: { name: 'Legendary', color: 'gold',   maxLevel: 25, subMin: 3, subMax: 4, upgrades: 5 },
+  4: { name: 'Epic',      color: 'purple', maxLevel: 20, subMin: 3, subMax: 4, upgrades: 4 },
+  3: { name: 'Rare',      color: 'blue',   maxLevel: 15, subMin: 3, subMax: 3, upgrades: 3 },
+  2: { name: 'Common',    color: 'gray',   maxLevel: 10, subMin: 2, subMax: 2, upgrades: 2 }
+};
+
+const ELEMENTS = ['Physical','Gun','Fire','Ice','Electric','Wind','Psychokinesis','Nuclear','Bless','Curse','Almighty','None'];
+
+/* The 20 four-slot ("Heavens") sets.
+   bonus2 describes the 2-piece effect numerically where it maps to a stat, so the
+   optimiser can value it. elem = only useful to characters of that element. */
+const SETS = {
+  'Power':          { p2: 'ATK +12%',                 bonus2: { stat: 'ATK%', amt: 12 },
+                      p4: 'ATK +10% every 6 turns, stacks 3x' },
+  'Control':        { p2: 'Max HP +12%',              bonus2: { stat: 'HP%', amt: 12 },
+                      p4: 'Skill attacks deal bonus damage equal to 8% of own HP' },
+  'Labor':          { p2: 'Max HP +12%',              bonus2: { stat: 'HP%', amt: 12 },
+                      p4: 'Party max HP, ATK and DEF +8%' },
+  'Peace':          { p2: 'DEF +20%',                 bonus2: { stat: 'DEF%', amt: 20 },
+                      p4: 'Shield strength +18%' },
+  'Prosperity':     { p2: 'Damage taken -8%',         bonus2: { stat: 'DEF%', amt: 10 },
+                      p4: 'Battle start: fill Highlight gauge 25%' },
+  'Worry':          { p2: 'SP recovery +80%',         bonus2: { stat: 'SP Recovery', amt: 80 },
+                      p4: 'Battle start: fill Highlight gauge 25%' },
+  'Reconciliation': { p2: 'Speed +6',                 bonus2: { stat: 'Speed', amt: 6 },
+                      p4: 'In battle: own max HP, ATK and DEF +15%' },
+  'Triumph':        { p2: 'Crit Rate +7.5%',          bonus2: { stat: 'Crit Rate', amt: 7.5 },
+                      p4: 'Resonance damage +40%' },
+  'Love':           { p2: 'Healing +9%',              bonus2: { stat: 'HP Recovery', amt: 9 },
+                      p4: 'Healing to allies below 50% HP +23%' },
+  'Courage':        { p2: 'Physical damage +10%',     bonus2: { stat: 'Damage Multiplier', amt: 10 }, elem: 'Physical',
+                      p4: 'Crit Multiplier +30% for 2 turns' },
+  'Oppression':     { p2: 'Physical damage +10%',     bonus2: { stat: 'Damage Multiplier', amt: 10 }, elem: 'Physical',
+                      p4: 'Gain Malice: ATK +5% for 2 turns, stacks 6x' },
+  'Strife':         { p2: 'Fire damage +10%',         bonus2: { stat: 'Damage Multiplier', amt: 10 }, elem: 'Fire',
+                      p4: 'ATK +15% if target is weak to Fire' },
+  'Defeat':         { p2: 'Ailment accuracy +15%',    bonus2: { stat: 'Ailment Accuracy', amt: 15 },
+                      p4: 'Fire damage to debuffed foes +20%' },
+  'Opulence':       { p2: 'Ice damage +10%',          bonus2: { stat: 'Damage Multiplier', amt: 10 }, elem: 'Ice',
+                      p4: 'Resonance damage +40%' },
+  'Renewal':        { p2: 'Electric damage +10%',     bonus2: { stat: 'Damage Multiplier', amt: 10 }, elem: 'Electric',
+                      p4: 'Own Electric damage +9% after allies use Electric skills' },
+  'Victory':        { p2: 'Wind damage +10%',         bonus2: { stat: 'Damage Multiplier', amt: 10 }, elem: 'Wind',
+                      p4: '25% chance to deal bonus damage equal to 20% of ATK' },
+  'Pleasure':       { p2: 'Psychokinesis damage +10%',bonus2: { stat: 'Damage Multiplier', amt: 10 }, elem: 'Psychokinesis',
+                      p4: 'ATK +15% when dealing Psychokinesis damage' },
+  'Truth':          { p2: 'Nuclear damage +10%',      bonus2: { stat: 'Damage Multiplier', amt: 10 }, elem: 'Nuclear',
+                      p4: 'Deal 30% of ATK as damage to targets with elemental ailments' },
+  'Virtue':         { p2: 'Bless damage +10%',        bonus2: { stat: 'Damage Multiplier', amt: 10 }, elem: 'Bless',
+                      p4: 'Bless skill crit rate +12% while HP >= 50%' },
+  'Hindrance':      { p2: 'Curse damage +10%',        bonus2: { stat: 'Damage Multiplier', amt: 10 }, elem: 'Curse',
+                      p4: 'Curse damage to debuffed foes +20%' },
+
+  /* --- Sets that appear in build guides but not in the set list I could verify.
+     Their 2-piece effects are unknown, so the optimiser values them at 0 and the
+     tool flags them. Correct these against the game and the maths follows. --- */
+  'Ruin':           { p2: 'Unverified', bonus2: null, unverified: true,
+                      p4: 'ATK +25% for 3 turns; triggers again after using a Theurgy' },
+  'Prudence':       { p2: 'Unverified', bonus2: null, unverified: true,
+                      p4: 'Unverified — appears on Wind single-target builds' }
+};
+
+/* Alternate localisations. Guide sites do not agree on set names: Game8 uses one set
+   of translations, Prydwen another, Fragster and Samurai Gamers a third. Only mappings
+   with solid evidence are listed here — a wrong alias would silently corrupt imports.
+   'Strength' -> 'Power' is confirmed by their Space-card pairings both being
+   Harmony / Trust / Growth. */
+const SET_ALIASES = {
+  'abundance': 'Prosperity', 'science': 'Truth', 'completion': 'Renewal', 'dominion': 'Control',
+  'valor': 'Courage', 'luxury': 'Opulence', 'interference': 'Hindrance', 'strength': 'Power'
+};
+
+/* Space (Universe) cards — one slot only. Each has conditional effects that key off
+   whichever 4-piece Heavens set is active. `pairs` lists the Heavens sets it works with. */
+const SPACE_SETS = {
+  'Creation':   { pairs: ['Worry','Reconciliation'],            note: 'SP thresholds grant Crit Multiplier; or buffs the slowest ally.' },
+  'Freedom':    { pairs: ['Triumph','Defeat'],                  note: 'Glory stacks raise pierce rate; or party damage vs debuffed foes.' },
+  'Acceptance': { pairs: ['Love','Strife','Peace'],             note: 'ATK after healing; ATK per foe; or DEF after taking damage.' },
+  'Awareness':  { pairs: ['Truth','Control','Hindrance'],       note: 'Bonus damage vs ailment-afflicted foes; Fire party buff; ATK stacking.' },
+  'Departure':  { pairs: ['Control','Prosperity','Hindrance'],  note: 'DEF shred on skill; party damage after attacking; ATK after a kill.' },
+  'Faith':      { pairs: ['Love','Peace'],                      note: 'Healing scales with max HP; or shields grant DEF.' },
+  'Growth':     { pairs: ['Opulence','Renewal','Power'],        note: 'Ice stacking; Resonance crit damage; or raises Power ATK stack cap.' },
+  'Harmony':    { pairs: ['Victory','Power','Truth'],           note: 'Vulnerability on set proc; same-attribute party damage; Nuclear stacking.' },
+  'Integrity':  { pairs: ['Pleasure','Labor'],                  note: 'Damage scales off healing; or Elucidator party stat boost.' },
+  'Meditation': { pairs: ['Love','Courage','Opulence'],         note: 'Healing after crit; Physical/Electric damage; Resonance crit damage.' },
+  'Nativity':   { pairs: ['Power'],                             note: 'Justine & Caroline only — Desire Level +5%.' },
+  'Resolve':    { pairs: ['Virtue','Labor'],                    note: 'HP thresholds grant damage; or Elucidator DEF shred.' },
+  'Trust':      { pairs: ['Renewal','Power','Prosperity'],      note: 'Electric party buff; ATK to allies at battle start; party damage after supporting.' },
+  'Wisdom':     { pairs: ['Oppression','Pleasure','Virtue'],    note: 'Malice thresholds; damage from ailment accuracy; ATK after Highlight.' },
+  'Hope':       { pairs: ['Hindrance'],                         note: 'Used on Makoto Yuki builds.' }
+};
+
+/* ---- Archetype defaults: main stats and substat weights (0-10) ---------------- */
+const ARCHETYPES = {
+  'ST DPS': {
+    label: 'Single-target DPS',
+    main: { Moon: 'Damage Multiplier', Star: 'Crit Rate', Sky: 'ATK%' },
+    w: { 'Crit Rate': 9, 'Crit Multiplier': 9, 'Damage Multiplier': 7, 'ATK%': 6, 'Resistance Pierce': 6,
+         'Speed': 3, 'ATK': 2, 'SP Recovery': 1, 'Ailment Accuracy': 1, 'HP%': 0, 'DEF%': 0, 'HP': 0, 'DEF': 0 }
+  },
+  'AoE DPS': {
+    label: 'AoE sweeper',
+    main: { Moon: 'Damage Multiplier', Star: 'Crit Rate', Sky: 'ATK%' },
+    w: { 'Crit Rate': 9, 'Crit Multiplier': 9, 'Damage Multiplier': 7, 'ATK%': 6, 'Resistance Pierce': 6,
+         'Speed': 4, 'ATK': 2, 'SP Recovery': 1, 'Ailment Accuracy': 1, 'HP%': 0, 'DEF%': 0, 'HP': 0, 'DEF': 0 }
+  },
+  'Healer': {
+    label: 'Healer',
+    main: { Moon: 'HP Recovery', Star: 'HP%', Sky: 'ATK%' },
+    w: { 'SP Recovery': 8, 'HP%': 6, 'ATK%': 5, 'Speed': 5, 'HP': 3, 'Crit Rate': 2, 'Crit Multiplier': 2,
+         'DEF%': 1, 'Damage Multiplier': 1, 'ATK': 1, 'DEF': 0, 'Ailment Accuracy': 0, 'Resistance Pierce': 0 }
+  },
+  'Guardian': {
+    label: 'Guardian / tank',
+    main: { Moon: 'DEF%', Star: 'DEF%', Sky: 'DEF%' },
+    w: { 'DEF%': 8, 'HP%': 8, 'SP Recovery': 7, 'Speed': 5, 'HP': 4, 'DEF': 4, 'ATK%': 1,
+         'Ailment Accuracy': 1, 'Crit Rate': 0, 'Crit Multiplier': 0, 'Damage Multiplier': 0, 'ATK': 0, 'Resistance Pierce': 0 }
+  },
+  'Strategist': {
+    label: 'Strategist / buffer',
+    main: { Moon: 'ATK%', Star: 'ATK%', Sky: 'ATK%' },
+    w: { 'ATK%': 8, 'Speed': 6, 'HP%': 5, 'SP Recovery': 5, 'ATK': 3, 'Crit Rate': 2, 'Crit Multiplier': 2,
+         'Ailment Accuracy': 2, 'Damage Multiplier': 2, 'DEF%': 1, 'HP': 1, 'DEF': 0, 'Resistance Pierce': 0 }
+  },
+  'Saboteur': {
+    label: 'Saboteur / debuffer',
+    main: { Moon: 'Damage Multiplier', Star: 'Ailment Accuracy', Sky: 'Speed' },
+    w: { 'Ailment Accuracy': 9, 'Speed': 7, 'ATK%': 5, 'HP%': 4, 'Damage Multiplier': 4, 'Crit Rate': 3,
+         'Crit Multiplier': 3, 'Resistance Pierce': 3, 'SP Recovery': 3, 'ATK': 1, 'DEF%': 1, 'HP': 1, 'DEF': 0 }
+  },
+  'Navigator': {
+    label: 'Navigator / Elucidator',
+    main: { Moon: 'ATK%', Star: 'Crit Rate', Sky: 'ATK%' },
+    w: { 'Crit Rate': 8, 'Crit Multiplier': 8, 'ATK%': 7, 'Resistance Pierce': 5, 'Damage Multiplier': 4,
+         'ATK': 3, 'Speed': 3, 'SP Recovery': 2, 'HP%': 1, 'Ailment Accuracy': 1, 'DEF%': 0, 'HP': 0, 'DEF': 0 }
+  },
+  'Virtuoso': {
+    label: 'Virtuoso / flex',
+    main: { Moon: 'Damage Multiplier', Star: 'Crit Multiplier', Sky: 'ATK%' },
+    w: { 'Crit Multiplier': 8, 'Crit Rate': 8, 'Damage Multiplier': 6, 'ATK%': 6, 'Resistance Pierce': 5,
+         'Speed': 4, 'ATK': 2, 'HP%': 1, 'SP Recovery': 1, 'Ailment Accuracy': 1, 'DEF%': 0, 'HP': 0, 'DEF': 0 }
+  }
+};
+
+/* ---- Roster --------------------------------------------------------------------
+   conf: 'high'   = full published build (Prydwen character page)
+         'med'    = published but sources conflicted or were vague
+         'low'    = no published build; archetype defaults applied, treat as a guess
+   sets: preferred 4-piece Heavens sets, best first.  space: preferred Space card.
+   ov:   overrides — main (per-slot main stat), w (weight tweaks), bp (breakpoints), note
+--------------------------------------------------------------------------------- */
+const CHARACTERS = [
+  // --- Phantom Thieves core ---
+  { n:'Ren Amamiya', a:'Joker', r:5, e:'Curse', arch:'AoE DPS', conf:'high',
+    sets:['Hindrance'], space:'Departure',
+    ov:{ main:{Moon:'Damage Multiplier',Star:'Crit Rate',Sky:'ATK%'}, w:{'Resistance Pierce':9} } },
+  { n:'Ren Amamiya [Starlight]', a:'Starlight Joker', r:5, e:'Curse', arch:'Virtuoso', conf:'low', sets:['Hindrance'], space:'Departure' },
+  { n:'Morgana', a:'Mona', r:5, e:'Wind', arch:'Healer', conf:'high',
+    sets:['Love'], space:'Meditation',
+    ov:{ main:{Moon:'HP Recovery',Star:'Crit Rate',Sky:'ATK%'}, w:{'Crit Rate':7,'SP Recovery':8,'ATK%':6},
+         bp:'Love 4pc boosts healing to allies below 50% HP; Morgana heals from 70%, so the 4pc is partly wasted.' } },
+  { n:'Morgana [Starlight]', a:'Starlight Mona', r:5, e:'Wind', arch:'Saboteur', conf:'low', sets:['Victory'], space:'Harmony' },
+  { n:'Ann Takamaki', a:'Panther', r:5, e:'Fire', arch:'AoE DPS', conf:'med',
+    sets:['Strife'], space:'Acceptance',
+    ov:{ note:'Source slot list appeared shifted by one — verify main stats in game.' } },
+  { n:'Ann Takamaki [Starlight]', a:'Starlight Panther', r:5, e:'Fire', arch:'ST DPS', conf:'low', sets:['Strife'], space:'Acceptance' },
+  { n:'Ryuji Sakamoto', a:'Skull', r:5, e:'Physical', arch:'ST DPS', conf:'high',
+    sets:['Courage','Oppression'], space:'Meditation',
+    ov:{ main:{Star:'Crit Multiplier'}, w:{'Crit Rate':0,'Crit Multiplier':10,'Resistance Pierce':8},
+         bp:'Skull always crits — Crit Rate is dead weight. Go Crit Multiplier on Star and ignore CR substats entirely.' } },
+  { n:'Yusuke Kitagawa', a:'Fox', r:5, e:'Ice', arch:'AoE DPS', conf:'high',
+    sets:['Opulence'], space:'Meditation',
+    ov:{ main:{Moon:'DEF%',Star:'Crit Rate',Sky:'DEF%'}, w:{'DEF%':9,'Speed':9,'ATK%':1,'DEF':4},
+         bp:'Scales off DEF, not ATK. Target 106+ Speed to act before your supports.' } },
+  { n:'Makoto Niijima', a:'Queen', r:5, e:'Nuclear', arch:'ST DPS', conf:'high',
+    sets:['Truth'], space:'Awareness',
+    ov:{ main:{Moon:'ATK%'}, bp:'Truth 4pc only fires on foes already under an elemental ailment — pair with a Saboteur.' } },
+  { n:'Haru Okumura', a:'Noir', r:5, e:'Psychokinesis', arch:'AoE DPS', conf:'high',
+    sets:['Pleasure'], space:'Wisdom',
+    ov:{ main:{Star:'Crit Multiplier'}, w:{'Crit Multiplier':10,'Ailment Accuracy':7,'Resistance Pierce':7},
+         bp:'Target 150 Ailment Accuracy in battle — her passive converts it into damage.' } },
+  { n:'Goro Akechi', a:'Crow', r:5, e:'Almighty', arch:'AoE DPS', conf:'low', sets:['Power'], space:'Harmony' },
+  { n:'Kasumi Yoshizawa', a:'Violet', r:5, e:'Bless', arch:'ST DPS', conf:'med',
+    sets:['Virtue'], space:'Wisdom',
+    ov:{ bp:'No stat breakpoints — she self-buffs ATK heavily, so prioritise crit.' } },
+  { n:'Futaba Sakura', a:'Oracle', r:5, e:'None', arch:'Navigator', conf:'high',
+    sets:['Labor'], space:'Resolve',
+    ov:{ main:{Moon:'ATK%',Star:'Crit Rate',Sky:'ATK%'}, w:{'Crit Rate':9,'Crit Multiplier':9},
+         bp:'Target 4600 ATK in battle. At A1 shift priority toward Crit Multiplier.' } },
+
+  // --- Original cast ---
+  { n:'Wonder', a:'Nagisa Kamishiro', r:5, e:'Almighty', arch:'Virtuoso', conf:'low',
+    ov:{ note:'The protagonist — built through the Persona system, not the gacha. No published Revelation build.' },
+    sets:['Power'], space:'Harmony' },
+  { n:'Ayaka Sakai', a:'Chord', r:5, e:'Electric', arch:'Strategist', conf:'high',
+    sets:['Prosperity'], space:'Trust',
+    ov:{ main:{Moon:'HP Recovery',Star:'HP%',Sky:'HP%'}, w:{'ATK%':8,'HP%':7,'Speed':7},
+         bp:'105-106 Speed. If you are not capping her skills, aim for 5083+ ATK.' } },
+  { n:'Chizuko Nagao', a:'Vino', r:4, e:'Nuclear', arch:'Saboteur', conf:'med',
+    sets:['Control','Truth'], space:'Departure',
+    ov:{ main:{Star:'Ailment Accuracy'}, note:'Sources were vague on Moon/Sky — HP or offensive both viable.' } },
+  { n:'Leo Kamiyama', a:'Leon', r:4, e:'Nuclear', arch:'Strategist', conf:'high', sets:['Prosperity'], space:'Trust' },
+  { n:'Lufel', a:'Cattle', r:4, e:'Fire', arch:'Healer', conf:'high',
+    sets:['Love','Prosperity'], space:'Acceptance',
+    ov:{ main:{Moon:'HP Recovery',Star:'ATK%',Sky:'ATK%'}, w:{'SP Recovery':9,'ATK%':7,'HP%':5} } },
+  { n:'Masaki Ashiya', a:'Cherish', r:5, e:'Ice', arch:'Guardian', conf:'high',
+    sets:['Peace','Prosperity'], space:'Faith',
+    ov:{ w:{'SP Recovery':9,'DEF%':9} } },
+  { n:'Minami Miyashita', a:'Marian', r:5, e:'Bless', arch:'Healer', conf:'high',
+    sets:['Prosperity'], space:'Trust',
+    ov:{ main:{Moon:'HP%',Star:'HP%',Sky:'HP%'}, w:{'SP Recovery':10,'HP%':7,'Speed':7},
+         bp:'Base Speed is only 94 — she needs Speed substats. Target 80%+ SP Recovery.' } },
+  { n:'Minami Miyashita [Beachflower]', a:'S. Minami', r:5, e:'Bless', arch:'Strategist', conf:'low', sets:['Prosperity'], space:'Trust' },
+  { n:'Miyu Sahara', a:'Puppet', r:4, e:'None', arch:'Navigator', conf:'high',
+    sets:['Labor','Peace'], space:'Integrity',
+    ov:{ main:{Moon:'DEF%',Star:'Crit Rate',Sky:'DEF%'}, w:{'DEF%':7,'Resistance Pierce':7} } },
+  { n:'Miyu Sahara [Wavecatcher]', a:'Wave Puppet', r:5, e:'Ice', arch:'AoE DPS', conf:'low', sets:['Opulence'], space:'Meditation' },
+  { n:'Motoha Arai', a:'Closer', r:4, e:'Electric', arch:'AoE DPS', conf:'high',
+    sets:['Renewal'], space:'Trust',
+    ov:{ main:{Moon:'ATK%'}, bp:'Wants enemies Shocked — pair with an Electric applier.' } },
+  { n:'Motoha Arai [Radiance]', a:'Radiance Closer', r:5, e:'Electric', arch:'ST DPS', conf:'low', sets:['Renewal'], space:'Growth' },
+  { n:'Motoha Arai [Tropical]', a:'Summer Closer', r:5, e:'Bless', arch:'AoE DPS', conf:'med',
+    sets:['Virtue'], space:'Resolve',
+    ov:{ main:{Moon:'ATK%'}, w:{'Resistance Pierce':10},
+         note:'Prydwen says Resolve space card, dbltap says Wisdom. HP-cost kit — pair with Marian or Chord.',
+         bp:'At A1+ switch Star from Crit Rate to Crit Multiplier.' } },
+  { n:'Narumi Nashimoto', a:'PINKY', r:5, e:'Psychokinesis', arch:'ST DPS', conf:'low', sets:['Pleasure'], space:'Wisdom' },
+  { n:'Riko Tanemura', a:'Wind', r:4, e:'None', arch:'Navigator', conf:'high',
+    sets:['Labor'], space:'Resolve',
+    ov:{ main:{Moon:'ATK%',Star:'Crit Rate',Sky:'Speed'}, w:{'Speed':10,'Crit Rate':9,'Crit Multiplier':8},
+         bp:'160 Speed caps her first Talent. Speed is the priority stat, above crit.' } },
+  { n:'Riko Tanemura [Tempest]', a:'Wind Vast', r:5, e:'Wind', arch:'Strategist', conf:'low', sets:['Prosperity'], space:'Trust' },
+  { n:'Runa Dogenzaka', a:'Howler', r:5, e:'Fire', arch:'Saboteur', conf:'med',
+    sets:['Reconciliation','Defeat'], space:'Creation',
+    ov:{ main:{Moon:'HP%',Star:'Ailment Accuracy',Sky:'Speed'},
+         note:'One source assigned Ailment Accuracy to both Star and Sky — Sky cannot roll it, so Star only.' } },
+  { n:'Seiji Shiratori', a:'Fleuret', r:4, e:'Wind', arch:'ST DPS', conf:'high',
+    sets:['Prudence','Victory'], space:'Resolve',
+    ov:{ main:{Star:'Crit Multiplier'}, w:{'Crit Multiplier':10},
+         bp:'Needs an ally to apply Windswept before his payoff skill.' } },
+  { n:'Shoki Ikenami', a:'Luce', r:4, e:'Bless', arch:'Strategist', conf:'low', sets:['Prosperity'], space:'Trust' },
+  { n:'Shoki Ikenami [Notte]', a:'Luce Notte', r:5, e:'Bless', arch:'AoE DPS', conf:'low', sets:['Virtue'], space:'Wisdom' },
+  { n:'Shun Kano', a:'Soy', r:4, e:'Ice', arch:'Guardian', conf:'high',
+    sets:['Control','Prosperity'], space:'Departure',
+    ov:{ main:{Moon:'HP%',Star:'HP%',Sky:'HP%'}, w:{'HP%':9,'Crit Rate':4,'DEF%':4},
+         note:'Classed as a Guardian but plays as a debuffer. His gun attack triggers All-Out Attacks.' } },
+  { n:'Shun Kano [Pioneer]', a:'Soy Pioneer', r:5, e:'Gun', arch:'Guardian', conf:'low', sets:['Peace'], space:'Faith' },
+  { n:'Tomoko Noge', a:'Moko', r:4, e:'Psychokinesis', arch:'Strategist', conf:'high',
+    sets:['Prosperity','Power'], space:'Trust', ov:{ w:{'ATK%':9,'HP%':5,'Ailment Accuracy':3} } },
+  { n:'Tomoko Noge [Seaside]', a:'Summer Moko', r:5, e:'Psychokinesis', arch:'Healer', conf:'high',
+    sets:['Prosperity','Victory'], space:'Trust',
+    ov:{ main:{Moon:'HP Recovery',Star:'Crit Rate',Sky:'ATK%'}, w:{'Crit Rate':8,'ATK%':8,'SP Recovery':7},
+         note:'Buffs party Ailment Accuracy. ATK main on Star is also viable — it boosts her healing.' } },
+  { n:'Toshiya Sumi', a:'Sepia', r:4, e:'Curse', arch:'ST DPS', conf:'high',
+    sets:['Hindrance'], space:'Awareness',
+    ov:{ main:{Star:'Ailment Accuracy'}, w:{'Ailment Accuracy':10,'Damage Multiplier':8,'Crit Rate':4},
+         bp:'Wants external Ailment Accuracy support on top of his own.' } },
+  { n:'YUI', a:'BUI', r:5, e:'Electric', arch:'ST DPS', conf:'high',
+    sets:['Renewal'], space:'Growth',
+    ov:{ main:{Moon:'ATK%'}, w:{'Crit Multiplier':10,'Resistance Pierce':9,'Crit Rate':6},
+         bp:'At A1, switch Star to Crit Multiplier and stop building Crit Rate.' } },
+  { n:'YUI [Prism]', a:'BUI Prism', r:5, e:'Nuclear', arch:'ST DPS', conf:'low', sets:['Truth'], space:'Awareness' },
+  { n:'Yaoling Li', a:'Rin', r:5, e:'Curse', arch:'Saboteur', conf:'high',
+    sets:['Prosperity','Control'], space:'Departure',
+    ov:{ main:{Moon:'Damage Multiplier',Star:'Crit Rate',Sky:'Speed'}, w:{'Speed':10,'Crit Rate':8,'Ailment Accuracy':6},
+         bp:'Speed IS her scaling: -3% enemy DEF per 10 Speed, capping at -49.7% around 166 Speed.' } },
+  { n:'Yaoling Li [Firecracker]', a:'Rin Lion Dance', r:5, e:'Fire', arch:'AoE DPS', conf:'low', sets:['Strife'], space:'Acceptance' },
+  { n:'Kotone Montagne', a:'Mont', r:4, e:'Ice', arch:'ST DPS', conf:'high',
+    sets:['Opulence'], space:'Meditation',
+    ov:{ main:{Star:'Crit Multiplier'}, w:{'Crit Multiplier':10} } },
+  { n:'Kotone Montagne [Frostgale]', a:'Frostgale Mont', r:5, e:'Wind', arch:'ST DPS', conf:'high',
+    sets:['Prudence','Victory'], space:'Resolve',
+    ov:{ main:{Star:'Crit Multiplier'}, note:'Dual Wind/Ice — Wind mode is the one people play.' } },
+  { n:'Kira Kitazato', a:'Messa', r:5, e:'Physical', arch:'ST DPS', conf:'high',
+    sets:['Oppression','Pleasure'], space:'Wisdom',
+    ov:{ main:{Moon:'Damage Multiplier',Star:'ATK%',Sky:'ATK%'},
+         w:{'Crit Rate':0,'Crit Multiplier':0,'Damage Multiplier':10,'Ailment Accuracy':8,'ATK%':8},
+         bp:'His Rending damage CANNOT crit — skip crit entirely. Target 90% Ailment Accuracy.' } },
+  { n:'Kiyoshi Kurotani', a:'Key', r:4, e:'Fire', arch:'Saboteur', conf:'high',
+    sets:['Control','Prosperity'], space:'Awareness',
+    ov:{ main:{Moon:'HP%',Star:'HP%',Sky:'HP%'}, w:{'HP%':9,'Ailment Accuracy':7},
+         note:'Fire-team only — built around enabling Panther.' } },
+  { n:'Kayo Tomiyama', a:'Okyann', r:4, e:'None', arch:'Navigator', conf:'high',
+    sets:['Labor','Prosperity'], space:'Integrity' },
+  { n:'Haruna Nishimori', a:'Riddle', r:5, e:'Psychokinesis', arch:'Strategist', conf:'high',
+    sets:['Prosperity','Power'], space:'Trust',
+    ov:{ w:{'ATK%':9,'HP%':5}, note:'Her buff proc is 40% RNG (60% at A2). Rated poorly on the CN server.' } },
+  { n:'Justine & Caroline', a:'Twins', r:5, e:'Almighty', arch:'Virtuoso', conf:'med',
+    sets:['Reconciliation','Power'], space:'Nativity',
+    ov:{ main:{Star:'Crit Multiplier'}, note:'Six selectable roles; per-role builds are not published. This is one generic setup.' } },
+
+  // --- Persona 3 collaboration ---
+  { n:'Makoto Yuki', a:'', r:5, e:'Fire', arch:'ST DPS', conf:'high',
+    sets:['Ruin','Strife'], space:'Hope',
+    ov:{ main:{Moon:'Damage Multiplier',Star:'Crit Rate',Sky:'ATK%'},
+         w:{'Crit Rate':10,'Crit Multiplier':9,'Resistance Pierce':8,'Damage Multiplier':6},
+         note:'Prydwen names his set "Ruin" with a 4-piece ATK buff. That set is not in the set list I could verify, so its 2-piece effect is unknown — check it in game.' } },
+  { n:'Aigis', a:'', r:5, e:'Gun', arch:'AoE DPS', conf:'low', sets:['Power'], space:'Harmony' },
+  { n:'Akihiko Sanada', a:'', r:5, e:'Electric', arch:'AoE DPS', conf:'low', sets:['Renewal'], space:'Trust' },
+  { n:'Junpei Iori', a:'', r:5, e:'Fire', arch:'Guardian', conf:'low', sets:['Peace','Control'], space:'Faith',
+    ov:{ main:{Moon:'HP%',Star:'HP%',Sky:'HP%'}, note:'His 5-star weapon gives +57% max HP, so an HP build is the likely direction.' } },
+  { n:'Mitsuru Kirijo', a:'', r:5, e:'Ice', arch:'ST DPS', conf:'low', sets:['Opulence'], space:'Meditation' },
+  { n:'Yukari Takeba', a:'', r:5, e:'Wind', arch:'Healer', conf:'low', sets:['Love'], space:'Acceptance' },
+  { n:'Fuuka Yamagishi', a:'', r:5, e:'None', arch:'Navigator', conf:'low', sets:['Labor'], space:'Integrity' },
+  { n:'Koromaru', a:'', r:5, e:'Curse', arch:'Saboteur', conf:'low', sets:['Hindrance'], space:'Awareness',
+    ov:{ note:'His 5-star weapon is ailment-accuracy focused.' } },
+
+  // --- Newer units with no published build ---
+  { n:'Mio Natsukawa', a:'Matoi', r:5, e:'Ice', arch:'Saboteur', conf:'low', sets:['Opulence','Defeat'], space:'Awareness',
+    ov:{ note:'Kit is Ice Technical / ailment focused, so Ailment Accuracy is the likely priority.' } },
+  { n:'Mayumi Hashimoto', a:'Turbo', r:5, e:'Physical', arch:'Strategist', conf:'low', sets:['Prosperity'], space:'Trust',
+    ov:{ main:{Sky:'Speed'}, w:{'Speed':9}, note:'Her 5-star weapon scales with Speed.' } },
+  { n:'Kumi Katayama', a:'Blitz', r:5, e:'Electric', arch:'Saboteur', conf:'low', sets:['Renewal','Defeat'], space:'Trust',
+    ov:{ main:{Sky:'Speed'}, note:'Her 5-star weapon grants Speed.' } },
+  { n:'Ichigo Shikano', a:'Berry', r:5, e:'Curse', arch:'ST DPS', conf:'low', sets:['Hindrance'], space:'Departure' },
+  { n:'Aran Hirano', a:'Anri', r:4, e:'Curse', arch:'Saboteur', conf:'low', sets:['Hindrance','Defeat'], space:'Awareness',
+    ov:{ note:'Kit revolves around Ailment Accuracy and Sin transfer.' } },
+  { n:'Manaka Nagao', a:'Ange', r:5, e:'None', arch:'Navigator', conf:'low', sets:['Labor'], space:'Integrity' }
+];
+
+</script>
+<script>
+/* ============================ state ============================ */
+const state = { cards: [], chars: {}, nextId: 1 };
+const $  = (s, r) => (r || document).querySelector(s);
+const $$ = (s, r) => Array.from((r || document).querySelectorAll(s));
+const esc = s => String(s == null ? '' : s).replace(/[&<>"]/g, c => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;' }[c]));
+
+CHARACTERS.forEach(c => { state.chars[c.n] = { owned: false, targets: null }; });
+
+/* Merge archetype defaults + per-character overrides + user edits. */
+function target(charDef) {
+  const A = ARCHETYPES[charDef.arch];
+  const saved = state.chars[charDef.n] && state.chars[charDef.n].targets;
+  if (saved) return saved;
+  const ov = charDef.ov || {};
+  return {
+    sets:  (charDef.sets || []).slice(),
+    space: charDef.space || '',
+    main:  Object.assign({}, A.main, ov.main || {}),
+    w:     Object.assign({}, A.w, ov.w || {}),
+    bp:    ov.bp || '',
+    note:  ov.note || ''
+  };
+}
+const charDef = name => CHARACTERS.find(c => c.n === name);
+const maxRoll = (stat, slot) =>
+  slot === 'Space' ? (SUBSTATS[stat].maxRollSpace || SUBSTATS[stat].maxRoll) : SUBSTATS[stat].maxRoll;
+
+function normStat(raw) {
+  if (!raw) return null;
+  const t = String(raw).trim();
+  if (SUBSTATS[t] || t === 'HP Recovery' || t === 'ATK + DEF') return t;
+  const k = t.toLowerCase().replace(/\s+/g, ' ').replace(/[%]$/, '').trim();
+  for (const s of Object.keys(SUBSTATS)) if (s.toLowerCase() === k) return s;
+  if (STAT_ALIASES[k]) return STAT_ALIASES[k];
+  const pk = k + '%';
+  for (const s of Object.keys(SUBSTATS)) if (s.toLowerCase() === pk) return s;
+  return null;
+}
+function normSet(raw) {
+  if (!raw) return null;
+  const t = String(raw).trim();
+  if (SETS[t] || SPACE_SETS[t]) return t;
+  const k = t.toLowerCase();
+  for (const s of Object.keys(SETS)) if (s.toLowerCase() === k) return s;
+  for (const s of Object.keys(SPACE_SETS)) if (s.toLowerCase() === k) return s;
+  if (SET_ALIASES[k]) return SET_ALIASES[k];
+  return null;
+}
+
+/* ======================== scoring engine ======================== */
+
+/* Raw quality of one card for one character: weighted roll value of its substats,
+   plus the main stat (weighted heavier, since a main stat is worth several rolls). */
+function cardScore(card, t) {
+  let s = 0;
+  for (const sub of card.subs || []) {
+    const w = t.w[sub.stat] || 0;
+    if (!w) continue;
+    s += (sub.value / maxRoll(sub.stat, card.slot)) * w;
+  }
+  // The main stat is roughly a third of a card's value, so it is weighted heavily
+  // and gets an extra bump for exactly matching the character's target.
+  let mainPart = 0;
+  if (card.slot !== 'Sun' && card.slot !== 'Space') {
+    const wanted = t.main[card.slot];
+    const mw = t.w[card.main] || 0;
+    mainPart = mw * 3.0 + (card.main === wanted ? 10 : 0);
+  }
+  const lvlPenalty = card.rarity === 5 ? 1 : card.rarity === 4 ? 0.82 : card.rarity === 3 ? 0.6 : 0.4;
+  return (s + mainPart) * lvlPenalty;
+}
+
+/* Value of a 2-piece bonus, on the same scale as card scores: a flat "+12% ATK"
+   is simply worth however many maximum ATK% rolls that is, times the stat's weight. */
+function bonus2Value(setName, char, t) {
+  const S = SETS[setName];
+  if (!S || !S.bonus2) return 0;
+  if (S.elem && S.elem !== char.e) return 0;
+  const st = S.bonus2.stat;
+  if (st === 'HP Recovery') return (t.w['HP%'] || 0) * 1.5;   // healing has no substat equivalent
+  const w = t.w[st] || 0;
+  if (!w) return 0;
+  return w * (S.bonus2.amt / maxRoll(st, 'Sun'));
+}
+
+/* Value of a 4-piece bonus. These are typically worth 20-40% more damage or
+   survivability, which lands around one whole card's worth of stats. Element sets
+   are worthless to off-element characters. */
+function bonus4Value(setName, char, t, base) {
+  const S = SETS[setName];
+  if (!S) return 0;
+  if (S.elem && S.elem !== char.e) return 0;
+  const B = base == null ? 55 : base;
+  const i = (t.sets || []).indexOf(setName);
+  if (i === 0) return B;
+  if (i > 0) return B * 0.72;
+  return B * 0.22;
+}
+
+function bestPlan(char, pool, opts) {
+  const t = target(char);
+  const heavens = ['Sun', 'Moon', 'Star', 'Sky'];
+
+  // index: slot -> set -> cards sorted by score desc
+  const idx = {}; const counts = {};
+  heavens.forEach(sl => idx[sl] = {});
+  const scored = pool
+    .filter(c => c.slot !== 'Space')
+    .map(c => ({ c, s: cardScore(c, t) }));
+  scored.forEach(o => {
+    const sl = o.c.slot, st = o.c.set;
+    (idx[sl][st] = idx[sl][st] || []).push(o);
+    counts[st] = (counts[st] || 0) + 1;
+  });
+  heavens.forEach(sl => Object.values(idx[sl]).forEach(a => a.sort((x, y) => y.s - x.s)));
+  const bestAny = {};
+  heavens.forEach(sl => {
+    const all = scored.filter(o => o.c.slot === sl).sort((x, y) => y.s - x.s);
+    bestAny[sl] = all[0] || null;
+  });
+
+  // candidate sets: the character's preferred sets, plus anything we hold >= 2 of
+  const cand = new Set(t.sets.filter(s => SETS[s]));
+  Object.keys(counts).forEach(s => { if (counts[s] >= 2 && SETS[s]) cand.add(s); });
+  const candArr = Array.from(cand);
+
+  const P4 = (opts && opts.p4value != null) ? +opts.p4value : 55;
+  const plans = [];
+  const pick = (sl, st) => (idx[sl][st] && idx[sl][st][0]) || null;
+
+  // 4-piece plans
+  for (const S of candArr) {
+    const picks = {}; let ok = true, sum = 0;
+    for (const sl of heavens) {
+      const p = pick(sl, S);
+      if (!p) { ok = false; picks[sl] = null; continue; }
+      picks[sl] = p; sum += p.s;
+    }
+    const missing = heavens.filter(sl => !picks[sl]);
+    const bon = bonus4Value(S, char, t, P4) + bonus2Value(S, char, t);
+    plans.push({
+      kind: '4pc', label: `4-piece ${S}`, sets: [S], picks,
+      complete: ok, missing, bonus: ok ? bon : 0, total: ok ? sum + bon : -1
+    });
+  }
+
+  const subsets = [['Sun','Moon'],['Sun','Star'],['Sun','Sky'],['Moon','Star'],['Moon','Sky'],['Star','Sky']];
+
+  // 2+2 plans, and 2-piece + two free-choice cards
+  for (let i = 0; i < candArr.length; i++) {
+    const A = candArr[i], bA = bonus2Value(A, char, t);
+    if (bA <= 0) continue;
+    for (const slotsA of subsets) {
+      const slotsB = heavens.filter(s => !slotsA.includes(s));
+      const baseP = {}; let okA = true, sumA = 0;
+      for (const sl of slotsA) { const p = pick(sl, A); if (!p) { okA = false; break; } baseP[sl] = p; sumA += p.s; }
+      if (!okA) continue;
+
+      // pair with a second 2-piece that actually does something
+      for (let j = 0; j < candArr.length; j++) {
+        if (i === j) continue;
+        const B = candArr[j], bB = bonus2Value(B, char, t);
+        if (bB <= 0) continue;
+        const picks = Object.assign({}, baseP); let ok = true, sum = sumA;
+        for (const sl of slotsB) { const p = pick(sl, B); if (!p) { ok = false; break; } picks[sl] = p; sum += p.s; }
+        if (!ok) continue;
+        plans.push({ kind: '2+2', label: `2-piece ${A} + 2-piece ${B}`, sets: [A, B], picks,
+          complete: true, missing: [], bonus: bA + bB, total: sum + bA + bB });
+      }
+
+      // ...or leave the other two slots free for the strongest cards available
+      const picks = Object.assign({}, baseP); let ok = true, sum = sumA;
+      for (const sl of slotsB) { if (!bestAny[sl]) { ok = false; break; } picks[sl] = bestAny[sl]; sum += bestAny[sl].s; }
+      if (ok) plans.push({ kind: '2+free', label: `2-piece ${A} + best available`, sets: [A], picks,
+        complete: true, missing: [], bonus: bA, total: sum + bA });
+    }
+  }
+
+  // no-set fallback: strongest four cards regardless of set
+  {
+    const picks = {}; let sum = 0, ok = true;
+    for (const sl of heavens) { if (!bestAny[sl]) { ok = false; break; } picks[sl] = bestAny[sl]; sum += bestAny[sl].s; }
+    if (ok) plans.push({ kind: 'raw', label: 'Best raw stats (no set bonus)', sets: [], picks,
+      complete: true, missing: [], bonus: 0, total: sum });
+  }
+
+  // A 2+2 plan is generated once per set ordering, so collapse identical loadouts.
+  const seen = new Set();
+  const complete = plans.filter(p => p.complete).sort((a, b) => b.total - a.total).filter(p => {
+    const key = heavens.map(sl => p.picks[sl].c.id).sort().join('|');
+    if (seen.has(key)) return false;
+    seen.add(key); return true;
+  });
+
+  /* Set policy. Left to pure stat maximisation the optimiser will nearly always
+     drop set bonuses, because an unconstrained pick from the whole inventory beats
+     one restricted to a single set. That is rarely how anyone actually plays, so by
+     default we honour the character's preferred sets and show what it costs. */
+  const policy = (opts && opts.policy) || 'pref';
+  let allowed = complete;
+  if (policy === 'force4') {
+    const p0 = complete.filter(p => p.kind === '4pc' && t.sets.includes(p.sets[0]));
+    allowed = p0.length ? p0 : complete.filter(p => p.kind === '4pc');
+    if (!allowed.length) allowed = complete;
+  } else if (policy === 'pref') {
+    const p1 = complete.filter(p => p.sets.some(s => t.sets.includes(s)));
+    const p2 = complete.filter(p => p.kind === '4pc');
+    allowed = p1.length ? p1 : (p2.length ? p2 : complete);
+  } else if (policy === 'any4') {
+    const p2 = complete.filter(p => p.kind === '4pc');
+    allowed = p2.length ? p2 : complete;
+  }
+  const best = allowed[0] || null;
+  const statMax = complete[0] || null;
+
+  // Space card: prefer one that pairs with the chosen 4-piece set
+  const spacePool = pool.filter(c => c.slot === 'Space').map(c => ({ c, s: cardScore(c, t) }));
+  const active4 = best && best.kind === '4pc' ? best.sets[0] : null;
+  spacePool.forEach(o => {
+    const sp = SPACE_SETS[o.c.set];
+    const pairs = sp && active4 && sp.pairs.includes(active4);
+    o.pairs = !!pairs;
+    o.pref  = o.c.set === t.space;
+    o.total = o.s + (pairs ? 9 : 0) + (o.pref && pairs ? 4 : 0);
+  });
+  spacePool.sort((a, b) => b.total - a.total);
+
+  return {
+    t, best, statMax,
+    alternatives: complete.filter(p => p !== best).slice(0, 4),
+    incomplete: plans.filter(p => !p.complete && t.sets.includes(p.sets[0])),
+    space: spacePool[0] || null, spaceAlts: spacePool.slice(1, 3), idx, scored
+  };
+}
+
+/* ============================ ui ============================ */
+function ownedChars() { return CHARACTERS.filter(c => state.chars[c.n].owned); }
+function poolFor(mode, rar, exclude) {
+  return state.cards.filter(c =>
+    c.rarity >= rar && (mode === 'all' || !c.equipped || c.equipped === exclude));
+}
+
+function renderOpt() {
+  const sel = $('#optChar');
+  const keep = sel.value;
+  const owned = ownedChars();
+  const list = owned.length ? owned : CHARACTERS;
+  sel.innerHTML = (owned.length ? '' : '<option disabled>— you have not marked any characters as owned —</option>') +
+    list.map(c => `<option value="${esc(c.n)}">${esc(c.n)}${c.a ? ' (' + esc(c.a) + ')' : ''}</option>`).join('');
+  if (keep && list.some(c => c.n === keep)) sel.value = keep;
+}
+
+function planCardHtml(slot, o, t) {
+  if (!o) return `<div class="lo empty"><h4><span class="slot ${slot}">${slot.slice(0,3)}</span> ${slot}</h4>
+    <div class="tiny muted">Nothing in inventory for this slot.</div></div>`;
+  const c = o.c;
+  const wantMain = t.main[c.slot];
+  const fixed = SLOT_INFO[c.slot].fixed;
+  const mainOk = fixed || c.main === wantMain;
+  const subs = (c.subs || []).map(s => {
+    const w = t.w[s.stat] || 0;
+    const rv = s.value / maxRoll(s.stat, c.slot);
+    return `<div class="sub ${w >= 6 ? 'good' : w <= 1 ? 'bad' : ''}">
+      <span>${esc(s.stat)}</span><b>${s.value}${SUBSTATS[s.stat].flat ? '' : '%'}
+      <span class="muted tiny">(${rv.toFixed(1)}r)</span></b></div>`;
+  }).join('');
+  return `<div class="lo">
+    <h4><span class="slot ${c.slot}">${c.slot.slice(0,3)}</span> ${esc(c.set)}
+      <span class="tag r${c.rarity}">${c.rarity}★</span>
+      <span class="score" style="margin-left:auto">${o.s.toFixed(1)}</span></h4>
+    <div style="border-bottom:1px solid #33333d;padding-bottom:6px;margin-bottom:5px">
+      <div class="sub" style="border:none;padding:0"><span class="muted">Main</span><b>${esc(c.main)}</b></div>
+      ${fixed ? '' : `<div style="margin-top:3px">${mainOk ? '<span class="tag hit">on target</span>'
+        : '<span class="tag miss">wants ' + esc(wantMain) + '</span>'}</div>`}
+    </div>
+    ${subs || '<div class="tiny muted">No substats recorded.</div>'}
+    <div class="tiny muted" style="margin-top:6px">Lv ${c.level}${c.equipped ? ' · on ' + esc(c.equipped) : ''}</div>
+  </div>`;
+}
+
+function runOpt() {
+  const name = $('#optChar').value;
+  const char = charDef(name);
+  if (!char) return;
+  const t = target(char);
+  const pool = poolFor($('#optPool').value, +$('#optRarity').value, name);
+  const r = bestPlan(char, pool, { policy: $('#optPolicy').value, p4value: +$('#optP4').value });
+  const out = $('#optOut');
+
+  const notes = [];
+  if (char.conf === 'low') notes.push(`<div class="notice"><b>Unverified build.</b> No published guide exists for ${esc(char.n)}.
+    These targets are ${esc(ARCHETYPES[char.arch].label)} defaults I generated — sanity-check them against her kit before committing resources.</div>`);
+  if (t.bp) notes.push(`<div class="notice info"><b>Breakpoints.</b> ${esc(t.bp)}</div>`);
+  if (t.note) notes.push(`<div class="notice info"><b>Note.</b> ${esc(t.note)}</div>`);
+  const unver = (t.sets || []).filter(s => SETS[s] && SETS[s].unverified);
+  if (unver.length) notes.push(`<div class="notice"><b>Unverified set data.</b>
+    ${esc(unver.join(' and '))} appears in build guides but was not in any set list I could confirm,
+    so its 2-piece effect is unknown and the optimiser scores that part as zero.
+    Check it in game and correct it, or the recommendation will undervalue this set.</div>`);
+  $('#optNotes').innerHTML = notes.join('');
+
+  if (!r.best) {
+    out.innerHTML = `<div class="panel"><p class="muted">Not enough cards in the pool to build a full loadout.
+      You need at least one card in each of Sun, Moon, Star and Sky.</p></div>`;
+    return;
+  }
+
+  const maxT = r.best.total;
+  const planSlots = p => p.kind === '4pc' || p.kind === 'raw' ? '' :
+    ' <span class="muted tiny">(' + ['Sun','Moon','Star','Sky']
+      .filter(sl => p.picks[sl].c.set === p.sets[0]).join('+') + ' carry ' + esc(p.sets[0]) + ')</span>';
+  const alt = r.alternatives.map(p =>
+    `<tr><td>${esc(p.label)}${planSlots(p)}</td><td class="right score">${p.total.toFixed(1)}</td>
+     <td class="right muted tiny">${(p.total - maxT).toFixed(1)}</td></tr>`).join('');
+  const cost = (r.statMax && r.statMax !== r.best)
+    ? `<p class="tiny muted" style="margin-top:8px">Ignoring set bonuses entirely would score
+       <b>${r.statMax.total.toFixed(1)}</b> (${(r.statMax.total - maxT >= 0 ? '+' : '')}${(r.statMax.total - maxT).toFixed(1)})
+       using ${esc(r.statMax.label.toLowerCase())}. Switch <b>Set policy</b> to compare.</p>` : '';
+  const missing = r.incomplete.map(p =>
+    `<tr><td>${esc(p.label)}</td><td colspan="2" class="tiny" style="color:#e87a5c">missing ${p.missing.join(', ')}</td></tr>`).join('');
+
+  const sp = r.space;
+  const spHtml = sp ? `<div class="lo">
+      <h4><span class="slot Space">Spa</span> ${esc(sp.c.set)}
+        <span class="tag r${sp.c.rarity}">${sp.c.rarity}★</span>
+        <span class="score" style="margin-left:auto">${sp.s.toFixed(1)}</span></h4>
+      <div class="tiny ${sp.pairs ? '' : 'muted'}" style="margin-bottom:5px">
+        ${sp.pairs ? '<span class="tag hit">pairs with your 4-piece</span>' : '<span class="tag miss">no synergy with this 4-piece</span>'}
+      </div>
+      ${(sp.c.subs || []).map(s => `<div class="sub ${(t.w[s.stat] || 0) >= 6 ? 'good' : ''}">
+        <span>${esc(s.stat)}</span><b>${s.value}${SUBSTATS[s.stat].flat ? '' : '%'}</b></div>`).join('')}
+      <div class="tiny muted" style="margin-top:6px">${esc((SPACE_SETS[sp.c.set] || {}).note || '')}</div>
+    </div>` : `<div class="lo empty"><h4><span class="slot Space">Spa</span> Space</h4>
+      <div class="tiny muted">No Space cards in inventory. Preferred: <b>${esc(t.space || '—')}</b>.</div></div>`;
+
+  out.innerHTML = `
+  <div class="panel">
+    <h2>Recommended loadout — ${esc(r.best.label)}</h2>
+    <div class="loadout">
+      ${['Sun','Moon','Star','Sky'].map(sl => planCardHtml(sl, r.best.picks[sl], t)).join('')}
+      ${spHtml}
+    </div>
+    <div class="row" style="margin-top:14px">
+      <div class="stat-tile"><span class="muted tiny">Total score</span><br><span class="score" style="font-size:22px">${r.best.total.toFixed(1)}</span></div>
+      <div class="stat-tile"><span class="muted tiny">From set bonuses</span><br><span class="score" style="font-size:22px">${r.best.bonus.toFixed(1)}</span></div>
+      <div style="flex:1"></div>
+      <button id="equipBtn" class="primary">Mark these as equipped on ${esc(char.n)}</button>
+    </div>
+    <p class="tiny muted" style="margin-top:10px">
+      Scores are relative, not absolute — they only mean anything when comparing options for the same character.
+      <b>(n r)</b> next to a substat is its roll value: how many maximum rolls that number is worth.
+    </p>
+    ${cost}
+  </div>
+  ${(alt || missing) ? `<div class="panel"><h2>Other set plans considered</h2>
+    <table><thead><tr><th>Plan</th><th class="right">Score</th><th class="right">vs best</th></tr></thead>
+    <tbody>${alt}${missing}</tbody></table></div>` : ''}
+  <div class="panel"><h2>Best alternatives per slot</h2>
+    <table><thead><tr><th>Slot</th><th>Set</th><th>Main</th><th>Substats</th><th class="right">Score</th></tr></thead>
+    <tbody>${['Sun','Moon','Star','Sky','Space'].flatMap(sl => {
+      const rows = (sl === 'Space' ? [r.space, ...r.spaceAlts].filter(Boolean)
+        : r.scored.filter(o => o.c.slot === sl).sort((a, b) => b.s - a.s).slice(0, 3));
+      return rows.map((o, i) => `<tr><td>${i === 0 ? `<span class="slot ${sl}">${sl.slice(0,3)}</span>` : ''}</td>
+        <td>${esc(o.c.set)} <span class="tag r${o.c.rarity}">${o.c.rarity}★</span></td>
+        <td class="tiny">${esc(o.c.main)}</td>
+        <td class="tiny muted">${(o.c.subs || []).map(s => esc(s.stat) + ' ' + s.value).join(' · ')}</td>
+        <td class="right score">${o.s.toFixed(1)}</td></tr>`);
+    }).join('')}</tbody></table></div>`;
+
+  const eq = $('#equipBtn');
+  if (eq) eq.onclick = () => {
+    state.cards.forEach(c => { if (c.equipped === name) c.equipped = null; });
+    ['Sun','Moon','Star','Sky'].forEach(sl => { const p = r.best.picks[sl]; if (p) p.c.equipped = name; });
+    if (r.space) r.space.c.equipped = name;
+    renderInv(); runOpt();
+  };
+}
+
+/* ---------------------------- inventory ---------------------------- */
+function fillSelects() {
+  $('#fSlot').innerHTML = SLOTS.map(s => `<option>${s}</option>`).join('');
+  $('#flSlot').innerHTML = '<option value="">Any</option>' + SLOTS.map(s => `<option>${s}</option>`).join('');
+  const setOpts = Object.keys(SETS).sort().map(s => `<option>${s}</option>`).join('');
+  const spOpts  = Object.keys(SPACE_SETS).sort().map(s => `<option>${s}</option>`).join('');
+  $('#flSet').innerHTML = '<option value="">Any</option>' + setOpts + spOpts;
+  syncSetOptions(); syncMainOptions(); renderSubInputs();
+}
+function syncSetOptions() {
+  const slot = $('#fSlot').value;
+  const src = slot === 'Space' ? SPACE_SETS : SETS;
+  $('#fSet').innerHTML = Object.keys(src).sort().map(s => `<option>${s}</option>`).join('');
+}
+function syncMainOptions() {
+  const slot = $('#fSlot').value;
+  const info = SLOT_INFO[slot];
+  $('#fMain').innerHTML = info.mains.map(s => `<option>${s}</option>`).join('');
+  $('#fMain').disabled = info.fixed;
+}
+function renderSubInputs() {
+  const opts = '<option value="">—</option>' + Object.keys(SUBSTATS).map(s => `<option>${s}</option>`).join('');
+  $('#fSubs').innerHTML = [1,2,3,4].map(i => `
+    <div class="field"><label>Substat ${i}</label>
+      <div style="display:flex;gap:5px">
+        <select class="subStat" data-i="${i}">${opts}</select>
+        <input class="subVal" data-i="${i}" type="number" step="0.1" style="width:78px" placeholder="0">
+      </div></div>`).join('');
+  $$('.subVal').forEach(el => el.addEventListener('keydown', e => { if (e.key === 'Enter') addCard(); }));
+}
+function addCard() {
+  const slot = $('#fSlot').value;
+  const subs = [];
+  $$('.subStat').forEach(sel => {
+    const i = sel.dataset.i;
+    const v = parseFloat($(`.subVal[data-i="${i}"]`).value);
+    if (sel.value && !isNaN(v)) subs.push({ stat: sel.value, value: v });
+  });
+  state.cards.push({
+    id: 'c' + (state.nextId++), slot, set: $('#fSet').value, rarity: +$('#fRar').value,
+    level: +$('#fLvl').value || 0, main: $('#fMain').value, subs, equipped: null
+  });
+  $$('.subVal').forEach(el => el.value = '');
+  $('.subVal').focus();
+  renderInv();
+}
+function parseLine(line) {
+  const parts = line.split('|').map(s => s.trim());
+  if (parts.length < 5) return { err: 'needs at least 5 fields separated by |' };
+  const slot = SLOTS.find(s => s.toLowerCase() === parts[0].toLowerCase()
+    || (s === 'Sky' && /^planet$/i.test(parts[0])) || (s === 'Space' && /^universe$/i.test(parts[0])));
+  if (!slot) return { err: `unknown slot "${parts[0]}"` };
+  const set = normSet(parts[1]);
+  if (!set) return { err: `unknown set "${parts[1]}"` };
+  const rarity = parseInt(parts[2], 10);
+  if (!RARITY[rarity]) return { err: `bad rarity "${parts[2]}"` };
+  const level = parseInt(parts[3], 10) || 0;
+  const main = SLOT_INFO[slot].fixed ? SLOT_INFO[slot].mains[0] : (normStat(parts[4]) || parts[4].trim());
+  const subs = [];
+  if (parts[5]) {
+    for (const chunk of parts[5].split(',')) {
+      const m = chunk.trim().match(/^(.*?)\s*([\d.]+)\s*%?$/);
+      if (!m) continue;
+      const st = normStat(m[1]);
+      if (!st) return { err: `unknown substat "${m[1].trim()}"` };
+      subs.push({ stat: st, value: parseFloat(m[2]) });
+    }
+  }
+  return { card: { id: 'c' + (state.nextId++), slot, set, rarity, level, main, subs, equipped: null } };
+}
+function bulkImport() {
+  const lines = $('#bulk').value.split('\n').map(s => s.trim()).filter(Boolean);
+  let ok = 0; const errs = [];
+  lines.forEach((l, i) => {
+    const r = parseLine(l);
+    if (r.err) errs.push(`line ${i + 1}: ${r.err}`); else { state.cards.push(r.card); ok++; }
+  });
+  $('#bulkMsg').innerHTML = `Imported <b>${ok}</b> card${ok === 1 ? '' : 's'}.` +
+    (errs.length ? ` <span style="color:#e87a5c">${errs.length} skipped</span> — ${esc(errs.slice(0, 3).join('; '))}${errs.length > 3 ? ' …' : ''}` : '');
+  if (ok) $('#bulk').value = '';
+  renderInv();
+}
+function filteredCards() {
+  const sl = $('#flSlot').value, st = $('#flSet').value, r = $('#flRar').value;
+  const q = $('#flQ').value.trim().toLowerCase();
+  return state.cards.filter(c => {
+    if (sl && c.slot !== sl) return false;
+    if (st && c.set !== st) return false;
+    if (r && c.rarity !== +r) return false;
+    if (q) {
+      const hay = [c.set, c.main, c.equipped || '', ...(c.subs || []).map(s => s.stat)].join(' ').toLowerCase();
+      if (!hay.includes(q)) return false;
+    }
+    return true;
+  });
+}
+function renderInv() {
+  const rows = filteredCards();
+  $('#invCount').textContent = `— ${rows.length} shown of ${state.cards.length}`;
+  $('#nodata').classList.toggle('hide', state.cards.length > 0);
+  $('#invTable').innerHTML = `<thead><tr>
+      <th>Slot</th><th>Set</th><th>★</th><th>Lv</th><th>Main</th><th>Substats</th><th>Equipped</th><th></th>
+    </tr></thead><tbody>` +
+    rows.slice(0, 600).map(c => `<tr>
+      <td><span class="slot ${c.slot}">${c.slot.slice(0,3)}</span></td>
+      <td>${esc(c.set)}</td>
+      <td><span class="tag r${c.rarity}">${c.rarity}★</span></td>
+      <td class="muted">${c.level}</td>
+      <td class="tiny">${esc(c.main)}</td>
+      <td class="tiny muted">${(c.subs || []).map(s => esc(s.stat) + ' ' + s.value).join(' · ')}</td>
+      <td class="tiny">${c.equipped ? esc(c.equipped) : '<span class="muted">—</span>'}</td>
+      <td class="right"><button class="sm ghost" data-del="${c.id}">✕</button></td>
+    </tr>`).join('') + '</tbody>';
+  if (rows.length > 600) $('#invTable').insertAdjacentHTML('beforeend',
+    `<tfoot><tr><td colspan="8" class="tiny muted">Showing the first 600 rows — narrow the filters to see more.</td></tr></tfoot>`);
+  $$('[data-del]').forEach(b => b.onclick = () => {
+    state.cards = state.cards.filter(c => c.id !== b.dataset.del); renderInv();
+  });
+}
+
+/* ------------------------------ triage ------------------------------ */
+function runTriage() {
+  const scope = $('#trScope').value;
+  const minR = +$('#trRar').value;
+  const chars = scope === 'owned' ? ownedChars() : CHARACTERS;
+  if (!chars.length) { $('#trSummary').innerHTML = '<p class="muted">Mark some characters as owned on the Roster tab first.</p>'; return; }
+  const targets = chars.map(c => ({ c, t: target(c) }));
+  const cards = state.cards.filter(c => c.rarity >= minR);
+  const rated = cards.map(card => {
+    let best = -1, who = '';
+    for (const { c, t } of targets) {
+      const s = cardScore(card, t);
+      if (s > best) { best = s; who = c.n; }
+    }
+    return { card, best, who };
+  });
+  const sorted = rated.slice().sort((a, b) => b.best - a.best);
+  const top = sorted.length ? sorted[0].best : 1;
+  rated.forEach(r => r.pct = top > 0 ? r.best / top : 0);
+  const order = $('#trShow').value === 'worst' ? rated.slice().sort((a, b) => a.best - b.best) : sorted;
+
+  const junk = rated.filter(r => r.pct < 0.35 && !r.card.equipped).length;
+  $('#trSummary').innerHTML = `<div class="notice info">
+    Rated <b>${rated.length}</b> cards against <b>${chars.length}</b> characters.
+    <b>${junk}</b> score below 35% of your best card and are not currently equipped — those are your safest feed candidates.
+    Always double-check before feeding: this only knows the characters you have marked as owned.</div>`;
+  $('#trPanel').classList.remove('hide');
+  $('#trTable').innerHTML = `<thead><tr>
+      <th>Slot</th><th>Set</th><th>★</th><th>Main</th><th>Substats</th>
+      <th>Best fit</th><th class="right">Score</th><th style="width:110px">Quality</th><th>Verdict</th>
+    </tr></thead><tbody>` +
+    order.slice(0, 800).map(r => {
+      const p = Math.round(r.pct * 100);
+      const verdict = r.card.equipped ? '<span class="tag hit">equipped</span>'
+        : r.pct >= 0.7 ? '<span class="tag hit">keep</span>'
+        : r.pct >= 0.35 ? '<span class="tag">hold</span>'
+        : '<span class="tag miss">feed</span>';
+      return `<tr>
+        <td><span class="slot ${r.card.slot}">${r.card.slot.slice(0,3)}</span></td>
+        <td>${esc(r.card.set)}</td>
+        <td><span class="tag r${r.card.rarity}">${r.card.rarity}★</span></td>
+        <td class="tiny">${esc(r.card.main)}</td>
+        <td class="tiny muted">${(r.card.subs || []).map(s => esc(s.stat) + ' ' + s.value).join(' · ')}</td>
+        <td class="tiny">${esc(r.who)}</td>
+        <td class="right score">${r.best.toFixed(1)}</td>
+        <td><div class="bar"><i style="width:${p}%"></i></div></td>
+        <td>${verdict}</td></tr>`;
+    }).join('') + '</tbody>';
+}
+
+/* ------------------------------ roster ------------------------------ */
+function renderRoster() {
+  const f = $('#rsFilter').value, q = $('#rsQ').value.trim().toLowerCase();
+  const list = CHARACTERS.filter(c => {
+    if (f === 'owned' && !state.chars[c.n].owned) return false;
+    if (f === 'low' && c.conf !== 'low') return false;
+    if (q && !(c.n + ' ' + (c.a || '') + ' ' + c.e + ' ' + c.arch).toLowerCase().includes(q)) return false;
+    return true;
+  });
+  $('#rsCount').textContent = `${list.length} shown · ${ownedChars().length} owned`;
+  $('#rsGrid').innerHTML = list.map(c => {
+    const t = target(c);
+    const o = state.chars[c.n].owned;
+    return `<div class="cc ${o ? 'owned' : ''}" data-ch="${esc(c.n)}">
+      <div class="nm">${esc(c.n)}</div>
+      ${c.a ? `<div class="al">${esc(c.a)}</div>` : '<div class="al">&nbsp;</div>'}
+      <div class="mt">
+        <span class="tag r${c.r}">${c.r}★</span>
+        <span class="tag">${esc(c.e)}</span>
+        <span class="tag">${esc(c.arch)}</span>
+        <span class="tag conf-${c.conf}">${c.conf}</span>
+      </div>
+      <div class="tiny muted" style="margin-top:7px">${esc((t.sets[0] || '—'))} 4pc · ${esc(t.space || '—')}</div>
+      <div class="row" style="margin-top:9px;gap:6px">
+        <button class="sm ${o ? 'primary' : ''}" data-own="${esc(c.n)}">${o ? 'Owned' : 'Mark owned'}</button>
+        <button class="sm ghost" data-edit="${esc(c.n)}">Targets</button>
+      </div></div>`;
+  }).join('');
+  $$('[data-own]').forEach(b => b.onclick = e => {
+    e.stopPropagation();
+    const n = b.dataset.own;
+    state.chars[n].owned = !state.chars[n].owned;
+    renderRoster(); renderOpt();
+  });
+  $$('[data-edit]').forEach(b => b.onclick = e => { e.stopPropagation(); editTargets(b.dataset.edit); });
+}
+
+function editTargets(name) {
+  const c = charDef(name), t = JSON.parse(JSON.stringify(target(c)));
+  const setOpts = sel => Object.keys(SETS).sort()
+    .map(s => `<option ${s === sel ? 'selected' : ''}>${s}</option>`).join('');
+  const body = `
+    <h2 style="margin-bottom:4px">${esc(c.n)}${c.a ? ' · ' + esc(c.a) : ''}</h2>
+    <p class="tiny muted" style="margin:0 0 14px">${esc(c.e)} · ${esc(ARCHETYPES[c.arch].label)} ·
+      confidence <span class="tag conf-${c.conf}">${c.conf}</span></p>
+    ${t.note ? `<div class="notice info tiny">${esc(t.note)}</div>` : ''}
+    ${t.bp ? `<div class="notice tiny"><b>Breakpoints.</b> ${esc(t.bp)}</div>` : ''}
+    <div class="row">
+      <div class="field"><label>Preferred 4-piece</label><select id="tSet0"><option value="">—</option>${setOpts(t.sets[0])}</select></div>
+      <div class="field"><label>Alternative 4-piece</label><select id="tSet1"><option value="">—</option>${setOpts(t.sets[1])}</select></div>
+      <div class="field"><label>Space card</label><select id="tSpace"><option value="">—</option>
+        ${Object.keys(SPACE_SETS).sort().map(s => `<option ${s === t.space ? 'selected' : ''}>${s}</option>`).join('')}</select></div>
+    </div>
+    <h3 style="margin:16px 0 8px;font-size:13px">Main stats</h3>
+    <div class="row">
+      ${['Moon','Star','Sky'].map(sl => `<div class="field"><label>${sl}</label>
+        <select id="tM${sl}">${SLOT_INFO[sl].mains.map(m =>
+          `<option ${m === t.main[sl] ? 'selected' : ''}>${m}</option>`).join('')}</select></div>`).join('')}
+      <span class="tiny muted" style="padding-bottom:8px">Sun and Space have fixed main stats.</span>
+    </div>
+    <h3 style="margin:16px 0 8px;font-size:13px">Substat weights <span class="muted tiny">0 = ignore, 10 = top priority</span></h3>
+    <div class="wgrid">${Object.keys(SUBSTATS).map(s =>
+      `<div class="wrow"><span>${s}</span><input type="number" min="0" max="10" step="1"
+        data-w="${s}" value="${t.w[s] != null ? t.w[s] : 0}"></div>`).join('')}</div>
+    <div class="row" style="margin-top:16px">
+      <button class="primary" id="tSave">Save targets</button>
+      <button id="tReset">Reset to default</button>
+    </div>`;
+  $('#dlgBody').innerHTML = body;
+  $('#dlg').showModal();
+  $('#tSave').onclick = () => {
+    const w = {}; $$('[data-w]').forEach(i => w[i.dataset.w] = +i.value || 0);
+    state.chars[name].targets = {
+      sets: [$('#tSet0').value, $('#tSet1').value].filter(Boolean),
+      space: $('#tSpace').value,
+      main: { Moon: $('#tMMoon').value, Star: $('#tMStar').value, Sky: $('#tMSky').value },
+      w, bp: t.bp, note: t.note
+    };
+    $('#dlg').close(); renderRoster(); runOpt();
+  };
+  $('#tReset').onclick = () => { state.chars[name].targets = null; $('#dlg').close(); renderRoster(); };
+}
+
+/* ------------------------------ data io ------------------------------ */
+function save() {
+  const payload = { version: 1, savedAt: new Date().toISOString(), nextId: state.nextId,
+    cards: state.cards, characters: state.chars };
+  const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = 'p5x-planner-save.json';
+  a.click(); URL.revokeObjectURL(a.href);
+  $('#dataMsg').textContent = 'Saved.';
+}
+function load(file) {
+  const fr = new FileReader();
+  fr.onload = () => {
+    try {
+      const d = JSON.parse(fr.result);
+      state.cards = (d.cards || []).map((c, i) => Object.assign({ id: 'c' + i, subs: [], equipped: null }, c));
+      state.nextId = d.nextId || state.cards.length + 1;
+      CHARACTERS.forEach(c => { state.chars[c.n] = (d.characters && d.characters[c.n]) || { owned: false, targets: null }; });
+      renderInv(); renderRoster(); renderOpt();
+      $('#dataMsg').innerHTML = `Loaded <b>${state.cards.length}</b> cards.`;
+    } catch (e) { $('#dataMsg').innerHTML = `<span style="color:#e87a5c">Could not read that file: ${esc(e.message)}</span>`; }
+  };
+  fr.readAsText(file);
+}
+function csv() {
+  const head = 'slot,set,rarity,level,main,sub1,val1,sub2,val2,sub3,val3,sub4,val4,equipped';
+  const rows = state.cards.map(c => {
+    const s = [0,1,2,3].flatMap(i => [(c.subs[i] || {}).stat || '', (c.subs[i] || {}).value != null ? c.subs[i].value : '']);
+    return [c.slot, c.set, c.rarity, c.level, c.main, ...s, c.equipped || ''].map(v => `"${String(v).replace(/"/g,'""')}"`).join(',');
+  });
+  const blob = new Blob([head + '\n' + rows.join('\n')], { type: 'text/csv' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob); a.download = 'p5x-cards.csv'; a.click(); URL.revokeObjectURL(a.href);
+}
+
+/* ------------------------------ wiring ------------------------------ */
+$$('nav button').forEach(b => b.onclick = () => {
+  $$('nav button').forEach(x => x.classList.remove('on'));
+  b.classList.add('on');
+  ['opt','inv','triage','roster','data'].forEach(t =>
+    $('#tab-' + t).classList.toggle('hide', t !== b.dataset.tab));
+});
+$('#fSlot').onchange = () => { syncSetOptions(); syncMainOptions(); };
+$('#fAdd').onclick = addCard;
+$('#bulkAdd').onclick = bulkImport;
+['#flSlot','#flSet','#flRar'].forEach(s => $(s).onchange = renderInv);
+$('#flQ').oninput = renderInv;
+$('#flClear').onclick = () => { $('#flSlot').value = ''; $('#flSet').value = ''; $('#flRar').value = ''; $('#flQ').value = ''; renderInv(); };
+$('#optRun').onclick = runOpt;
+$('#optChar').onchange = runOpt;
+$('#trRun').onclick = runTriage;
+$('#rsFilter').onchange = renderRoster;
+$('#rsQ').oninput = renderRoster;
+$('#dlSave').onclick = save;
+$('#dlCsv').onclick = csv;
+$('#upSave').onclick = () => $('#fileIn').click();
+$('#fileIn').onchange = e => { if (e.target.files[0]) load(e.target.files[0]); };
+$('#wipe').onclick = () => {
+  if (!confirm('Clear all cards and character settings? Download a save file first if you want to keep them.')) return;
+  state.cards = []; state.nextId = 1;
+  CHARACTERS.forEach(c => state.chars[c.n] = { owned: false, targets: null });
+  renderInv(); renderRoster(); renderOpt();
+};
+
+$('#stamp').textContent = `${CHARACTERS.length} characters · ${Object.keys(SETS).length} sets · ${Object.keys(SPACE_SETS).length} space cards`;
+fillSelects(); renderInv(); renderRoster(); renderOpt();
+
+</script>
+</body></html>

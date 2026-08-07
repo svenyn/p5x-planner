@@ -1,0 +1,4 @@
+node_modules/
+docs/shot-*.png
+*.log
+p5x-planner-save.json

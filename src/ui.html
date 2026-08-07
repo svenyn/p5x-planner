@@ -1,0 +1,337 @@
+<style>
+:root{
+  --bg:#0b0b0d; --panel:#141419; --panel2:#1c1c23; --line:#2c2c36;
+  --ink:#f2f2f4; --dim:#9a9aa6; --dim2:#6e6e7a;
+  --red:#e6274a; --red-dim:#7a1528; --gold:#e8b64c; --purple:#a86fd0; --blue:#4c8fe8;
+  --ok:#3fbf7f;
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);
+  font:14px/1.5 "Segoe UI",-apple-system,system-ui,sans-serif;-webkit-font-smoothing:antialiased}
+h1,h2,h3{margin:0;font-weight:700;letter-spacing:-.01em}
+a{color:var(--red)}
+button{font:inherit;cursor:pointer;border:1px solid var(--line);background:var(--panel2);
+  color:var(--ink);border-radius:6px;padding:7px 12px;transition:.12s}
+button:hover{border-color:var(--red);background:#26262f}
+button.primary{background:var(--red);border-color:var(--red);color:#fff;font-weight:600}
+button.primary:hover{background:#ff3557}
+button.ghost{background:transparent}
+button.sm{padding:3px 8px;font-size:12px}
+input,select,textarea{font:inherit;background:#0f0f13;color:var(--ink);
+  border:1px solid var(--line);border-radius:6px;padding:6px 9px;outline:none}
+input:focus,select:focus,textarea:focus{border-color:var(--red)}
+table{width:100%;border-collapse:collapse}
+th{text-align:left;font-size:11px;text-transform:uppercase;letter-spacing:.06em;
+  color:var(--dim2);font-weight:600;padding:8px 10px;border-bottom:1px solid var(--line);
+  position:sticky;top:0;background:var(--panel);z-index:2}
+td{padding:7px 10px;border-bottom:1px solid #1e1e26;vertical-align:middle}
+tr:hover td{background:#16161c}
+
+header{background:linear-gradient(180deg,#17171d,#0e0e12);border-bottom:1px solid var(--line);
+  padding:14px 20px;display:flex;align-items:center;gap:16px;flex-wrap:wrap;
+  position:sticky;top:0;z-index:20}
+header .logo{font-size:17px;font-weight:800}
+header .logo em{color:var(--red);font-style:normal}
+nav{display:flex;gap:4px;margin-left:auto;flex-wrap:wrap}
+nav button{border:none;background:transparent;color:var(--dim);padding:7px 13px;border-radius:6px;font-weight:600}
+nav button:hover{color:var(--ink);background:#20202a}
+nav button.on{background:var(--red);color:#fff}
+main{padding:20px;max-width:1500px;margin:0 auto}
+.panel{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:16px;margin-bottom:16px}
+.panel > h2{font-size:14px;text-transform:uppercase;letter-spacing:.07em;color:var(--dim);margin-bottom:12px}
+.row{display:flex;gap:10px;flex-wrap:wrap;align-items:flex-end}
+.field{display:flex;flex-direction:column;gap:4px}
+.field label{font-size:11px;text-transform:uppercase;letter-spacing:.05em;color:var(--dim2);font-weight:600}
+.muted{color:var(--dim)}
+.tiny{font-size:12px}
+.mono{font-family:ui-monospace,"Cascadia Code",Consolas,monospace}
+.scroll{max-height:62vh;overflow:auto;border:1px solid var(--line);border-radius:8px}
+
+.tag{display:inline-block;padding:1px 7px;border-radius:20px;font-size:11px;font-weight:600;
+  border:1px solid var(--line);background:#202029;color:var(--dim);white-space:nowrap}
+.tag.r5{color:#f0c260;border-color:#6b5220;background:#2a2213}
+.tag.r4{color:#c08ae8;border-color:#4d3163;background:#241a2e}
+.tag.r3{color:#6fa6ee;border-color:#294466;background:#141e2b}
+.tag.r2{color:#9a9aa6;border-color:#33333d;background:#1b1b22}
+.tag.conf-high{color:var(--ok);border-color:#1d5c3d;background:#10241a}
+.tag.conf-med{color:var(--gold);border-color:#5c4a1d;background:#241f10}
+.tag.conf-low{color:#e87a5c;border-color:#6b3524;background:#2a1712}
+.tag.hit{color:var(--ok);border-color:#1d5c3d;background:#10241a}
+.tag.miss{color:#e87a5c;border-color:#6b3524;background:#2a1712}
+
+.grid{display:grid;gap:10px}
+.cards{grid-template-columns:repeat(auto-fill,minmax(215px,1fr))}
+.cc{background:var(--panel2);border:1px solid var(--line);border-radius:9px;padding:11px;cursor:pointer;transition:.12s}
+.cc:hover{border-color:var(--red)}
+.cc.owned{border-left:3px solid var(--red)}
+.cc .nm{font-weight:700;font-size:14px}
+.cc .al{color:var(--dim2);font-size:12px}
+.cc .mt{display:flex;gap:5px;margin-top:7px;flex-wrap:wrap}
+
+.slot{display:inline-flex;align-items:center;justify-content:center;min-width:34px;height:20px;
+  padding:0 6px;border-radius:5px;font-size:10px;font-weight:800;letter-spacing:.04em;
+  text-transform:uppercase;background:#242430;color:var(--dim)}
+.slot.Sun{background:#3a2a10;color:#f0c260}
+.slot.Moon{background:#1b2438;color:#7fa8e8}
+.slot.Star{background:#332040;color:#c08ae8}
+.slot.Sky{background:#123028;color:#4fc79a}
+.slot.Space{background:#3a1520;color:#f07a92}
+
+.loadout{display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:10px}
+.lo{background:var(--panel2);border:1px solid var(--line);border-radius:9px;padding:12px}
+.lo.empty{border-style:dashed;opacity:.55}
+.lo h4{margin:0 0 6px;font-size:13px;display:flex;align-items:center;gap:7px;flex-wrap:wrap}
+.stat-tile{min-width:130px}
+.lo .sub{display:flex;justify-content:space-between;align-items:baseline;gap:8px;flex-wrap:wrap;
+  font-size:12px;padding:3px 0;border-bottom:1px dotted #26262f}
+.lo .sub > span:first-child{flex:0 0 auto}
+.lo .sub b{text-align:right}
+.lo .sub b{font-weight:600}
+.lo .sub.good b{color:var(--ok)}
+.lo .sub.bad{opacity:.45}
+.score{font-family:ui-monospace,monospace;font-weight:700}
+.bar{height:5px;border-radius:3px;background:#24242e;overflow:hidden;margin-top:4px}
+.bar>i{display:block;height:100%;background:linear-gradient(90deg,var(--red-dim),var(--red))}
+
+.wgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(190px,1fr));gap:8px}
+.wrow{display:flex;align-items:center;gap:8px;background:#0f0f14;border:1px solid var(--line);
+  border-radius:6px;padding:5px 8px}
+.wrow span{flex:1;font-size:12px}
+.wrow input{width:52px;padding:3px 6px;text-align:center}
+
+.notice{background:#1a1218;border:1px solid #4a2030;border-left:3px solid var(--red);
+  border-radius:7px;padding:10px 13px;font-size:13px;margin-bottom:12px}
+.notice.info{background:#101a1c;border-color:#1d4a52;border-left-color:#3fbfbf}
+dialog{background:var(--panel);color:var(--ink);border:1px solid var(--line);border-radius:12px;
+  padding:20px;max-width:820px;width:94%;max-height:88vh}
+dialog::backdrop{background:rgba(0,0,0,.7)}
+.hide{display:none!important}
+.right{text-align:right}
+.nowrap{white-space:nowrap}
+</style>
+
+<header>
+  <div class="logo">P5<em>X</em> &nbsp;Revelation Planner</div>
+  <span class="tiny muted" id="stamp"></span>
+  <nav>
+    <button data-tab="opt" class="on">Optimise</button>
+    <button data-tab="inv">Inventory</button>
+    <button data-tab="triage">Triage</button>
+    <button data-tab="roster">Roster</button>
+    <button data-tab="data">Save / Load</button>
+  </nav>
+</header>
+
+<main>
+  <div id="nodata" class="notice hide">
+    No cards yet. Add a few on the <b>Inventory</b> tab, or load a save file on the <b>Save / Load</b> tab.
+  </div>
+
+  <!-- ===================== OPTIMISE ===================== -->
+  <section id="tab-opt">
+    <div class="panel">
+      <div class="row">
+        <div class="field" style="min-width:250px">
+          <label>Character</label>
+          <select id="optChar"></select>
+        </div>
+        <div class="field">
+          <label>Card pool</label>
+          <select id="optPool">
+            <option value="all">All cards</option>
+            <option value="free">Only unequipped cards</option>
+          </select>
+        </div>
+        <div class="field">
+          <label>Minimum rarity</label>
+          <select id="optRarity">
+            <option value="5">5★ only</option>
+            <option value="4">4★ and up</option>
+            <option value="2">Everything</option>
+          </select>
+        </div>
+        <div class="field">
+          <label>Set policy</label>
+          <select id="optPolicy">
+            <option value="pref">Honour preferred sets</option>
+            <option value="force4">Force preferred 4-piece</option>
+            <option value="any4">Best complete 4-piece</option>
+            <option value="stats">Pure stat maximum</option>
+          </select>
+        </div>
+        <div class="field">
+          <label title="How much a 4-piece set effect is worth relative to raw substats. Raise it if you think set effects matter more than the optimiser assumes.">4-piece value</label>
+          <input id="optP4" type="number" value="55" min="0" max="300" step="5" style="width:75px">
+        </div>
+        <button class="primary" id="optRun">Recommend</button>
+      </div>
+      <div id="optNotes" style="margin-top:12px"></div>
+    </div>
+    <div id="optOut"></div>
+  </section>
+
+  <!-- ===================== INVENTORY ===================== -->
+  <section id="tab-inv" class="hide">
+    <div class="panel">
+      <h2>Add a card</h2>
+      <div class="row">
+        <div class="field"><label>Slot</label><select id="fSlot"></select></div>
+        <div class="field"><label>Set</label><select id="fSet"></select></div>
+        <div class="field"><label>Rarity</label><select id="fRar">
+          <option value="5">5★</option><option value="4">4★</option>
+          <option value="3">3★</option><option value="2">2★</option></select></div>
+        <div class="field"><label>Level</label><input id="fLvl" type="number" value="0" min="0" max="25" style="width:70px"></div>
+        <div class="field"><label>Main stat</label><select id="fMain"></select></div>
+      </div>
+      <div class="row" style="margin-top:10px" id="fSubs"></div>
+      <div class="row" style="margin-top:12px">
+        <button class="primary" id="fAdd">Add card</button>
+        <span class="tiny muted">Tip: press Enter in any substat box to add and reset for the next card.</span>
+      </div>
+    </div>
+
+    <div class="panel">
+      <h2>Bulk paste</h2>
+      <p class="tiny muted" style="margin:0 0 8px">
+        One card per line:
+        <code class="mono">Slot | Set | Rarity | Level | Main stat | sub value, sub value, ...</code><br>
+        Example: <code class="mono">Star | Hindrance | 5 | 25 | Crit Rate | Crit Multiplier 12.4, ATK% 8.7, Speed 4.2, Pierce 3.9</code><br>
+        Stat names are matched loosely — CDMG, EHR, SPD, Pen and similar all resolve correctly.
+      </p>
+      <textarea id="bulk" rows="7" style="width:100%" class="mono" placeholder="Paste lines here..."></textarea>
+      <div class="row" style="margin-top:10px">
+        <button class="primary" id="bulkAdd">Import lines</button>
+        <span id="bulkMsg" class="tiny muted"></span>
+      </div>
+    </div>
+
+    <div class="panel">
+      <h2>Cards <span class="muted" id="invCount"></span></h2>
+      <div class="row" style="margin-bottom:10px">
+        <div class="field"><label>Slot</label><select id="flSlot"><option value="">Any</option></select></div>
+        <div class="field"><label>Set</label><select id="flSet"><option value="">Any</option></select></div>
+        <div class="field"><label>Rarity</label><select id="flRar">
+          <option value="">Any</option><option value="5">5★</option><option value="4">4★</option>
+          <option value="3">3★</option><option value="2">2★</option></select></div>
+        <div class="field"><label>Search</label><input id="flQ" placeholder="stat, set, character..."></div>
+        <button class="ghost" id="flClear">Clear</button>
+      </div>
+      <div class="scroll"><table id="invTable"></table></div>
+    </div>
+  </section>
+
+  <!-- ===================== TRIAGE ===================== -->
+  <section id="tab-triage" class="hide">
+    <div class="panel">
+      <h2>Keep or feed</h2>
+      <p class="tiny muted" style="margin:0 0 10px">
+        Every card is scored against every character you own, and rated by its best match.
+        With a large inventory this is the fastest way to find what is safe to feed away.
+      </p>
+      <div class="row">
+        <div class="field"><label>Rate against</label><select id="trScope">
+          <option value="owned">Characters I own</option>
+          <option value="all">All characters</option></select></div>
+        <div class="field"><label>Show</label><select id="trShow">
+          <option value="worst">Worst first (feed candidates)</option>
+          <option value="best">Best first (keepers)</option></select></div>
+        <div class="field"><label>Minimum rarity</label><select id="trRar">
+          <option value="2">Everything</option><option value="4">4★ and up</option>
+          <option value="5">5★ only</option></select></div>
+        <button class="primary" id="trRun">Rate inventory</button>
+      </div>
+      <div id="trSummary" style="margin-top:12px"></div>
+    </div>
+    <div class="panel hide" id="trPanel">
+      <div class="scroll"><table id="trTable"></table></div>
+    </div>
+  </section>
+
+  <!-- ===================== ROSTER ===================== -->
+  <section id="tab-roster" class="hide">
+    <div class="panel">
+      <div class="row">
+        <div class="field"><label>Show</label><select id="rsFilter">
+          <option value="all">All characters</option>
+          <option value="owned">Owned only</option>
+          <option value="low">Unverified builds only</option></select></div>
+        <div class="field"><label>Search</label><input id="rsQ" placeholder="name or element"></div>
+        <span class="tiny muted" id="rsCount"></span>
+      </div>
+    </div>
+    <div class="notice info tiny">
+      <b>Confidence flags.</b> <span class="tag conf-high">high</span> means a full published build exists.
+      <span class="tag conf-med">med</span> means sources conflicted or were vague.
+      <span class="tag conf-low">low</span> means no build has been published and the targets are archetype
+      defaults I generated — treat those as a starting point, not gospel. Every target is editable.
+    </div>
+    <div class="grid cards" id="rsGrid"></div>
+  </section>
+
+  <!-- ===================== DATA ===================== -->
+  <section id="tab-data" class="hide">
+    <div class="panel">
+      <h2>Save your work</h2>
+      <p class="tiny muted" style="margin:0 0 10px">
+        This tool keeps nothing between sessions on its own — download a save file when you are done,
+        and load it back next time. The file is plain JSON, so the OCR pipeline can write it directly.
+      </p>
+      <div class="row">
+        <button class="primary" id="dlSave">Download save file</button>
+        <button id="upSave">Load save file</button>
+        <input type="file" id="fileIn" accept=".json" class="hide">
+        <button class="ghost" id="dlCsv">Export cards as CSV</button>
+        <span id="dataMsg" class="tiny muted"></span>
+      </div>
+    </div>
+    <div class="panel">
+      <h2>Schema</h2>
+      <p class="tiny muted" style="margin:0 0 8px">This is the shape the OCR pipeline needs to produce.</p>
+      <pre class="mono tiny" style="background:#0f0f13;border:1px solid var(--line);border-radius:8px;padding:12px;overflow:auto">{
+  "version": 1,
+  "cards": [
+    { "id": "c1", "slot": "Star", "set": "Hindrance", "rarity": 5, "level": 25,
+      "main": "Crit Rate", "equipped": "Ren Amamiya",
+      "subs": [ { "stat": "Crit Multiplier", "value": 12.4 },
+                { "stat": "ATK%", "value": 8.7 } ] }
+  ],
+  "characters": { "Ren Amamiya": { "owned": true, "targets": { } } }
+}</pre>
+    </div>
+    <div class="panel">
+      <h2>Where this data came from, and what to distrust</h2>
+      <p class="tiny muted" style="margin:0 0 8px">
+        Everything here was assembled from community guides in August 2026, not from the game client.
+        Four things are worth knowing before you trust a recommendation:
+      </p>
+      <ol class="tiny muted" style="margin:0;padding-left:18px;line-height:1.7">
+        <li><b>Guide sites use different set names.</b> Game8 and Prydwen translate the same sets
+            differently, and Fragster uses a third scheme. Confirmed equivalences are handled on import
+            (Strength is Power, Abundance is Prosperity, and so on), but two names —
+            <b>Ruin</b> and <b>Prudence</b> — could not be matched to anything, so they are listed as
+            separate sets with unknown 2-piece effects.</li>
+        <li><b>Main stat magnitudes are not published anywhere.</b> No source lists what a main stat is
+            actually worth at level 25, so the optimiser weights main stats by priority rather than by
+            real numbers.</li>
+        <li><b>Substat roll values come from a single source</b> and were never checked against the
+            client. If a number looks wrong, it may be.</li>
+        <li><b>Twenty-five characters have no published build.</b> They carry archetype defaults I
+            generated and are flagged <span class="tag conf-low">low</span> on the Roster tab.</li>
+      </ol>
+      <p class="tiny muted" style="margin:8px 0 0">
+        All of it is editable, and all of it gets much better the moment it is checked against real
+        screenshots from your own game.
+      </p>
+    </div>
+    <div class="panel">
+      <h2>Danger zone</h2>
+      <button id="wipe">Clear everything</button>
+    </div>
+  </section>
+</main>
+
+<dialog id="dlg"><div id="dlgBody"></div>
+  <div class="row" style="margin-top:16px;justify-content:flex-end">
+    <button onclick="document.getElementById('dlg').close()">Close</button>
+  </div>
+</dialog>
