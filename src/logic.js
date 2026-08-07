@@ -22,6 +22,27 @@ function target(charDef) {
   };
 }
 const charDef = name => CHARACTERS.find(c => c.n === name);
+
+/* ---- roster card art -------------------------------------------------------
+   Portraits are optional and loaded from an `art/` folder sitting next to the
+   built HTML — art/<slug>.png, e.g. art/ren-amamiya-starlight.png. The <img>
+   removes itself on error, so a missing file (or the Cowork artifact build,
+   where relative fetches are blocked outright) silently falls back to the
+   element-tinted initials placeholder underneath. Nothing is bundled: game art
+   is not ours to redistribute, and 63 embedded portraits would bloat the
+   single-file build well past the point of being openable from file://. */
+const artSlug = name => String(name).toLowerCase()
+  .replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
+const artPath = name => `art/${artSlug(name)}.png`;
+
+function initials(name) {
+  // strip the [Costume] suffix so alternate arts don't all read the same
+  const base = String(name).replace(/\[.*?\]/g, ' ').trim();
+  const words = base.split(/[\s&]+/).filter(Boolean);
+  if (!words.length) return '?';
+  if (words.length === 1) return words[0].slice(0, 2).toUpperCase();
+  return (words[0][0] + words[words.length - 1][0]).toUpperCase();
+}
 const maxRoll = (stat, slot) =>
   slot === 'Space' ? (SUBSTATS[stat].maxRollSpace || SUBSTATS[stat].maxRoll) : SUBSTATS[stat].maxRoll;
 
@@ -746,19 +767,29 @@ function renderRoster() {
   $('#rsGrid').innerHTML = list.map(c => {
     const t = target(c);
     const o = state.chars[c.n].owned;
-    return `<div class="cc ${o ? 'owned' : ''}" data-ch="${esc(c.n)}">
-      <div class="nm">${esc(c.n)}</div>
-      ${c.a ? `<div class="al">${esc(c.a)}</div>` : '<div class="al">&nbsp;</div>'}
-      <div class="mt">
-        <span class="tag r${c.r}">${c.r}★</span>
-        <span class="tag">${esc(c.e)}</span>
-        <span class="tag">${esc(c.arch)}</span>
-        <span class="tag conf-${c.conf}">${c.conf}</span>
+    const el = ELEMENT_COLORS[c.e] || ELEMENT_COLORS['None'];
+    return `<div class="cc ${o ? 'owned' : ''}" data-ch="${esc(c.n)}" style="--el:${esc(el)}">
+      <div class="portrait">
+        <div class="initials">${esc(initials(c.n))}</div>
+        <img src="${esc(artPath(c.n))}" alt="" loading="lazy" onerror="this.remove()">
+        <div class="veil"></div>
+        <div class="corner l"><span class="tag r${c.r}">${c.r}★</span></div>
+        <div class="corner r"><span class="tag el"><i class="el-dot"></i>${esc(c.e)}</span></div>
+        <div class="cap">
+          <div class="nm">${esc(c.n)}</div>
+          ${c.a ? `<div class="al">${esc(c.a)}</div>` : ''}
+        </div>
       </div>
-      <div class="tiny muted" style="margin-top:7px">${esc((t.sets[0] || '—'))} 4pc · ${esc(t.space || '—')}</div>
-      <div class="row" style="margin-top:9px;gap:6px">
-        <button class="sm ${o ? 'primary' : ''}" data-own="${esc(c.n)}">${o ? 'Owned' : 'Mark owned'}</button>
-        <button class="sm ghost" data-edit="${esc(c.n)}">Targets</button>
+      <div class="body">
+        <div class="mt">
+          <span class="tag">${esc(c.arch)}</span>
+          <span class="tag conf-${c.conf}">${c.conf}</span>
+        </div>
+        <div class="tiny muted" style="margin-top:7px">${esc((t.sets[0] || '—'))} 4pc · ${esc(t.space || '—')}</div>
+        <div class="row" style="margin-top:9px;gap:6px">
+          <button class="sm ${o ? 'primary' : ''}" data-own="${esc(c.n)}">${o ? 'Owned' : 'Mark owned'}</button>
+          <button class="sm ghost" data-edit="${esc(c.n)}">Targets</button>
+        </div>
       </div></div>`;
   }).join('');
   $$('[data-own]').forEach(b => b.onclick = e => {

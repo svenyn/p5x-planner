@@ -66,12 +66,44 @@ main{padding:20px;max-width:1500px;margin:0 auto}
 
 .grid{display:grid;gap:10px}
 .cards{grid-template-columns:repeat(auto-fill,minmax(215px,1fr))}
-.cc{background:var(--panel2);border:1px solid var(--line);border-radius:9px;padding:11px;cursor:pointer;transition:.12s}
+.cc{background:var(--panel2);border:1px solid var(--line);border-radius:9px;
+  cursor:pointer;transition:.12s;overflow:hidden;display:flex;flex-direction:column}
 .cc:hover{border-color:var(--red)}
+.cc:hover .portrait img,.cc:hover .portrait .initials{transform:scale(1.05)}
 .cc.owned{border-left:3px solid var(--red)}
-.cc .nm{font-weight:700;font-size:14px}
+.cc .body{padding:10px 11px 11px}
+.cc .nm{font-weight:700;font-size:14px;line-height:1.25}
 .cc .al{color:var(--dim2);font-size:12px}
 .cc .mt{display:flex;gap:5px;margin-top:7px;flex-wrap:wrap}
+
+/* Character card, laid out like lufel.net's: portrait first, name and rarity
+   over the bottom of the art, details underneath. --el is the element colour,
+   set per card from ELEMENT_COLORS in data.js. */
+.portrait{position:relative;aspect-ratio:3/4;overflow:hidden;background:#0f0f14;
+  background-image:
+    radial-gradient(120% 90% at 50% 8%, color-mix(in srgb, var(--el) 55%, transparent), transparent 70%),
+    repeating-linear-gradient(115deg, rgba(255,255,255,.05) 0 2px, transparent 2px 9px),
+    linear-gradient(170deg, color-mix(in srgb, var(--el) 22%, #101015), #0c0c11 78%)}
+.portrait img,.portrait .initials{position:absolute;inset:0;width:100%;height:100%;
+  transition:transform .18s ease}
+.portrait img{object-fit:cover;object-position:center top}
+.portrait .initials{display:flex;align-items:center;justify-content:center;
+  font-size:52px;font-weight:800;letter-spacing:-.03em;
+  color:color-mix(in srgb, var(--el) 70%, #ffffff);opacity:.5;
+  text-shadow:0 3px 14px rgba(0,0,0,.6)}
+.portrait .veil{position:absolute;inset:auto 0 0 0;height:62%;
+  background:linear-gradient(transparent, rgba(10,10,13,.55) 42%, #141419)}
+.portrait .cap{position:absolute;left:10px;right:10px;bottom:8px}
+.portrait .cap .nm{text-shadow:0 2px 8px rgba(0,0,0,.85)}
+.portrait .corner{position:absolute;top:8px;display:flex;gap:4px}
+.portrait .corner.l{left:8px}
+.portrait .corner.r{right:8px}
+.el-dot{display:inline-block;width:8px;height:8px;border-radius:50%;
+  background:var(--el);box-shadow:0 0 0 2px rgba(0,0,0,.45)}
+.tag.el{border-color:color-mix(in srgb, var(--el) 45%, transparent);
+  background:color-mix(in srgb, var(--el) 16%, #16161c);
+  color:color-mix(in srgb, var(--el) 78%, #ffffff);
+  display:inline-flex;align-items:center;gap:5px}
 
 .slot{display:inline-flex;align-items:center;justify-content:center;min-width:34px;height:20px;
   padding:0 6px;border-radius:5px;font-size:10px;font-weight:800;letter-spacing:.04em;
@@ -423,6 +455,16 @@ const RARITY = {
 };
 
 const ELEMENTS = ['Physical','Gun','Fire','Ice','Electric','Wind','Psychokinesis','Nuclear','Bless','Curse','Almighty','None'];
+
+/* Display only — drives the element tint on roster character cards. Chosen to
+   match the in-game affinity icon colours; nothing in the scoring engine reads
+   these, so adjusting one is purely cosmetic. */
+const ELEMENT_COLORS = {
+  'Physical': '#d9694c', 'Gun': '#9aa0aa', 'Fire': '#e8523f', 'Ice': '#4fa8dc',
+  'Electric': '#e9c84c', 'Wind': '#4fc79a', 'Psychokinesis': '#d86fbe',
+  'Nuclear': '#b5d84f', 'Bless': '#f0dd9a', 'Curse': '#a86fd0',
+  'Almighty': '#e4e4ee', 'None': '#8a8f98'
+};
 
 /* The 20 four-slot ("Heavens") sets.
    bonus2 describes the 2-piece effect numerically where it maps to a stat, so the
@@ -777,6 +819,27 @@ function target(charDef) {
   };
 }
 const charDef = name => CHARACTERS.find(c => c.n === name);
+
+/* ---- roster card art -------------------------------------------------------
+   Portraits are optional and loaded from an `art/` folder sitting next to the
+   built HTML — art/<slug>.png, e.g. art/ren-amamiya-starlight.png. The <img>
+   removes itself on error, so a missing file (or the Cowork artifact build,
+   where relative fetches are blocked outright) silently falls back to the
+   element-tinted initials placeholder underneath. Nothing is bundled: game art
+   is not ours to redistribute, and 63 embedded portraits would bloat the
+   single-file build well past the point of being openable from file://. */
+const artSlug = name => String(name).toLowerCase()
+  .replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
+const artPath = name => `art/${artSlug(name)}.png`;
+
+function initials(name) {
+  // strip the [Costume] suffix so alternate arts don't all read the same
+  const base = String(name).replace(/\[.*?\]/g, ' ').trim();
+  const words = base.split(/[\s&]+/).filter(Boolean);
+  if (!words.length) return '?';
+  if (words.length === 1) return words[0].slice(0, 2).toUpperCase();
+  return (words[0][0] + words[words.length - 1][0]).toUpperCase();
+}
 const maxRoll = (stat, slot) =>
   slot === 'Space' ? (SUBSTATS[stat].maxRollSpace || SUBSTATS[stat].maxRoll) : SUBSTATS[stat].maxRoll;
 
@@ -1501,19 +1564,29 @@ function renderRoster() {
   $('#rsGrid').innerHTML = list.map(c => {
     const t = target(c);
     const o = state.chars[c.n].owned;
-    return `<div class="cc ${o ? 'owned' : ''}" data-ch="${esc(c.n)}">
-      <div class="nm">${esc(c.n)}</div>
-      ${c.a ? `<div class="al">${esc(c.a)}</div>` : '<div class="al">&nbsp;</div>'}
-      <div class="mt">
-        <span class="tag r${c.r}">${c.r}★</span>
-        <span class="tag">${esc(c.e)}</span>
-        <span class="tag">${esc(c.arch)}</span>
-        <span class="tag conf-${c.conf}">${c.conf}</span>
+    const el = ELEMENT_COLORS[c.e] || ELEMENT_COLORS['None'];
+    return `<div class="cc ${o ? 'owned' : ''}" data-ch="${esc(c.n)}" style="--el:${esc(el)}">
+      <div class="portrait">
+        <div class="initials">${esc(initials(c.n))}</div>
+        <img src="${esc(artPath(c.n))}" alt="" loading="lazy" onerror="this.remove()">
+        <div class="veil"></div>
+        <div class="corner l"><span class="tag r${c.r}">${c.r}★</span></div>
+        <div class="corner r"><span class="tag el"><i class="el-dot"></i>${esc(c.e)}</span></div>
+        <div class="cap">
+          <div class="nm">${esc(c.n)}</div>
+          ${c.a ? `<div class="al">${esc(c.a)}</div>` : ''}
+        </div>
       </div>
-      <div class="tiny muted" style="margin-top:7px">${esc((t.sets[0] || '—'))} 4pc · ${esc(t.space || '—')}</div>
-      <div class="row" style="margin-top:9px;gap:6px">
-        <button class="sm ${o ? 'primary' : ''}" data-own="${esc(c.n)}">${o ? 'Owned' : 'Mark owned'}</button>
-        <button class="sm ghost" data-edit="${esc(c.n)}">Targets</button>
+      <div class="body">
+        <div class="mt">
+          <span class="tag">${esc(c.arch)}</span>
+          <span class="tag conf-${c.conf}">${c.conf}</span>
+        </div>
+        <div class="tiny muted" style="margin-top:7px">${esc((t.sets[0] || '—'))} 4pc · ${esc(t.space || '—')}</div>
+        <div class="row" style="margin-top:9px;gap:6px">
+          <button class="sm ${o ? 'primary' : ''}" data-own="${esc(c.n)}">${o ? 'Owned' : 'Mark owned'}</button>
+          <button class="sm ghost" data-edit="${esc(c.n)}">Targets</button>
+        </div>
       </div></div>`;
   }).join('');
   $$('[data-own]').forEach(b => b.onclick = e => {

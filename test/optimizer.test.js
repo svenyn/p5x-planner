@@ -7,7 +7,16 @@ const PAGE = 'file://' + path.join(__dirname, '..', 'dist', 'p5x-planner.html');
   const p = await b.newPage();
   const errs = [];
   p.on('pageerror', e => errs.push('PAGEERROR: ' + e.message));
-  p.on('console', m => { if (m.type() === 'error') errs.push('CONSOLE: ' + m.text()); });
+  p.on('console', m => {
+    if (m.type() !== 'error') return;
+    // Roster portraits are optional files in art/ next to the HTML; each <img>
+    // removes itself on error so a missing one falls back to the initials
+    // placeholder. With no art/ folder that is 63 expected 404s, which are the
+    // feature working, not a fault — but only ignore that exact case.
+    const loc = (m.location() && m.location().url) || '';
+    if (/\/art\/[^/]+\.png$/.test(loc)) return;
+    errs.push('CONSOLE: ' + m.text());
+  });
   await p.goto(PAGE);
   await p.waitForTimeout(400);
 

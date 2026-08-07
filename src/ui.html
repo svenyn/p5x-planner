@@ -61,12 +61,44 @@ main{padding:20px;max-width:1500px;margin:0 auto}
 
 .grid{display:grid;gap:10px}
 .cards{grid-template-columns:repeat(auto-fill,minmax(215px,1fr))}
-.cc{background:var(--panel2);border:1px solid var(--line);border-radius:9px;padding:11px;cursor:pointer;transition:.12s}
+.cc{background:var(--panel2);border:1px solid var(--line);border-radius:9px;
+  cursor:pointer;transition:.12s;overflow:hidden;display:flex;flex-direction:column}
 .cc:hover{border-color:var(--red)}
+.cc:hover .portrait img,.cc:hover .portrait .initials{transform:scale(1.05)}
 .cc.owned{border-left:3px solid var(--red)}
-.cc .nm{font-weight:700;font-size:14px}
+.cc .body{padding:10px 11px 11px}
+.cc .nm{font-weight:700;font-size:14px;line-height:1.25}
 .cc .al{color:var(--dim2);font-size:12px}
 .cc .mt{display:flex;gap:5px;margin-top:7px;flex-wrap:wrap}
+
+/* Character card, laid out like lufel.net's: portrait first, name and rarity
+   over the bottom of the art, details underneath. --el is the element colour,
+   set per card from ELEMENT_COLORS in data.js. */
+.portrait{position:relative;aspect-ratio:3/4;overflow:hidden;background:#0f0f14;
+  background-image:
+    radial-gradient(120% 90% at 50% 8%, color-mix(in srgb, var(--el) 55%, transparent), transparent 70%),
+    repeating-linear-gradient(115deg, rgba(255,255,255,.05) 0 2px, transparent 2px 9px),
+    linear-gradient(170deg, color-mix(in srgb, var(--el) 22%, #101015), #0c0c11 78%)}
+.portrait img,.portrait .initials{position:absolute;inset:0;width:100%;height:100%;
+  transition:transform .18s ease}
+.portrait img{object-fit:cover;object-position:center top}
+.portrait .initials{display:flex;align-items:center;justify-content:center;
+  font-size:52px;font-weight:800;letter-spacing:-.03em;
+  color:color-mix(in srgb, var(--el) 70%, #ffffff);opacity:.5;
+  text-shadow:0 3px 14px rgba(0,0,0,.6)}
+.portrait .veil{position:absolute;inset:auto 0 0 0;height:62%;
+  background:linear-gradient(transparent, rgba(10,10,13,.55) 42%, #141419)}
+.portrait .cap{position:absolute;left:10px;right:10px;bottom:8px}
+.portrait .cap .nm{text-shadow:0 2px 8px rgba(0,0,0,.85)}
+.portrait .corner{position:absolute;top:8px;display:flex;gap:4px}
+.portrait .corner.l{left:8px}
+.portrait .corner.r{right:8px}
+.el-dot{display:inline-block;width:8px;height:8px;border-radius:50%;
+  background:var(--el);box-shadow:0 0 0 2px rgba(0,0,0,.45)}
+.tag.el{border-color:color-mix(in srgb, var(--el) 45%, transparent);
+  background:color-mix(in srgb, var(--el) 16%, #16161c);
+  color:color-mix(in srgb, var(--el) 78%, #ffffff);
+  display:inline-flex;align-items:center;gap:5px}
 
 .slot{display:inline-flex;align-items:center;justify-content:center;min-width:34px;height:20px;
   padding:0 6px;border-radius:5px;font-size:10px;font-weight:800;letter-spacing:.04em;

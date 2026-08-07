@@ -66,6 +66,16 @@ const RARITY = {
 
 const ELEMENTS = ['Physical','Gun','Fire','Ice','Electric','Wind','Psychokinesis','Nuclear','Bless','Curse','Almighty','None'];
 
+/* Display only — drives the element tint on roster character cards. Chosen to
+   match the in-game affinity icon colours; nothing in the scoring engine reads
+   these, so adjusting one is purely cosmetic. */
+const ELEMENT_COLORS = {
+  'Physical': '#d9694c', 'Gun': '#9aa0aa', 'Fire': '#e8523f', 'Ice': '#4fa8dc',
+  'Electric': '#e9c84c', 'Wind': '#4fc79a', 'Psychokinesis': '#d86fbe',
+  'Nuclear': '#b5d84f', 'Bless': '#f0dd9a', 'Curse': '#a86fd0',
+  'Almighty': '#e4e4ee', 'None': '#8a8f98'
+};
+
 /* The 20 four-slot ("Heavens") sets.
    bonus2 describes the 2-piece effect numerically where it maps to a stat, so the
    optimiser can value it. elem = only useful to characters of that element. */

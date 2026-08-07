@@ -48,10 +48,25 @@ resolve to the same stat, and `Planet` and `Sky` are the same slot.
 character you own, rates it by its best match, and sorts worst-first. The bottom of that
 list is your feed pile.
 
-**Roster** holds all 63 characters. Every target is editable: preferred sets, the Space
-card, main stat per slot, and a weight from 0 to 10 for each of the thirteen substats.
-Characters whose builds are documented carry real published targets; the rest carry
-archetype defaults and are flagged.
+**Roster** holds all 63 characters as portrait cards, laid out like lufel.net's. Every
+target is editable: preferred sets, the Space card, main stat per slot, and a weight from 0
+to 10 for each of the thirteen substats. Characters whose builds are documented carry real
+published targets; the rest carry archetype defaults and are flagged.
+
+Portraits are optional and nothing ships with the build — game art is not this project's to
+redistribute, and 63 embedded images would bloat the single-file build. To add your own,
+drop PNGs into an `art/` folder next to `dist/p5x-planner.html`, named after the character
+in lowercase with non-letters replaced by hyphens:
+
+```
+dist/art/ren-amamiya.png
+dist/art/ren-amamiya-starlight.png
+dist/art/justine-caroline.png
+```
+
+Any portrait that is missing falls back to an element-tinted placeholder, so a partial set
+of images is fine. Portraits are loaded relatively, which works when opening the file
+directly but not in the Cowork artifact build, where the placeholders are always used.
 
 ## How scoring works
 
