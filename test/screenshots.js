@@ -29,5 +29,8 @@ const PAGE = 'file://' + path.join(__dirname, '..', 'dist', 'p5x-planner.html');
   await p.screenshot({ path:path.join(__dirname,'..','docs','shot-triage.png') });
   await p.click('nav button[data-tab="roster"]'); await p.waitForTimeout(300);
   await p.screenshot({ path:path.join(__dirname,'..','docs','shot-roster.png') });
+  // the scanning guide is one long document — capture the whole thing, not a viewport of it
+  await p.click('nav button[data-tab="howto"]'); await p.waitForTimeout(200);
+  await p.screenshot({ path:path.join(__dirname,'..','docs','shot-howto.png'), fullPage:true });
   await b.close();
 })();

@@ -25,7 +25,9 @@ const charDef = name => CHARACTERS.find(c => c.n === name);
 
 /* ---- roster card art -------------------------------------------------------
    Portraits are optional and loaded from an `art/` folder sitting next to the
-   built HTML — art/<slug>.png, e.g. art/ren-amamiya-starlight.png. The <img>
+   built HTML — art/<slug>.webp, e.g. art/ren-amamiya-starlight.webp. WebP
+   rather than PNG because this is painted artwork: the same images run to
+   ~28 MB as PNG and well under a tenth of that as WebP. The <img>
    removes itself on error, so a missing file (or the Cowork artifact build,
    where relative fetches are blocked outright) silently falls back to the
    element-tinted initials placeholder underneath. Nothing is bundled: game art
@@ -33,7 +35,7 @@ const charDef = name => CHARACTERS.find(c => c.n === name);
    single-file build well past the point of being openable from file://. */
 const artSlug = name => String(name).toLowerCase()
   .replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
-const artPath = name => `art/${artSlug(name)}.png`;
+const artPath = name => `art/${artSlug(name)}.webp`;
 
 function initials(name) {
   // strip the [Costume] suffix so alternate arts don't all read the same
@@ -964,12 +966,15 @@ function csv() {
 }
 
 /* ------------------------------ wiring ------------------------------ */
-$$('nav button').forEach(b => b.onclick = () => {
-  $$('nav button').forEach(x => x.classList.remove('on'));
-  b.classList.add('on');
-  ['opt','inv','triage','roster','data'].forEach(t =>
-    $('#tab-' + t).classList.toggle('hide', t !== b.dataset.tab));
-});
+const TABS = ['opt','inv','triage','roster','data','howto'];
+function showTab(tab) {
+  $$('nav button').forEach(x => x.classList.toggle('on', x.dataset.tab === tab));
+  TABS.forEach(t => $('#tab-' + t).classList.toggle('hide', t !== tab));
+  window.scrollTo(0, 0);
+}
+$$('nav button').forEach(b => b.onclick = () => showTab(b.dataset.tab));
+// in-prose cross-links, e.g. the scanning guide pointing at Save / Load
+$$('[data-goto]').forEach(b => b.onclick = () => showTab(b.dataset.goto));
 $('#fSlot').onchange = () => { syncSetOptions(); syncMainOptions(); };
 $('#fAdd').onclick = addCard;
 $('#bulkAdd').onclick = bulkImport;

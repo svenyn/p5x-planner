@@ -19,7 +19,7 @@ npm run build
 Then open `dist/p5x-planner.html` in any browser. To pick up where you left off, load your
 save file on the **Save / Load** tab.
 
-## The four tabs
+## The tabs
 
 **Optimise** picks a full loadout — Sun, Moon, Star, Sky and a Space card — for one
 character. It compares four kinds of plan against each other: a full 4-piece set, a 2+2
@@ -54,19 +54,28 @@ to 10 for each of the thirteen substats. Characters whose builds are documented 
 published targets; the rest carry archetype defaults and are flagged.
 
 Portraits are optional and nothing ships with the build — game art is not this project's to
-redistribute, and 63 embedded images would bloat the single-file build. To add your own,
-drop PNGs into an `art/` folder next to `dist/p5x-planner.html`, named after the character
+redistribute, and 63 embedded images would bloat the single-file build. `dist/art/` is
+gitignored for the same reason. To fetch them from lufel.net:
+
+```
+npm run export-tables       # fetch-art matches names against dist/tables.json
+python tools/fetch-art.py --dry-run   # check the name matching first
+python tools/fetch-art.py
+```
+
+That covers 46 of the 63 characters; the rest have no portrait on the site and keep their
+placeholder. To add one by hand, drop a `.webp` into `dist/art/` named after the character
 in lowercase with non-letters replaced by hyphens:
 
 ```
-dist/art/ren-amamiya.png
-dist/art/ren-amamiya-starlight.png
-dist/art/justine-caroline.png
+dist/art/ren-amamiya.webp
+dist/art/ren-amamiya-starlight.webp
+dist/art/justine-caroline.webp
 ```
 
 Any portrait that is missing falls back to an element-tinted placeholder, so a partial set
-of images is fine. Portraits are loaded relatively, which works when opening the file
-directly but not in the Cowork artifact build, where the placeholders are always used.
+is fine. Portraits are loaded relatively, which works when opening the file directly but
+not in the Cowork artifact build, where the placeholders are always used.
 
 ## How scoring works
 

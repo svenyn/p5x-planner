@@ -301,5 +301,385 @@
     "Ichigo Shikano",
     "Aran Hirano",
     "Manaka Nagao"
+  ],
+  "characterMeta": [
+    {
+      "n": "Ren Amamiya",
+      "a": "Joker",
+      "r": 5,
+      "e": "Curse"
+    },
+    {
+      "n": "Ren Amamiya [Starlight]",
+      "a": "Starlight Joker",
+      "r": 5,
+      "e": "Curse"
+    },
+    {
+      "n": "Morgana",
+      "a": "Mona",
+      "r": 5,
+      "e": "Wind"
+    },
+    {
+      "n": "Morgana [Starlight]",
+      "a": "Starlight Mona",
+      "r": 5,
+      "e": "Wind"
+    },
+    {
+      "n": "Ann Takamaki",
+      "a": "Panther",
+      "r": 5,
+      "e": "Fire"
+    },
+    {
+      "n": "Ann Takamaki [Starlight]",
+      "a": "Starlight Panther",
+      "r": 5,
+      "e": "Fire"
+    },
+    {
+      "n": "Ryuji Sakamoto",
+      "a": "Skull",
+      "r": 5,
+      "e": "Physical"
+    },
+    {
+      "n": "Yusuke Kitagawa",
+      "a": "Fox",
+      "r": 5,
+      "e": "Ice"
+    },
+    {
+      "n": "Makoto Niijima",
+      "a": "Queen",
+      "r": 5,
+      "e": "Nuclear"
+    },
+    {
+      "n": "Haru Okumura",
+      "a": "Noir",
+      "r": 5,
+      "e": "Psychokinesis"
+    },
+    {
+      "n": "Goro Akechi",
+      "a": "Crow",
+      "r": 5,
+      "e": "Almighty"
+    },
+    {
+      "n": "Kasumi Yoshizawa",
+      "a": "Violet",
+      "r": 5,
+      "e": "Bless"
+    },
+    {
+      "n": "Futaba Sakura",
+      "a": "Oracle",
+      "r": 5,
+      "e": "None"
+    },
+    {
+      "n": "Wonder",
+      "a": "Nagisa Kamishiro",
+      "r": 5,
+      "e": "Almighty"
+    },
+    {
+      "n": "Ayaka Sakai",
+      "a": "Chord",
+      "r": 5,
+      "e": "Electric"
+    },
+    {
+      "n": "Chizuko Nagao",
+      "a": "Vino",
+      "r": 4,
+      "e": "Nuclear"
+    },
+    {
+      "n": "Leo Kamiyama",
+      "a": "Leon",
+      "r": 4,
+      "e": "Nuclear"
+    },
+    {
+      "n": "Lufel",
+      "a": "Cattle",
+      "r": 4,
+      "e": "Fire"
+    },
+    {
+      "n": "Masaki Ashiya",
+      "a": "Cherish",
+      "r": 5,
+      "e": "Ice"
+    },
+    {
+      "n": "Minami Miyashita",
+      "a": "Marian",
+      "r": 5,
+      "e": "Bless"
+    },
+    {
+      "n": "Minami Miyashita [Beachflower]",
+      "a": "S. Minami",
+      "r": 5,
+      "e": "Bless"
+    },
+    {
+      "n": "Miyu Sahara",
+      "a": "Puppet",
+      "r": 4,
+      "e": "None"
+    },
+    {
+      "n": "Miyu Sahara [Wavecatcher]",
+      "a": "Wave Puppet",
+      "r": 5,
+      "e": "Ice"
+    },
+    {
+      "n": "Motoha Arai",
+      "a": "Closer",
+      "r": 4,
+      "e": "Electric"
+    },
+    {
+      "n": "Motoha Arai [Radiance]",
+      "a": "Radiance Closer",
+      "r": 5,
+      "e": "Electric"
+    },
+    {
+      "n": "Motoha Arai [Tropical]",
+      "a": "Summer Closer",
+      "r": 5,
+      "e": "Bless"
+    },
+    {
+      "n": "Narumi Nashimoto",
+      "a": "PINKY",
+      "r": 5,
+      "e": "Psychokinesis"
+    },
+    {
+      "n": "Riko Tanemura",
+      "a": "Wind",
+      "r": 4,
+      "e": "None"
+    },
+    {
+      "n": "Riko Tanemura [Tempest]",
+      "a": "Wind Vast",
+      "r": 5,
+      "e": "Wind"
+    },
+    {
+      "n": "Runa Dogenzaka",
+      "a": "Howler",
+      "r": 5,
+      "e": "Fire"
+    },
+    {
+      "n": "Seiji Shiratori",
+      "a": "Fleuret",
+      "r": 4,
+      "e": "Wind"
+    },
+    {
+      "n": "Shoki Ikenami",
+      "a": "Luce",
+      "r": 4,
+      "e": "Bless"
+    },
+    {
+      "n": "Shoki Ikenami [Notte]",
+      "a": "Luce Notte",
+      "r": 5,
+      "e": "Bless"
+    },
+    {
+      "n": "Shun Kano",
+      "a": "Soy",
+      "r": 4,
+      "e": "Ice"
+    },
+    {
+      "n": "Shun Kano [Pioneer]",
+      "a": "Soy Pioneer",
+      "r": 5,
+      "e": "Gun"
+    },
+    {
+      "n": "Tomoko Noge",
+      "a": "Moko",
+      "r": 4,
+      "e": "Psychokinesis"
+    },
+    {
+      "n": "Tomoko Noge [Seaside]",
+      "a": "Summer Moko",
+      "r": 5,
+      "e": "Psychokinesis"
+    },
+    {
+      "n": "Toshiya Sumi",
+      "a": "Sepia",
+      "r": 4,
+      "e": "Curse"
+    },
+    {
+      "n": "YUI",
+      "a": "BUI",
+      "r": 5,
+      "e": "Electric"
+    },
+    {
+      "n": "YUI [Prism]",
+      "a": "BUI Prism",
+      "r": 5,
+      "e": "Nuclear"
+    },
+    {
+      "n": "Yaoling Li",
+      "a": "Rin",
+      "r": 5,
+      "e": "Curse"
+    },
+    {
+      "n": "Yaoling Li [Firecracker]",
+      "a": "Rin Lion Dance",
+      "r": 5,
+      "e": "Fire"
+    },
+    {
+      "n": "Kotone Montagne",
+      "a": "Mont",
+      "r": 4,
+      "e": "Ice"
+    },
+    {
+      "n": "Kotone Montagne [Frostgale]",
+      "a": "Frostgale Mont",
+      "r": 5,
+      "e": "Wind"
+    },
+    {
+      "n": "Kira Kitazato",
+      "a": "Messa",
+      "r": 5,
+      "e": "Physical"
+    },
+    {
+      "n": "Kiyoshi Kurotani",
+      "a": "Key",
+      "r": 4,
+      "e": "Fire"
+    },
+    {
+      "n": "Kayo Tomiyama",
+      "a": "Okyann",
+      "r": 4,
+      "e": "None"
+    },
+    {
+      "n": "Haruna Nishimori",
+      "a": "Riddle",
+      "r": 5,
+      "e": "Psychokinesis"
+    },
+    {
+      "n": "Justine & Caroline",
+      "a": "Twins",
+      "r": 5,
+      "e": "Almighty"
+    },
+    {
+      "n": "Makoto Yuki",
+      "a": "",
+      "r": 5,
+      "e": "Fire"
+    },
+    {
+      "n": "Aigis",
+      "a": "",
+      "r": 5,
+      "e": "Gun"
+    },
+    {
+      "n": "Akihiko Sanada",
+      "a": "",
+      "r": 5,
+      "e": "Electric"
+    },
+    {
+      "n": "Junpei Iori",
+      "a": "",
+      "r": 5,
+      "e": "Fire"
+    },
+    {
+      "n": "Mitsuru Kirijo",
+      "a": "",
+      "r": 5,
+      "e": "Ice"
+    },
+    {
+      "n": "Yukari Takeba",
+      "a": "",
+      "r": 5,
+      "e": "Wind"
+    },
+    {
+      "n": "Fuuka Yamagishi",
+      "a": "",
+      "r": 5,
+      "e": "None"
+    },
+    {
+      "n": "Koromaru",
+      "a": "",
+      "r": 5,
+      "e": "Curse"
+    },
+    {
+      "n": "Mio Natsukawa",
+      "a": "Matoi",
+      "r": 5,
+      "e": "Ice"
+    },
+    {
+      "n": "Mayumi Hashimoto",
+      "a": "Turbo",
+      "r": 5,
+      "e": "Physical"
+    },
+    {
+      "n": "Kumi Katayama",
+      "a": "Blitz",
+      "r": 5,
+      "e": "Electric"
+    },
+    {
+      "n": "Ichigo Shikano",
+      "a": "Berry",
+      "r": 5,
+      "e": "Curse"
+    },
+    {
+      "n": "Aran Hirano",
+      "a": "Anri",
+      "r": 4,
+      "e": "Curse"
+    },
+    {
+      "n": "Manaka Nagao",
+      "a": "Ange",
+      "r": 5,
+      "e": "None"
+    }
   ]
 }

@@ -26,7 +26,10 @@ const PAGE = 'file://' + path.join(__dirname, '..', 'dist', 'p5x-planner.html');
     sets: Object.keys(SETS),
     setAliases: SET_ALIASES,
     spaceSets: Object.keys(SPACE_SETS),
-    characters: CHARACTERS.map(c => c.n)
+    characters: CHARACTERS.map(c => c.n),
+    // richer per-character view; `characters` above stays a plain name list so
+    // vocab.py's norm_character keeps working unchanged
+    characterMeta: CHARACTERS.map(c => ({ n: c.n, a: c.a || '', r: c.r, e: c.e }))
   }));
   await b.close();
 

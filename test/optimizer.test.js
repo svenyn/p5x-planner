@@ -14,7 +14,7 @@ const PAGE = 'file://' + path.join(__dirname, '..', 'dist', 'p5x-planner.html');
     // placeholder. With no art/ folder that is 63 expected 404s, which are the
     // feature working, not a fault — but only ignore that exact case.
     const loc = (m.location() && m.location().url) || '';
-    if (/\/art\/[^/]+\.png$/.test(loc)) return;
+    if (/\/art\/[^/]+\.webp$/.test(loc)) return;
     errs.push('CONSOLE: ' + m.text());
   });
   await p.goto(PAGE);
