@@ -19,10 +19,14 @@ const PAGE = 'file://' + path.join(__dirname, '..', 'dist', 'p5x-planner.html');
     slotInfo: Object.fromEntries(Object.entries(SLOT_INFO).map(([k, v]) => [k, { fixed: v.fixed, mains: v.mains }])),
     substats: Object.fromEntries(Object.entries(SUBSTATS).map(([k, v]) =>
       [k, { maxRoll: v.maxRoll, maxRollSpace: v.maxRollSpace || v.maxRoll, flat: v.flat }])),
+    // measured 5-star tables the OCR pipeline checks reads against (plausibility.py):
+    // the five values one roll can take, and the main stat's [Lv0, Lv-cap] magnitude
+    rollTiers: ROLL_TIERS,
+    mainMagnitude: MAIN_MAGNITUDE,
     statAliases: STAT_ALIASES,
     flatToPercent: FLAT_TO_PERCENT,
     rarity: Object.fromEntries(Object.entries(RARITY).map(([k, v]) =>
-      [k, { maxLevel: v.maxLevel, subMin: v.subMin, subMax: v.subMax }])),
+      [k, { maxLevel: v.maxLevel, subMin: v.subMin, subMax: v.subMax, upgrades: v.upgrades }])),
     sets: Object.keys(SETS),
     setAliases: SET_ALIASES,
     spaceSets: Object.keys(SPACE_SETS),

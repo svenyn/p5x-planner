@@ -4,7 +4,7 @@ real screenshots."""
 import json
 
 from calibrate import save_config
-from pipeline import run_pipeline
+from pipeline import run_pipeline, unique_out_path
 from tests.test_panel_ocr import _build_panel
 
 
@@ -26,7 +26,8 @@ def _write_sample_frames(tmp_path):
 
     img2, _ = _build_panel(
         title="[Opulence]", level_text="Lv.20", main_label="Crit Multiplier",
-        subs=[("Damage Mult.+", "3.1%"), ("Speed", "2.5"), ("SP Recovery", "11.2%")],
+        subs=[("Damage Mult.+", "3.1%"), ("Speed", "2.5"), ("SP Recovery", "11.2%"),
+              ("Defense", "4.6%")],
     )
     img2.save(frames_dir / "002.png")
 
@@ -62,6 +63,20 @@ def test_pipeline_splits_clean_and_broken_cards(tmp_path):
         assert json.load(f) == invalid
 
 
+def test_pipeline_does_not_write_a_review_file_when_nothing_is_flagged(tmp_path):
+    frames_dir, regions_path = _write_sample_frames(tmp_path)
+    (frames_dir / "003.png").unlink()  # drop the deliberately-broken frame
+
+    valid, invalid, out_path, review_path = run_pipeline(
+        frames_dir, regions_path, tmp_path / "cards.json", rarity=5, slot="Star",
+    )
+
+    assert len(invalid) == 0
+    # review_path is still handed back for messaging, but nothing on disk —
+    # an empty "[]" file was a standing invitation to review nothing.
+    assert not review_path.exists()
+
+
 def test_pipeline_without_rarity_sends_everything_to_review(tmp_path):
     frames_dir, regions_path = _write_sample_frames(tmp_path)
     valid, invalid, _, _ = run_pipeline(frames_dir, regions_path, tmp_path / "cards.json", rarity=None, slot="Star")
@@ -80,3 +95,25 @@ def test_pipeline_without_slot_sends_heavens_cards_to_review(tmp_path):
     # given must not be silently guessed
     assert len(valid) == 0
     assert len(invalid) == 3
+
+
+def test_second_batch_to_the_same_out_path_does_not_overwrite_the_first(tmp_path):
+    frames_dir, regions_path = _write_sample_frames(tmp_path)
+    out_path = tmp_path / "cards.json"
+
+    _, _, out_path_1, review_path_1 = run_pipeline(frames_dir, regions_path, out_path, rarity=5, slot="Star")
+    _, _, out_path_2, review_path_2 = run_pipeline(frames_dir, regions_path, out_path, rarity=5, slot="Star")
+
+    assert out_path_1 == tmp_path / "cards.json"
+    assert out_path_2 == tmp_path / "cards-2.json"
+    assert review_path_1 == tmp_path / "cards-review.json"
+    assert review_path_2 == tmp_path / "cards-2-review.json"
+    # the first batch's files must still exist, unmodified in location
+    assert out_path_1.exists()
+    assert review_path_1.exists()
+
+
+def test_unique_out_path_keeps_incrementing_past_existing_numbered_files(tmp_path):
+    (tmp_path / "cards.json").write_text("{}")
+    (tmp_path / "cards-2.json").write_text("{}")
+    assert unique_out_path(tmp_path / "cards.json") == tmp_path / "cards-3.json"

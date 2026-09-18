@@ -5,7 +5,14 @@ crop regions can't be guessed, they have to be shown once against a real
 screenshot at your actual resolution.
 
 Usage:
-    python calibrate.py path/to/screenshot.png
+    python calibrate.py path/to/heavens-card.png
+    python calibrate.py path/to/space-card.png --layout space
+
+Two runs, because there are two panel layouts and no one screenshot shows
+both: a Space card has a second main stat row (flat ATK then flat DEF) which
+pushes its four substats down one row, so those rows get their own boxes
+(--layout space). Both runs write to the same file and merge, the same way
+--only does, so the second one does not undo the first.
 
 For each field in turn, a window opens on the image — drag a box around
 that field, press Enter/Space to confirm and move to the next one, or Enter
@@ -21,13 +28,28 @@ import argparse
 import json
 from pathlib import Path
 
-FIELDS = [
-    "slot_tabs", "title", "level", "main_label",
+HEAVENS_FIELDS = [
+    "slot_tabs", "title", "level", "main_label", "main_value",
     "sub1_label", "sub1_value",
     "sub2_label", "sub2_value",
     "sub3_label", "sub3_value",
     "sub4_label", "sub4_value",
 ]
+
+# Space cards only. Everything a Space panel shares with a Heavens one
+# (slot_tabs, title, level, the FIRST main stat row) is deliberately absent —
+# it is already calibrated by the Heavens run and re-dragging it here would
+# only add a second chance to get it wrong.
+SPACE_FIELDS = [
+    "space_main2_value",
+    "space_sub1_label", "space_sub1_value",
+    "space_sub2_label", "space_sub2_value",
+    "space_sub3_label", "space_sub3_value",
+    "space_sub4_label", "space_sub4_value",
+]
+
+LAYOUTS = {"heavens": HEAVENS_FIELDS, "space": SPACE_FIELDS}
+FIELDS = HEAVENS_FIELDS + SPACE_FIELDS
 
 # Shown before each drag, so it's clear what to aim at — several of these are
 # not the obvious thing on screen (see panel_ocr.py's module docstring).
@@ -43,17 +65,38 @@ SUB_LABEL_HINT = ("the substat's NAME only. Stop well before the yellow bolt ico
                   "cards) and before the value column — either one bleeding in "
                   "corrupts short names like 'Speed' and 'HP'")
 
+# The third miscalibration that reached a batch (Aug 2026): value boxes fitted to
+# whatever number was on the calibration card start too far right, and since the
+# numbers are RIGHT-aligned the box then clips the leading digit of every wider
+# one — a real "10.8%" was imported as "0.8%", in range and so unflagged. The
+# boxes have to be sized to the widest value the column can hold, not this card's.
+VALUE_HINT = ("the NUMBER only, and extend the box well to the LEFT of it — the "
+              "column is right-aligned, so a box that just fits this card's value "
+              "silently eats the first digit of every longer one. Stop short of "
+              "the yellow bolt icon; the gap between it and the digits is the "
+              "left edge to aim for")
+
 FIELD_HINTS = {
     "slot_tabs": "the WHOLE Space/Sun/Moon/Star/Sky tab strip, top-left "
                  "(read by colour, not text — one tab is highlighted red)",
     "title": "the set name in the Set Effect box, lower right, e.g. '[Futility]' "
-             "— NOT the big stylized title at the top, which OCR cannot read",
+             "— NOT the big stylized title at the top, which OCR cannot read. On a "
+             "Space card it names two sets ('Acceptance & Strife'); box both, the "
+             "pipeline takes the Space one",
     "level": "the 'Lv.25' text. Calibrate this on a TWO-DIGIT level and leave "
              "clear margin on both sides — a box fitted snugly to 'Lv.0' clips "
              "the second digit and misreads every maxed card",
     "main_label": "the name of the first stat, the one with its own icon "
                   "(e.g. 'Crit Rate') — not its number",
+    "main_value": VALUE_HINT + " (this row's widest value is a 4-digit HP main)",
+    "space_main2_value": "the number on the SECOND main stat row of a Space card — "
+                         "the flat Defense one, under flat Attack. " + VALUE_HINT,
     **{f"sub{i}_label": SUB_LABEL_HINT for i in range(1, 5)},
+    **{f"sub{i}_value": VALUE_HINT for i in range(1, 5)},
+    **{f"space_sub{i}_label": SUB_LABEL_HINT + ". NOTE: on a Space card the "
+       "substats start BELOW the second main stat row, not below the first"
+       for i in range(1, 5)},
+    **{f"space_sub{i}_value": VALUE_HINT for i in range(1, 5)},
 }
 
 
@@ -92,7 +135,7 @@ def load_config(path):
     return payload["fields"]
 
 
-def run_calibration(image_path, out_path, only=None):
+def run_calibration(image_path, out_path, only=None, layout="heavens"):
     import cv2  # imported here, not at module load, so the testable functions
     # above don't require a display/GUI backend to be importable at all
 
@@ -101,7 +144,7 @@ def run_calibration(image_path, out_path, only=None):
         raise FileNotFoundError(f"could not read image: {image_path}")
     height, width = img.shape[:2]
 
-    fields = [f for f in FIELDS if f in only] if only else FIELDS
+    fields = [f for f in FIELDS if f in only] if only else LAYOUTS[layout]
 
     px_boxes = {}
     for field in fields:
@@ -119,8 +162,10 @@ def run_calibration(image_path, out_path, only=None):
     regions = build_regions(px_boxes, width, height)
 
     # --only is a partial recalibration: keep every field not being redone,
-    # so fixing one bad box doesn't mean dragging all eleven again.
-    if only and Path(out_path).exists():
+    # so fixing one bad box doesn't mean dragging all eleven again. --layout is
+    # partial for the same reason — the Space rows are calibrated on a Space card
+    # in a second run, and must not wipe the Heavens rows from the first.
+    if (only or layout != "heavens") and Path(out_path).exists():
         existing = load_config(out_path)
         merged = dict(existing)
         merged.update(regions)
@@ -134,8 +179,12 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("image", help="a real screenshot of one card's detail panel")
     parser.add_argument("--out", default=str(Path(__file__).parent / "config" / "crop_regions.json"))
+    parser.add_argument("--layout", choices=sorted(LAYOUTS), default="heavens",
+                         help="'space' calibrates only the Space card's extra main stat "
+                              "row and its shifted substat rows, merging into an existing "
+                              "config. Run it on a Space card after the heavens run")
     parser.add_argument("--only", nargs="+", metavar="FIELD",
                          help="recalibrate just these fields, keeping the rest of an "
                               f"existing config. Fields: {', '.join(FIELDS)}")
     args = parser.parse_args()
-    run_calibration(args.image, args.out, only=args.only)
+    run_calibration(args.image, args.out, only=args.only, layout=args.layout)

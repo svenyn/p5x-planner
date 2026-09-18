@@ -16,6 +16,7 @@ has to satisfy — produce this shape and the tool consumes it unchanged.
       "rarity": 5,
       "level": 25,
       "main": "Crit Rate",
+      "mainValue": 14.4,
       "equipped": "Ren Amamiya",
       "subs": [
         { "stat": "Crit Multiplier", "value": 12.4 },
@@ -26,7 +27,7 @@ has to satisfy — produce this shape and the tool consumes it unchanged.
     }
   ],
   "characters": {
-    "Ren Amamiya": { "owned": true, "targets": null }
+    "Ren Amamiya": { "owned": true, "benched": false, "targets": null, "loadout": null }
   }
 }
 ```
@@ -59,9 +60,69 @@ something you are wearing.
 raw in-game number with no percent sign. A substat never duplicates the card's main stat and
 never appears twice on the same card.
 
+**`cards[].mainValue`** — optional. The main stat's magnitude as printed on the card
+detail panel. `cardScore()` never reads it — scoring only cares *which* stat the main is —
+but no guide site publishes what a main stat is worth at max level, so this is the only
+place that number exists, and without it a stat cannot be totalled against a build target.
+Absent on every card saved before it existed and on any card the OCR could not read it
+from; everything downstream treats missing as **unknown**, never as zero. One scanned
+max-level card settles the magnitude for every card like it (it is deterministic, not a
+roll), so `mainMagnitude()` fills the gaps from the rest of the inventory.
+
+A Space card prints its `ATK + DEF` main as **two rows**, one per stat. They carried the
+same number on every Space panel scanned so far (52 frames, Aug 2026), so `mainValue` on a
+Space card is that shared per-stat magnitude — not a sum, and not one of a pair. The OCR
+reads both rows and refuses the value rather than picking a side if they disagree, which
+is what keeps that claim checkable per card instead of assumed.
+
 **`characters`** — keyed by exact character name from `CHARACTERS`. `owned` drives the
 roster and Triage. `targets` is `null` to use the built-in defaults, or a full override
-object with `sets`, `space`, `main`, `w`, `bp` and `note`.
+object with `sets`, `space`, `main`, `w`, `targets`, `bp` and `note`.
+
+**`characters[].benched`** — optional, defaults to `false`. Marks a character you own but
+are not building. `ownedChars()` filters on `owned && !benched`, so a benched character
+disappears from the optimiser dropdown, Triage's "owned" scope, Upgrades and the Vault
+tab's fielded-role count — everywhere except the Roster tab, which shows it (dimmed, with
+a "benched" tag) so it can be un-benched later without losing its saved `targets` or
+`loadout`. Absent on files saved before this existed, which is read as `false`.
+
+**`characters[].targets.main`** — recommended main stat per slot, keyed `Moon` / `Star` /
+`Sky` (Sun and Space are fixed). The value is a **list, best first**, because lufel names
+alternatives rather than one answer — Ann's Moon is `["ATK%", "Damage Multiplier"]`, and two
+healers get three choices. Every stat in the list counts as on target; the order only breaks
+ties. A bare string is still accepted and means a list of one, so files saved before this
+existed load unchanged. Nothing reads the field directly — `mainList()` / `mainTop()` in
+`logic.js` normalise both shapes.
+
+**`characters[].loadout`** — optional, `null` to use defaults. Everything about the
+character that is not a revelation card, because Lufelnet's stat targets are in-battle
+totals: `{ level: 80|100, asc: 0-7, weapon: ""|"4"|"5", refine: 1-7, mindSkill: bool,
+mind1: 0-5, mind2: 0-5, awareness: 0-6 }`. It matters more than it looks — Kumi Katayama's
+180 Speed target needs 73 Speed from cards on a 4★ weapon at A0 with no Mindscape, and 14
+on a 5★ R7 at A7 with it fully invested. Only shown in the Targets dialog for the 37
+characters that have a stat target, since for everyone else there is nothing to total
+against — the roster's own Loadout popup shows the same fields for every character, since
+they still move the build score's spread term. My Palace and party buffs are deliberately
+**not** modelled, so every total is a floor.
+
+Mindscape is 4 paths, not one lock. `mind1`/`mind2` are the two that grant a flat/percent
+stat (`CHAR_STATS[name].mind[0]`/`[1]`, lufel's `mind_stats1`/`mind_stats2`) — each levels
+0-5, scaling linearly up to lufel's published value at level 5 (lufel only ever publishes
+that max; the in-between scaling was confirmed by the user against real play, since no
+guide site prints it). `mindSkill` covers the other two paths, which raise a skill's
+level cap instead of granting a stat, and drives `pickTier`'s "+5" tier variant. Files
+saved before this existed carried a single `mind: bool` covering all 4 paths at once;
+`charLoadout()` maps `true` to `mindSkill: true, mind1: 5, mind2: 5` and `false` to all-zero
+so old saves still load.
+
+`awareness` (default `0`) is the "Awareness" ladder — 7 named passives per character
+(0-6), unlocked with Cognitite, unrelated to Ascension/Mindscape/Awakening-7. Absent on
+files saved before this existed, read as `0`. It moves a total two ways: a universal
+HP/ATK/DEF percentage (102/105/107/110/112/115% of base at levels 1-6, `AWARENESS_STAT_PCT`
+in `logic.js`, the same for every character) that always applies, plus whichever named
+ability is unlocked at that level — almost always a conditional kit passive, not a flat
+stat, so see `CHAR_STATS[name].awareness` in `src/data.js` for the rare case (if any) that
+also carries a modelled `s`/`v`/`pct` on top.
 
 ## Legal values
 
@@ -85,12 +146,27 @@ bulk parser uses is available: `normStat()` returns `null` for an unrecognised s
 treat `null` as a card that needs a human to look at the screenshot again.
 
 Expect OCR to confuse visually similar values — `8` and `B`, `5` and `S`, decimal points at
-small font sizes. A cheap sanity filter: a substat value should never exceed roughly five
-times its `maxRoll`, since a card gets at most five upgrade events. `validateCard()` in
-`src/logic.js` runs exactly this set of checks (legal slot/set/rarity/level/main, substat
-count for the rarity, no duplicate or main-shadowing substat, the `5×maxRoll` bound) and is
-the single gate all three import paths (bulk paste, JSON load, merge import) run every card
-through — a card that fails it never reaches the inventory.
+small font sizes. A cheap sanity filter: a substat value should never exceed its `maxRoll`
+times the number of rolls the card can be holding, which is **one plus the upgrades its
+level has earned** — upgrades arrive every `maxLevel / upgrades` levels (5, at every
+rarity), so a Lv0 card cannot carry more than a single max roll of anything and a Lv25 5★
+tops out at six.
+
+Reading that bound off the rarity alone rather than the level misses a whole class of
+misread: `Speed 4` on a Lv0 card is under five max Speed rolls, so it imports clean, but
+Speed is 2.2 a roll and an unlevelled card has had exactly one. Seven such cards reached
+this user's inventory before the bound was tightened.
+
+The bound stays deliberately loose — the roll table is now verified against the client for
+5★ cards (see `DATA-SOURCES.md`) but other rarities are not, and rejecting a card the user
+genuinely owns is worse than admitting a bad one — so it only rejects what is impossible
+outright.
+
+`validateCard()` in `src/logic.js` runs exactly this set of checks (legal
+slot/set/rarity/level/main, substat count for the rarity, no duplicate or main-shadowing
+substat, the per-level roll bound) and is the single gate all three import paths (bulk
+paste, JSON load, merge import) run every card through — a card that fails it never reaches
+the inventory.
 
 ## Optional fields (schema v2)
 
@@ -102,12 +178,25 @@ keep loading unchanged:
 - **`cards[].src`** — a string identifying where the card came from (a frame index, a
   screenshot filename). Useful for tracing a bad card back to the source image.
 
+## Optional fields (schema v3)
+
+- **`prefs`** — an object of UI view state: the Roster tab's `rsFilter` / `rsElement` /
+  `rsSort` / `rsHideUnowned` / `rsHideBenched` / `rsQ`, the Inventory tab's `flSlot` /
+  `flSet` / `flRar` / `flMain` / `flSub` / `flQ` and its column sort (`invSort: { key,
+  dir }`), and the Triage/Vault/Upgrades scope selects (`trScope`, `trShow`, `trRar`,
+  `vaRar`, `vaShow`, `upRar`). Written by `collectPrefs()`, read by `applyPrefs()` in
+  `src/logic.js`. Ignored if absent, so v1/v2 files keep loading unchanged; any field the
+  loading build no longer recognises (a renamed set, a dropped filter option) is likewise
+  ignored rather than rejected.
+
 ## Importing a rescan without losing your inventory
 
 Loading a file on the Save/Load tab **replaces** `cards` and `characters` wholesale — it is
 meant for resuming your own previously-downloaded save, not for merging in newly scanned
 cards. For that, the same tab's **Import cards (merge)** control reads a `{ "cards": [...] }`
-file and merges it into the current inventory via `mergeImport()`:
+file and merges it into the current inventory via `mergeImport()`. The Inventory tab's
+bulk-paste box accepts the same JSON pasted as text — anything starting with `{` or `[` is
+parsed as JSON and routed to the same review rather than to the one-card-per-line parser.
 
 Cards have no in-game serial number, so "the same physical card, scanned again" is inferred
 from `slot` + `set` + `rarity` + `main` (its fingerprint) plus how close its level and
@@ -126,3 +215,12 @@ classified as:
   could also be a second copy of an identical roll). Never applied automatically — the
   Import Review dialog lists it for a manual decision (skip / add as new / replace
   existing), defaulting to skip.
+
+Which existing card an incoming one is measured against is decided **by confidence, not by
+arrival order**: within a fingerprint, exact rescans claim their counterparts first, then
+clean level-ups, and only what is unclaimed on both sides is paired up for review — and
+inside each pass the closest pair wins across the whole pool. Resolving it greedily in scan
+order instead lets a genuinely new card claim the existing card that the *next* incoming
+card is an exact rescan of, after which the whole run shifts by one and every card in it is
+reported ambiguous against somebody else's twin. Results still come back in scan order, so
+the review table lines up with the file you handed over.

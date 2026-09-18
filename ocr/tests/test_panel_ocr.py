@@ -8,7 +8,8 @@ from pathlib import Path
 import pytest
 from PIL import Image, ImageDraw, ImageFont
 
-from panel_ocr import parse_level, parse_panel
+from panel_ocr import (TAB_ORDER, is_lone_digit, parse_level, parse_panel,
+                       pick_value_reading, resolve_lone_digit)
 
 W, H = 900, 700
 FONT_PATH = r"C:\Windows\Fonts\arial.ttf"
@@ -45,6 +46,125 @@ def _build_panel(title, level_text, main_label, subs):
 
     regions = {k: _fraction_box(v) for k, v in px_regions.items()}
     return img, regions
+
+
+def _build_space_panel(title, level_text, main_value, main2_value, subs):
+    """A Space panel, which unlike a Heavens one has TWO main stat rows — flat
+    ATK then flat DEF — pushing every substat down a row.
+
+    Returns (image, regions). `regions` carries BOTH layouts' boxes over the same
+    pixels: the space_* ones on the real rows, and the plain sub* ones where a
+    Heavens-layout config would have put them (one row too high). Handing over
+    both is what makes a test able to tell which layout parse_panel actually
+    used, rather than just that it got four substats from somewhere."""
+    if not Path(FONT_PATH).exists():
+        pytest.skip("Arial not found — this test needs a real TTF for legible synthetic OCR")
+    font = ImageFont.truetype(FONT_PATH, 28)
+
+    img = Image.new("RGB", (W, H), "white")
+    draw = ImageDraw.Draw(img)
+    regions = {}
+
+    def place(key, box, text):
+        if text is not None:
+            draw.text((box[0] + 5, box[1] + 3), text, font=font, fill="black")
+        regions[key] = _fraction_box(box)
+
+    place("title", (40, 20, W - 40, 60), title)
+    place("level", (40, 70, W - 40, 110), level_text)
+
+    # row i: label on the left, value on the right, same line
+    rows = [("Attack", str(main_value)), ("Defense", str(main2_value))] + list(subs)
+    def label_box(i):
+        return (40, 140 + i * 60, 420, 140 + i * 60 + 44)
+    def value_box(i):
+        return (460, 140 + i * 60, W - 40, 140 + i * 60 + 44)
+
+    for i, (label, value) in enumerate(rows):
+        draw.text((label_box(i)[0] + 5, label_box(i)[1] + 3), label, font=font, fill="black")
+        draw.text((value_box(i)[0] + 5, value_box(i)[1] + 3), value, font=font, fill="black")
+
+    place("main_label", label_box(0), None)
+    place("main_value", value_box(0), None)
+    place("space_main2_value", value_box(1), None)
+    for i in range(1, len(rows) - 1):
+        place(f"space_sub{i}_label", label_box(i + 1), None)
+        place(f"space_sub{i}_value", value_box(i + 1), None)
+        # the Heavens boxes for the same card, one row too high
+        place(f"sub{i}_label", label_box(i), None)
+        place(f"sub{i}_value", value_box(i), None)
+
+    return img, regions
+
+
+def test_space_card_reads_its_substats_below_the_second_main_row(vocab):
+    """The Aug 2026 regression: read on the Heavens rows, a Space card files its
+    flat DEF main as substat 1 and drops substat 4 off the bottom of the panel."""
+    img, regions = _build_space_panel(
+        title="Acceptance & Strife", level_text="Lv.25",
+        main_value=359, main2_value=359,
+        subs=[("Pierce Rate", "6%"), ("Ailment Acc.", "11.9%"),
+              ("Crit Rate", "4.5%"), ("HP", "157")],
+    )
+    card, conf, notes = parse_panel(img, regions, vocab, rarity=5)
+
+    assert card["slot"] == "Space"
+    assert card["set"] == "Acceptance"
+    assert card["main"] == "ATK + DEF"
+    stats = [s["stat"] for s in card["subs"]]
+    assert stats == ["Resistance Pierce", "Ailment Accuracy", "Crit Rate", "HP"]
+    # the tell for the bug: DEF is the second MAIN, never a substat here
+    assert "DEF" not in stats and "DEF%" not in stats
+    assert {s["stat"]: s["value"] for s in card["subs"]}["HP"] == pytest.approx(157)
+    assert card["mainValue"] == pytest.approx(359)
+
+
+def test_space_main_rows_that_disagree_drop_the_value_rather_than_pick_one(vocab):
+    """flat ATK and flat DEF were identical on all 52 real Space frames, so a
+    disagreement means one row was misread — and nothing on the panel says
+    which, so guessing would put a wrong magnitude into stat totals."""
+    img, regions = _build_space_panel(
+        title="Acceptance & Strife", level_text="Lv.25",
+        main_value=359, main2_value=59,
+        subs=[("Pierce Rate", "6%"), ("Crit Rate", "4.5%")],
+    )
+    card, conf, notes = parse_panel(img, regions, vocab, rarity=5)
+
+    assert "mainValue" not in card
+    assert any("main stat rows disagree" in n for n in notes)
+
+
+def _tab_strip(img, selected):
+    """Paints a synthetic Space/Sun/Moon/Star/Sky strip with one tab highlighted
+    in the game's bright red, and returns its region box. detect_slot_from_tabs
+    reads colour, not text, so five flat rectangles are a faithful stand-in."""
+    draw = ImageDraw.Draw(img)
+    x0, y0, x1, y1 = 40, 600, 640, 660
+    draw.rectangle((x0, y0, x1, y1), fill=(40, 10, 10))
+    i = TAB_ORDER.index(selected)
+    w = (x1 - x0) // len(TAB_ORDER)
+    draw.rectangle((x0 + i * w, y0, x0 + (i + 1) * w, y1), fill=(230, 40, 40))
+    return _fraction_box((x0, y0, x1, y1))
+
+
+def test_unreadable_title_does_not_throw_away_the_slot_from_the_tab_strip(vocab):
+    """The slot comes from the tab strip's colour, which is independent evidence
+    and stays good when the title is mush. Discarding it alongside the set turned
+    every Space card whose paired title failed to resolve into an unslotted one —
+    and the slot is what picks the row geometry the substats are read on."""
+    img, regions = _build_space_panel(
+        title="~~~ unreadable ~~~", level_text="Lv.25",
+        main_value=359, main2_value=359,
+        subs=[("Pierce Rate", "6%"), ("Ailment Acc.", "11.9%"),
+              ("Crit Rate", "4.5%"), ("HP", "157")],
+    )
+    regions["slot_tabs"] = _tab_strip(img, "Space")
+    card, conf, notes = parse_panel(img, regions, vocab, rarity=5)
+
+    assert card["set"] is None
+    assert card["slot"] == "Space"
+    assert len(card["subs"]) == 4        # still read on the Space rows
+    assert any("could not resolve set" in n for n in notes)
 
 
 def test_heavens_card_round_trip(vocab):
@@ -132,6 +252,94 @@ def test_fewer_than_four_substats_leaves_remaining_slots_empty(vocab):
     )
     card, conf, notes = parse_panel(img, regions, vocab, rarity=5, slot="Sky")
     assert len(card["subs"]) == 2
+
+
+@pytest.mark.parametrize("native,upscaled,expected", [
+    # a dropped decimal point is a 10x error, so the reading that kept one wins
+    ("15", "1.5", "1.5"),
+    ("17%", "1.7%", "1.7%"),
+    # ...but not the other way round: upscaling dropped the point on this one
+    ("2.2", "2", "2.2"),
+    ("7.1%", "71%", "7.1%"),
+    # a dropped "%" is silent rather than large — it turns a % substat into its
+    # flat sibling — so it counts the same way
+    ("47", "2%", "2%"),
+    ("44", "5.2%", "5.2%"),
+    # the game's dim grey leading zero ("032"): whether Tesseract merges it into
+    # the next digit flips with the resampling, in both directions
+    ("32", "4", "32"),
+    ("4", "32", "32"),
+    ("4", "92", "92"),
+    # but digit count is only evidence between two PLAIN readings. Here 2x
+    # hallucinated a digit onto a real "2.5"; counting digits would take it
+    ("2.5", "2.35", "2.5"),
+    # nothing to choose between them: native, as before any of this
+    ("84", "84", "84"),
+    ("2", "2", "2"),
+])
+def test_value_tie_break_prefers_the_reading_that_resolved_more(native, upscaled, expected):
+    """Every case here is a real (native, 2x) pair from the Aug 2026 batches,
+    with `expected` read by eye off the crop — see pick_value_reading."""
+    assert pick_value_reading(native, upscaled) == expected
+
+
+@pytest.mark.parametrize("readings,expected", [
+    # the decimal point in front of a 9 tucks under its tail and is lost at
+    # BOTH of the original scales; only 4x sees it. Real "1.9" and "5.9" Speed
+    # substats from the Sep 2026 Space runs, read as 19 and 59 and sent to
+    # review as out of range.
+    (("19", "19", "1.9"), "1.9"),
+    (("59", "59", "5.9"), "5.9"),
+    # the larger scale is held to the same rule the other way: a scale that
+    # drops a point the smaller ones kept, or reads nothing at all, loses
+    (("7.1%", "7.1%", "71%"), "7.1%"),
+    (("4.9%", "4.9%", ""), "4.9%"),
+    # among equally-marked readings the smallest scale wins, so a larger scale
+    # hallucinating a digit onto a real value still loses
+    (("2.5", "2.35", "2.55"), "2.5"),
+    # the grey-zero digit-count rule applies across all plain readings...
+    (("4", "32", "32"), "32"),
+    # ...which is why 3x is NOT one of the scales: on a real Lv25 DEF "55" it
+    # read "595", and a longer plain reading wins. 4x read the same box "53"
+    # and the smaller scales keep it.
+    (("55", "55", "595"), "595"),
+    (("55", "55", "53"), "55"),
+    # all empty stays empty rather than raising
+    (("", "", ""), ""),
+])
+def test_value_pick_scores_every_scale_by_the_same_rule(readings, expected):
+    """Real 1x/2x/4x reading tuples from the Sep 2026 frames (and the 3x
+    readings that kept 3x out) — see pick_value_reading and _VALUE_SCALES."""
+    assert pick_value_reading(*readings) == expected
+
+
+@pytest.mark.parametrize("pick,word_readings,expected", [
+    # the Sep 2026 live-grab run: every Speed 2 in rows 1 and 4 read
+    # ("4", "4", "2") under psm 7 and the tie-break kept the 4; psm 8 reads
+    # the same crops as 2, so it wins
+    ("4", ("2", "2", "2"), "2"),
+    # a real Lv25 Speed 4 (3 of 3 in the Steam corpus): psm 8 reads nothing,
+    # so the psm 7 reading stands rather than being thrown away
+    ("4", ("", "", ""), "4"),
+    # agreement, with a scale or two dropping out, changes nothing
+    ("2", ("", "2", "2"), "2"),
+    ("7", ("7", "7", "7"), "7"),
+    # psm 8 is only believed for a bare digit — its own failure modes ("4.",
+    # "032.", "2.20") never replace the reading
+    ("2", ("2.", "4.", "4."), "2"),
+    ("4", ("032.", "032.", "032."), "4"),
+])
+def test_lone_digit_second_opinion_is_believed_only_when_it_is_a_lone_digit(pick, word_readings, expected):
+    """Real (psm 7 pick, psm 8 readings) pairs — see resolve_lone_digit."""
+    assert resolve_lone_digit(pick, word_readings) == expected
+
+
+@pytest.mark.parametrize("text,expected", [
+    ("2", True), (" 4 ", True), ("", False), (None, False),
+    ("2%", False), ("2.2", False), ("32", False), ("2,", False),
+])
+def test_is_lone_digit(text, expected):
+    assert is_lone_digit(text) is expected
 
 
 @pytest.mark.parametrize("text,expected", [

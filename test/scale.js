@@ -28,6 +28,29 @@ const PAGE = 'file://' + path.join(__dirname, '..', 'dist', 'p5x-planner.html');
         k[res.best.kind]=(k[res.best.kind]||0)+1; tot++; if(res.space&&res.space.pairs)syn++; }
       out[name]={kinds:k,spaceSynergy:`${syn}/${tot}`,ms:Math.round(performance.now()-t0)};
     }
+    /* Build-score calibration: equip each character's `pref` recommendation and score it.
+       CLAUDE.md quotes these bands; a scoring change that moves them needs either a
+       reason or a re-cut of BUILD_BANDS. Also counts Moon/Star/Sky picks whose main is
+       not one lufel recommends — the main is worth about nine max rolls, so a high count
+       here means the optimiser is trading the main away for substats. */
+    {
+      const scores = []; let offMain = 0;
+      for (const ch of CHARACTERS) {
+        state.cards.forEach(c => c.equipped = null);
+        const res = bestPlan(ch, pool, { policy: 'pref' }); if (!res.best) continue;
+        const worn = ['Sun','Moon','Star','Sky'].map(sl => res.best.picks[sl].c); if (res.space) worn.push(res.space.c);
+        worn.forEach(c => c.equipped = ch.n);
+        const t = target(ch);
+        worn.forEach(c => { if (c.slot !== 'Sun' && c.slot !== 'Space' && !mainList(t, c.slot).includes(c.main)) offMain++; });
+        const bs = buildScore(ch); if (bs) scores.push(bs.score);
+      }
+      state.cards.forEach(c => c.equipped = null);
+      scores.sort((a, b) => a - b);
+      const bands = {}; scores.forEach(x => { const b = buildBand(x).label; bands[b] = (bands[b] || 0) + 1; });
+      out.buildScore = { mean: +(scores.reduce((a, b) => a + b, 0) / scores.length).toFixed(1),
+        median: scores[Math.floor(scores.length / 2)], min: scores[0], max: scores[scores.length - 1],
+        bands, slotsWithNonRecommendedMain: `${offMain}/${scores.length * 3}` };
+    }
     // dead 2pc must never appear
     const dead=[];
     for(const ch of CHARACTERS){ const res=bestPlan(ch,pool,{policy:'pref'}); if(!res.best)continue;

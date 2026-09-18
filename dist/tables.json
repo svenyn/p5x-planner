@@ -118,6 +118,266 @@
       "flat": false
     }
   },
+  "rollTiers": {
+    "ATK": {
+      "heavens": [
+        27,
+        32,
+        37,
+        41,
+        46
+      ],
+      "space": [
+        27,
+        32,
+        37,
+        41,
+        46
+      ]
+    },
+    "DEF": {
+      "heavens": [
+        27,
+        32,
+        37,
+        41,
+        46
+      ],
+      "space": [
+        27,
+        32,
+        37,
+        41,
+        46
+      ]
+    },
+    "HP": {
+      "heavens": [
+        84,
+        98,
+        112,
+        126,
+        140
+      ],
+      "space": [
+        105,
+        123,
+        140,
+        157,
+        175
+      ]
+    },
+    "Speed": {
+      "heavens": [
+        1.3,
+        1.5,
+        1.8,
+        2,
+        2.2
+      ],
+      "space": [
+        1.6,
+        1.9,
+        2.2,
+        2.5,
+        2.8
+      ]
+    },
+    "ATK%": {
+      "heavens": [
+        2,
+        2.5,
+        2.8,
+        3.2,
+        3.5
+      ],
+      "space": [
+        2.6,
+        3.1,
+        3.5,
+        3.9,
+        4.3
+      ]
+    },
+    "DEF%": {
+      "heavens": [
+        3,
+        3.5,
+        4.1,
+        4.6,
+        5.2
+      ],
+      "space": [
+        3.8,
+        4.5,
+        5.2,
+        5.8,
+        6.4
+      ]
+    },
+    "HP%": {
+      "heavens": [
+        2.1,
+        2.6,
+        2.9,
+        3.3,
+        3.6
+      ],
+      "space": [
+        2.7,
+        3.2,
+        3.6,
+        4,
+        4.4
+      ]
+    },
+    "Damage Multiplier": {
+      "heavens": [
+        1.7,
+        1.9,
+        2.1,
+        2.5,
+        2.8
+      ],
+      "space": [
+        2.1,
+        2.5,
+        2.7,
+        3.1,
+        3.5
+      ]
+    },
+    "Crit Rate": {
+      "heavens": [
+        1.3,
+        1.4,
+        1.7,
+        1.8,
+        2
+      ],
+      "space": [
+        1.6,
+        1.8,
+        2.1,
+        2.3,
+        2.6
+      ]
+    },
+    "Crit Multiplier": {
+      "heavens": [
+        2.5,
+        2.8,
+        3.4,
+        3.7,
+        4.1
+      ],
+      "space": [
+        3.1,
+        3.6,
+        4.2,
+        4.7,
+        5.2
+      ]
+    },
+    "Ailment Accuracy": {
+      "heavens": [
+        2.5,
+        2.8,
+        3.4,
+        3.7,
+        4.1
+      ],
+      "space": [
+        3.1,
+        3.6,
+        4.2,
+        4.7,
+        5.2
+      ]
+    },
+    "SP Recovery": {
+      "heavens": [
+        5.9,
+        7,
+        7.9,
+        9,
+        10
+      ],
+      "space": [
+        7.5,
+        8.7,
+        10,
+        11.2,
+        12.5
+      ]
+    },
+    "Resistance Pierce": {
+      "heavens": [
+        1.3,
+        1.4,
+        1.7,
+        1.9,
+        2.1
+      ],
+      "space": [
+        1.6,
+        1.8,
+        2.2,
+        2.5,
+        2.7
+      ]
+    }
+  },
+  "mainMagnitude": {
+    "ATK%": [
+      4.6,
+      31.4
+    ],
+    "HP%": [
+      4.7,
+      31.5
+    ],
+    "DEF%": [
+      7.1,
+      47.1
+    ],
+    "Damage Multiplier": [
+      3.7,
+      25.1
+    ],
+    "Crit Rate": [
+      2.8,
+      18.8
+    ],
+    "Crit Multiplier": [
+      5.7,
+      37.6
+    ],
+    "Ailment Accuracy": [
+      5.7,
+      37.6
+    ],
+    "Speed": [
+      3.1,
+      20.3
+    ],
+    "SP Recovery": [
+      13.6,
+      90.4
+    ],
+    "HP Recovery": [
+      3.4,
+      22.6
+    ],
+    "HP": [
+      162,
+      1080
+    ],
+    "ATK + DEF": [
+      54,
+      359
+    ]
+  },
   "statAliases": {
     "crit dmg": "Crit Multiplier",
     "crit damage": "Crit Multiplier",
@@ -163,51 +423,61 @@
     "2": {
       "maxLevel": 10,
       "subMin": 2,
-      "subMax": 2
+      "subMax": 2,
+      "upgrades": 2
     },
     "3": {
       "maxLevel": 15,
       "subMin": 3,
-      "subMax": 3
+      "subMax": 3,
+      "upgrades": 3
     },
     "4": {
       "maxLevel": 20,
       "subMin": 3,
-      "subMax": 4
+      "subMax": 4,
+      "upgrades": 4
     },
     "5": {
       "maxLevel": 25,
       "subMin": 3,
-      "subMax": 4
+      "subMax": 4,
+      "upgrades": 5
     }
   },
   "sets": [
-    "Power",
-    "Control",
-    "Labor",
-    "Peace",
-    "Prosperity",
-    "Worry",
-    "Reconciliation",
-    "Triumph",
-    "Love",
-    "Courage",
-    "Oppression",
-    "Strife",
-    "Defeat",
-    "Opulence",
-    "Renewal",
-    "Victory",
-    "Pleasure",
-    "Truth",
-    "Virtue",
-    "Hindrance",
-    "Futility",
-    "Sorrow",
-    "Disappointment",
     "Change",
+    "Control",
+    "Courage",
+    "Defeat",
+    "Disappointment",
+    "Futility",
+    "Hindrance",
+    "Labor",
+    "Love",
+    "Oppression",
+    "Opulence",
+    "Peace",
+    "Pleasure",
+    "Power",
+    "Prosperity",
+    "Prudence",
+    "Reconciliation",
+    "Renewal",
     "Ruin",
-    "Prudence"
+    "Sorrow",
+    "Strife",
+    "Triumph",
+    "Truth",
+    "Victory",
+    "Virtue",
+    "Worry",
+    "Depravity",
+    "Determination",
+    "Flourishing",
+    "Obtain",
+    "Satiety",
+    "Tenacity"
   ],
   "setAliases": {
     "abundance": "Prosperity",
@@ -217,125 +487,101 @@
     "valor": "Courage",
     "luxury": "Opulence",
     "interference": "Hindrance",
-    "strength": "Power"
+    "strength": "Power",
+    "reconcilation": "Reconciliation"
   },
   "spaceSets": [
-    "Creation",
-    "Freedom",
     "Acceptance",
     "Awareness",
+    "Creation",
     "Departure",
     "Faith",
+    "Freedom",
     "Growth",
     "Harmony",
+    "Hope",
     "Integrity",
     "Meditation",
     "Nativity",
+    "Perseverance",
     "Resolve",
     "Trust",
     "Wisdom",
-    "Hope",
-    "Perseverance"
+    "Agility",
+    "Ego",
+    "Purity"
   ],
   "characters": [
-    "Ren Amamiya",
-    "Ren Amamiya [Starlight]",
-    "Morgana",
-    "Morgana [Starlight]",
     "Ann Takamaki",
-    "Ann Takamaki [Starlight]",
     "Ryuji Sakamoto",
+    "Morgana",
+    "Yaoling Li",
+    "Haruna Nishimori",
+    "Lufel",
+    "Leo Kamiyama",
+    "Motoha Arai",
+    "Kotone Montagne",
+    "Shun Kano",
+    "Seiji Shiratori",
+    "Yukimi Fujikawa",
+    "Kiyoshi Kurotani",
+    "Tomoko Noge",
+    "Toshiya Sumi",
+    "Miyu Sahara",
+    "Kayo Tomiyama",
+    "Ren Amamiya",
+    "YUI",
+    "Minami Miyashita",
     "Yusuke Kitagawa",
     "Makoto Niijima",
-    "Haru Okumura",
-    "Goro Akechi",
-    "Kasumi Yoshizawa",
-    "Futaba Sakura",
-    "Wonder",
-    "Ayaka Sakai",
     "Chizuko Nagao",
-    "Leo Kamiyama",
-    "Lufel",
-    "Masaki Ashiya",
-    "Minami Miyashita",
-    "Minami Miyashita [Beachflower]",
-    "Miyu Sahara",
-    "Miyu Sahara [Wavecatcher]",
-    "Motoha Arai",
-    "Motoha Arai [Radiance]",
-    "Motoha Arai [Tropical]",
-    "Narumi Nashimoto",
+    "Yumi Shiina",
+    "Ayaka Sakai",
     "Riko Tanemura",
-    "Riko Tanemura [Tempest]",
-    "Runa Dogenzaka",
-    "Seiji Shiratori",
-    "Shoki Ikenami",
-    "Shoki Ikenami [Notte]",
-    "Shun Kano",
-    "Shun Kano [Pioneer]",
-    "Tomoko Noge",
+    "Motoha Arai [Tropical]",
     "Tomoko Noge [Seaside]",
-    "Toshiya Sumi",
-    "YUI",
-    "YUI [Prism]",
-    "Yaoling Li",
-    "Yaoling Li [Firecracker]",
-    "Kotone Montagne",
-    "Kotone Montagne [Frostgale]",
     "Kira Kitazato",
-    "Kiyoshi Kurotani",
-    "Kayo Tomiyama",
-    "Haruna Nishimori",
+    "Futaba Sakura",
+    "Masaki Ashiya",
+    "Haru Okumura",
     "Justine & Caroline",
-    "Makoto Yuki",
-    "Aigis",
-    "Akihiko Sanada",
-    "Junpei Iori",
-    "Mitsuru Kirijo",
-    "Yukari Takeba",
-    "Fuuka Yamagishi",
-    "Koromaru",
+    "Kotone Montagne [Frostgale]",
+    "Runa Dogenzaka",
+    "Riko Tanemura [Tempest]",
     "Mio Natsukawa",
+    "Yaoling Li [Firecracker]",
+    "Kasumi Yoshizawa",
     "Mayumi Hashimoto",
-    "Kumi Katayama",
+    "Goro Akechi",
+    "Manaka Nagao",
+    "Shoki Ikenami",
+    "Makoto Yuki",
+    "Yukari Takeba",
+    "Akihiko Sanada",
+    "Hatsune Miku",
+    "Minami Miyashita [Beachflower]",
+    "Miyu Sahara [Wavecatcher]",
     "Ichigo Shikano",
+    "Kumi Katayama",
+    "YUI [Prism]",
+    "Mitsuru Kirijo",
+    "Fuuka Yamagishi",
+    "Shoki Ikenami [Notte]",
+    "Shun Kano [Pioneer]",
+    "Junpei Iori",
+    "Narumi Nashimoto",
+    "Koromaru",
+    "Motoha Arai [Radiance]",
     "Aran Hirano",
-    "Manaka Nagao"
+    "Aigis",
+    "Ren Amamiya [Starlight]",
+    "Morgana [Starlight]",
+    "Ann Takamaki [Starlight]"
   ],
   "characterMeta": [
     {
-      "n": "Ren Amamiya",
-      "a": "Joker",
-      "r": 5,
-      "e": "Curse"
-    },
-    {
-      "n": "Ren Amamiya [Starlight]",
-      "a": "Starlight Joker",
-      "r": 5,
-      "e": "Curse"
-    },
-    {
-      "n": "Morgana",
-      "a": "Mona",
-      "r": 5,
-      "e": "Wind"
-    },
-    {
-      "n": "Morgana [Starlight]",
-      "a": "Starlight Mona",
-      "r": 5,
-      "e": "Wind"
-    },
-    {
       "n": "Ann Takamaki",
       "a": "Panther",
-      "r": 5,
-      "e": "Fire"
-    },
-    {
-      "n": "Ann Takamaki [Starlight]",
-      "a": "Starlight Panther",
       "r": 5,
       "e": "Fire"
     },
@@ -344,6 +590,114 @@
       "a": "Skull",
       "r": 5,
       "e": "Physical"
+    },
+    {
+      "n": "Morgana",
+      "a": "Mona",
+      "r": 5,
+      "e": "Wind"
+    },
+    {
+      "n": "Yaoling Li",
+      "a": "Rin",
+      "r": 5,
+      "e": "Curse"
+    },
+    {
+      "n": "Haruna Nishimori",
+      "a": "Riddle",
+      "r": 5,
+      "e": "Psychokinesis"
+    },
+    {
+      "n": "Lufel",
+      "a": "Cattle",
+      "r": 4,
+      "e": "Fire"
+    },
+    {
+      "n": "Leo Kamiyama",
+      "a": "Leon",
+      "r": 4,
+      "e": "Nuclear"
+    },
+    {
+      "n": "Motoha Arai",
+      "a": "Closer",
+      "r": 4,
+      "e": "Electric"
+    },
+    {
+      "n": "Kotone Montagne",
+      "a": "Mont",
+      "r": 4,
+      "e": "Ice"
+    },
+    {
+      "n": "Shun Kano",
+      "a": "Soy",
+      "r": 4,
+      "e": "Ice"
+    },
+    {
+      "n": "Seiji Shiratori",
+      "a": "Fleuret",
+      "r": 4,
+      "e": "Wind"
+    },
+    {
+      "n": "Yukimi Fujikawa",
+      "a": "Yuki",
+      "r": 4,
+      "e": "Bless"
+    },
+    {
+      "n": "Kiyoshi Kurotani",
+      "a": "Key",
+      "r": 4,
+      "e": "Fire"
+    },
+    {
+      "n": "Tomoko Noge",
+      "a": "Moko",
+      "r": 4,
+      "e": "Psychokinesis"
+    },
+    {
+      "n": "Toshiya Sumi",
+      "a": "Sepia",
+      "r": 4,
+      "e": "Curse"
+    },
+    {
+      "n": "Miyu Sahara",
+      "a": "Puppet",
+      "r": 4,
+      "e": "None"
+    },
+    {
+      "n": "Kayo Tomiyama",
+      "a": "Okyann",
+      "r": 4,
+      "e": "None"
+    },
+    {
+      "n": "Ren Amamiya",
+      "a": "Joker",
+      "r": 5,
+      "e": "Curse"
+    },
+    {
+      "n": "YUI",
+      "a": "BUI",
+      "r": 5,
+      "e": "Electric"
+    },
+    {
+      "n": "Minami Miyashita",
+      "a": "Marian",
+      "r": 5,
+      "e": "Bless"
     },
     {
       "n": "Yusuke Kitagawa",
@@ -358,34 +712,16 @@
       "e": "Nuclear"
     },
     {
-      "n": "Haru Okumura",
-      "a": "Noir",
-      "r": 5,
-      "e": "Psychokinesis"
+      "n": "Chizuko Nagao",
+      "a": "Vino",
+      "r": 4,
+      "e": "Nuclear"
     },
     {
-      "n": "Goro Akechi",
-      "a": "Crow",
-      "r": 5,
-      "e": "Almighty"
-    },
-    {
-      "n": "Kasumi Yoshizawa",
-      "a": "Violet",
-      "r": 5,
-      "e": "Bless"
-    },
-    {
-      "n": "Futaba Sakura",
-      "a": "Oracle",
+      "n": "Yumi Shiina",
+      "a": "Phoebe",
       "r": 5,
       "e": "None"
-    },
-    {
-      "n": "Wonder",
-      "a": "Nagisa Kamishiro",
-      "r": 5,
-      "e": "Almighty"
     },
     {
       "n": "Ayaka Sakai",
@@ -394,64 +730,10 @@
       "e": "Electric"
     },
     {
-      "n": "Chizuko Nagao",
-      "a": "Vino",
-      "r": 4,
-      "e": "Nuclear"
-    },
-    {
-      "n": "Leo Kamiyama",
-      "a": "Leon",
-      "r": 4,
-      "e": "Nuclear"
-    },
-    {
-      "n": "Lufel",
-      "a": "Cattle",
-      "r": 4,
-      "e": "Fire"
-    },
-    {
-      "n": "Masaki Ashiya",
-      "a": "Cherish",
-      "r": 5,
-      "e": "Ice"
-    },
-    {
-      "n": "Minami Miyashita",
-      "a": "Marian",
-      "r": 5,
-      "e": "Bless"
-    },
-    {
-      "n": "Minami Miyashita [Beachflower]",
-      "a": "S. Minami",
-      "r": 5,
-      "e": "Bless"
-    },
-    {
-      "n": "Miyu Sahara",
-      "a": "Puppet",
+      "n": "Riko Tanemura",
+      "a": "Wind",
       "r": 4,
       "e": "None"
-    },
-    {
-      "n": "Miyu Sahara [Wavecatcher]",
-      "a": "Wave Puppet",
-      "r": 5,
-      "e": "Ice"
-    },
-    {
-      "n": "Motoha Arai",
-      "a": "Closer",
-      "r": 4,
-      "e": "Electric"
-    },
-    {
-      "n": "Motoha Arai [Radiance]",
-      "a": "Radiance Closer",
-      "r": 5,
-      "e": "Electric"
     },
     {
       "n": "Motoha Arai [Tropical]",
@@ -460,112 +742,10 @@
       "e": "Bless"
     },
     {
-      "n": "Narumi Nashimoto",
-      "a": "PINKY",
-      "r": 5,
-      "e": "Psychokinesis"
-    },
-    {
-      "n": "Riko Tanemura",
-      "a": "Wind",
-      "r": 4,
-      "e": "None"
-    },
-    {
-      "n": "Riko Tanemura [Tempest]",
-      "a": "Wind Vast",
-      "r": 5,
-      "e": "Wind"
-    },
-    {
-      "n": "Runa Dogenzaka",
-      "a": "Howler",
-      "r": 5,
-      "e": "Fire"
-    },
-    {
-      "n": "Seiji Shiratori",
-      "a": "Fleuret",
-      "r": 4,
-      "e": "Wind"
-    },
-    {
-      "n": "Shoki Ikenami",
-      "a": "Luce",
-      "r": 4,
-      "e": "Bless"
-    },
-    {
-      "n": "Shoki Ikenami [Notte]",
-      "a": "Luce Notte",
-      "r": 5,
-      "e": "Bless"
-    },
-    {
-      "n": "Shun Kano",
-      "a": "Soy",
-      "r": 4,
-      "e": "Ice"
-    },
-    {
-      "n": "Shun Kano [Pioneer]",
-      "a": "Soy Pioneer",
-      "r": 5,
-      "e": "Gun"
-    },
-    {
-      "n": "Tomoko Noge",
-      "a": "Moko",
-      "r": 4,
-      "e": "Psychokinesis"
-    },
-    {
       "n": "Tomoko Noge [Seaside]",
       "a": "Summer Moko",
       "r": 5,
       "e": "Psychokinesis"
-    },
-    {
-      "n": "Toshiya Sumi",
-      "a": "Sepia",
-      "r": 4,
-      "e": "Curse"
-    },
-    {
-      "n": "YUI",
-      "a": "BUI",
-      "r": 5,
-      "e": "Electric"
-    },
-    {
-      "n": "YUI [Prism]",
-      "a": "BUI Prism",
-      "r": 5,
-      "e": "Nuclear"
-    },
-    {
-      "n": "Yaoling Li",
-      "a": "Rin",
-      "r": 5,
-      "e": "Curse"
-    },
-    {
-      "n": "Yaoling Li [Firecracker]",
-      "a": "Rin Lion Dance",
-      "r": 5,
-      "e": "Fire"
-    },
-    {
-      "n": "Kotone Montagne",
-      "a": "Mont",
-      "r": 4,
-      "e": "Ice"
-    },
-    {
-      "n": "Kotone Montagne [Frostgale]",
-      "a": "Frostgale Mont",
-      "r": 5,
-      "e": "Wind"
     },
     {
       "n": "Kira Kitazato",
@@ -574,20 +754,20 @@
       "e": "Physical"
     },
     {
-      "n": "Kiyoshi Kurotani",
-      "a": "Key",
-      "r": 4,
-      "e": "Fire"
-    },
-    {
-      "n": "Kayo Tomiyama",
-      "a": "Okyann",
-      "r": 4,
+      "n": "Futaba Sakura",
+      "a": "Oracle",
+      "r": 5,
       "e": "None"
     },
     {
-      "n": "Haruna Nishimori",
-      "a": "Riddle",
+      "n": "Masaki Ashiya",
+      "a": "Cherish",
+      "r": 5,
+      "e": "Ice"
+    },
+    {
+      "n": "Haru Okumura",
+      "a": "Noir",
       "r": 5,
       "e": "Psychokinesis"
     },
@@ -598,52 +778,22 @@
       "e": "Almighty"
     },
     {
-      "n": "Makoto Yuki",
-      "a": "",
-      "r": 5,
-      "e": "Fire"
-    },
-    {
-      "n": "Aigis",
-      "a": "",
-      "r": 5,
-      "e": "Gun"
-    },
-    {
-      "n": "Akihiko Sanada",
-      "a": "",
-      "r": 5,
-      "e": "Electric"
-    },
-    {
-      "n": "Junpei Iori",
-      "a": "",
-      "r": 5,
-      "e": "Fire"
-    },
-    {
-      "n": "Mitsuru Kirijo",
-      "a": "",
-      "r": 5,
-      "e": "Ice"
-    },
-    {
-      "n": "Yukari Takeba",
-      "a": "",
+      "n": "Kotone Montagne [Frostgale]",
+      "a": "Frostgale Mont",
       "r": 5,
       "e": "Wind"
     },
     {
-      "n": "Fuuka Yamagishi",
-      "a": "",
+      "n": "Runa Dogenzaka",
+      "a": "Howler",
       "r": 5,
-      "e": "None"
+      "e": "Fire"
     },
     {
-      "n": "Koromaru",
-      "a": "",
+      "n": "Riko Tanemura [Tempest]",
+      "a": "Wind Vast",
       "r": 5,
-      "e": "Curse"
+      "e": "Wind"
     },
     {
       "n": "Mio Natsukawa",
@@ -652,16 +802,76 @@
       "e": "Ice"
     },
     {
+      "n": "Yaoling Li [Firecracker]",
+      "a": "Rin Lion Dance",
+      "r": 5,
+      "e": "Fire"
+    },
+    {
+      "n": "Kasumi Yoshizawa",
+      "a": "Violet",
+      "r": 5,
+      "e": "Bless"
+    },
+    {
       "n": "Mayumi Hashimoto",
       "a": "Turbo",
       "r": 5,
       "e": "Physical"
     },
     {
-      "n": "Kumi Katayama",
-      "a": "Blitz",
+      "n": "Goro Akechi",
+      "a": "Crow",
+      "r": 5,
+      "e": "Almighty"
+    },
+    {
+      "n": "Manaka Nagao",
+      "a": "Ange",
+      "r": 5,
+      "e": "None"
+    },
+    {
+      "n": "Shoki Ikenami",
+      "a": "Luce",
+      "r": 4,
+      "e": "Bless"
+    },
+    {
+      "n": "Makoto Yuki",
+      "a": "",
+      "r": 5,
+      "e": "Fire"
+    },
+    {
+      "n": "Yukari Takeba",
+      "a": "",
+      "r": 5,
+      "e": "Wind"
+    },
+    {
+      "n": "Akihiko Sanada",
+      "a": "",
       "r": 5,
       "e": "Electric"
+    },
+    {
+      "n": "Hatsune Miku",
+      "a": "Miku",
+      "r": 5,
+      "e": "None"
+    },
+    {
+      "n": "Minami Miyashita [Beachflower]",
+      "a": "S. Minami",
+      "r": 5,
+      "e": "Bless"
+    },
+    {
+      "n": "Miyu Sahara [Wavecatcher]",
+      "a": "Wave Puppet",
+      "r": 5,
+      "e": "Ice"
     },
     {
       "n": "Ichigo Shikano",
@@ -670,16 +880,94 @@
       "e": "Curse"
     },
     {
+      "n": "Kumi Katayama",
+      "a": "Blitz",
+      "r": 5,
+      "e": "Electric"
+    },
+    {
+      "n": "YUI [Prism]",
+      "a": "BUI Prism",
+      "r": 5,
+      "e": "Nuclear"
+    },
+    {
+      "n": "Mitsuru Kirijo",
+      "a": "",
+      "r": 5,
+      "e": "Ice"
+    },
+    {
+      "n": "Fuuka Yamagishi",
+      "a": "",
+      "r": 5,
+      "e": "None"
+    },
+    {
+      "n": "Shoki Ikenami [Notte]",
+      "a": "Luce Notte",
+      "r": 5,
+      "e": "Bless"
+    },
+    {
+      "n": "Shun Kano [Pioneer]",
+      "a": "Soy Pioneer",
+      "r": 5,
+      "e": "Gun"
+    },
+    {
+      "n": "Junpei Iori",
+      "a": "",
+      "r": 5,
+      "e": "Fire"
+    },
+    {
+      "n": "Narumi Nashimoto",
+      "a": "PINKY",
+      "r": 5,
+      "e": "Psychokinesis"
+    },
+    {
+      "n": "Koromaru",
+      "a": "",
+      "r": 5,
+      "e": "Curse"
+    },
+    {
+      "n": "Motoha Arai [Radiance]",
+      "a": "Radiance Closer",
+      "r": 5,
+      "e": "Electric"
+    },
+    {
       "n": "Aran Hirano",
       "a": "Anri",
       "r": 4,
       "e": "Curse"
     },
     {
-      "n": "Manaka Nagao",
-      "a": "Ange",
+      "n": "Aigis",
+      "a": "",
       "r": 5,
-      "e": "None"
+      "e": "Gun"
+    },
+    {
+      "n": "Ren Amamiya [Starlight]",
+      "a": "Starlight Joker",
+      "r": 5,
+      "e": "Curse"
+    },
+    {
+      "n": "Morgana [Starlight]",
+      "a": "Starlight Mona",
+      "r": 5,
+      "e": "Wind"
+    },
+    {
+      "n": "Ann Takamaki [Starlight]",
+      "a": "Starlight Panther",
+      "r": 5,
+      "e": "Fire"
     }
   ]
 }

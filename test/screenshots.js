@@ -19,18 +19,44 @@ const PAGE = 'file://' + path.join(__dirname, '..', 'dist', 'p5x-planner.html');
         s.push({stat:st,value:+(mx*(0.6+rnd()*2.4)).toFixed(1)});}
       state.cards.push({id:'c'+i,slot,set,rarity,level:rarity*5,main,subs:s,equipped:null});
     }
-    ['Ren Amamiya','Ryuji Sakamoto','Morgana','Kira Kitazato','Yusuke Kitagawa','Makoto Yuki'].forEach(n=>state.chars[n].owned=true);
+    const own=['Ren Amamiya','Ryuji Sakamoto','Morgana','Kira Kitazato','Yusuke Kitagawa','Makoto Yuki'];
+    own.forEach(n=>state.chars[n].owned=true);
+    /* Dress everyone from the optimiser, but only the first four slots and from a pool
+       that shrinks as it goes — the point of these shots is a board with real gear on it
+       that still has visible room in it, not a finished account. Roster, Upgrades and the
+       Weakest slots view all read equipped cards and show nothing without this. */
+    own.forEach((n,k)=>{
+      const ch=charDef(n);
+      // Half the roster is geared from a deliberately narrow slice of the inventory, so
+      // better cards of the same set are still sitting there for the Weakest slots view
+      // to find — geared from the whole pool they would all be optimal by construction.
+      const pool=state.cards.filter((c,i)=>!c.equipped&&c.rarity>=4&&(k<3||i<260));
+      const r=bestPlan(ch,pool,{policy:'pref'});
+      if(!r.best)return;
+      ['Sun','Moon','Star','Sky'].slice(0,k===0?4:3).forEach(sl=>{const pk=r.best.picks[sl]; if(pk)pk.c.equipped=n;});
+      if(r.space&&k%2===0)r.space.c.equipped=n;
+    });
     renderInv(); renderRoster(); renderOpt();
   });
+  // The roster is the landing tab, so Optimise has to be opened before its picker is
+  // visible — selectOption on a hidden <select> just times out.
+  await p.click('nav button[data-tab="opt"]');
   await p.selectOption('#optChar','Ryuji Sakamoto');
   await p.waitForTimeout(300);
   await p.screenshot({ path:path.join(__dirname,'..','docs','shot-opt.png') });
   await p.click('nav button[data-tab="triage"]'); await p.click('#trRun'); await p.waitForTimeout(400);
   await p.screenshot({ path:path.join(__dirname,'..','docs','shot-triage.png') });
+  await p.click('nav button[data-tab="vault"]'); await p.click('#vaRun'); await p.waitForTimeout(400);
+  await p.screenshot({ path:path.join(__dirname,'..','docs','shot-vault.png') });
+  await p.click('nav button[data-tab="upgrades"]');
+  await p.click('#upSubtabs button[data-uptab="headroom"]'); await p.waitForTimeout(500);
+  await p.screenshot({ path:path.join(__dirname,'..','docs','shot-headroom.png') });
   await p.click('nav button[data-tab="roster"]'); await p.waitForTimeout(300);
   await p.screenshot({ path:path.join(__dirname,'..','docs','shot-roster.png') });
-  // the scanning guide is one long document — capture the whole thing, not a viewport of it
-  await p.click('nav button[data-tab="howto"]'); await p.waitForTimeout(200);
+  // The scanning guide has no nav button of its own any more — it is reached from the two
+  // in-prose links on Save / Load. Capture the whole thing, not a viewport of it.
+  await p.click('nav button[data-tab="data"]');
+  await p.click('[data-goto="howto"]'); await p.waitForTimeout(200);
   await p.screenshot({ path:path.join(__dirname,'..','docs','shot-howto.png'), fullPage:true });
   await b.close();
 })();
