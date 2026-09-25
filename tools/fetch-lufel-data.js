@@ -72,6 +72,12 @@ async function grab(path, label) {
 
 async function main() {
   const outfile = process.argv[2] || 'lufel-data.json';
+  /* The argument is where the dump is WRITTEN, so a flag must not be taken for it: an Aug
+     2026 `--help` left a 588 kB dump at the repo root in a file called "--help". */
+  if (outfile.startsWith('-')) {
+    console.error('usage: node tools/fetch-lufel-data.js [outfile]   (default lufel-data.json)');
+    process.exit(outfile === '-h' || outfile === '--help' ? 0 : 2);
+  }
   const dump = {};
 
   console.error('core files:');

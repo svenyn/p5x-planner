@@ -56,7 +56,7 @@ function weightOverrideDrift() {
     if (m.type() !== 'error') return;
     // Roster portraits are optional files in art/ next to the HTML; each <img>
     // removes itself on error so a missing one falls back to the initials
-    // placeholder. With no art/ folder that is 65 expected 404s, which are the
+    // placeholder. With no art/ folder that is 68 expected 404s, which are the
     // feature working, not a fault — but only ignore that exact case.
     const loc = (m.location() && m.location().url) || '';
     if (/\/art\/[^/]+\.webp$/.test(loc)) return;
@@ -135,9 +135,19 @@ function weightOverrideDrift() {
           legality.push(`${ch.n} (${ch.e}): recommended off-element 4pc ${S}`);
       }
       if (!isFinite(res.best.total)) evalBad.push(`${ch.n}: best total ${res.best.total}`);
-      // r.heavensTotal is the plan search's own evaluator; a plan's total must be what it says
-      const ht = res.heavensTotal(heavens.map(sl => res.best.picks[sl].c));
-      if (!near(ht.total, res.best.total, 1e-6)) evalBad.push(`${ch.n}: heavensTotal ${ht.total} vs best.total ${res.best.total}`);
+      /* r.loadoutTotal is the plan search's own evaluator: a plan's total must be what it
+         says over the five cards it puts on, and exactly the build score's numerator — the
+         optimiser maximises the number the Roster reports, not a look-alike of its own. */
+      const worn = heavens.map(sl => res.best.picks[sl].c).concat(res.space ? [res.space.c] : []);
+      const ht = res.loadoutTotal(worn), idlCh = idealLoadout(ch, t, 55);
+      if (!near(ht.total, res.best.total, 1e-6)) evalBad.push(`${ch.n}: loadoutTotal ${ht.total} vs best.total ${res.best.total}`);
+      const bsBest = buildScoreOf(ch, worn, 55, charLoadout(ch.n), idlCh, t);
+      if (!near(bsBest.total, res.best.total, 1e-6)) evalBad.push(`${ch.n}: plan total ${res.best.total} vs build-score numerator ${bsBest.total}`);
+      // ...so among the plans it considered and its policy allows, none scores higher once worn
+      for (const alt of sameClass) {
+        const aw = heavens.map(sl => alt.picks[sl].c).concat(alt.space ? [alt.space.c] : []);
+        if (buildScoreOf(ch, aw, 55, charLoadout(ch.n), idlCh, t).raw > bsBest.raw + 1e-9) evalBad.push(`${ch.n}: "${alt.label}" builds higher than the pick`);
+      }
       // Space: with a 4-piece active and a pairing card in the pool, the pick must pair
       if (res.best.kind === '4pc' && res.space) {
         const anyPairs = pool.some(c => c.slot === 'Space' && SPACE_SETS[c.set] && SPACE_SETS[c.set].pairs.includes(res.best.sets[0]));
@@ -160,7 +170,8 @@ function weightOverrideDrift() {
     }
     fail('every character produced a plan', incomplete === 0, `${incomplete} without a plan`);
     fail('no slot/set legality violations', legality.length === 0, legality.slice(0, 5).join(' | '));
-    fail('every plan total is finite and equals its own heavensTotal', evalBad.length === 0, evalBad.slice(0, 4).join(' | '));
+    fail('every plan total is finite, equals its own loadoutTotal and the build score\'s numerator, and no allowed alternative builds higher',
+      evalBad.length === 0, evalBad.slice(0, 4).join(' | '));
     fail('the Space pick pairs with an active 4-piece whenever a pairing card exists', spaceBad.length === 0, spaceBad.slice(0, 4).join(' | '));
     fail('set policies pick what they say they pick (force4 / any4 / stats / pref)', policyBad.length === 0, policyBad.slice(0, 4).join(' | '));
     fail('poolFor("free") excludes cards worn by others and keeps the character\'s own', (() => {
@@ -175,8 +186,8 @@ function weightOverrideDrift() {
     /* ================================================================================
        2. Data integrity — CHARACTERS, SETS, SPACE_SETS, tables
        ================================================================================ */
-    fail('the roster is the documented 65 characters in release order (not re-sorted by name)',
-      CHARACTERS.length === 65 && CHARACTERS.slice().sort((a, b) => a.n.localeCompare(b.n)).some((c, i) => c !== CHARACTERS[i]));
+    fail('the roster is the documented 68 characters in release order (not re-sorted by name)',
+      CHARACTERS.length === 68 && CHARACTERS.slice().sort((a, b) => a.n.localeCompare(b.n)).some((c, i) => c !== CHARACTERS[i]));
     const names = CHARACTERS.map(c => c.n);
     fail('no duplicate character names', new Set(names).size === names.length, names.filter((n, i) => names.indexOf(n) !== i).join(', '));
     fail('every character has a known archetype and element',
@@ -187,12 +198,21 @@ function weightOverrideDrift() {
       const t = target(ch);
       for (const sl of ['Moon', 'Star', 'Sky']) {
         const list = mainList(t, sl);
-        if (!list.length) badMain.push(`${ch.n} ${sl} has no main`);
         list.forEach(m => { if (!SLOT_INFO[sl].mains.includes(m)) badMain.push(`${ch.n} ${sl}=${m}`); });
         if (new Set(list).size !== list.length) badMain.push(`${ch.n} ${sl} lists a main twice`);
       }
     }
     fail('all target main stats are legal for their slot, listed once, best first', badMain.length === 0, badMain.join(' | '));
+    /* An open slot (lufel's "-") recommends nothing: the perfect card takes whichever legal
+       main scores best, not the slot's first entry or an archetype placeholder. */
+    const openSlots = [];
+    CHARACTERS.forEach(ch => { const t = target(ch); ['Moon', 'Star', 'Sky'].forEach(sl => { if (!mainList(t, sl).length) openSlots.push([ch, t, sl]); }); });
+    const openBest = ([ch, t, sl]) => near(cardScore(idealCard(sl, t, ''), t), Math.max(...SLOT_INFO[sl].mains.map(m => cardScore(idealCardFor(sl, t, '', m), t))), 1e-9);
+    fail('lufel\'s "-" slots are open, Chizuko\'s and Runa\'s Moon and Sky among them',
+      ['Chizuko Nagao|Moon', 'Chizuko Nagao|Sky', 'Runa Dogenzaka|Moon', 'Runa Dogenzaka|Sky', 'Aran Hirano|Moon'].every(k => openSlots.some(([c, , sl]) => `${c.n}|${sl}` === k)),
+      openSlots.map(([c, , sl]) => c.n + ' ' + sl).join(', '));
+    fail('an open slot\'s perfect card takes the best-scoring legal main', openSlots.every(openBest),
+      openSlots.filter(o => !openBest(o)).map(([c, , sl]) => c.n + ' ' + sl).join(', '));
     const badRef = [];
     for (const ch of CHARACTERS) {
       (ch.sets || []).forEach(s => { if (!SETS[s]) badRef.push(`${ch.n} set ${s}`); });
@@ -202,25 +222,42 @@ function weightOverrideDrift() {
     const badPair = [];
     Object.entries(SPACE_SETS).forEach(([k, v]) => v.pairs.forEach(pp => { if (!SETS[pp]) badPair.push(`${k}->${pp}`); }));
     fail('all space pairings reference real sets', badPair.length === 0, badPair.join(' | '));
-    fail('every Space card names at least one pairing and an effect for each (lufel lists one for Nativity)',
-      Object.values(SPACE_SETS).every(v => v.pairs.length >= 1 && v.pairs.length <= 3 && v.pairs.every(pp => v.effects && v.effects[pp])) &&
-      Object.values(SPACE_SETS).filter(v => v.pairs.length === 3).length >= 16);
+    /* Most cards pair with three sets. Acuity has one on Global (its Wealth and Hindrance
+       pairings are later releases of their own), Nativity and Ego two, Perseverance four. */
+    fail('every Space card names at least one pairing and an effect for each',
+      Object.values(SPACE_SETS).every(v => v.pairs.length >= 1 && v.pairs.length <= 4 && v.pairs.every(pp => v.effects && v.effects[pp])) &&
+      Object.values(SPACE_SETS).filter(v => v.pairs.length >= 3).length >= 16,
+      Object.entries(SPACE_SETS).map(([k, v]) => `${k} ${v.pairs.length}`).join(', '));
+    /* Pairings are Global's, from lufel's English table: its Korean one already pairs Acuity
+       with Wealth and Hindrance, which the GLB schedule releases later (Acuity + Hindrance in
+       4.16). Update this when a refresh brings the pairing in — never by reading the Korean
+       table, which would hand Koromaru and Aran an effect their server does not have. */
+    fail('Acuity pairs as it does on Global (Satiety only, until 4.16 brings Hindrance)',
+      SPACE_SETS.Acuity && SPACE_SETS.Acuity.pairs.join() === 'Satiety' &&
+      ['Koromaru', 'Aran Hirano'].every(n => CHARACTERS.find(c => c.n === n).space !== 'Acuity'),
+      SPACE_SETS.Acuity && SPACE_SETS.Acuity.pairs.join());
     const deadOwnSets = [];
     for (const ch of CHARACTERS) (ch.sets || []).forEach(s => {
       const def = SETS[s];
       if (def && def.elem && def.elem !== ch.e) deadOwnSets.push(`${ch.n} (${ch.e}) lists off-element set ${s} (${def.elem})`);
     });
     fail('no character lists an off-element set among their own preferred sets', deadOwnSets.length === 0, deadOwnSets.join(' | '));
-    /* Six Heavens sets and a few Space cards are lufel-listed but unshipped. They stay in
-       the tables so an import resolves, but nobody may be built around one. */
-    const unreleased = Object.keys(SETS).filter(s => SETS[s].unreleased);
-    const unreleasedSpace = Object.keys(SPACE_SETS).filter(s => SPACE_SETS[s].unreleased);
-    fail('the unreleased sets are still marked (6 Heavens, 3+ Space)', unreleased.length === 6 && unreleasedSpace.length >= 3,
-      `${unreleased.length} / ${unreleasedSpace.length}`);
+    /* Seven Heavens sets and two Space cards are lufel-listed but unshipped on Global. They
+       stay in the tables so an import resolves, but nobody may be built around one. Named,
+       not counted, so a release that moves one is a line to review on the next refresh
+       rather than a number that silently still adds up. */
+    const unreleased = Object.keys(SETS).filter(s => SETS[s].unreleased).sort();
+    const unreleasedSpace = Object.keys(SPACE_SETS).filter(s => SPACE_SETS[s].unreleased).sort();
+    fail('the unreleased sets are still marked',
+      unreleased.join() === 'Cruelty,Debauch,Failure,Happiness,Satiety,Tenacity,Wealth' && unreleasedSpace.join() === 'Ego,Purity',
+      `${unreleased.join(', ')} / ${unreleasedSpace.join(', ')}`);
     fail('no character targets an unreleased set or Space card',
       CHARACTERS.every(c => !(c.sets || []).some(s => SETS[s] && SETS[s].unreleased) && !(c.space && SPACE_SETS[c.space] && SPACE_SETS[c.space].unreleased)),
       CHARACTERS.filter(c => (c.sets || []).some(s => SETS[s] && SETS[s].unreleased) || (c.space && SPACE_SETS[c.space] && SPACE_SETS[c.space].unreleased)).map(c => c.n).join(', '));
     fail('every set carries a 2-piece model on a real stat', Object.values(SETS).every(s => s.bonus2 && (SUBSTATS[s.bonus2.stat] || s.bonus2.stat === 'HP Recovery') && s.bonus2.amt > 0));
+    fail('a 2-piece\'s further terms name real stats with a signed, non-zero amount (only Prudence\'s Speed cost today)',
+      Object.values(SETS).every(s => !s.bonus2Also || (Array.isArray(s.bonus2Also) && s.bonus2Also.every(x => SUBSTATS[x.stat] && isFinite(x.amt) && x.amt !== 0))) &&
+      J(SETS.Prudence.bonus2Also) === J([{ stat: 'Speed', amt: -3 }]) && Object.values(SETS).filter(s => s.bonus2Also).length === 1);
     fail('every element-locked set names a real element', Object.values(SETS).every(s => !s.elem || ELEMENTS.includes(s.elem)));
     fail('set aliases resolve to real sets and never shadow a real name',
       Object.entries(SET_ALIASES).every(([k, v]) => SETS[v] && !SETS[k] && !Object.keys(SETS).some(s => s.toLowerCase() === k)));
@@ -242,7 +279,7 @@ function weightOverrideDrift() {
       if (!keys.length || !keys.every(k => /^LV\d+(\+5)?$/.test(k) && typeof x.tiers[k] === 'number')) badT.push(`${c.n}: tiers ${J(x.tiers)}`);
     }));
     fail('every stat target scores a real substat against its own stat and carries LV-keyed tiers', badT.length === 0, badT.join(' | '));
-    fail('37 characters carry stat targets', CHARACTERS.filter(c => c.ov && c.ov.targets && c.ov.targets.length).length === 37);
+    fail('39 characters carry stat targets', CHARACTERS.filter(c => c.ov && c.ov.targets && c.ov.targets.length).length === 39);
 
     // ---- measured tables ----
     fail('ROLL_TIERS: five ascending tiers per stat on both layouts, top tier equal to maxRoll',
@@ -296,12 +333,13 @@ function weightOverrideDrift() {
     fail('CONVERSIONS names real characters, real source and destination stats, and a reason',
       Object.entries(CONVERSIONS).every(([n, list]) => charDef(n) && list.every(cv =>
         (SUBSTATS[cv.from] || cv.from === 'HP Recovery') && ['ATK%', 'ATK', 'Crit Multiplier', 'Damage Multiplier', 'HP'].includes(cv.to) && cv.rate > 0 && cv.why)));
-    fail('CRIT_PROFILE names real characters with a locked share in (0,1] or a no-crit share',
-      Object.entries(CRIT_PROFILE).every(([n, pr]) => charDef(n) && ((pr.locked > 0 && pr.locked <= 1) || (pr.nocrit > 0 && pr.nocrit < 1))) &&
+    fail('CRIT_PROFILE names real characters with a locked share in (0,1], a no-crit share, or an extra-crit share on a weapon ladder',
+      Object.entries(CRIT_PROFILE).every(([n, pr]) => charDef(n) && ((pr.locked > 0 && pr.locked <= 1) || (pr.nocrit > 0 && pr.nocrit < 1) ||
+        (pr.extraCr && pr.extraCr.share > 0 && pr.extraCr.share < 1 && (pr.extraCr.v > 0 || (Array.isArray(pr.extraCr.ladder) && pr.extraCr.ladder.length === 7))))) &&
       CRIT_PROFILE['Ryuji Sakamoto'].locked === 1 && CRIT_PROFILE['Shun Kano [Pioneer]'].locked === 1);
-    fail('DAMAGE_SCALE names the six DEF/HP-scaling kits, each weighting ATK% at zero',
-      Object.keys(DAMAGE_SCALE).length === 6 && Object.entries(DAMAGE_SCALE).every(([n, s]) => charDef(n) && ['DEF', 'HP'].includes(s) && target(charDef(n)).w['ATK%'] === 0) &&
-      !DAMAGE_SCALE['Yukimi Fujikawa'] && !DAMAGE_SCALE['Motoha Arai [Tropical]']);
+    fail('DAMAGE_SCALE names the eight DEF/HP-scaling kits, each weighting ATK% at zero',
+      Object.keys(DAMAGE_SCALE).length === 8 && Object.entries(DAMAGE_SCALE).every(([n, s]) => charDef(n) && ['DEF', 'HP'].includes(s) && target(charDef(n)).w['ATK%'] === 0) &&
+      DAMAGE_SCALE['Minami Miyashita [Beachflower]'] === 'HP' && !DAMAGE_SCALE['Yukimi Fujikawa'] && !DAMAGE_SCALE['Motoha Arai [Tropical]']);
     fail('TARGET_TIER_AWARENESS_5 names real characters', [...TARGET_TIER_AWARENESS_5].every(n => charDef(n)));
 
     /* ================================================================================
@@ -366,6 +404,20 @@ function weightOverrideDrift() {
       hpRecoveryMainWeight({ w: { 'HP Recovery': 3 }, main: { Moon: ['ATK%'] } }, 'Moon') === 3);
     fail('an HP Recovery Moon never beats a wanted main for a damage dealer',
       cardScore(mk('Moon', 'Hindrance', 'HP Recovery', []), tj) < cardScore(mk('Moon', 'Hindrance', mainTop(tj, 'Moon'), []), tj));
+    /* Healing has one price wherever it lands. Love's +9% 2-piece used to be a flat 1.5 x the
+       HP% weight (6-15 points) where the same 9% as a Moon main was 36, which is how Worry, a
+       set neither lists, beat Love for Morgana and Lufel. */
+    const morgH = charDef('Morgana'), tMorgH = target(morgH), yuki = charDef('Yukimi Fujikawa'), tYuki = target(yuki);
+    const healPct = SETS.Love.bonus2.amt, perPct = mainRolls('HP Recovery', 'Moon', 25) / MAIN_MAGNITUDE['HP Recovery'][1];
+    fail('Love\'s healing 2-piece is priced exactly as the same healing on an HP Recovery main',
+      SETS.Love.bonus2.stat === 'HP Recovery' && near(bonus2Value('Love', morgH, tMorgH), hpRecoveryMainWeight(tMorgH, 'Moon') * healPct * perPct) &&
+      near(bonus2Value('Love', yukari, target(yukari)), hpRecoveryMainWeight(target(yukari), 'Moon') * healPct * perPct));
+    fail('Love\'s 2-piece is worth nothing to a character lufel lists no healing main for, whatever their HP% weight',
+      !mainList(tYuki, 'Moon').includes('HP Recovery') && (tYuki.w['HP%'] || 0) > 0 && bonus2Value('Love', yuki, tYuki) === 0);
+    const lufelH = charDef('Lufel'), tLufelH = target(lufelH);
+    fail('Lufel\'s and Morgana\'s own Love beats Worry on set bonuses alone (Lufel\'s Worry used to win, 85 to 73)',
+      [[lufelH, tLufelH], [morgH, tMorgH]].every(([c, tt]) => tt.sets[0] === 'Love' &&
+        55 + bonus2Value('Love', c, tt) > 55 * 0.22 + bonus2Value('Worry', c, tt)) && bonus4Value('Love', morgH, tMorgH, 55) === 55);
     // Skull and Messa: kit facts the tiers cannot express
     const skull = charDef('Ryuji Sakamoto'), ts = target(skull);
     fail('Skull weights Crit Rate at 0', ts.w['Crit Rate'] === 0, 'w=' + ts.w['Crit Rate']);
@@ -401,8 +453,8 @@ function weightOverrideDrift() {
       CHARACTERS.every(c => { const t = target(c); return SLOTS.every(sl => SLOT_INFO[sl].mains.every(m => Object.values(couplingFactors(t, sl, m)).every(v => v === 0 || (v >= COUPLE_CLAMP[0] - 1e-12 && v <= COUPLE_CLAMP[1] + 1e-12)))); }));
     /* Seeded coupling: the pre-board baseline is the character's own. YUI starts above 50%
        crit with her weapon, so a Crit Multiplier roll is worth more than a Crit Rate roll to
-       her before any card is placed; an Elucidator keeps the generic baseline because the
-       stats are donated. */
+       her before any card is placed. An Elucidator is not coupled at all: the stats are
+       donated, so what a roll is worth is decided by an ally's board, not theirs. */
     const yui = charDef('YUI');
     const fy = couplingFactors(target(yui), 'Moon', 'ATK%');
     fail('a high-crit character\'s baseline favours Crit Multiplier over Crit Rate', fy['Crit Multiplier'] > fy['Crit Rate'] && damageBase(yui).cr > 40,
@@ -410,14 +462,59 @@ function weightOverrideDrift() {
     const navi = charDef('Hatsune Miku'), tn = target(navi);
     const generic = Object.assign({}, tn, { n: undefined });
     const fN = couplingFactors(tn, 'Moon', 'ATK%'), fG = couplingFactors(generic, 'Moon', 'ATK%');
-    fail('an Elucidator\'s coupling uses the generic baseline, not their own 0/0 crit board',
-      near(fN['Crit Rate'], fG['Crit Rate']) && near(fN['Crit Multiplier'], fG['Crit Multiplier']) && seedBaseline(tn) === null && seedBaseline(tj) !== null);
+    fail('an Elucidator\'s cards are priced on their weights alone: no coupling for any slot or main',
+      CHARACTERS.filter(c => !spreadApplies(c)).every(c => { const t = target(c); return SLOTS.every(sl => SLOT_INFO[sl].mains.every(m => Object.keys(couplingFactors(t, sl, m)).length === 0)); }) &&
+      Object.keys(fN).length === 0 && Object.keys(fG).length > 0 && seedBaseline(tn) === null && seedBaseline(tj) !== null);
+    fail('Fuuka\'s perfect Star is lufel\'s Crit Multiplier, not a Crit Rate the generic board over-priced',
+      idealCard('Star', target(charDef('Fuuka Yamagishi')), '').main === 'Crit Multiplier');
     fail('a DPS\'s seeded baseline reads their own weapon and Awakening (Joker above 100% ATK, real crit)',
       seedBaseline(tj)['ATK%'] > 100 && near(seedBaseline(tj)['Crit Rate'], damageBase(joker).cr));
     fail('target() stamps the owner\'s name on generated and saved targets alike', (() => {
       state.chars['Morgana'].targets = { sets: ['Love'], space: 'Acceptance', main: { Moon: ['ATK%'] }, w: { 'ATK%': 10 }, targets: [] };
       const ok = target(charDef('Morgana')).n === 'Morgana' && tj.n === 'Ren Amamiya';
       state.chars['Morgana'].targets = null; return ok;
+    })());
+    /* Saved targets are a diff over the data, so a data fix still reaches every field the
+       user did not change — a full snapshot froze Kiyoshi's and Yusuke's ATK% at a 4 the
+       DEF/HP-kit override had since set to 0. */
+    fail('a saved target applies only its own edits; every other field, and the stat targets, follow the data', (() => {
+      const kumiT = defaultTarget(charDef('Kumi Katayama'));
+      state.chars['Kumi Katayama'].targets = { v: 2, space: 'Hope', w: { 'Speed': 3 } };
+      const t = target(charDef('Kumi Katayama'));
+      const ok = t.space === 'Hope' && t.w.Speed === 3 && J(t.sets) === J(kumiT.sets) && t.w['ATK%'] === kumiT.w['ATK%'] &&
+        J(t.main) === J(kumiT.main) && J(t.targets) === J(kumiT.targets) && target(charDef('Kumi Katayama')) === t;
+      state.chars['Kumi Katayama'].targets = null;
+      return ok && target(charDef('Kumi Katayama')) !== t && target(charDef('Kumi Katayama')).space === kumiT.space;
+    })());
+    fail('targetEdits stores only what differs from the data, and nothing when nothing does', (() => {
+      const base = defaultTarget(joker), mine = JSON.parse(JSON.stringify(base));
+      if (targetEdits(base, mine) !== null) return false;
+      mine.w['Speed'] = (base.w.Speed || 0) + 1; mine.main.Star = ['Crit Multiplier']; mine.space = 'Hope';
+      const e = targetEdits(base, mine);
+      return e && e.v === 2 && J(Object.keys(e).sort()) === J(['main', 'space', 'v', 'w']) && J(Object.keys(e.w)) === '["Speed"]' &&
+        J(e.main) === J({ Star: ['Crit Multiplier'] }) && e.space === 'Hope';
+    })());
+    fail('an old full snapshot converts to a diff: set/Space/main changes kept, a differing weight handed back and reported, stat targets from the data', (() => {
+      const yk = charDef('Yusuke Kitagawa'), yd = defaultTarget(yk);
+      const legacy = JSON.parse(JSON.stringify(yd));
+      legacy.space = 'Growth'; legacy.w['ATK%'] = 4; legacy.targets = [{ s: 'Speed', sub: 'Speed', pct: false, tiers: { LV10: 999 } }];
+      state.chars[yk.n].targets = legacy;
+      const dropped = migrateSavedTargets(), e = state.chars[yk.n].targets;
+      const ok = J(e) === J({ v: 2, space: 'Growth' }) && dropped.length === 1 && dropped[0].n === yk.n && dropped[0].stat === 'ATK%' &&
+        dropped[0].saved === 4 && dropped[0].data === 0 && target(yk).w['ATK%'] === 0 && J(target(yk).targets) === J(yd.targets) &&
+        migrateSavedTargets().length === 0 && J(state.chars[yk.n].targets) === J(e);
+      state.chars[yk.n].targets = null;
+      return ok;
+    })());
+    fail('an old snapshot\'s main for a slot the data now leaves open is handed back and reported, its other edits kept', (() => {
+      const cz = charDef('Chizuko Nagao'), legacy = JSON.parse(JSON.stringify(defaultTarget(cz)));
+      legacy.main.Moon = ['Damage Multiplier']; legacy.main.Sky = ['Speed']; legacy.sets = ['Truth']; legacy.space = 'Harmony';
+      state.chars[cz.n].targets = legacy;
+      const dropped = migrateSavedTargets(), e = state.chars[cz.n].targets;
+      const ok = J(e) === J({ v: 2, sets: ['Truth'], space: 'Harmony' }) && dropped.length === 2 &&
+        dropped.every(d => d.n === cz.n && / main$/.test(d.stat) && d.data === 'any') && mainList(target(cz), 'Moon').length === 0;
+      state.chars[cz.n].targets = null;
+      return ok;
     })());
     /* Capped Crit Rate: once the board holds 100 points, a Crit Rate roll is worth zero. */
     const morg = charDef('Morgana'), tm = target(morg);
@@ -428,6 +525,19 @@ function weightOverrideDrift() {
       `held ${capped['Crit Rate']}`);
     fail('below the cap the generic path leaves Crit Rate live', couplingFactors(target(yui), 'Star', 'Crit Rate')['Crit Rate'] > 0);
     fail('cf() treats a hard zero as an answer and only a missing factor as neutral', cf({ 'Crit Rate': 0 }, 'Crit Rate') === 0 && cf({}, 'Crit Rate') === 1);
+    /* A saved target is the same object for as long as it exists, and the coupling and the
+       perfect-card score memoised on it depend on the loadout too (seedBaseline reads the
+       weapon and Awareness). A Setup change must reach them without a reload (targetMemo). */
+    fail('a Setup change reaches a saved target\'s coupling and perfect-card score without a reload', (() => {
+      state.chars[morg.n].targets = JSON.parse(JSON.stringify(target(morg)));
+      const t = target(morg), probe = tt => J(couplingFactors(tt, 'Moon', mainTop(tt, 'Moon'))) + '|' + idealCardScore('Star', tt);
+      const before = probe(t);
+      state.chars[morg.n].loadout = Object.assign({}, DEFAULT_LOADOUT, { refine: 7, awareness: 6 });
+      const after = probe(t), fresh = probe(Object.assign(JSON.parse(JSON.stringify(t)), { n: morg.n }));
+      const same = target(morg) === t;
+      state.chars[morg.n].targets = null; state.chars[morg.n].loadout = null;
+      return same && after === fresh && after !== before;
+    })());
 
     /* Scaling stat: Yusuke's ⓐ is DEF, so the coupling pairs DEF% with Damage Multiplier. */
     const yu = charDef('Yusuke Kitagawa'), yt = target(yu), ylo = charLoadout(yu.n);
@@ -456,11 +566,21 @@ function weightOverrideDrift() {
     });
     fail('no coupling factor or card score is ever NaN, on any board', !nanSweep.length, nanSweep.slice(0, 4).join(' | '));
     fail('a sub-100% crit damage total floors at zero supply, never goes negative',
-      CHARACTERS.every(c => realCoupleContext(c, [], charLoadout(c.n))['Crit Multiplier'] >= 0),
-      CHARACTERS.filter(c => realCoupleContext(c, [], charLoadout(c.n))['Crit Multiplier'] < 0).map(c => c.n).join(', '));
+      CHARACTERS.every(c => { const rb = realCoupleContext(c, [], charLoadout(c.n)); return !rb || rb['Crit Multiplier'] >= 0; }),
+      CHARACTERS.filter(c => { const rb = realCoupleContext(c, [], charLoadout(c.n)); return rb && rb['Crit Multiplier'] < 0; }).map(c => c.n).join(', '));
+    /* An Elucidator's stats are donated, so like seedBaseline their real board is null and
+       every per-card price is the uncoupled one — otherwise the optimiser picks each slot by
+       one crit balance (their 0% / 0% board, crit switched off) while the build score and
+       bestPlan's own totals price it by another. */
+    fail('an Elucidator gets no real board, and everyone else does', CHARACTERS.every(c => (realCoupleContext(c, [], charLoadout(c.n)) === null) === !spreadApplies(c)));
+    fail('for an Elucidator the optimiser ranks each slot by the build score\'s own card price (Miku)', (() => {
+      const r = bestPlan(navi, state.cards.filter(c => c.rarity >= 2), { policy: 'pref' });
+      return r.scored.length > 0 && r.scored.every(o => near(o.s, cardScore(o.c, tn), 1e-9));
+    })());
     const mikuStar = mk('Star', 'Labor', 'Crit Rate', [['Crit Multiplier', 9.2], ['ATK%', 3.2], ['Damage Multiplier', 7.8]]);
-    fail('an Elucidator\'s crit-main Star scores against a real board',
-      isFinite(cardScore(mikuStar, tn, realCoupleContext(navi, [], charLoadout(navi.n)))) && cardScore(mikuStar, tn, realCoupleContext(navi, [], charLoadout(navi.n))) > 0);
+    fail('an Elucidator\'s crit-main Star prices the same with or without a board, finite and positive',
+      isFinite(cardScore(mikuStar, tn, realCoupleContext(navi, [], charLoadout(navi.n)))) && cardScore(mikuStar, tn, realCoupleContext(navi, [], charLoadout(navi.n))) > 0 &&
+      near(cardScore(mikuStar, tn, realCoupleContext(navi, [], charLoadout(navi.n))), cardScore(mikuStar, tn)));
 
     // ---- the ideal card, and the per-card percentage ----
     const idealBad = [];
@@ -486,8 +606,33 @@ function weightOverrideDrift() {
     fail('potentialCardScore is a ceiling: above the score at level 0, equal at the cap, and grows the main',
       (() => { const c0 = mk('Star', 'Hindrance', 'Crit Rate', [['Crit Multiplier', 4.1], ['ATK%', 3.5], ['Speed', 2.2]], { level: 0 });
         const c25 = Object.assign({}, c0, { level: 25 });
+        const up = bestCaseUpgrades(c0, tj), subGrowth = up.mint.reduce((s, x) => s + x.w, 0) + up.rolls * up.w;
         return potentialCardScore(c0, tj) > cardScore(c0, tj) && near(potentialCardScore(c25, tj), cardScore(c25, tj)) &&
-          potentialCardScore(c0, tj) > cardScore(c0, tj) + remainingUpgrades(c0) * bestSubstats(c0, tj).w; })());
+          potentialCardScore(c0, tj) > cardScore(c0, tj) + subGrowth; })());
+    /* A card minted with three substats gains a fourth on its first upgrade (the accounting
+       validateCard and mergeImport use). The best case must mint the most valuable stat the
+       card lacks and spend only the REMAINING upgrades as rolls — 60% of the real level-0
+       inventory is three-substat cards, and the old rule (every upgrade a roll on an existing
+       substat) labelled 763 card/character pairs "even maxed, not an upgrade" wrongly. */
+    fail('a three-substat card mints the most valuable stat it lacks (never its main) at one roll, then rolls the rest',
+      (() => { const c0 = mk('Star', 'Hindrance', 'Crit Rate', [['Crit Multiplier', 4.1], ['ATK%', 3.5], ['Speed', 2.2]], { level: 0 });
+        const up = bestCaseUpgrades(c0, tj), f = couplingFactors(tj, 'Star', 'Crit Rate'), w = s => (tj.w[s] || 0) * cf(f, s);
+        const lacking = Object.keys(SUBSTATS).filter(s => !['Crit Multiplier', 'ATK%', 'Speed', 'Crit Rate'].includes(s));
+        const top = Math.max(...lacking.map(w));
+        return up.mint.length === 1 && lacking.includes(up.mint[0].stat) && near(up.mint[0].w, top) &&
+          up.rolls === remainingUpgrades(c0) - 1 && near(up.w, Math.max(top, ...['Crit Multiplier', 'ATK%', 'Speed'].map(w))); })());
+    fail('a four-substat card mints nothing and rolls every remaining upgrade onto its best substat', (() => {
+      const c4 = mk('Star', 'Hindrance', 'Crit Rate', [['Crit Multiplier', 4.1], ['ATK%', 3.5], ['Speed', 2.2], ['DEF', 27]], { level: 0 });
+      const up = bestCaseUpgrades(c4, tj);
+      return up.mint.length === 0 && up.rolls === remainingUpgrades(c4) && up.onto.length >= 1 &&
+        near(potentialCardScore(c4, tj), cardScore(c4, tj) + up.rolls * up.w + mainWeightFor(c4, tj) * (mainRolls('Crit Rate', 'Star', 25) - mainRolls('Crit Rate', 'Star', 0)));
+    })());
+    fail('a three-substat card of junk can still reach a keeper through its fourth substat', (() => {
+      const junk = mk('Sun', 'Hindrance', 'HP', [['DEF', 27], ['HP%', 2.1], ['SP Recovery', 5.9]], { level: 0 });
+      const up = bestCaseUpgrades(junk, tj), existingBest = Math.max(...junk.subs.map(s => (tj.w[s.stat] || 0) * cf(couplingFactors(tj, 'Sun', 'HP'), s.stat)));
+      return up.mint.length === 1 && up.w > existingBest && up.onto.includes(up.mint[0].stat) &&
+        potentialCardScore(junk, tj) > cardScore(junk, tj) + remainingUpgrades(junk) * existingBest;
+    })());
     fail('atMaxLevel lifts the level to the rarity cap and leaves the substats as rolled',
       (() => { const c0 = mk('Star', 'Hindrance', 'Crit Rate', [['Crit Multiplier', 4.1]], { level: 3, rarity: 4 }); const m = atMaxLevel(c0);
         return m.level === 20 && m.subs === c0.subs && c0.level === 3 && atMaxLevel(Object.assign({}, c0, { level: 20 })).level === 20; })());
@@ -526,6 +671,99 @@ function weightOverrideDrift() {
       const bb = scoreLoadout(four.concat([mk('Space', other, 'ATK + DEF', [])]), joker, tj, 55);
       return a.synergy === SPACE_PAIR_VALUE && a.pairs && bb.synergy === 0 && !bb.pairs;
     })());
+
+    /* ---- perfect is a ceiling: lufel's order holds against every other configuration ----
+       Whole loadouts of perfect cards, stat targets and the damage-spread term included, since
+       a 2-piece's stat and a main's feed both. The 4-piece value is this tool's invention and
+       yields to lufel's set order (setLift); mains are left to the model, which gets them right
+       everywhere but one documented case. */
+    const spacesR = Object.keys(SPACE_SETS).filter(x => !SPACE_SETS[x].unreleased);
+    const ceilingBreaks = () => {
+    const liftBad = [], lifted = [], mainBad = [];
+    CHARACTERS.forEach(c => {
+      const t = target(c), lc = charLoadout(c.n), idl = idealLoadout(c, t, 55);
+      const heav = idl.cards.filter(x => x.slot !== 'Space'), sp = idl.cards.filter(x => x.slot === 'Space')[0];
+      const tot = (sets, space) => buildScoreOf(c, heav.map((x, i) => Object.assign({}, x, { set: sets[i] })).concat([Object.assign({}, sp, { set: space })]), 55, lc, idl, t).total;
+      const base = buildScoreOf(c, idl.cards, 55, lc, idl, t).total;
+      const usable = Object.keys(SETS).filter(x => !SETS[x].unreleased && !(SETS[x].elem && SETS[x].elem !== c.e));
+      const pairFor = x => spacesR.filter(y => SPACE_SETS[y].pairs.includes(x))[0] || sp.set;
+      const four = {}; usable.forEach(x => four[x] = tot([x, x, x, x], pairFor(x)));
+      const listed = t.sets.filter(x => usable.includes(x));
+      usable.forEach(x => { if (x !== listed[0] && four[x] > base + 1e-6) liftBad.push(`${c.n}: 4pc ${x}`); });
+      for (let i = 0; i < usable.length; i++) for (let j = i + 1; j < usable.length; j++) {
+        if (tot([usable[i], usable[i], usable[j], usable[j]], sp.set) > base + 1e-6) liftBad.push(`${c.n}: ${usable[i]} 2 + ${usable[j]} 2`);
+      }
+      if (listed[0] && bonus4Value(listed[0], c, t, 55) > 55 + 1e-9) lifted.push(c.n);
+      ['Moon', 'Star', 'Sky'].forEach(sl => SLOT_INFO[sl].mains.forEach(m => {
+        if (buildScoreOf(c, idl.cards.map(x => x.slot === sl ? idealCardFor(sl, t, x.set, m) : x), 55, lc, idl, t).total > base * (1 + 1e-4)) mainBad.push(`${c.n} ${sl}: ${m}`);
+      }));
+    });
+    return { liftBad, lifted, mainBad };
+    };
+    const { liftBad, lifted, mainBad } = ceilingBreaks();
+    fail('no other 4-piece and no two 2-pieces of perfect cards beat the preferred 4-piece, targets and spread counted', liftBad.length === 0, liftBad.slice(0, 5).join(' | '));
+    fail('the preferred set is lifted only where the flat 4-piece value contradicted lufel: Elucidators and healers, never a DPS like Joker',
+      lifted.length > 0 && lifted.length <= 18 && lifted.includes('Futaba Sakura') && lifted.includes('Lufel') && !lifted.includes('Ren Amamiya') && !lifted.includes('Ann Takamaki') &&
+      CHARACTERS.every(c => { const t = target(c); return t.sets.slice(1).every(a => !SETS[a] || bonus4Value(a, c, t, 55) === 0 || near(bonus4Value(a, c, t, 55), 55 * 0.72)); }),
+      lifted.join(', '));
+    /* The one known exception: lufel lists only Crit Multiplier for Wavecatcher Miyu's Star, the
+       right call in a party that supplies crit rate — which lufel's builds assume, and which the
+       team crit rate models only when the user sets it. On her own board a Crit Rate Star is
+       ahead (docs/SCORING.md, known gaps). */
+    fail('no main outscores the perfect card\'s own, loadout-wide, but Wavecatcher Miyu\'s Star',
+      mainBad.every(x => x === 'Miyu Sahara [Wavecatcher] Star: Crit Rate'), mainBad.join(' | '));
+
+    /* ---- the team crit rate (Roster) ----
+       The crit rate the user's supports add, in points: into every damage dealer's crit rate in
+       the damage model and both coupling baselines, never an Elucidator's, never an on-screen
+       total or a stat target. Every memo that reads it has to drop when it changes. */
+    const annC = charDef('Ann Takamaki'), tAnn = target(annC), futabaC = charDef('Futaba Sakura');
+    const critAt = () => ({ cr: damageBase(annC).cr, crF: damageBase(futabaC).cr,
+      tot: totalStat(annC, 'Crit Rate', 'Crit Rate', [], charLoadout(annC.n)).total,
+      f: Object.assign({}, couplingFactors(tAnn, 'Star', 'Crit Multiplier')), v: Object.assign({}, couplingFactors(VAULT_TARGET, 'Star', 'Crit Multiplier')),
+      ideal: idealCardScore('Star', tAnn) });
+    const c0 = critAt();
+    state.teamCrit = 20;
+    const c20 = critAt(), ceil20 = ceilingBreaks();
+    state.teamCrit = 0;
+    const cBack = critAt();
+    fail('the team crit rate adds to a damage dealer\'s crit rate in the damage model, never an Elucidator\'s or an on-screen total',
+      state.teamCrit === 0 && near(c20.cr, c0.cr + 20) && near(c20.crF, c0.crF) && near(c20.tot, c0.tot), JSON.stringify({ c0: c0.cr, c20: c20.cr }));
+    fail('a new team crit rate reprices the coupling at once — Crit Multiplier up, Crit Rate down, the Vault\'s generic board too — and 0 restores it exactly',
+      c20.f['Crit Multiplier'] > c0.f['Crit Multiplier'] && c20.f['Crit Rate'] < c0.f['Crit Rate'] && c20.v['Crit Multiplier'] > c0.v['Crit Multiplier'] &&
+      c20.ideal !== c0.ideal && near(cBack.f['Crit Multiplier'], c0.f['Crit Multiplier']) && near(cBack.f['Crit Rate'], c0.f['Crit Rate']) && near(cBack.ideal, c0.ideal));
+    fail('at a 20% team crit rate perfect is a ceiling for everyone, Wavecatcher Miyu\'s Crit Multiplier Star included',
+      ceil20.mainBad.length === 0 && ceil20.liftBad.length === 0, ceil20.mainBad.concat(ceil20.liftBad).slice(0, 5).join(' | '));
+    const toshiya = charDef('Toshiya Sumi'), runaD = charDef('Runa Dogenzaka');
+    fail('Defeat\'s 4-piece works for Fire only, its ailment-accuracy 2-piece for anyone',
+      SETS.Defeat.elem4 === 'Fire' && !SETS.Defeat.elem && bonus4Value('Defeat', toshiya, target(toshiya), 55) === 0 &&
+      bonus4Value('Defeat', runaD, target(runaD), 55) > 0 && bonus2Value('Defeat', toshiya, target(toshiya)) > 0);
+    const bm = charDef('Minami Miyashita [Beachflower]'), tbm = target(bm);
+    const wsum = (tt, list) => list.reduce((acc, x) => acc + (tt.w[x] || 0), 0);
+    fail('Beachflower Minami scales off HP, and her crit multiplier and HP buff allies: uncoupled, not booked as her damage, lufel\'s Crit Multiplier Star her ideal',
+      scaleStat(bm) === 'HP' && tbm.w['ATK%'] === 0 && SLOT_INFO.Star.mains.every(m => Object.keys(couplingFactors(tbm, 'Star', m)).length === 0) &&
+      idealCard('Star', tbm, '').main === 'Crit Multiplier' &&
+      near(damageShare(tbm, bm), wsum(tbm, ['HP', 'Damage Multiplier', 'Crit Rate']) / wsum(tbm, Object.keys(tbm.w))));
+    const lufelC = charDef('Lufel'), tlu = target(lufelC);
+    fail('Lufel\'s heal-scaling ATK% is her top weight, and lufel\'s ATK% Star and Sky are her ideal',
+      tlu.w['ATK%'] === Math.max(...Object.values(tlu.w)) && idealCard('Star', tlu, '').main === 'ATK%' && idealCard('Sky', tlu, '').main === 'ATK%');
+    const kira = charDef('Kira Kitazato');
+    const kiraAA = wpn => { const b = charBaseStat(kira, 'Ailment Accuracy', Object.assign({}, charLoadout(kira.n), { weapon: wpn })); return b.flat + b.pct; };
+    fail('Kira: Doctor mode and Bloodletter\'s unconditional line count toward his ailment accuracy, and lufel\'s ATK% Star is his ideal',
+      near(kiraAA('4'), 36) && near(kiraAA('5'), 51) && idealCard('Star', target(kira), '').main === 'ATK%');
+    fail('Wavecatcher Miyu\'s Resonance crit rate lifts her crit factor for its share, and only with Mermaid Dreamer', (() => {
+      const wm = charDef('Miyu Sahara [Wavecatcher]'), twm = target(wm), L5 = Object.assign({}, charLoadout(wm.n), { weapon: '5' }), L4 = Object.assign({}, L5, { weapon: '4' });
+      const board = idealLoadout(wm, twm, 55).cards, prof = CRIT_PROFILE[wm.n];
+      const with5 = damageFactors(board, wm, twm, L5).crit, with4 = damageFactors(board, wm, twm, L4).crit;
+      delete CRIT_PROFILE[wm.n];
+      const plain5 = damageFactors(board, wm, twm, L5).crit, plain4 = damageFactors(board, wm, twm, L4).crit;
+      CRIT_PROFILE[wm.n] = prof;
+      return with5 > plain5 && near(with4, plain4) && extraCritFor(prof, L4) === null && extraCritFor(prof, L5).cr === prof.extraCr.ladder[L5.refine - 1];
+    })());
+    fail('the archetype floor never lifts a stat to one lufel ranks above it (Minami, Seaside Tomoko, Ichigo)',
+      target(charDef('Minami Miyashita')).w['SP Recovery'] < target(charDef('Minami Miyashita')).w['DEF%'] &&
+      target(charDef('Ichigo Shikano')).w['Crit Rate'] < target(charDef('Ichigo Shikano')).w['ATK%'] &&
+      target(charDef('Tomoko Noge [Seaside]')).w['SP Recovery'] === 6);
 
     // ---- build score ----
     const notHundred = [];
@@ -634,6 +872,17 @@ function weightOverrideDrift() {
       return cardScore(A, tj) > cardScore(B, tj) && sB > sA;
     })());
     fail('damageFactors exposes ⓐ, ⓑ, ⓓ and their product', (() => { const d = damageFactors(four, joker, tj, lj); return d.atk > 0 && d.dmg >= 1 && d.crit >= 1 && near(d.value, d.atk * d.dmg * d.crit, 1e-6); })());
+    /* The fixed mains are flat stat added after the percentage, at their real magnitude for
+       the card's level: a Space card's ATK + DEF for ATK and DEF kits, a Sun card's HP for HP
+       kits. They used to be left out as "cancelling", which a flat term in a ratio does not. */
+    fail('the fixed mains feed ⓐ as flat stat at their level\'s magnitude, for the kits whose scaling stat they are', (() => {
+      const sp = mk('Space', 'Hope', 'ATK + DEF', []), sun = mk('Sun', 'Opulence', 'HP', []), sun0 = mk('Sun', 'Opulence', 'HP', [], { level: 0 });
+      const jun = charDef('Junpei Iori'), tjun = target(jun), ljun = charLoadout(jun.n);
+      const dA = (cards, c, t, l) => damageFactors(cards, c, t, l).atk - damageFactors([], c, t, l).atk;
+      return near(dA([sp], joker, tj, lj), MAIN_MAGNITUDE['ATK + DEF'][1], 1e-6) && near(dA([sp], yu, yt, ylo), MAIN_MAGNITUDE['ATK + DEF'][1], 1e-6) &&
+        near(dA([sun], jun, tjun, ljun), MAIN_MAGNITUDE.HP[1], 1e-6) && near(dA([sun0], jun, tjun, ljun), MAIN_MAGNITUDE.HP[0], 1e-6) &&
+        near(dA([sun], joker, tj, lj), 0, 1e-9) && near(dA([sp], jun, tjun, ljun), 0, 1e-9);
+    })());
 
     /* ================================================================================
        7. Stat targets — totals, tiers, the breakpoint term
@@ -649,6 +898,42 @@ function weightOverrideDrift() {
     });
     fail('every stat target is satisfied by the ideal loadout (bar capped at what a perfect build reaches)', bpBad.length === 0, bpBad.slice(0, 4).join(' | '));
     fail('a character with no targets has no breakpoint rows', breakpointRows([], idealLoadout(joker, tj).cards, joker, tj, lj).length === 0 && (tj.targets || []).length === 0);
+    /* A target already met with no cards cannot be earned by any loadout, so it is shown but
+       left out of the block. Fuuka's Crit Multiplier target (lufel's 64-78%, the crit damage
+       at which her party buff caps) sits under her 150% base; Mitsuru's LV10 ATK under her
+       no-card ATK — until a Setup whose tier her base does not clear. Each setup gets its own
+       idealLoadout, since breakpointRows caches the ideal side per idealCards array. */
+    fail('a target met with no cards is shown but not scored (Fuuka\'s Crit Multiplier; Mitsuru\'s ATK until her tier outgrows her base)', (() => {
+      const fu = charDef('Fuuka Yamagishi'), tf = target(fu), lf = charLoadout(fu.n), idf = idealLoadout(fu, tf, 55);
+      const card = mk('Sun', 'Labor', 'HP', [['ATK%', 3.5]]);
+      const bs = buildScoreOf(fu, [card], 55, lf, idf, tf), part = bs.parts.find(x => x.label === 'Stat targets');
+      const cm = bs.targets.find(r => r.stat === 'Crit Multiplier'), atk = bs.targets.find(r => r.stat === 'ATK');
+      const mi = charDef('Mitsuru Kirijo'), tmi = target(mi);
+      const lm0 = Object.assign({}, DEFAULT_LOADOUT), lm5 = Object.assign({}, DEFAULT_LOADOUT, { mindSkill: true });
+      const bm0 = buildScoreOf(mi, [card], 55, lm0, idealLoadout(mi, tmi, 55), tmi), bm5 = buildScoreOf(mi, [card], 55, lm5, idealLoadout(mi, tmi, 55), tmi);
+      return bs.targets.length === 2 && cm.metBare && cm.bare > cm.bar && !atk.metBare && part && part.max === BREAKPOINT_VALUE &&
+        near(part.got, BREAKPOINT_VALUE * atk.ratio) &&
+        bm0.targets[0].metBare && !bm0.parts.some(x => x.label === 'Stat targets') &&
+        !bm5.targets[0].metBare && bm5.parts.some(x => x.label === 'Stat targets');
+    })());
+    /* Progress toward a target is measured from the character's no-card total, so base stats
+       earn none of the block and the cards earn all of it. Measured from zero, the median target
+       was 64% met before a card was worn and a naked character took about 49 of its 80 points. */
+    fail('an unmet target reads 0 with no cards and fills linearly from the no-card total to the bar', (() => {
+      const bad = [];
+      CHARACTERS.forEach(c => {
+        const t = target(c); if (!(t.targets || []).length) return;
+        const lc = charLoadout(c.n), idl = idealLoadout(c, t, 55);
+        breakpointRows([], idl.cards, c, t, lc).forEach(r => { if (r.exact && !r.metBare && r.ratio !== 0) bad.push(`${c.n} ${r.stat} ${r.ratio}`); });
+      });
+      const y = charDef('Yaoling Li'), ty = target(y), ly = charLoadout(y.n), idy = idealLoadout(y, ty, 55);
+      const r0 = breakpointRows([], idy.cards, y, ty, ly)[0], need = r0.effBar - r0.bare;
+      const half = mk('Sun', 'Control', 'HP', [['Speed', need / 2]]);
+      const r1 = breakpointRows([half], idy.cards, y, ty, ly)[0];
+      const html = targetHtml(buildScoreOf(y, [half], 55, ly, idy, ty));
+      return bad.length === 0 && r0.stat === 'Speed' && need > 0 && near(r1.ratio, 0.5, 1e-9) &&
+        /close this share of the gap from/.test(html) && /no-card total and the target/.test(html);
+    })());
     fail('the breakpoint block is worth BREAKPOINT_VALUE however many targets it holds', (() => {
       const two = CHARACTERS.find(c => c.ov && c.ov.targets && c.ov.targets.length >= 2);
       const t = target(two), idl = idealLoadout(two, t, 55); const bs = buildScore(two, idl.cards, 55, charLoadout(two.n), idl, t);
@@ -668,6 +953,30 @@ function weightOverrideDrift() {
       return bb > a + 20 && 180.2 - bb < 25 && 180.2 - a > 40;
     })());
     fail('totalStat is null for a character with no stat block', totalStat({ n: 'Nobody' }, 'ATK', 'ATK%', [], DEFAULT_LOADOUT) === null);
+    /* Ailment Accuracy reads 0% on the in-game panel with no cards (the user, 25 Sep 2026);
+       it was modelled at 100%. At 0, Awakening 7's `ailment_accuracy` is unambiguous and read. */
+    fail('Ailment Accuracy starts at 0% and Awakening 7\'s ailment_accuracy is read (Ann none, Runa 34.9)',
+      charBaseStat(ann, 'Ailment Accuracy', charLoadout(ann.n)).flat === 0 && !(CHAR_STATS[ann.n].aw || {}).ailment_accuracy &&
+      near(charBaseStat(runa, 'Ailment Accuracy', lr).flat, CHAR_STATS[runa.n].aw.ailment_accuracy) && near(CHAR_STATS[runa.n].aw.ailment_accuracy, 34.9));
+    fail('Haru\'s 150 and Shoki\'s 100 Ailment Accuracy are not met with no cards (nor their conversions capped), and a perfect build reaches both', (() => {
+      return ['Haru Okumura', 'Shoki Ikenami'].every(n => {
+        const c = charDef(n), t = target(c), l = charLoadout(n), idl = idealLoadout(c, t, 55);
+        const row = rs => rs.find(x => x.stat === 'Ailment Accuracy');
+        const bare = row(breakpointRows([], idl.cards, c, t, l)), full = row(breakpointRows(idl.cards, idl.cards, c, t, l));
+        // any AA conversion at its cap — Shoki's ATK% caps at 100 AA, Haru's crit stacks at 150
+        const anyCapped = cards => CONVERSIONS[n].some(cv => cv.from === 'Ailment Accuracy' && cv.cap != null &&
+          conversionBonus(c, cards, l)[cv.to] >= cv.cap - 1e-9);
+        return bare.exact && bare.ratio < 0.7 && full.reach >= full.bar && !anyCapped([]) && anyCapped(idl.cards);
+      });
+    })());
+    fail('Prudence\'s 2-piece costs 3 Speed, in the in-battle total and in what the 2-piece is worth', (() => {
+      const pair = [mk('Moon', 'Prudence', 'ATK%', []), mk('Star', 'Prudence', 'Crit Rate', [])];
+      const plain = [mk('Moon', 'Power', 'ATK%', []), mk('Star', 'Sorrow', 'Crit Rate', [])];
+      const lk = charLoadout(kumi.n), tw = { sets: [], space: '', targets: [], main: {}, w: { 'ATK%': 6, 'Speed': 10 } };
+      return near(totalStat(kumi, 'Speed', 'Speed', pair, lk).total, totalStat(kumi, 'Speed', 'Speed', plain, lk).total - 3) &&
+        near(bonus2Value('Prudence', kumi, tw), 6 * 18 / maxRoll('ATK%', 'Sun') - 10 * 3 / maxRoll('Speed', 'Sun')) &&
+        near(statSupply(pair, kumi, 'ATK%'), 18);
+    })());
     fail('a Space card\'s ATK + DEF main counts toward both ATK and DEF totals at its real magnitude', (() => {
       const sp = mk('Space', 'Hope', 'ATK + DEF', []);
       return near(cardStatContribution([sp], joker, 'ATK', 'ATK%').flat, MAIN_MAGNITUDE['ATK + DEF'][1]) && near(cardStatContribution([sp], joker, 'DEF', 'DEF%').flat, MAIN_MAGNITUDE['ATK + DEF'][1]);
@@ -770,6 +1079,26 @@ function weightOverrideDrift() {
       state.cards.pop(); runTriage();
       return row && row.pct > 0.5 && row.who === 'Ren Amamiya';
     })());
+    /* Triage subtracts buildScore RAW values: the rounded `score` left the real inventory on
+       about thirty distinct Score values and moved 6% of its verdicts across the 35% / 70%
+       lines. And an empty board is not worth 0 — see buildScoreOf. */
+    fail('Triage marginals are unrounded build-score deltas', rated.some(x => Math.abs(x.best - Math.round(x.best)) > 1e-6),
+      `${new Set(rated.map(x => x.best.toFixed(6))).size} distinct values`);
+    fail('an empty board is worth what its base stats earn (buildScoreOf), while buildScore still reads it as nothing', (() => {
+      const lk = charLoadout(kumi.n), ik = idealLoadout(kumi, tk, 55), e = buildScoreOf(kumi, [], 55, lk, ik, tk);
+      return buildScore(kumi, [], 55, lk, ik, tk) === null && e && e.raw > 0 && e.filled === 0 &&
+        near(e.raw, 100 * e.parts.reduce((s, x) => s + x.got, 0) / e.parts.reduce((s, x) => s + x.max, 0), 1e-9);
+    })());
+    fail('Triage prices a card for a bare character against their bare board, not against zero', (() => {
+      const was = Object.assign({}, state.chars[kumi.n]);
+      state.chars[kumi.n].owned = true; state.chars[kumi.n].benched = false;
+      runTriage();
+      const lk = charLoadout(kumi.n), ik = idealLoadout(kumi, tk, 55), empty = buildScoreOf(kumi, [], 55, lk, ik, tk).raw;
+      const hers = trCache.rated.filter(x => x.who === kumi.n);
+      const ok = hers.length > 0 && hers.every(x => near(x.best, buildScoreOf(kumi, [atMaxLevel(x.card)], 55, lk, ik, tk).raw - empty, 1e-9));
+      state.chars[kumi.n].owned = was.owned; state.chars[kumi.n].benched = was.benched; runTriage();
+      return ok;
+    })());
 
     // ---- Vault ----
     $('#vaRar').value = '2';
@@ -811,13 +1140,40 @@ function weightOverrideDrift() {
         });
         const grouped = rows.filter(x => x.group != null);
         if (grouped.length && (new Set(grouped.map(x => x.group)).size !== 1 || grouped.length < 2)) upBad.push(`${n}: grouped rows disagree on the group total`);
-        if (grouped.length && !(grouped[0].group > UPGRADE_MIN_DELTA)) upBad.push(`${n}: group below the gate`);
+        if (grouped.length && !(grouped[0].groupPts >= UPGRADE_MIN_GAIN)) upBad.push(`${n}: group below the gate`);
+        rows.forEach(row => { if (!(upPts(row) >= UPGRADE_MIN_GAIN - 1e-9) && row.group == null) upBad.push(`${n}: ${row.slot} row below the gate`); });
         for (let i = 1; i < rows.length; i++) if (upGain(rows[i]) > upGain(rows[i - 1]) + 1e-9) upBad.push(`${n}: rows not sorted by upGain`);
       });
     });
     fail('Upgrades proposes only whole preferred-set 4-pieces, honours the same-set and ignore-equipped flags, and groups rows consistently', upBad.length === 0, upBad.slice(0, 4).join(' | '));
     fail('Upgrades found at least one better card on the narrowly-dressed roster', anyRows);
     fail('upGain reads the group total when there is one, else the row\'s own delta', upGain({ delta: 3, group: 28 }) === 28 && upGain({ delta: -2 }) === -2 && gainStr(-2.5) === '−2.5' && gainStr(3) === '+3.0');
+    /* A raw gain is in the character's own units, so across characters it measures the size of
+       their yardstick as much as the upgrade. Each row carries its gain in build points too —
+       exactly the build score it adds — and that is what orders characters and fills the column. */
+    fail('an Upgrades row\'s build points are exactly the build score its swap adds', (() => {
+      let checked = 0;
+      const ok = own.every(n => {
+        const ch = charDef(n), t = target(ch), lo = charLoadout(n), idl = idealLoadout(ch, t, 55);
+        const worn = SLOTS.map(sl => state.cards.find(c => c.equipped === n && c.slot === sl)).filter(Boolean);
+        const base = buildScoreOf(ch, worn, 55, lo, idl, t);
+        return upgradesFor(ch, 4, false, false).every(row => {
+          const after = worn.filter(c => c.slot !== row.slot).concat([row.rec]);
+          const b1 = buildScoreOf(ch, after, 55, lo, idl, t);
+          checked++;
+          // a Space row is priced against the Heavens as they will be once the rows above are on
+          return (row.slot === 'Space' || near(row.pts, 100 * (b1.total - base.total) / base.idealTotal, 1e-6)) && near(row.pts, row.delta * 100 / base.idealTotal, 1e-6);
+        });
+      });
+      return ok && checked > 0;
+    })());
+    fail('Upgrades orders characters by build points, not raw gains', (() => {
+      runUpgrades();
+      const names = [...document.querySelectorAll('#upList .panel h3')].map(h => h.firstChild.textContent.trim());
+      const best = names.map(n => Math.max(...upgradesFor(charDef(n), +document.getElementById('upRar').value,
+        document.getElementById('upSameSet').checked, document.getElementById('upIgnoreEquipped').checked).map(upPts)));
+      return names.length >= 2 && best.every((v, i) => i === 0 || v <= best[i - 1] + 1e-9);
+    })());
 
     // ---- Headroom ----
     const hr = headroomRows(false);
@@ -829,6 +1185,15 @@ function weightOverrideDrift() {
     fail('Headroom: with takeEquipped the pool may name a card worn by someone else, never a locked one',
       headroomRows(true).every(row => !row.alt || !(row.alt.locked && row.alt.equipped !== row.ch.n)));
     fail('Headroom: shares of a character\'s room sum to one', own.every(n => { const rows = hr.filter(x => x.ch.n === n); const s = rows.reduce((a, x) => a + x.share, 0); return near(s, 1, 1e-9) || rows.every(x => x.share === 0); }));
+    fail('Headroom measures a bare character\'s gains from their bare board, not from zero', (() => {
+      const was = Object.assign({}, state.chars[kumi.n]);
+      state.chars[kumi.n].owned = true; state.chars[kumi.n].benched = false;
+      const rows = headroomRows(false).filter(x => x.ch.n === kumi.n);
+      state.chars[kumi.n].owned = was.owned; state.chars[kumi.n].benched = was.benched;
+      const lk = charLoadout(kumi.n), ik = idealLoadout(kumi, tk, HR_P4), empty = buildScoreOf(kumi, [], HR_P4, lk, ik, tk).raw;
+      return rows.length === SLOTS.length && rows.every(x => x.card === null && x.build === null &&
+        near(x.gain, buildScoreOf(kumi, [idealCard(x.slot, tk, hrSetFor(x.slot, [], tk))], HR_P4, lk, ik, tk).raw - empty, 1e-9));
+    })());
 
     // ---- equip plumbing ----
     $('#optChar').value = 'Ren Amamiya';
@@ -1012,9 +1377,36 @@ function weightOverrideDrift() {
   await p.waitForTimeout(150);
   const savedT = await p.evaluate(() => { const t = state.chars['Hatsune Miku'].targets, L = charLoadout('Hatsune Miku'); return { moon: t && t.main.Moon, refine: L.refine, closed: !document.getElementById('dlg').open, stamped: target(charDef('Hatsune Miku')).n }; });
   check('saving targets stores a best-first main list and the Setup fields', savedT.moon && savedT.moon.length === 3 && savedT.moon[2] === 'HP%' && savedT.refine === 5 && savedT.closed && savedT.stamped === 'Hatsune Miku', JSON.stringify(savedT));
+  const editedOnly = await p.evaluate(() => { const t = state.chars['Hatsune Miku'].targets; editTargets('Hatsune Miku');
+    const r = { keys: Object.keys(t).sort().join(','), slots: Object.keys(t.main).join(','), hint: /data: ATK% \/ Damage Multiplier/.test(document.getElementById('dlgBody').innerHTML) };
+    document.getElementById('dlg').close(); return r; });
+  check('the save keeps only the edit (the Moon list) and the dialog shows the data\'s value beside it', editedOnly.keys === 'main,v' && editedOnly.slots === 'Moon' && editedOnly.hint, JSON.stringify(editedOnly));
   await p.evaluate(() => { editTargets('Hatsune Miku'); document.getElementById('tReset').click(); });
   await p.waitForTimeout(100);
   check('"Reset to default" clears the saved target', await p.evaluate(() => state.chars['Hatsune Miku'].targets === null && state.chars['Hatsune Miku'].loadout && state.chars['Hatsune Miku'].loadout.refine === 5 && !document.getElementById('dlg').open));
+  await p.evaluate(() => { editTargets('Hatsune Miku'); document.getElementById('lRefine').value = '3'; document.getElementById('tSave').click(); });
+  await p.waitForTimeout(100);
+  check('saving the Targets dialog with only its Setup fields changed stores no target, so the character keeps following the data',
+    await p.evaluate(() => state.chars['Hatsune Miku'].targets === null && charLoadout('Hatsune Miku').refine === 3));
+  const teamCritUi = await p.evaluate(() => {
+    const input = document.getElementById('rsTeamCrit'), ren = charDef('Ren Amamiya');
+    const r = { field: input.value, before: buildScoreOf(ren, state.cards.filter(c => c.equipped === ren.n)).raw };
+    runTriage();
+    input.value = '25'; input.dispatchEvent(new Event('change'));
+    r.state = state.teamCrit; r.after = buildScoreOf(ren, state.cards.filter(c => c.equipped === ren.n)).raw;
+    r.stale = !!document.querySelector('#trSummary .stale-tc');
+    input.value = '250'; input.dispatchEvent(new Event('change')); r.clamped = state.teamCrit;
+    input.value = '0'; input.dispatchEvent(new Event('change'));
+    r.backToZero = state.teamCrit === 0 && !document.querySelector('#trSummary .stale-tc');
+    return r;
+  });
+  check('the Roster\'s team crit rate starts at 0, reprices a build when changed, clamps to 100 and flags a Triage run scored at the old value',
+    teamCritUi.field === '0' && teamCritUi.state === 25 && Math.abs(teamCritUi.after - teamCritUi.before) > 1e-9 && teamCritUi.stale && teamCritUi.clamped === 100 && teamCritUi.backToZero,
+    JSON.stringify(teamCritUi));
+  const anyMain = await p.evaluate(() => { editTargets('Chizuko Nagao'); const sel = document.getElementById('tMMoon0');
+    const r = { v: sel.value, label: sel.options[sel.selectedIndex].text }; document.getElementById('tSave').click();
+    return Object.assign(r, { saved: state.chars['Chizuko Nagao'].targets }); });
+  check('an open slot reads "any" in the Targets dialog, and saving it unchanged stores no target', anyMain.v === '' && anyMain.label === 'any' && anyMain.saved === null, JSON.stringify(anyMain));
 
   // Inventory: the add-card form
   await p.click('nav button[data-tab="inv"]');
@@ -1085,21 +1477,25 @@ function weightOverrideDrift() {
   const roundTrip = await p.evaluate(() => new Promise(res => {
     const prefsBefore = collectPrefs();
     document.getElementById('trRar').value = '4';
-    const payload = { version: 1, savedAt: 'x', nextId: state.nextId, cards: state.cards, characters: state.chars, prefs: collectPrefs() };
+    state.teamCrit = 12.5;
+    const payload = savePayload();
     const json = JSON.stringify(payload);
     const n = state.cards.length, worn = state.cards.filter(c => c.equipped).length;
-    state.cards = []; state.chars['Ren Amamiya'].owned = false; document.getElementById('trRar').value = '2';
+    state.cards = []; state.chars['Ren Amamiya'].owned = false; document.getElementById('trRar').value = '2'; state.teamCrit = 0;
     load(new File([json], 'p5x-planner-save.json', { type: 'application/json' }));
     setTimeout(() => {
       res({ n, worn, after: state.cards.length, wornAfter: state.cards.filter(c => c.equipped).length, owned: state.chars['Ren Amamiya'].owned,
-        trRar: document.getElementById('trRar').value, msg: document.getElementById('dataMsg').textContent, ids: new Set(state.cards.map(c => c.id)).size, saveShape: Object.keys(payload).join(',') });
+        trRar: document.getElementById('trRar').value, msg: document.getElementById('dataMsg').textContent, ids: new Set(state.cards.map(c => c.id)).size, saveShape: Object.keys(payload).join(','),
+        teamCrit: state.teamCrit, teamCritField: document.getElementById('rsTeamCrit').value });
       document.getElementById('trRar').value = prefsBefore.trRar;
+      state.teamCrit = 0; document.getElementById('rsTeamCrit').value = 0;
     }, 400);
   }));
-  check('a save file round-trips through load(): cards, equips, ownership and view prefs all come back',
-    roundTrip.after === roundTrip.n && roundTrip.wornAfter === roundTrip.worn && roundTrip.owned === true && roundTrip.trRar === '4' && /Loaded/.test(roundTrip.msg) && roundTrip.ids === roundTrip.after,
+  check('a save file round-trips through load(): cards, equips, ownership, the team crit rate and view prefs all come back',
+    roundTrip.after === roundTrip.n && roundTrip.wornAfter === roundTrip.worn && roundTrip.owned === true && roundTrip.trRar === '4' && /Loaded/.test(roundTrip.msg) && roundTrip.ids === roundTrip.after &&
+    roundTrip.teamCrit === 12.5 && roundTrip.teamCritField === '12.5',
     JSON.stringify(roundTrip));
-  check('the save payload has the documented shape', roundTrip.saveShape === 'version,savedAt,nextId,cards,characters,prefs');
+  check('the save payload has the documented shape', roundTrip.saveShape === 'version,savedAt,nextId,cards,characters,settings,prefs');
   const badLoad = await p.evaluate(() => new Promise(res => {
     const n = state.cards.length;
     load(new File(['{not json'], 'x.json', { type: 'application/json' }));
@@ -1110,9 +1506,11 @@ function weightOverrideDrift() {
     const cards = state.cards.slice();
     const payload = { version: 1, nextId: 5, cards: [{ slot: 'Sun', set: 'Power', rarity: 5, level: 0, main: 'HP', subs: [{ stat: 'ATK%', value: 2 }] }, { slot: 'Sun', set: 'Power', rarity: 5, level: 0, main: 'HP', subs: [{ stat: 'ATK%', value: 2 }, { stat: 'DEF', value: 27 }, { stat: 'HP%', value: 2.1 }] }], characters: {} };
     load(new File([JSON.stringify(payload)], 'x.json'));
-    setTimeout(() => { const r = { n: state.cards.length, msg: document.getElementById('dataMsg').textContent }; state.cards = cards; renderInv(); res(r); }, 300);
+    state.teamCrit = 7;
+    setTimeout(() => { const r = { n: state.cards.length, msg: document.getElementById('dataMsg').textContent, teamCrit: state.teamCrit }; state.cards = cards; renderInv(); res(r); }, 300);
   }));
   check('load() skips an invalid card and says so rather than refusing the file', skipLoad.n === 1 && /1 skipped/.test(skipLoad.msg), skipLoad.msg);
+  check('a save from before the team crit rate existed loads it as 0', skipLoad.teamCrit === 0, String(skipLoad.teamCrit));
 
   // Tabs: the scanning guide is reached from an in-prose link, not the nav
   await p.click('nav button[data-tab="data"]');

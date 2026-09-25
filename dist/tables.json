@@ -452,6 +452,7 @@
     "Defeat",
     "Disappointment",
     "Futility",
+    "Gain",
     "Hindrance",
     "Labor",
     "Love",
@@ -472,12 +473,13 @@
     "Victory",
     "Virtue",
     "Worry",
-    "Depravity",
-    "Determination",
-    "Flourishing",
-    "Obtain",
+    "Cruelty",
+    "Debauch",
+    "Failure",
+    "Happiness",
     "Satiety",
-    "Tenacity"
+    "Tenacity",
+    "Wealth"
   ],
   "setAliases": {
     "abundance": "Prosperity",
@@ -492,6 +494,7 @@
   },
   "spaceSets": [
     "Acceptance",
+    "Acuity",
     "Awareness",
     "Creation",
     "Departure",
@@ -507,7 +510,6 @@
     "Resolve",
     "Trust",
     "Wisdom",
-    "Agility",
     "Ego",
     "Purity"
   ],
@@ -564,6 +566,7 @@
     "Ichigo Shikano",
     "Kumi Katayama",
     "YUI [Prism]",
+    "Kotone Shiomi",
     "Mitsuru Kirijo",
     "Fuuka Yamagishi",
     "Shoki Ikenami [Notte]",
@@ -576,7 +579,9 @@
     "Aigis",
     "Ren Amamiya [Starlight]",
     "Morgana [Starlight]",
-    "Ann Takamaki [Starlight]"
+    "Ann Takamaki [Starlight]",
+    "Ayaka Sakai [Summer]",
+    "Ichigo Shikano [Summer]"
   ],
   "characterMeta": [
     {
@@ -892,6 +897,12 @@
       "e": "Nuclear"
     },
     {
+      "n": "Kotone Shiomi",
+      "a": "Kotone",
+      "r": 5,
+      "e": "Fire"
+    },
+    {
       "n": "Mitsuru Kirijo",
       "a": "",
       "r": 5,
@@ -968,6 +979,18 @@
       "a": "Starlight Panther",
       "r": 5,
       "e": "Fire"
+    },
+    {
+      "n": "Ayaka Sakai [Summer]",
+      "a": "Summer Chord",
+      "r": 5,
+      "e": "Wind"
+    },
+    {
+      "n": "Ichigo Shikano [Summer]",
+      "a": "Summer Berry",
+      "r": 5,
+      "e": "Psychokinesis"
     }
   ]
 }

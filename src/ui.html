@@ -561,6 +561,15 @@ dialog::-webkit-scrollbar-thumb:hover{background:var(--dim2)}
         <label class="check"><input type="checkbox" id="rsHideBenched"> Hide benched</label>
         <span class="tiny muted" id="rsCount"></span>
       </div>
+      <div class="row" style="margin-top:10px">
+        <div class="field">
+          <label title="Lufel's Crit Multiplier picks assume a crit support in the team. At 0 the tool reads crit rate as scarce and favours Crit Rate instead. Changes every build score, recommendation and Triage score; stat totals and stat targets stay each character's own.">Team crit rate %</label>
+          <input id="rsTeamCrit" type="number" value="0" min="0" max="100" step="0.1" style="width:75px">
+        </div>
+        <span class="tiny muted" style="max-width:560px;padding-bottom:8px">Crit rate your supports add to every damage dealer:
+          about 15 for one crit buffer such as Summer Ichigo, plus 5-10 from your Elucidator. At 0, only each
+          character's own counts.</span>
+      </div>
     </div>
     <div class="grid cards" id="rsGrid"></div>
   </section>

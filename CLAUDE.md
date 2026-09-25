@@ -41,7 +41,7 @@ executes immediately on load and depends on both of the others:
 
 | File | Contains |
 |---|---|
-| `src/data.js` | Game data only, no behaviour. Slots, substat roll tables, 32 sets, 19 Space cards, 8 archetypes, 65 characters in release order. |
+| `src/data.js` | Game data only, no behaviour. Slots, substat roll tables, 34 sets, 19 Space cards, 8 archetypes, 68 characters in release order. |
 | `src/ui.html` | All markup and CSS. No `<script>` tags. |
 | `src/logic.js` | State, scoring engine, optimiser, rendering, event wiring. |
 
@@ -70,7 +70,11 @@ Everything routes through five functions in `src/logic.js`:
   through `couplingFactors()` first (see below). HP Recovery, the one main-only stat, is
   worth a character's top weight if lufel lists it for that slot and **nothing** otherwise
   (`hpRecoveryMainWeight`) — an earlier opportunity-cost pricing made it never worse than
-  the best main for anyone, and handed HP Recovery Moons to damage dealers.
+  the best main for anyone, and handed HP Recovery Moons to damage dealers. Healing from a
+  2-piece (Love's +9%) is priced by the same rule on the main's own scale (`healingRolls`,
+  nine rolls to a max-level 22.6% main). Until Sep 2026 it was a flat 1.5 × the HP% weight
+  whatever the amount, a sixth to a third of the same healing on a main, which made Worry's
+  SP Recovery 2-piece beat Love for Lufel, whose own set it is.
 - `bonus2Value(set, char, target)` — a 2-piece "+12% ATK" is worth however many maximum
   ATK% rolls that is, times that stat's weight. Returns 0 for off-element sets.
 - `bonus4Value(set, char, target, base)` — `base` defaults to 55 and is user-adjustable in
@@ -124,17 +128,28 @@ that using it as the denominator squashes every real build into the low thirties
 that beats the ideal clamps at 100.
 
 Calibration, printed by `npm run scale` (its `buildScore` block): an optimally-equipped
-4000-card synthetic account lands **around 70** (mean 70.5, median 70, range 51-86), and
+4000-card synthetic account lands **around 70** (mean 69.5, median 71, range 40-84, across
+the 68-character roster as of 25 Sep 2026; the pool is drawn over `Object.keys(SETS)`, so
+the lufel refresh that day, which added two sets and renamed four, redrew it — on the
+pool before it the same data reads 70.3, 70, 51-84, and `docs/SCORING.md` §9 says how to
+make that comparison. Before the refresh: starting Ailment Accuracy at its real 0% took
+0.2 off the mean and the top of the range from 86, whose owner had been met-for-free,
+making plan totals the build score's own numerator put 0.5 back, since the optimiser now
+picks what the score rates best, and holding lufel's set order and opening lufel's "-" slots
+took 0.3 off again, by raising a few perfect builds; pricing Love's healing like the healing
+main put 0.1 back, and scoring stat targets from the no-card total took 0.3 off), and
 80+ is genuinely excellent. Nothing clamps at 100. `BUILD_BANDS` is cut at 80/60/40; it was
 75/55/35 while a main stat was priced at three rolls, and pricing mains at their measured
 magnitude lifted every score by about five points without changing the shape of the
 distribution (6/54/5 excellent/good/workable after, 7/54/4 before). Making the ideal card
 legal (Sep 2026 — its substats used to duplicate its own main, see below) lifted the mean
 by 0.4 and moved the bands to 11/49/5; the median did not move, so the bands were left
-alone. If a scoring change moves these, either the change is wrong or `BUILD_BANDS` needs
+alone (7/53/8 on today's 68 and pool, 10/53/5 on the pool before). If a scoring change moves these, either the change is wrong or `BUILD_BANDS` needs
 re-cutting — check before shipping. The same block prints how many Moon/Star/Sky picks carry
-a main lufel does not recommend (40 of 195 on the synthetic pool, down from 71): a rise
-there means the optimiser is trading the main away for substats again.
+a main lufel does not recommend (33 of 204 on today's synthetic pool and 26 on the one before
+it, down from 71 of 195 at three rolls a main; an open slot never counts, since any main is on
+target there): a rise there on an unchanged pool means the optimiser is trading the main away
+for substats again.
 
 ### Spread matters, because damage is a product
 
@@ -164,16 +179,25 @@ rolls says. Two things handle this at different altitudes:
 budget sitting in the modelled stats — about 0.73 for a DPS and 0.03 for a shield Guardian —
 so the term is worth what damage is worth to them, with no archetype whitelist. It counts
 Resistance Pierce as *not* captured, because ⓒ is not modelled and a term must not claim
-credit for a factor it left out.
+credit for a factor it left out. Nor does it count a stat in **`BUFF_SOURCE_STATS`** — one a
+kit turns into an ally buff, for a character whose own damage is a side line. That stat is
+left out of the coupling too, because what it is worth is the buff (linear up to the cap
+lufel's target records), not what it adds to the character's own damage product. Only
+Beachflower Minami is listed: her crit multiplier and max HP drive Gentle Sea Breeze, Summer
+Garden and Bewitching Blossoms, and coupled as her own damage at a 5% crit rate a Crit
+Multiplier roll priced at 0.63, so lufel's Crit Multiplier Star lost to an HP% one. Most
+buffers' ATK% feeds a buff and their own damage alike; booking it as damage is harmless
+while the same weights build the ideal (a known gap, `docs/SCORING.md`), so they are not
+listed.
 
-**Which stat sits in ⓐ is per character.** `DAMAGE_SCALE` names the six kits whose skill
+**Which stat sits in ⓐ is per character.** `DAMAGE_SCALE` names the eight kits whose skill
 text writes every damage line as a fraction of DEF (Yusuke, Ashiya) or max HP (Junpei, both
-Shuns, Kiyoshi Kurotani); for them `scaleStat()` puts DEF/HP and DEF%/HP% where ATK/ATK% sit
+Shuns, Kiyoshi Kurotani, Summer Ichigo, Beachflower Minami); for them `scaleStat()` puts DEF/HP and DEF%/HP% where ATK/ATK% sit
 for everyone else — in `damageBase`, `damageFactors`, `modelledStats()` (so `damageShare`
 books HP% as damage for Junpei, which is why he reads 0.4 and it is correct) and the first
 coupling product. Yukimi Fujikawa is deliberately not listed: her DEF feeds shields, never a
 damage line. Tropical Motoha is not either: her damage is ATK-scaled and HP is *converted*
-into ATK by a passive, which her HP% weight already captures. Those six also have ATK% at 0
+into ATK by a passive, which her HP% weight already captures. Those eight also have ATK% at 0
 in `WEIGHT_OVERRIDES` — the generator caps an unlisted stat at 4, and 4 is a third of a real
 weight for a stat their kits never read.
 
@@ -182,7 +206,8 @@ Accuracy, Yaoling's +1% per 2 Speed, Tempest Riko's crit damage +84% at 450% SP 
 and Tropical Motoha's flat ATK from Speed and HP. The weights already put the source stat
 first (that is why lufel lists it first), but the damage model did not see the conversion, so
 ATK% was over-credited against the source stat for all of them: on Runa's perfect build the
-conversion is +166% ATK. `conversionBonus()` reads the in-battle source total, cards included,
+conversion is +119% ATK (R1, no Mindscape; it read +166% while Ailment Accuracy was wrongly
+started at 100% — see below). `conversionBonus()` reads the in-battle source total, cards included,
 and feeds ⓐⓑⓓ, both coupling baselines and `damageShare`. Party-buff conversions (Miku,
 Manaka, Fuuka, Yumi, Kayo, Haruna, Leo) are not the character's own damage and are not
 listed. Lufel's target notes (`battle_plus_stats`) do the same arithmetic — Tempest Riko's
@@ -200,7 +225,37 @@ spread term valued a Crit Multiplier roll on him at his 5% base rate. Akihiko is
 Awareness 4) but Lightning Fist, Blitzkrieg and Spark Impact roll, and by his own
 coefficients the guaranteed part is 26-29% of his damage. A single guaranteed skill with no
 stated share (Junpei's Power Swing, Mayumi's extra action) does not earn an entry. Everyone's
-rolled crit rate is capped at 100%.
+rolled crit rate is capped at 100%. The third shape, `extraCr`, is a share that crits at a
+*higher* rate: Wavecatcher Miyu's Mermaid Dreamer adds 16.4-31.4% crit rate to her Resonance
+only, which her kit's coefficients put at about half her damage at Awareness 0. ⓓ mixes the
+two rates, and the coupling reads her Crit Rate supply `share × extra` higher (a Crit
+Multiplier point is then worth `cr + share × extra`), gated on the weapon being held.
+
+**The team crit rate** (Roster tab, `state.teamCrit`, saved as `settings.teamCritRate`) is
+the crit rate the user's usual supports add, in points, one number for the roster. Every
+crit rate above is the character's own, but a real team adds more: an Elucidator's 20%
+share, and a crit-rate buffer such as Summer Ichigo (+14.6%), Starlight Ren (+15.6%) or
+Beachflower Minami (+15.6% on one ally). Lufel's crit advice assumes one: 35 of the 62 who
+weight both crit stats put Crit Multiplier first on the Star, which only pays once crit rate
+is covered. At 0 the engine reads crit rate as scarce for everyone. It then takes a Crit Rate
+Star for 18 of the 32 whose lufel list has both, and splits about 15 of the real inventory's
+4-pieces for Triumph's +7.5% crit-rate 2-piece.
+
+`teamCritFor(char)` adds it where the damage model reads a crit rate: `damageBase` (so ⓓ
+and both coupling baselines), the generic board the Vault's archetype targets are priced
+on (`genericSupply`), and the 100% cap (`heldCritRate`). It is 0 for an Elucidator, whose
+stats are donated and who is not coupled. It **never enters `totalStat`**, so on-screen
+totals and stat targets stay what the character has alone. Lufel's own crit-rate targets do
+the same: Starlight Morgana's 50% counts the Elucidator share and My Palace, not another
+party member's buff. Three memos read it and check it (`damageBase`'s key, `targetMemo`,
+`prefSetLift`). Triage and the Vault keep their last run and mark it stale
+(`markStaleRuns`) rather than re-run a several-second sweep on each edit.
+
+Measured on the default setups: at 10 the perfect Star follows lufel's first choice for
+20 of 32 (13 at 0); at 20, 24 of 32, and perfect is a ceiling for everyone, Wavecatcher
+Miyu included (a test pins that). From 30 up, Summer Ichigo's HP% Star falls 0.2-0.7%
+behind a Crit Multiplier one. Her kit line already counts her own party crit buff, so a
+high setting counts it twice for her.
 
 **`damageBase` must read `flat + pct` for Crit Rate, Crit Multiplier and Damage Multiplier.**
 Those are percentage-*unit* stats: a weapon's "+18% critical rate" is 18 points added, and
@@ -239,22 +294,43 @@ Two things worth knowing before touching it:
   and measured, and brute-forcing every combination of the top six candidates per slot
   against the full build score found at most **1 point** of headroom, on 2 of 65 characters,
   mean 0.03. The per-card coupling already lands on the balanced pick. If the coupling is
-  ever weakened, revisit that.
+  ever weakened, revisit that. Re-checked on the real inventory in Sep 2026, after plan
+  totals became the build score itself: no plan the optimiser considered builds higher than
+  its pick, and the best same-set single-card swap left is 0.7 (mean 0.04 over 36). That
+  held only once Elucidators stopped getting a real board (`realCoupleContext` returns null
+  for them, as `seedBaseline` does): their own 0% / 0% board switched the crit product off
+  in the per-slot pick while the build score priced crit on the generic baseline, and five of
+  them were handed a Crit Multiplier Sun their own score rated 9-12 points below the Crit Rate
+  one beside it.
 - **`damageBase()` is memoised per character and setup.** It is pure `CHAR_STATS` arithmetic
   and the optimiser evaluates thousands of loadouts per character; `supplyOf()` likewise
   exists so a loadout is walked once for several stats rather than once per stat. Skipping
   either put `npm run scale` an order of magnitude slower.
 
-`bestPlan` returns its cardSum+set-bonus+breakpoint+spread evaluator as `r.heavensTotal` (an
-`evalCards`-style function closed over that call's `t`/`lo`/`idealHeavens`/`wants`/`P4`), so
-anything that wants to compare an arbitrary set of Heavens cards against what `bestPlan`
-itself would score can call it instead of re-deriving the rule. `upgradesFor()` is the other
-caller: it used to gate its "is this swap worth it" delta on `scoreLoadout` alone — cards and
-set bonus, no breakpoint or spread — while `bestPlan` had already picked the winning plan
-*with* those terms, so a swap that only helped or hurt stat spread could be missed or
-over-credited relative to what actually got recommended. `curTotal`/`recTotal` in
-`upgradesFor` now both go through `r.heavensTotal`, so the displayed delta is never scored by
-different rules than the plan search that produced it.
+**A plan's total is the build score's own numerator.** `bestPlan` prices every plan with
+`buildScoreOf(char, cards, P4, lo, idl, t).total` over the five cards it would put on — the
+four Heavens picks plus the Space card its rule gives that plan (`spaceChoice`: pairing with
+the plan's actual 4-piece, then the character's own Space set under `pref`/`force4`) —
+against the same `idealLoadout`. The denominator is fixed per character, so ranking plans by
+that numerator is ranking them by the build score they would earn, and at the default 4-piece
+value of 55 the two are the same number (a test asserts it, and that no allowed alternative
+builds higher than the pick). Before Sep 2026 the optimiser had its own look-alike terms: the
+stat target as the four Heavens cards' substats and 2-piece bonuses against a perfect
+four-card set — blind to the base stats, weapon and mains that are most of the real
+in-battle total — the spread against a four-card ideal, and the Space card chosen only after
+the plan was fixed. On the real inventory that read Justine & Caroline's Damage Multiplier
+target at 29% while it was met in battle, kept buying Speed and Ailment Accuracy past met
+bars, and picked plans the build score rated 1.7-3.2 points below one it had considered
+(Yukari, Beachflower Minami, Shun Kano, Runa). Identical loadouts are collapsed *before*
+pricing now, which paid for the costlier evaluation (`npm run scale` within a few percent).
+
+`bestPlan` returns that evaluator as `r.loadoutTotal`, closed over the call's `t`/`lo`/`idl`/
+`P4`, so anything that wants to compare an arbitrary loadout against what `bestPlan` itself
+would score calls it instead of re-deriving the rule. `upgradesFor()` is the other caller:
+it once gated its "is this swap worth it" delta on `scoreLoadout` alone while `bestPlan`
+picked *with* the stat-target and spread terms; every number it shows now goes through
+`r.loadoutTotal`, with whatever a row does not change — the worn Space card included — left
+as it is.
 
 **A row's Gain and its plan's total are two different numbers, and conflating them was a
 bug.** `upgradesFor` only ever proposes a whole 4-piece, so one suggestion is usually
@@ -262,23 +338,38 @@ several rows; every one of them carried the whole plan's delta, which read as th
 separate +28s when there was one +28 on the table (the user spotted it on the Upgrades
 tab). Each row's `delta` is now the marginal of equipping *that* card with the character's
 other slots left as they are — exactly what the Equip button beside it does, also through
-`r.heavensTotal` — and the plan total moves to `group`, set on every row of the block so
+`r.loadoutTotal` — and the plan total moves to `group`, set on every row of the block so
 the UI can foot it once with an "Equip all" (`swapCards`, one re-render rather than one per
 card). They do not sum, and a single row is often negative while the group is strongly
 positive: most of a set switch is the 4-piece bonus, which lands only when the fourth card
-goes on. `upGain()` is what ordering uses — rows within a character and characters against
-each other — so a 30-point set switch made of four small marginals does not sort below a
-single 8-point swap. The Space row keeps its own basis (`cardScore` + `SPACE_PAIR_VALUE`,
-since `heavensTotal` prices four Heavens cards and knows nothing about the Space slot), so
-it is comparable to the other Space candidates and not to the Heavens rows.
+goes on. `upGain()` orders a character's rows, so a 30-point set switch made of four small
+marginals does not sort below a single 8-point swap. **Characters are ordered, and the Gain
+column is shown, in build points** (`upPts`: the raw gain × 100 ÷ the character's perfect
+total, i.e. exactly the build score the swap adds). A raw gain is in the character's own
+units: one raw point is 0.104 build points for Tropical Motoha and 0.162 for Kiyoshi on the
+real inventory. So ranking on it (until Sep 2026) put whoever has the biggest yardstick
+first. With every card and set allowed it ranked Miku and Yumi above Yaoling, whose
+upgrade is the largest in build points. The listing gate is in build points too
+(`UPGRADE_MIN_GAIN`, 0.1, the column's precision); as one raw point it let the same swap
+through for one character and not another. The Space row is priced the same way — the whole loadout with that one
+card swapped in, the Heavens as they will be once the rows above are equipped — so its Gain
+counts what the card's substats do for the stat targets and spread and sits on the same
+scale as the Heavens rows. (It used to be `cardScore` + `SPACE_PAIR_VALUE`, comparable only to
+other Space candidates, because the evaluator priced four Heavens cards and knew nothing
+about the Space slot.) Its candidate is still chosen by the pairing/pref rule.
 
 Absolute in-battle numbers remain `totalStat()`'s job, not this one — `damageFactors`
 counts each main at its `MAIN_MAGNITUDE` value for the card's level, the same figure
-`cardScore` prices it at, identically on both sides of every ratio.
+`cardScore` prices it at, identically on both sides of every ratio. That includes the two
+**fixed** mains, as flat stat added after the percentage: a Space card's ATK + DEF for ATK
+and DEF kits, a Sun card's HP for the HP kits. Until Sep 2026 `damagePoints` skipped both
+as "cancelling" — but a flat term on both sides of a ratio does not cancel, and a Lv0 card
+does not match a Lv25 one; for the seven DEF/HP kits it was 5-7% of a perfect ⓐ. `cardScore`
+still prices neither, since every card of the slot carries the same main.
 
 ### Stat targets, and what they can and cannot check
 
-37 of the 65 characters carry `ov.targets` — lufel's "recommended stats", the hard numbers
+39 of the 68 characters carry `ov.targets` — lufel's "recommended stats", the hard numbers
 some units need (180 Speed for Rin, 171% Ailment Accuracy for Howler, 4600 ATK for Oracle).
 Weights alone cannot express these: weights make stats fungible, a threshold does not.
 
@@ -289,6 +380,20 @@ and `characters[].loadout` says which of it applies. This is not a detail: Kumi 
 180 Speed is 73 Speed from cards on a 4★ weapon at A0 with no Mindscape, and 14 on a 5★ R7
 at A7 with it.
 
+**Every stat starts from the game's own panel baseline**: Speed, Crit Rate and Crit
+Multiplier from `CHAR_STATS` (Awakening 7 replacing them where it publishes a value), SP
+Recovery at 100%, and **Ailment Accuracy, Damage Multiplier and Resistance Pierce at 0%**.
+Ailment Accuracy was modelled at 100% until the user checked a real panel (25 Sep 2026: 0%
+with no cards). The 100 put every AA total 100 high — Haru (150) and Shoki (100) met their
+targets with no cards and their AA conversions sat at their caps before a card was worn —
+and it was also the only reason Awakening 7's `ailment_accuracy` was left unread (at a 100
+base, lufel's 34.9 could only be a bonus; at 0 a total and a bonus coincide, so it is read).
+At 0 the lufel numbers line up: Shoki's conversion caps at 100 AA, exactly his target, and
+Haru's crit-damage stacks at 150, exactly hers. Four AA targets (Chizuko 173, Mio 171,
+Koromaru 170.8, Aran 161) are now out of reach at the default R1 with no Mindscape and are
+scored against what a perfect build reaches, like any unreachable target; the Setup fields
+are what brings them back into range.
+
 Only **unconditional** weapon passives count automatically. A line like "Increase Speed by
 15/…/30." is a stat you always have; "After user uses [Secret Art], increase critical rate by
 …" is not, and the generator deliberately refuses to parse it (`b` vs `extra` in
@@ -296,7 +401,7 @@ Only **unconditional** weapon passives count automatically. A line like "Increas
 hand-kept list of lines judged always-on in the character's real rotation, each with its
 reason and gated like the rest of the setup — an Awareness node counts only at or above its
 level, a weapon line only while that weapon is held, at its refine step, and per-stack lines
-at the stack count the kit sustains. 43 characters carry entries after a kit-by-kit pass over
+at the stack count the kit sustains. 47 characters carry entries after a kit-by-kit pass over
 lufel's skill, Awareness and weapon text; the Loadout popup says what was counted. The rules
 for what earns an entry are in the table's own comment — rotation buffs of 2+ turns, sustained
 stacks and modes, permanent and battle-start lines; never one-turn or Highlight-gated lines,
@@ -309,7 +414,11 @@ unconditional stat in the *same sentence* is not a condition, though — the par
 dropped Mermaid Dreamer's whole "critical damage … and Resonance critical rate …" line and
 scored Miyu Sahara [Wavecatcher] 36.3% Crit Multiplier under her real panel — so a weapon may
 carry `b` and `extra` together, meaning "this much counted, this clause not". A test asserts
-no `extra` is really a plain unconditional stat line.
+no `extra` is really a plain unconditional stat line. The parser also keeps only **one** stat
+line per weapon, and a second unconditional *sentence* goes nowhere, not even into `extra`:
+Bloodletter's "+15% ailment accuracy" was the one case on the roster (a scan of every weapon's
+text, Sep 2026), and it is counted through `KIT_STAT_BUFFS` with Kira's Doctor-mode accuracy and
+his Bleed damage line. That moved his Star back to lufel's ATK%.
 
 **Each target carries up to four numbers, not one.** Lufel splits `ov.targets[].tiers` by the
 character's own skill-level cap — `LV10`/`LV12`/`LV13` — plus a `+5` variant of whichever cap
@@ -341,22 +450,48 @@ about other rarities. Missing is still **unknown, never zero**: an unscanned 4�
 undercount as fact.
 
 **My Palace and party buffs are not modelled** — lufel lists My Palace as its own separate
-requirement — so every total is a floor. Say so wherever a total is shown.
+requirement — so every total is a floor. Say so wherever a total is shown. The one party
+buff the scoring can assume, the team crit rate, is kept out of these totals on purpose (see
+`CRIT_PROFILE` above).
 
-Two things the score does that look odd until you know why:
+Four things the score does that look odd until you know why:
 
+- Progress toward a target is measured **from the character's no-card total**, not from
+  zero: a row's ratio is the share of the gap from what the character has with no cards to
+  the bar that the cards close (`breakpointRows`). Measured from zero, base stats alone met
+  the median target 64% of the way (61% on average, over the 45 scored), so a naked
+  character took about 49 of the block's 80 points, and loadouts differed only in the rest.
+  Since Sep 2026 base stats earn none of it. It moved the synthetic calibration by only 0.3
+  (optimal builds close their gaps). On the real inventory it cost the 36 geared characters
+  0.4 on average, most for those still short: Yaoling's 159 Speed of 180, from 139.9 with no
+  cards, reads 48% where it read 88%. The Recommended-stats table says what the percentage
+  now means.
 - The bar is capped at what a *perfect* build on that loadout actually reaches. Some targets
   are unreachable from cards plus gear at all (Starlight Morgana wants 50% Crit Rate; a
   flawless build with her recommended mains gets 26), and scoring against a number nothing
   can hit would put 100 out of reach for reasons the user cannot act on.
 - The block is worth `BREAKPOINT_VALUE` (80) however many stats it decomposes into, so a
   unit with three targets is not scored out of three times as much as a unit with one.
+- A target the character already meets **with no cards at all** on the current setup is
+  shown but left out of the block (`metBare` in `breakpointRows`). No loadout can earn or
+  lose it, so scoring it only handed every loadout the same free points and watered down the
+  targets gear does move. Fuuka is the standing case: lufel's Crit Multiplier 64-78% is the
+  crit damage at which her party crit-damage buff stops growing ("10% + 0.625% per 1% of
+  Fuuka's critical damage, up to 40%" — lufel's number is the cap over 0.625). Kit text means
+  the *total* there, as Starlight Ren's "up to 31.4% … at 197.6% critical damage" (his target
+  is 197.6) and Tempest Riko's explicit "the portion that exceeds 100%" show, so her 150%
+  base clears it before a card is worn. It was half her block, leaving her ATK target — the
+  one gear moves — the other half. Mitsuru's LV10 ATK target (2928, under her no-card 3190)
+  is the other; at a Setup whose tier her base does not clear, it counts again. Checked
+  against lufel's raw `minimum_stats` and skill text in Sep 2026, which is also where an
+  earlier guess (that 64 was the 20% share Fuuka passes to allies) was ruled out.
 
-`bestPlan` adds the same term to every plan's total. It has to: without it the optimiser
-trades away the one stat the character must reach for generic quality, and then recommends
-a loadout the build score rates *worse* than what the user already had. Target stats are
-therefore counted twice — once through their weight, once through this term — which is
-deliberate, not a bug.
+`bestPlan` scores every plan with this same term — literally, since a plan's total is
+`buildScoreOf(...).total` (see the scoring-engine section). It has to: without it the
+optimiser trades away the one stat the character must reach for generic quality, and then
+recommends a loadout the build score rates *worse* than what the user already had. Target
+stats are therefore counted twice — once through their weight, once through this term — which
+is deliberate, not a bug.
 
 Main-stat magnitudes are now real (`MAIN_MAGNITUDE`, from the user's scan), so a 5★ card's
 main is a true total even without a scanned `mainValue`; `mainValue` still wins when present,
@@ -372,7 +507,15 @@ it is called `ritual`, not `awake`. `tools/fetch-lufel-data.js` pulls it from
 `CHAR_STATS` entry's `awareness` array (`{n, d}` per level, name and full effect text) and
 patches `src/data.js` **in place** via a brace-depth scan rather than a full regeneration,
 so it never touches anything else in the file — safe to run even when the rest of
-`src/data.js` has diverged from `gen-data-from-lufel.js`'s own output.
+`src/data.js` has diverged from `gen-data-from-lufel.js`'s own output. It replaces an
+existing `awareness` field rather than appending one (until Sep 2026 every re-run stacked a
+second copy on all 65 entries), and its scan skips comments — a `// lufel's …` note on
+Makoto Niijima's Mindscape line used to open a string that never closed and abort the run.
+It writes the file's own line endings (a bare `\n` left 476 mixed ones in the CRLF
+`src/data.js`), and a second run is byte-identical to the first.
+A new character's `CHAR_STATS` entry has to exist before it runs; it only adds the field.
+After a full regeneration — the generator emits `CHAR_STATS` without the field — run it
+again, or every Awareness tooltip goes blank.
 
 Two separate things move a stat here, and only one comes from lufel:
 
@@ -408,7 +551,17 @@ a well-progressed account has finished on everyone.
 tiers, and `gen-data-from-lufel.js` turns that ranking into numbers with a flat map —
 tier 1 → 10, tier 2 → 8, tier 3 → 6, anything lufel weighed and left out capped at 4,
 over the archetype floor. The ranking is lufel's and is trusted. **The magnitudes are the
-generator's own invention**, and one falloff curve is shared by all 65 characters.
+generator's own invention**, and one falloff curve is shared by all 68 characters. The floor
+is invented too, so it may raise a ranked stat but never to the weight of a stat lufel ranks
+above it: where it would, the stat takes its plain tier value. Until Sep 2026 it could, on
+three characters — a Healer's SP Recovery default of 8 tied Minami's and Seaside Tomoko's
+tier-3 SP Recovery with a tier-2 stat, and an ST DPS's Crit Rate default of 9 put Ichigo's
+tier-3 Crit Rate above her tier-2 ATK% and Damage Multiplier.
+
+Lufel publishes no tiers at all for one character, Lufel (the healer), so she runs on the
+Healer archetype, which is an HP-scaling healer's order. Her kit heals off ATK and lufel
+names ATK% for her Star and Sky, so `WEIGHT_OVERRIDES` sets ATK% to 10: that is not
+reordering lufel, because there is no lufel order for her to reorder.
 
 That is wrong wherever a character's priorities fall off faster than average. A DPS whose
 whole job is one damage number wants its tier-2 stats nearly as much as its tier-1 ones. A
@@ -450,6 +603,17 @@ is reverted by the next run. `test/optimizer.test.js` checks the table against
 `src/data.js` outside the page (neither file is visible from inside it) and fails with the
 exact mismatch, so the two cannot silently drift.
 
+A fix here reaches characters the user has edited too, because a saved target is a **diff**
+over the data (`target()` applies only the sets, Space card, main lists and weights the user
+changed; stat targets always come from the data). It used to be a full snapshot, and a
+snapshot stops every later fix: Kiyoshi Kurotani and Yusuke Kitagawa kept an ATK% weight of
+4 that the DEF/HP-kit override had set to 0, because a Space change — or only the Setup
+fields, which share the Targets dialog — had once been saved there. Old snapshots are
+converted on load by `migrateSavedTargets()`, which keeps differing sets, Space and mains as
+the user's choice and hands differing weights back to the data with a load message naming
+each (the old dialog saved the whole weight grid every time, so those were stale far more
+often than meant). Saving the dialog with nothing changed stores `null`.
+
 **Do not mass-retune the roster from this.** `damageShare` versus the character's own
 archetype `damageShare` is a smell test, and a weak one: it flags around ten characters,
 and when all of them were checked against lufel's skill data **nine were legitimate**.
@@ -484,6 +648,18 @@ and both accept a bare string, so archetype defaults and every target saved befo
 existed still work. Later alternatives decay by `MAIN_ALT_DECAY` per rank, which is a
 tie-break on lufel's printed order and nothing more.
 
+**An empty list is an open slot** — lufel's "-" (or a blank), where it names no main:
+Chizuko's and Runa's Moon and Sky, Yaoling's Moon and Star, Tempest Riko's Moon, Aran's Moon
+and Sky. No main earns the match bonus there, and the perfect card takes whichever legal main
+scores best. Those slots used to inherit an archetype placeholder the generator filled in
+(Chizuko's Damage Multiplier Moon and Speed Sky, Runa's HP% Moon), and a main the
+character's own weights prefer beat it by 15-20% at equal substats, so "perfect" was not a
+ceiling. The generator emits `[]` only for an explicit "-"; a stat it cannot map keeps the
+fallback, since that is a vocabulary gap rather than an answer. The Targets dialog shows an
+open slot as "any" and can set one. Loading an old full snapshot hands a saved main for a
+now-open slot back to the data and says so, the way #8 treats weights: the old dialog wrote
+every main box, so that main is almost always the placeholder.
+
 That makes the choice between alternatives real, which is what `STAT_PRODUCTS` prices.
 Damage is a **product** of separate factors: ATK total multiplies the damage multiplier,
 crit rate multiplies crit multiplier. Stats in different factors of one product are
@@ -492,7 +668,13 @@ more its partner is worth. Take the Damage Multiplier main and you want ATK% in 
 substats; take the ATK% main and you want the reverse.
 
 `couplingFactors(t, slot, main)` returns the per-stat weight multipliers, memoised per
-target in a `WeakMap`. Supply is counted in **max-roll equivalents** — points held over
+target in a `WeakMap` through `targetMemo`, which drops the memo when the character's saved
+loadout object changes. That matters because `target()` returns the same object for as long
+as a saved target exists while the coupling reads the weapon, Awakening and Awareness: keyed
+on the target alone, a Setup change on 6 of the 8 real saved targets kept pricing cards
+against the old setup until reload (`idealCardScore` had the same problem and uses the same
+helper). Every loadout write assigns a fresh object, which is what makes identity a safe
+version stamp — keep it that way. Supply is counted in **max-roll equivalents** — points held over
 points per max roll — because that is the unit `cardScore` already prices substats in and
 the only unit that makes two factors comparable. Marginal value of a factor is then `1 /
 supply`, so a weight is scaled by `reference / supply` with the reference the geometric mean
@@ -511,10 +693,16 @@ over the factors of the same product. Three consequences worth knowing:
   starts at 159% ATK, so with an ATK% Sky the Damage Multiplier Moon is the better
   complement and the ideal card takes it; a character whose weapon puts them at 40% crit
   wants Crit Multiplier on the Star. `STAT_PRODUCTS`' 5/150 pair is only the fallback for a
-  target with no `n` (a hand-built one in a test) — and for **Elucidators**, deliberately:
-  their stats are donated to allies at 20%, so the board that decides what a roll is worth
-  is an ally's, and their own 0%/0% crit base says nothing about it (`seedBaseline` returns
-  null when `spreadApplies` is false). Seven Buff-element support units genuinely carry
+  target with no `n` (a hand-built one in a test). **Elucidators are not coupled at all**
+  (`computeCoupling` returns nothing when `spreadApplies` is false): their stats are donated
+  to allies at 20%, so the board that decides what a roll is worth is an ally's, and their
+  own 0%/0% crit base says nothing about it. They used to fall back to the 5/150 guess,
+  which is an *ungeared* ally, and priced a Crit Rate roll at 1.8-2.9 times a Crit
+  Multiplier roll — Fuuka's Crit Multiplier Star, the stat her Spirit Wave turns into party
+  crit damage, lost to a Crit Rate one by 11%. At a geared ally's board the two rolls are
+  worth about the same, so their cards are priced on their weights alone (`seedBaseline`
+  and `realCoupleContext` both return null for them, so the optimiser's per-slot pick and
+  the build score agree). Seven Buff-element support units genuinely carry
   0%/0% — confirmed via lufel's raw data and Miku's own in-game panel — and the generator
   used to read that with `l1.crit_rate || 5`, treating a legitimate 0 as missing data.
 - **Reading that 0 correctly is not enough on its own — the crit factor needs a floor.**
@@ -571,6 +759,22 @@ large enough raw-weight gap between two single-card options can still win despit
 whole-loadout comparisons get the full-strength version. Being on the `buildScore` 0-100
 scale, the marginal stays comparable across characters, which is what lets it double as the
 "who fits best" argmax too.
+
+Two things about how that delta is taken, both fixed in Sep 2026 after measuring them on the
+real inventory:
+
+- **It subtracts `.raw`, never `.score`** — the same rule as the Upgrades gains below. The
+  rounded score left 4035 cards on about thirty distinct Score values and moved 6% of the
+  verdicts across the 35% / 70% lines, mostly in the Space slot, whose best card is worth
+  about eight points.
+- **An empty `others` is priced, not zeroed.** `buildScore` returns `null` for an empty
+  board because there is nothing to display, but a board with no cards still earns what the
+  stat-target and spread terms credit the character's base stats with (median 7, up to 15
+  build points). Treating it as 0 handed that credit to the card, so a character wearing
+  nothing won nearly every argmax — 21% of verdicts and 30% of best fits under "All
+  characters", and on "Characters I own" the day a newly pulled character is marked owned
+  before being dressed. Both ends go through `buildScoreOf(char, worn, …)`, which is
+  `buildScore` without the empty-board `null`. Measure with it; display `buildScore`.
 
 The **Score** column and the keep/hold/feed verdict use that marginal, maxed over whichever
 *eligible* owned character values it most, **graded against the best card of the same slot**
@@ -648,7 +852,9 @@ spoken is dropped rather than printed as an upgrade.
 Both gain columns subtract **`buildScore().raw`**, not `.score`. `.score` is rounded and
 floored at 1 for display; a single slot is often worth only a few points, so rounding both
 ends first quantises a real difference away and the floor makes a near-empty loadout's
-delta wrong outright. Display `score`, measure with `raw`.
+delta wrong outright. Display `score`, measure with `raw`. The baseline is `buildScoreOf`,
+so a character wearing nothing is measured from what their base stats already earn rather
+than from 0 — the same rule as Triage's.
 
 Split run/render like Triage and Vault: `runHeadroom()` does the scoring pass into
 `hrRowsCache`, `renderHeadroomTable()` filters and sorts it. Only the "may take a card off
@@ -700,6 +906,42 @@ how the game is played, so `policy: 'pref'` is the default and the UI reports wh
 the set costs in raw stats. If you change scoring, re-run `npm run scale` and check the
 distribution of plan kinds stays sane across all four policies.
 
+### The preferred set is the ceiling, by lufel's order
+
+`bonus4Value`'s 55 / ×0.72 / ×0.22 are the tool's own stand-in for "how good is this
+4-piece for this character", with lufel's ranking supplying the order; a 2-piece is priced
+from its stat. For characters who weight a 2-piece's stat heavily those two pricings used to
+disagree about lufel's order. At equal perfect cards, Power's 4-piece or two ATK 2-pieces
+beat Labor for every Elucidator, Worry's +80% SP Recovery beat Love for Lufel, and 2+2
+splits beat the preferred 4-piece for 18 characters, so 100 was not the ceiling. What the
+flat number cannot see is the 4-piece's own effect (Labor's party-wide ATK/HP/DEF,
+Prosperity's Highlight charge) and that the 2-piece's stat runs past the kit's cap.
+
+`prefSetLift` holds lufel's order on the invented number, not the measured one. The
+preferred 4-piece is lifted by exactly what it takes to match any other configuration of
+perfect cards (another 4-piece, or any two 2-pieces). This is measured on whole loadouts
+(stat targets and spread included, since a 2-piece stat feeds both) at the caller's P4. It
+is zero for 50 of the 68 and non-zero for exactly the 18 whose ceiling was broken, mostly
+Elucidators, healers and buffers; the largest is Seaside Tomoko's, at 19.1 (Lufel's was 35.6
+until Love's healing 2-piece was priced like the healing main, and is 8.8 since). It is memoised per
+character, dropped when their Setup or saved target changes, and only a character's own
+target gets one. A preferred set whose 4-piece is dead for the character would get none:
+Defeat's 4-piece raises Fire damage only (`elem4`), and lufel lists it as Curse Toshiya's
+alternative for the ailment-accuracy 2-piece.
+
+Only the preferred set is lifted. Holding each alternative above every unlisted
+configuration was tried and dropped. It reads more into lufel's list than it says, the
+alternatives' lifts ran to 40 points, and the preferred set had to clear them in turn,
+which lifted 30 characters where only 18 had a broken ceiling.
+
+Mains get no such lift: their magnitudes are measured and the coupling is exact, so where
+the model and lufel disagree, the model is fixed. Of the ten slot cases found in Sep 2026,
+nine were fixed that way (open slots, Elucidator coupling, Beachflower Minami's buff
+sources and HP scaling, Kira's kit lines, Lufel's weights). The one left is Wavecatcher
+Miyu's Crit Multiplier Star, which is right only in a party that supplies crit rate: lufel's
+builds assume one, and the model does only once the team crit rate is set. A test names it as
+the single exception at the default of 0, and another holds that at 20 nothing is left.
+
 ## Data provenance — read before touching src/data.js
 
 Sets, Space cards and the roster are derived from **lufel.net**, which the user rates above
@@ -713,7 +955,11 @@ full accounting. The load-bearing caveats:
    (substat weights — see "Lufel publishes an order, not magnitudes" below) or its
    `bonus2` carry-over. A hand-set weight of **0** is the one exception that survives on
    its own, because the tier map provably never emits one for a stat lufel ranks — but the
-   generator now says so on stderr and tells you to record it in the table anyway.
+   generator now says so on stderr and tells you to record it in the table anyway. The
+   generator writes `CHAR_STATS` too; a Global number that differs from lufel's (which
+   follows JP) goes in its `GLB_STAT_OVERRIDES` table with the in-game evidence — today only
+   Makoto Niijima's Resistance Pierce Mindscape node, which had been a hand edit that the
+   next regeneration would have reverted.
 2. **Main stat magnitudes are measured, not published.** No site lists them, lufel included;
    `MAIN_MAGNITUDE` comes from the user's own scan of 3947 5★ cards (every card of a stat
    shows the same value at the same level, linear in level). Other rarities have not been
@@ -722,9 +968,14 @@ full accounting. The load-bearing caveats:
    single-sourced; the same scan's level-0 cards (one roll per substat) reproduce every
    maximum exactly, for all 13 stats on both the Heavens and Space layouts, and show each
    roll has five tiers (ATK% 2.0/2.5/2.8/3.2/3.5).
-4. **Six sets and three Space cards are `unreleased: true`** — lufel lists them, the game
-   has not shipped them. They stay in the tables so imports resolve, but a test asserts no
-   character targets one.
+4. **Seven sets and two Space cards are `unreleased: true`** — lufel lists them, the game
+   has not shipped them on Global. They stay in the tables so imports resolve, but a test
+   asserts no character targets one, and names the nine so a release shows up on the next
+   refresh. Release is also **per pairing**, which no tag records: lufel's GLB schedule
+   releases Space+Heavens combinations on their own (`rev_set`), and its English table is
+   the one that tracks Global — Acuity shipped pairing with Satiety alone, while the Korean
+   table already has its Wealth and Hindrance pairings. The generator reads the English
+   table and reports the difference; never take pairings from the Korean one.
 5. **Do not add speculative `SET_ALIASES`.** A wrong one silently corrupts the user's
    imported inventory. Every entry there has evidence behind it.
 
@@ -929,7 +1180,12 @@ is a value the game can print. Three facts from the user's own 4200-card scan ca
   the digits is not. An inferred level still goes to review — the frame is a render worth
   teaching to the templates — but with the right value filled in.
 - **A card below `subMax` gains the missing substat on its first upgrade**, which
-  `mergeImport` already assumes; every 3-substat card in the scan is level 0.
+  `mergeImport` already assumes; every 3-substat card in the scan is level 0. So does the
+  level-0 panel's best case (`bestCaseUpgrades`): the new substat is the stat worth most
+  that the card lacks, and only the upgrades after it are rolls. Until Sep 2026 it treated
+  every upgrade as a roll on an existing substat, which is wrong both ways — and 60% of the
+  real level-0 inventory is three-substat cards, so 763 card/character pairs were labelled
+  "even maxed, not an upgrade" that could beat the recommended card.
 
 All of it is **notes, never repairs**, for the reason the level field taught: a
 confidently wrong value reaches `cards.json`, a flagged one goes to review. Running the

@@ -17,7 +17,7 @@ than none.
 
 The slug list below comes from the site's own `__CHARACTER_SLUG_MAP` global
 rather than the rendered character index: the index only paints 49 cards, but
-the map holds all 66, including every alternate costume and the whole
+the map holds every character, including every alternate costume and the whole
 Persona 3 collab. Its keys are the Korean names the image files are named
 after, so the portrait path falls straight out of it.
 """

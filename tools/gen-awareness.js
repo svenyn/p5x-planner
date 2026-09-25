@@ -68,7 +68,8 @@ const EXPLICIT = {
   'AKIHIKO': 'Akihiko Sanada', 'YUKARI': 'Yukari Takeba', 'JUNPEI': 'Junpei Iori',
   'KOROMARU': 'Koromaru', 'J&C': 'Justine & Caroline', 'BUI': 'YUI',
   'MONT': 'Kotone Montagne', 'MONT·Frostgale': 'Kotone Montagne [Frostgale]',
-  'BUI·Prism': 'YUI [Prism]', 'CLOSER·Tropical': 'Motoha Arai [Tropical]',
+  'BUI·Prism': 'YUI [Prism]', 'BUI·Cosmic': 'YUI [Prism]',
+  'CHORD·Summer': 'Ayaka Sakai [Summer]', 'BERRY·Summer': 'Ichigo Shikano [Summer]', 'CLOSER·Tropical': 'Motoha Arai [Tropical]',
   'CLOSER·Radiance': 'Motoha Arai [Radiance]', 'MOKO·Seaside': 'Tomoko Noge [Seaside]',
   'MARIAN·Beachflower': 'Minami Miyashita [Beachflower]',
   'PUPPET·Wavecatcher': 'Miyu Sahara [Wavecatcher]', 'WIND·Tempest': 'Riko Tanemura [Tempest]',
@@ -78,11 +79,22 @@ const EXPLICIT = {
 };
 const norm = n => String(n).replace(/[^a-z]/gi, '').toLowerCase();
 
+/* If a // or /* comment starts at `i`, returns the index just past it; otherwise `i`. */
+function skipComment(text, i) {
+  if (text[i] !== '/') return i;
+  if (text[i + 1] === '/') { const e = text.indexOf('\n', i); return e < 0 ? text.length : e; }
+  if (text[i + 1] === '*') { const e = text.indexOf('*/', i + 2); return e < 0 ? text.length : e + 2; }
+  return i;
+}
+
 /* Finds the index of the bracket/brace/paren matching the one at `openIdx`, skipping
-   over quoted strings so a stray '{' or '}' inside prose text is never counted. */
+   over quoted strings so a stray '{' or '}' inside prose text is never counted, and over
+   comments, whose apostrophes ("lufel's") would otherwise open a string that never closes. */
 function matchClose(text, openIdx) {
   let depth = 0;
   for (let i = openIdx; i < text.length; i++) {
+    const past = skipComment(text, i);
+    if (past !== i) { i = past - 1; continue; }
     const c = text[i];
     if (c === "'" || c === '"') {
       const quote = c;
@@ -108,7 +120,7 @@ function parseCharStatsEntries(text) {
   const entries = [];
   let i = objStart + 1;
   while (i < objEnd) {
-    while (i < objEnd && /[\s,]/.test(text[i])) i++;
+    for (let was = -1; was !== i;) { was = i; while (i < objEnd && /[\s,]/.test(text[i])) i++; i = skipComment(text, i); }
     if (i >= objEnd) break;
     if (text[i] !== "'") throw new Error('expected quoted CHAR_STATS key at index ' + i);
     let j = i + 1, key = '';
@@ -179,17 +191,28 @@ function main() {
 
   const text = fs.readFileSync(DATA_FILE, 'utf8');
   const entries = parseCharStatsEntries(text);
+  /* src/data.js is CRLF; joining the nodes with a bare \n left it with mixed line
+     endings (476 of them, 68 entries x 7 nodes, on the Sep 2026 refresh). */
+  const EOL = text.includes('\r\n') ? '\r\n' : '\n';
 
   let out = '';
   let cursor = 0;
   let patched = 0, skipped = [];
   const INDENT = ' '.repeat(38);
-  for (const { key, valEnd } of entries) {
+  for (const { key, valStart, valEnd } of entries) {
     const nodes = buildAwareness(key);
+    /* Replace an existing awareness field rather than appending a second one, so a
+       re-run after a game patch refreshes the ladder instead of duplicating it. */
+    const at = nodes ? text.slice(valStart, valEnd).indexOf('awareness:[') : -1;
+    if (at >= 0) {
+      const fieldStart = text.lastIndexOf(',', valStart + at);
+      out += text.slice(cursor, fieldStart);
+      cursor = matchClose(text, valStart + at + 'awareness:'.length) + 1;
+    }
     out += text.slice(cursor, valEnd);
     if (nodes) {
       out = out.replace(/\s+$/, '');
-      out += `,\n${INDENT}awareness:[${nodes.join(',\n' + INDENT + '           ')}] `;
+      out += `,${EOL}${INDENT}awareness:[${nodes.join(',' + EOL + INDENT + '           ')}] `;
       patched++;
     } else {
       skipped.push(key);

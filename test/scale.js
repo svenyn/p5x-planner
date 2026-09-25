@@ -41,7 +41,8 @@ const PAGE = 'file://' + path.join(__dirname, '..', 'dist', 'p5x-planner.html');
         const worn = ['Sun','Moon','Star','Sky'].map(sl => res.best.picks[sl].c); if (res.space) worn.push(res.space.c);
         worn.forEach(c => c.equipped = ch.n);
         const t = target(ch);
-        worn.forEach(c => { if (c.slot !== 'Sun' && c.slot !== 'Space' && !mainList(t, c.slot).includes(c.main)) offMain++; });
+        // an open slot (lufel's '-') recommends nothing, so no main there is off it
+        worn.forEach(c => { const want = c.slot !== 'Sun' && c.slot !== 'Space' ? mainList(t, c.slot) : []; if (want.length && !want.includes(c.main)) offMain++; });
         const bs = buildScore(ch); if (bs) scores.push(bs.score);
       }
       state.cards.forEach(c => c.equipped = null);

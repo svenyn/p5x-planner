@@ -40,11 +40,39 @@ writes. Re-run it after any hand-edit to `src/data.js` to see what you have dive
 
 ### Sets, Space cards, pairings — high, from lufel
 
-Thirty-two Heavens sets and nineteen Space cards, with the complete pairing table. Six sets
-(`Flourishing`, `Determination`, `Satiety`, `Obtain`, `Depravity`, `Tenacity`) and three
-Space cards (`Ego`, `Purity`, `Agility`) are tagged `unreleased: true` — lufel lists them
-but the game has not shipped them. They stay in the tables so names resolve on import and
-so the data is right the day they land, but a test asserts no character targets one.
+Thirty-four Heavens sets and nineteen Space cards, with the pairing table as Global has it.
+Seven sets (`Cruelty`, `Debauch`, `Failure`, `Happiness`, `Satiety`, `Tenacity`, `Wealth`)
+and two Space cards (`Ego`, `Purity`) are tagged `unreleased: true` — lufel lists them but
+the game has not shipped them on Global. They stay in the tables so names resolve on import
+and so the data is right the day they land, but a test asserts no character targets one.
+
+**Names follow lufel, and lufel moves to the official Global name when a card ships.** The
+25 Sep 2026 refresh brought four renames and two new sets: `Obtain` → `Gain` and `Agility` →
+`Acuity`, both released in 4.9 (2026-09-09) with YUI [Prism]; `Depravity` → `Debauch`,
+`Determination` → `Cruelty` and `Flourishing` → `Wealth`, all still unreleased; and `Failure`
+and `Happiness`, new and unreleased. None of the old names is on any card in the user's save
+or in the 9720 scanned cards, so nothing needed a `SET_ALIASES` entry — and a speculative
+one is exactly what not to add.
+
+**Pairings are released one at a time, and no tag says so.** A Space card does not ship with
+every pairing it will eventually have. Lufel's GLB schedule lists pairing releases of their
+own (`rev_set`: Hope + Change in 4.8, Nativity + Strife in 4.10, Acuity + Hindrance in 4.16
+with Koromaru), and lufel's English table is the one that tracks Global. Acuity is the live
+case: it shipped pairing with Satiety alone, which is all the English table lists, while the
+Korean table already pairs it with Wealth, Satiety and Hindrance. Read from the Korean table,
+Koromaru and Aran Hirano — whose top build is Hindrance + Acuity — would have been handed a
+pairing that does not exist on their server. `gen-data-from-lufel.js` reads the English
+table, reports on stderr what only the Korean one has, and warns if the schedule has not yet
+released a pairing that the English table lists with both halves out (none today). Those two
+characters keep Creation, and their notes say why. Every other one of lufel's 132 ranked
+Space + Heavens combos is a pairing the English table has.
+
+**One tag disagrees with lufel's own schedule.** `Satiety` is still tagged unreleased, but
+the schedule lists it in 4.9 beside Acuity and Gain, whose tags were updated — and Acuity
+pairs with nothing else on Global, so it would be a dead card without it. It is kept
+unreleased because the tag is lufel's statement of record and no scan has seen a Satiety
+card. If one turns up, YUI [Prism]'s target should move from the Truth fallback to lufel's
+Satiety + Acuity.
 
 `Ruin` and `Prudence` were previously carried as `unverified: true` with no 2-piece,
 because no English source listed them. Both are real and now fully specified:
@@ -52,13 +80,24 @@ because no English source listed them. Both are real and now fully specified:
 - **Ruin** — 2-piece ATK +12%; 4-piece ATK +25% for 3 turns, refreshing after a Theurgy.
   It is not a Curse set and is not a duplicate of Hindrance; the earlier source was wrong.
 - **Prudence** — 2-piece **Speed −3, ATK +18%**; 4-piece damage +16%. It is not elemental
-  and has nothing to do with Wind. Only the ATK term is modelled in `bonus2`, since the
-  schema holds one stat; the Speed cost is stated in the `p2` text.
+  and has nothing to do with Wind. The ATK term is its `bonus2`; the Speed cost is
+  `bonus2Also: [{ stat: 'Speed', amt: -3 }]` (Sep 2026 — until then it was only stated in
+  the `p2` text, so a Speed breakpoint read 3 high under a Prudence 2-piece).
 
 `bonus2` remains a **scoring model, not a transcription**. Effects like Prosperity's
 "reduces incoming damage by 8%" have no substat equivalent, so the number there is the DEF%
-that buys comparable mitigation. `gen-data-from-lufel.js` preserves existing `bonus2` values
-rather than re-deriving them, so tuning them by hand survives a regeneration.
+that buys comparable mitigation. `gen-data-from-lufel.js` preserves existing `bonus2` and
+`bonus2Also` values rather than re-deriving them, so tuning them by hand survives a
+regeneration; for a set that has none yet, it reads a "Decrease Speed by N" clause into
+`bonus2Also`.
+
+One set's 4-piece is bound to an element its 2-piece is not: **Defeat** — 2-piece ailment
+accuracy +15% for anyone, 4-piece "Fire damage to debuffed foes +20%" (lufel's Korean text
+says the same). It carries `elem4: 'Fire'` rather than `elem`, so its 4-piece is worth
+nothing off Fire while its 2-piece keeps working; the generator reads `elem4` off a 4-piece
+that names an element when the 2-piece does not, and Defeat is the only such set. Until Sep
+2026 Curse Toshiya, whom lufel sends to Defeat for the accuracy, was paid the alternative's
+4-piece for a Fire bonus he cannot use.
 
 ### Slots and main stat pools — high
 
@@ -140,15 +179,29 @@ now modelled, from these lufel files:
 
 **The `awake7` block is not one shape.** Lufel writes some of its keys as the stat's new
 *total* and others as the *bonus* on top, and nothing in the file distinguishes them:
-`crit_mult: 184.9` against a 150 baseline can only be a total, `ailment_accuracy: 34.9`
-against a 100 baseline can only be a bonus. `speed` and `sp_recover` are read as totals
-because each has been checked against a real in-game panel — Miyu Sahara [Wavecatcher]'s
-`sp_recover: 188.5` shows up as exactly 88.5 above the baseline in game. `crit_rate`,
-`crit_mult`, `ailment_accuracy` and a lone `HP_recover` are still **not read at all**, and
-should stay that way until someone checks one the same way. The HP key is read under both
+`crit_mult: 184.9` against a 150 baseline can only be a total. `speed`, `sp_recover` and
+`crit_rate` are read as totals because each has been checked against a real in-game panel —
+Miyu Sahara [Wavecatcher]'s `sp_recover: 188.5` shows up as exactly 88.5 above the baseline
+in game, and Akihiko's panel confirmed `crit_rate`. `ailment_accuracy` (7 characters) is read
+too: Ailment Accuracy's in-game baseline is **0%** (the user's panel, 25 Sep 2026 — it had
+been modelled at 100%), and against 0 a total and a bonus are the same number. `crit_mult`
+and a lone `HP_recover` are still **not read at all**, and should stay that way until someone
+checks one the same way. The HP key is read under both
 `hp_per` and `HP_per`, which is lufel's own inconsistency across characters; the planner
 previously looked for `health_per`, which is neither, so every HP awakening on the roster
-was silently dropped.
+was silently dropped. The generator writes Hatsune Miku's ATK awakening, which lufel files
+under `attack`, as `attack_per` — every other 5★ ATK awakening is `attack_per: 29`, and
+`charBaseStat` reads only that key. Her value also changed in the Sep 2026 refresh, from
+`{hp_per: 20, crit_rate: 12}` (the only two-stat awakening lufel has ever listed) to that
+`attack: 29`; lufel's new value is followed, and an A7 Miku's panel is the check.
+
+Two more corrections live in the generator rather than in `src/data.js`, so a regeneration
+keeps them. Lufel gives Fuuka Speed 0 (and SP 0) where every character acts at 100, so a
+Speed of 0 keeps the value `src/data.js` already has and says so on stderr. And
+`GLB_STAT_OVERRIDES` holds Global numbers that differ from lufel's JP ones, with the in-game
+evidence beside each: today only Makoto Niijima's second Mindscape node, which reads
+Resistance Pierce 7.5% on Global where lufel has Crit Rate 12% — the user's own panel. It had been
+a hand edit that the next regeneration would have reverted.
 
 **Awakening 7 is live on Global**, contrary to an earlier reading of this file. It is worth
 a great deal — Kasumi Yoshizawa's `attack_per: 29` moves her zero-card ATK from 1986 to
@@ -174,9 +227,15 @@ from, so a weapon can carry both. The rule is narrow on purpose: the tail must i
 conditional buff and stays uncounted. Measured over all 130 weapons, it reads exactly one
 more passive than before.
 
+The parser still keeps **one stat line per weapon**, and a second unconditional *sentence*
+is dropped without leaving an `extra` behind. A scan of every weapon's text (Sep 2026) found
+one: Kira's Bloodletter, whose "Increase ailment accuracy by 15%." follows its ATK ladder.
+It is counted through `KIT_STAT_BUFFS` (weapon `'5'`) beside his Doctor-mode accuracy and
+Bloodletter's damage against Bleed.
+
 This matters more than it sounds. Kumi Katayama's 180 Speed target needs **73 Speed from
 cards** on a 4★ weapon at A0 with no Mindscape, and **14** on a 5★ R7 at A7 with it — her
-5★ *Ironsworn Rider* grants +15→30 Speed where her 4★ grants none, Awakening 7 moves her
+5★ *Lightning Riders* grants +15→30 Speed where her 4★ grants none, Awakening 7 moves her
 base from 107 to 125.8, and her Mindscape adds another 10.
 
 **Main stat magnitudes** are the one piece lufel does not have — but the game prints them on
@@ -307,20 +366,31 @@ enough to keep genuinely correct cards out of the recommendation. Stats lufel li
 are not legal for the slot are still dropped; `tools/audit-lufel.js` reports any list that
 differs from lufel's legal part, in order.
 
-### Characters — high for 55 of 65
+A slot lufel fills with **"-"** (or leaves blank) names no main at all, and is stored as an
+**open slot**, `[]`: Chizuko's and Runa's Moon and Sky, Yaoling's Moon and Star, Tempest
+Riko's Moon, Aran's Moon and Sky (Sep 2026). The generator used to leave those slots on
+whatever it had before — an archetype placeholder, or an old hand pick like Runa's HP% Moon
+— which the scoring then treated as lufel's answer. A stat the generator cannot map is not a
+"-", and keeps the fallback.
 
-Sixty-five entries. For 55 of them lufel publishes a build outright; for the other 10,
-lufel's top build is built on a set or Space card that is not released yet, so the stored
-target is the best obtainable alternative and the character's note says what the intended
-build will be. Every character currently carried has a published build — the generator
+### Characters — high for 57 of 68
+
+Sixty-eight entries. For 57 of them lufel publishes a build outright; for the other 11,
+lufel's top build is built on a set or Space card that is not released yet — or, for
+Koromaru and Aran Hirano, on a pairing Global does not have yet (Hindrance + Acuity) — so
+the stored target is the best obtainable alternative and the character's note says what the
+intended build will be. Every character currently carried has a published build — the generator
 used to track this distinction in a `conf` field the Roster tab displayed as a tag, which
 has since been removed as a feature; the underlying note text on affected characters is
 unaffected.
 
 Three characters were missing entirely and have been added: **Yukimi Fujikawa** (Yuki, 4★
-Bless), **Yumi Shiina** (Phoebe, 5★), and **Hatsune Miku** (5★ collaboration). Six further
-lufel entries are unreleased and carry no build, so they are deliberately not imported:
-Ryuji·Starlight, Ayaka·Summer, Ichigo·Summer, Ken Amada, Shinjiro Aragaki, Kotone Shiomi.
+Bless), **Yumi Shiina** (Phoebe, 5★), and **Hatsune Miku** (5★ collaboration). Three
+further lufel entries are unreleased and carry no build, so they are deliberately not
+imported: Ryuji·Starlight, Ken Amada and Shinjiro Aragaki (as of the 25 Sep 2026 refresh).
+Ayaka·Summer, Ichigo·Summer and Kotone Shiomi were on this list and now carry a lufel build,
+so they are imported; Kotone shipped on Global in 4.10 (2026-09-24), the two Summer units are
+still undated there and sort last in the roster.
 
 **Wonder is deliberately absent.** He is the protagonist, built through the Persona system
 rather than the gacha, and has no Revelation build anywhere — lufel included, which is why
@@ -407,9 +477,9 @@ Both are read, in that order, so a projected date never reorders a shipped chara
 four entries with no date at all (`schedulePending`) sit at the end and carry no build, so
 they are not imported.
 
-### Three places where lufel and the stored data deliberately disagree
+### Places where lufel and the stored data deliberately disagree
 
-All are recorded here because a future regeneration will surface them again. The last two
+All are recorded here because a future regeneration will surface them again. Items 2-5
 live in `gen-data-from-lufel.js`'s `WEIGHT_OVERRIDES` table, which is applied on every run
 and reports itself on stderr.
 
@@ -429,13 +499,15 @@ and reports itself on stderr.
    and `gen-data-from-lufel.js` reports the disagreement on every run. **Worth checking in
    game**, since it changes his substat targets materially.
 
-3. **ATK% on the DEF- and HP-scaling kits.** Yusuke, Ashiya, Fujikawa, Junpei, both Shuns
-   and Kiyoshi Kurotani carry `ATK%: 0`. Lufel does not list ATK% for any of them, and the
+3. **ATK% on the DEF- and HP-scaling kits.** Yusuke, Ashiya, Fujikawa, Junpei, both Shuns,
+   Kiyoshi Kurotani, Summer Ichigo and Beachflower Minami carry `ATK%: 0`. Lufel does not list ATK% for any of them, and the
    generator's rule for an unlisted stat is a cap at 4 over the archetype floor — but 4 is a
    third of a real weight for a stat their kits never read: every damage, shield and buff
-   line in those seven kits is a fraction of DEF or max HP, with no Attack coefficient
-   anywhere (checked in lufel's skill data). The six that deal damage are also
+   line in those kits is a fraction of DEF or max HP, with no Attack coefficient
+   anywhere (checked in lufel's skill data). The eight that deal damage are also
    `DAMAGE_SCALE` in `logic.js`, which puts DEF/HP in the ATK factor's seat for them.
+   Beachflower Minami joined in Sep 2026: Beach Basket (64.4% of max HP) is her only damage
+   line, and her buffs scale off her max HP and crit multiplier.
 
 4. **Seaside Moko's Damage Multiplier.** Lufel puts Damage Multiplier in her first
    priority tier, level with ATK%. Her kit backs that up as far as it goes — her Resonance
@@ -451,6 +523,18 @@ and reports itself on stderr.
    a flawless heal build could not score above 82. **Worth revisiting** if her Resonance
    damage turns out to carry a real share of a team's total, or if a future patch scales
    it up.
+
+5. **Lufel's ATK%.** Lufel publishes no substat tiers for Lufel the healer, so she ran on
+   the Healer archetype, which is an HP-scaling healer's order (SP Recovery 8, HP% 6, ATK%
+   5). Every heal in her kit is a fraction of her ATK and lufel names ATK% for her Star and
+   Sky, so `WEIGHT_OVERRIDES` sets it to 10. This is not a disagreement with lufel's order —
+   there is none for her — but it is a judgement, and is recorded as one.
+
+Not a disagreement, but a generator rule worth knowing: the archetype floor may raise a stat
+lufel ranks, never to the weight of a stat lufel ranks above it. It used to, for three
+characters — SP Recovery (tier 3) on Minami and Seaside Tomoko at the Healer floor of 8, level
+with a tier-2 stat, and Crit Rate (tier 3) on Ichigo at the ST DPS floor of 9, above her tier-2
+ATK% and Damage Multiplier. Those now take the tier-3 value, 6.
 
 ## Sources
 

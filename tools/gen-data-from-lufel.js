@@ -11,8 +11,9 @@
  *
  *   - `arch`, because lufel's role strings are free-form Korean prose and our
  *     archetypes drive the substat fallback for stats lufel never mentions;
- *   - `bonus2`, which is a scoring model ("+12% ATK is worth N max ATK% rolls"),
- *     not a transcription — lufel supplies the effect text, we choose the number;
+ *   - `bonus2` (and `bonus2Also`, a second stat the same line moves), which is a
+ *     scoring model ("+12% ATK is worth N max ATK% rolls"), not a transcription —
+ *     lufel supplies the effect text, we choose the number;
  *   - hand-written `note` prose, which explains things lufel states only implicitly.
  *
  * Unreleased content (lufel tags it 미출시) is emitted with `unreleased: true` so
@@ -218,9 +219,10 @@ const WEIGHT_OVERRIDES = {
   /* Kits with no ATK scaling at all. Lufel lists ATK% for none of them, and the tier map's
      rule for an unlisted stat is a cap at 4 over the archetype floor — but 4 is a third of a
      real weight for a stat these kits never read: every damage, shield and buff line is a
-     fraction of DEF (Yusuke, Ashiya, Fujikawa) or max HP (Junpei, both Shuns, Kiyoshi), with
-     no Attack coefficient anywhere in lufel's skill data. The six damage dealers among them
-     are also DAMAGE_SCALE in logic.js, which puts DEF/HP in the ATK factor's seat. */
+     fraction of DEF (Yusuke, Ashiya, Fujikawa) or max HP (Junpei, both Shuns, Kiyoshi, Summer
+     Ichigo, Beachflower Minami), with no Attack coefficient anywhere in lufel's skill data.
+     The eight damage dealers among them are also DAMAGE_SCALE in logic.js, which puts DEF/HP
+     in the ATK factor's seat. */
   'Yusuke Kitagawa':   { w: { 'ATK%': 0 }, why: 'every damage line is a fraction of DEF; no ATK coefficient in the kit' },
   'Masaki Ashiya':     { w: { 'ATK%': 0 }, why: 'every damage and shield line is a fraction of DEF; no ATK coefficient in the kit' },
   'Yukimi Fujikawa':   { w: { 'ATK%': 0 }, why: 'shields and the Oath buff scale off DEF; no ATK coefficient in the kit' },
@@ -228,6 +230,19 @@ const WEIGHT_OVERRIDES = {
   'Shun Kano':         { w: { 'ATK%': 0 }, why: 'damage is a fraction of max HP; no ATK coefficient in the kit' },
   'Shun Kano [Pioneer]': { w: { 'ATK%': 0 }, why: 'damage and party buffs are fractions of max HP; no ATK coefficient in the kit' },
   'Kiyoshi Kurotani':  { w: { 'ATK%': 0 }, why: 'Fire damage scales off max HP; no ATK coefficient in the kit' },
+  'Ichigo Shikano [Summer]': { w: { 'ATK%': 0 }, why: 'damage, party buffs and heals are fractions of max HP; the one ATK line (the boat ram) reads the Helmsman\'s ATK, not hers' },
+  'Minami Miyashita [Beachflower]': { w: { 'ATK%': 0 }, why: 'Beach Basket, her only damage line, is a fraction of max HP, and her buffs scale off max HP and crit multiplier; no ATK coefficient in the kit' },
+  /* Lufel publishes no substat tiers for her, so the Healer archetype applied as it stands —
+     and that is an HP-scaling healer's order, HP% (6) and SP Recovery (8) above ATK% (5).
+     There is no lufel order here to disagree with: this sets the one her kit states. */
+  'Lufel': {
+    w: { 'ATK%': 10 },
+    why: 'every heal in her kit is a fraction of her ATK (Owl Green 67.4%, Healing Satellite '
+       + '42.1%, Highlight 59.7%), and lufel names ATK% for both her Star and her Sky; under '
+       + 'the archetype order an HP% Star and an SP Recovery Sky both outscored those at equal '
+       + 'substats. HP% keeps its archetype weight — Sparks of Support turns max HP into '
+       + 'healing, up to 12000'
+  },
   'Tomoko Noge [Seaside]': {
     w: { 'Damage Multiplier': 5, 'Crit Rate': 3, 'Crit Multiplier': 3 },
     why: 'a healer whose Resonance chips for 19% of ATK — real damage, but a small share '
@@ -238,6 +253,18 @@ const WEIGHT_OVERRIDES = {
        + 'card the build score divides by. At 5/3/3 that build scores 96, a crit build '
        + 'still scores 83, and damageShare lands at 0.524 — beside Yukari 0.511 and '
        + 'Morgana 0.529.'
+  }
+};
+
+/* Where the Global client's numbers differ from lufel's, which follows the JP data, and the
+   user has confirmed the Global value in game. Applied over what lufel publishes on every
+   run, reported on stderr, and written into src/data.js with its reason beside the line —
+   the same contract as WEIGHT_OVERRIDES, for CHAR_STATS. Until Sep 2026 the one there was
+   was a hand edit in src/data.js, which the next regeneration would have reverted. */
+const GLB_STAT_OVERRIDES = {
+  'Makoto Niijima': {
+    mind: [{ s: 'ATK%', v: 20, pct: true }, { s: 'Resistance Pierce', v: 7.5, pct: true, tag: '!' }],
+    why: "GLB Mindscape reads Resistance Pierce, not lufel's (JP) Crit Rate - confirmed in-game by the user"
   }
 };
 
@@ -252,6 +279,10 @@ const stripGenerated = t =>
   GENERATED_NOTE_RE.reduce((acc, re) => acc.replace(re, ''), t || '').trim();
 
 const canonSet = n => SET_RENAME[n] || n;
+/* Lufel's effect text is lifted from the client and now and then keeps its colour markup —
+   Nativity's Strife line reads "increase party's critical damage by <color=%s>10%</color>" —
+   which is noise in a tooltip. */
+const plain = t => String(t == null ? '' : t).replace(/<\/?color[^>]*>/gi, '').replace(/\s+/g, ' ').trim();
 const splitStats = s => String(s == null ? '' : s)
   .split(/[\/,]/).map(x => x.trim()).filter(x => x && x !== '-')
   .map(x => STAT_KR[x]).filter(Boolean);
@@ -286,7 +317,9 @@ function loadLufel(file) {
     const en = mod.enCharacterWeaponData || {};
     if (en[kr]) weaponsEn[kr] = en[kr];
   }
-  return { en: d.revelations_en.enRevelationData, roster: d.character_info.characterData, settings,
+  return { en: d.revelations_en.enRevelationData, map: d.revelations_en.mapping_en || {},
+           kr: (d.revelations_kr && d.revelations_kr.revelationData) || null,
+           roster: d.character_info.characterData, settings,
            base: unwrap(d.base_stats), weapons: weaponsEn,
            schedule: (d.schedule && d.schedule.ReleaseScheduleData) || null };
 }
@@ -306,6 +339,20 @@ function scheduleOrder(sched) {
   return pos;
 }
 
+/* 'Space+Set' -> { version, date } for every pairing lufel's GLB schedule releases on its
+   own (`rev_set`, Korean names, the Space card first in every entry so far — found by name
+   rather than trusted by position). `date` is null for a version not yet dated. */
+function revSetSchedule(sched, map, spaceNames) {
+  const out = {};
+  if (!sched) return out;
+  for (const v of [...(sched.manualReleases || []), ...(sched.autoGenerateCharacters || [])]) {
+    const names = (v.rev_set || []).map(x => map[x] || x);
+    const sp = names.find(n => spaceNames.has(n));
+    for (const st of names) if (st !== sp && sp) out[`${sp}+${canonSet(st)}`] = { version: v.version, date: v.date || null };
+  }
+  return out;
+}
+
 /* ---- 2-piece effect -> {stat, amt} ------------------------------------------
    Reads the numeric part off lufel's effect text. The mapping from an effect to
    a substat is our model: "reduces incoming damage" has no substat equivalent,
@@ -317,7 +364,8 @@ function parseBonus2(text) {
   if ((n = num(/Increases? (?:the )?Crit Rate by (\d+(?:\.\d+)?)%/i)) != null) return { stat: 'Crit Rate', amt: n };
   if ((n = num(/Increases? SP Recovery by (\d+(?:\.\d+)?)%/i)) != null) return { stat: 'SP Recovery', amt: n };
   if ((n = num(/Increases? Ailment Accuracy Rate by (\d+(?:\.\d+)?)%/i)) != null) return { stat: 'Ailment Accuracy', amt: n };
-  if ((n = num(/healing effect is increased by (\d+(?:\.\d+)?)%/i)) != null) return { stat: 'HP Recovery', amt: n };
+  // "The healing effect is increased by 9%" (Love) and "Increase Healing Effect by 9%" (Happiness)
+  if ((n = num(/healing effect (?:is increased )?by (\d+(?:\.\d+)?)%/i)) != null) return { stat: 'HP Recovery', amt: n };
   if ((n = num(/Increases? Speed by (\d+(?:\.\d+)?)/i)) != null) return { stat: 'Speed', amt: n };
   if ((n = num(/Reduces incoming DMG by (\d+(?:\.\d+)?)%/i)) != null) return { stat: 'DEF%', amt: n + 2 };
   for (const e of ELEM_EN) {
@@ -328,12 +376,30 @@ function parseBonus2(text) {
   if ((n = num(/(?:Defense|DEF) increased by (\d+(?:\.\d+)?)%/i)) != null) return { stat: 'DEF%', amt: n };
   if ((n = num(/(?:HP|Max HP) increased by (\d+(?:\.\d+)?)%/i)) != null) return { stat: 'HP%', amt: n };
   if ((n = num(/Increase HP by (\d+(?:\.\d+)?)%/i)) != null) return { stat: 'HP%', amt: n };
-  // Prudence reads "Decrease Speed by 3, but increase Attack by 18%" — the ATK is
-  // the term worth scoring; the Speed cost is left in the p2 text for the reader.
+  // Prudence reads "Decrease Speed by 3, but increase Attack by 18%" — the ATK is the
+  // modelled bonus here; the Speed cost is parseBonus2Also's.
   if ((n = num(/(?:increase|Increase) Att?ack by (\d+(?:\.\d+)?)%/i)) != null) return { stat: 'ATK%', amt: n };
   if ((n = num(/Own attack increased by (\d+(?:\.\d+)?)%/i)) != null) return { stat: 'ATK%', amt: n };
   if ((n = num(/Increase ATK by (\d+(?:\.\d+)?)%/i)) != null) return { stat: 'ATK%', amt: n };
   return null;
+}
+
+/* The element a 4-piece is bound to on a set whose 2-piece is not ("Increases fire damage
+   to enemies affected by ailments by 20%"), for `elem4`. Only Defeat has one: its
+   ailment-accuracy 2-piece works for anyone, so the set cannot carry `elem`. */
+function parseElem4(text4, b2) {
+  if (b2 && b2.elem) return null;
+  for (const e of ELEM_EN)
+    if (new RegExp(`\\b${e}\\s+(?:DMG|damage)\\b`, 'i').test(text4 || '')) return ELEM_CANON[e] || e;
+  return null;
+}
+
+/* Any further stat the same 2-piece line moves, as signed terms for `bonus2Also`. Only
+   Prudence has one: its Speed cost used to be left in the p2 text, which let a Speed
+   breakpoint read 3 higher than the character's real total under a Prudence 2-piece. */
+function parseBonus2Also(text) {
+  const m = String(text || '').match(/Decrease Speed by (\d+(?:\.\d+)?)/i);
+  return m ? [{ stat: 'Speed', amt: -parseFloat(m[1]) }] : null;
 }
 
 /* A short label for the 2-piece, for the set table in the UI. */
@@ -354,6 +420,7 @@ const q = s => "'" + String(s).replace(/\\/g, '\\\\').replace(/'/g, "\\'") + "'"
 
 function main() {
   const ours = loadOurs();
+  const notes = [];     // printed to stderr at the end: everywhere this run is not simply echoing lufel
   const L = loadLufel(process.argv[2] || 'lufel.json');
   const isUnrel = o => ((o && o.type) || []).includes(UNRELEASED);
 
@@ -368,14 +435,18 @@ function main() {
     const prev = ours.SETS[name];
     // bonus2 is a scoring model; keep the existing number where we already had one.
     const model = prev && prev.bonus2 && !prev.unverified ? prev.bonus2 : (b2 && { stat: b2.stat, amt: b2.amt });
+    const also = prev && prev.bonus2Also ? prev.bonus2Also : parseBonus2Also(v.set2);
     setMeta[name] = { unreleased: isUnrel(v), elem: b2 && b2.elem };
     const bits = [
       `p2: ${q(terse2(b2, v.set2))}`,
       `bonus2: ${model ? `{ stat: ${q(model.stat)}, amt: ${model.amt} }` : 'null'}`
     ];
+    if (also && also.length) bits.push(`bonus2Also: [${also.map(x => `{ stat: ${q(x.stat)}, amt: ${x.amt} }`).join(', ')}]`);
     if (b2 && b2.elem) bits.push(`elem: ${q(b2.elem)}`);
+    const e4 = parseElem4(v.set4, b2);
+    if (e4) bits.push(`elem4: ${q(e4)}`);
     if (isUnrel(v)) bits.push('unreleased: true');
-    bits.push(`p4: ${q(v.set4)}`);
+    bits.push(`p4: ${q(plain(v.set4))}`);
     setLines.push(`  ${(q(name) + ':').padEnd(20)} { ${bits.join(',\n' + ' '.repeat(24))} },`);
   }
 
@@ -383,14 +454,37 @@ function main() {
   const spaceLines = [];
   const spaceEntries = Object.entries(L.en.main)
     .sort((a, b) => (isUnrel(L.en.set_effects[a[0]]) - isUnrel(L.en.set_effects[b[0]])) || a[0].localeCompare(b[0]));
+  /* A Space card's pairings are released one at a time, not with the card, and it is the
+     English table that tracks the Global client. Lufel's GLB schedule lists pairings as
+     releases of their own (`rev_set`): Acuity shipped in 4.9 (2026-09-09) pairing with
+     Satiety alone, and Acuity + Hindrance is 4.16's, with Koromaru. Lufel's Korean table
+     already carries all three of Acuity's pairings, so reading it would hand Koromaru and
+     Aran a pairing that does not exist on their server yet. A pairing only the Korean table
+     has is reported, never used. So is the reverse, an English pairing the schedule has not
+     released yet, because nothing else would catch it: `unreleased` is per card, not per
+     pairing. */
+  const pairRelease = revSetSchedule(L.schedule, L.map, new Set(Object.keys(L.en.main)));
+  const today = new Date().toISOString().slice(0, 10);
+  const when = r => r ? ` (lufel's GLB schedule: ${r.version}, ${r.date || 'undated'})` : '';
+  const krName = {};
+  for (const [k, v] of Object.entries(L.map)) if (!(v in krName)) krName[v] = k;
   for (const [name, pairs] of spaceEntries) {
     const eff = L.en.set_effects[name] || {};
     const canon = pairs.map(canonSet);
+    const kr = (L.kr && L.kr.main && L.kr.main[krName[name]]) || [];
+    const onlyKr = kr.map(x => canonSet(L.map[x] || x)).filter(p => !canon.includes(p));
+    if (onlyKr.length)
+      notes.push(`${name}: lufel's Korean table also pairs it with ${onlyKr.map(p => p + when(pairRelease[`${name}+${p}`])).join('; ')} — not in the English table, so not used`);
+    for (const p of canon) {
+      const r = pairRelease[`${name}+${p}`];
+      if (r && !(r.date && r.date <= today) && !isUnrel(eff) && !(setMeta[p] && setMeta[p].unreleased))
+        notes.push(`${name} + ${p}: both halves are tagged released, but the pairing is not out yet${when(r)} — a character recommended it will be scored on an effect they cannot have`);
+    }
     // One effect string per pairing — a Space card does something different depending
     // on which 4-piece is live, so the UI shows only the clause that is actually firing.
     const effects = canon.map(p => {
       const txt = (Object.entries(eff).find(([k]) => canonSet(k) === p) || [])[1];
-      return txt ? [p, String(txt).replace(/\s+/g, ' ').trim()] : null;
+      return txt ? [p, plain(txt)] : null;
     }).filter(Boolean);
     const bits = [`pairs: [${canon.map(q).join(', ')}]`];
     if (isUnrel(eff)) bits.push('unreleased: true');
@@ -410,7 +504,8 @@ function main() {
     'AKIHIKO': 'Akihiko Sanada', 'YUKARI': 'Yukari Takeba', 'JUNPEI': 'Junpei Iori',
     'KOROMARU': 'Koromaru', 'J&C': 'Justine & Caroline', 'BUI': 'YUI',
     'MONT': 'Kotone Montagne', 'MONT·Frostgale': 'Kotone Montagne [Frostgale]',
-    'BUI·Prism': 'YUI [Prism]', 'CLOSER·Tropical': 'Motoha Arai [Tropical]',
+    'BUI·Prism': 'YUI [Prism]', 'BUI·Cosmic': 'YUI [Prism]',
+    'CHORD·Summer': 'Ayaka Sakai [Summer]', 'BERRY·Summer': 'Ichigo Shikano [Summer]', 'CLOSER·Tropical': 'Motoha Arai [Tropical]',
     'CLOSER·Radiance': 'Motoha Arai [Radiance]', 'MOKO·Seaside': 'Tomoko Noge [Seaside]',
     'MARIAN·Beachflower': 'Minami Miyashita [Beachflower]',
     'PUPPET·Wavecatcher': 'Miyu Sahara [Wavecatcher]', 'WIND·Tempest': 'Riko Tanemura [Tempest]',
@@ -465,7 +560,6 @@ function main() {
 
   const outChars = [];
   const statsFor = [];   // (korean name, our name) for the CHAR_STATS block below
-  const notes = [];
   if (!schedPos.size) notes.push('no release schedule in the dump — roster ordered by release_order alone; re-run tools/fetch-lufel-data.js');
   for (const [kr, info] of rows) {
     // A settings file exists for some units that carry no build at all (Wonder is
@@ -496,8 +590,9 @@ function main() {
     const rawSpace = ((s && s.main_revelation) || []).map(x => L.en.mapping_en[x] || x);
     /* The two halves of a pairing are held back independently. A Heavens set whose
        recommended Space card is not out yet is still perfectly farmable — Koromaru's
-       best set is Hindrance, paired with the unreleased Agility, and dropping Hindrance
-       along with Agility would have cost him his own element's set for no reason. */
+       best set is Hindrance, ranked with Acuity (unreleased until Sep 2026, and its
+       Hindrance pairing still not on Global), and dropping Hindrance along with Acuity
+       would have cost him his own element's set for no reason. */
     const pairsRanked = rawSets.map((st, i) => ({ st, sp: rawSpace[i] }));
     const setOk = st => st && !(setMeta[st] && setMeta[st].unreleased);
     const spaceOk = sp => sp && !isUnrel(L.en.set_effects[sp]);
@@ -529,12 +624,22 @@ function main() {
       if (space) break;
     }
     space = space || spacesRanked[0] || '';
-    if (!sets.length && prev) { sets = prev.sets.slice(); space = space || prev.space; }
+    /* Nothing lufel ranks is obtainable, so the sets are src/data.js's hand-picked fallback.
+       The Space card chosen above was ranked alongside sets that got dropped, so it only
+       survives if it pairs with the fallback; otherwise keep the card chosen with it. */
+    if (!sets.length && prev) {
+      sets = prev.sets.slice();
+      space = spacesRanked.find(sp => sets.some(st => pairsWith(sp, st))) || prev.space || space;
+    }
     if (!space && prev) space = prev.space;
 
-    // Only the top-ranked pairing being unavailable is worth telling the user about.
+    /* Only the top-ranked pairing being unavailable is worth telling the user about. Both
+       halves can be out and the pairing still not be (see pairRelease): Koromaru's and
+       Aran's top build is Hindrance + Acuity, which Global does not have yet. Every other
+       one of lufel's 132 ranked combos is a pairing the English table has. */
     const top = pairsRanked[0];
-    const held = top && (!setOk(top.st) || !spaceOk(top.sp)) ? [top] : [];
+    const unpaired = p => !!(p && p.st && p.sp && setOk(p.st) && spaceOk(p.sp) && !pairsWith(p.sp, p.st));
+    const held = top && (!setOk(top.st) || !spaceOk(top.sp) || unpaired(top)) ? [top] : [];
 
     /* Main stats: every legal choice lufel lists for the slot, best-first, not just
        the first. Lufel names alternatives — Ann's Moon is Damage Multiplier or ATK%,
@@ -549,9 +654,17 @@ function main() {
     const baseMain = Object.assign({}, A.main, (prev && prev.ov && prev.ov.main) || {});
     const main = Object.assign({}, baseMain);
     const SLOTF = { Moon: 'sub_revel2', Star: 'sub_revel3', Sky: 'sub_revel4' };
+    /* A slot lufel fills with "-" (or leaves blank) recommends nothing, which is an answer:
+       any main will do. That is an open slot, [], not the archetype placeholder it used to
+       inherit — Chizuko's and Runa's Moon and Sky, Yaoling's Moon and Star, Tempest Riko's
+       Moon and Aran's Moon and Sky, where the placeholder was beaten by 15-20% by a main the
+       character's own weights prefer. A stat this tool cannot map is NOT a "-": that is a
+       vocabulary gap, and keeps the fallback. */
+    const openField = v => (Array.isArray(v) ? v : [v]).every(x => x == null || !String(x).trim() || String(x).trim() === '-');
     for (const [slot, field] of Object.entries(SLOTF)) {
       const want = splitStats(s && s[field]).filter(st => legal(slot, st));
       if (want.length) main[slot] = want.slice(0, MAIN_CHOICES);
+      else if (s && s[field] != null && openField(s[field])) main[slot] = [];
     }
 
     // Substat weights from lufel's three priority tiers, over the archetype floor.
@@ -559,7 +672,28 @@ function main() {
     const tiers = [splitStats(s && s.sub_option1), splitStats(s && s.sub_option2), splitStats(s && s.sub_option3)];
     const listed = new Set([].concat(...tiers));
     if (listed.size) {
-      tiers.forEach((tier, i) => tier.forEach(st => { if (w[st] === undefined || w[st] < [10, 8, 6][i]) w[st] = [10, 8, 6][i]; }));
+      /* A ranked stat takes its tier's value, or the archetype's own default where that is
+         higher — but never so high that it reaches a stat lufel ranks above it. The floor
+         is the archetype's guess and the order is lufel's, and only the order is trusted:
+         left unchecked, a Healer's SP Recovery default of 8 tied Minami's tier-3 SP
+         Recovery with her tier-2 DEF, and an ST DPS's Crit Rate default of 9 put Ichigo's
+         tier-3 Crit Rate above her tier-2 ATK% and Damage Multiplier. Where the floor would
+         get there, the stat takes its plain tier value. */
+      let above = Infinity;          // the lowest weight given to the tier above
+      const ranked = new Set();
+      tiers.forEach((tier, i) => {
+        const v = [10, 8, 6][i];
+        let low = Infinity;
+        tier.forEach(st => {
+          if (ranked.has(st)) return;  // listed in a higher tier too: that one stands
+          ranked.add(st);
+          let x = Math.max(v, w[st] === undefined ? 0 : w[st]);
+          if (x >= above) x = v;
+          w[st] = x;
+          low = Math.min(low, x);
+        });
+        if (low < Infinity) above = low;
+      });
       // A stat lufel weighed and left out of all three tiers is not a priority,
       // whatever the archetype default says. Flat ATK/DEF/HP are outside lufel's
       // vocabulary, so no opinion is inferred for them.
@@ -641,9 +775,12 @@ function main() {
     if (held.length) {
       const { st, sp } = held[0];
       const gone = [!setOk(st) ? st : null, !spaceOk(sp) ? sp : null].filter(Boolean).join(' and ');
+      const r = pairRelease[`${sp}+${st}`];
+      const why = gone ? `${gone} ${gone.includes(' and ') ? 'are' : 'is'} not released yet`
+        : `${sp} does not pair with ${st} on Global yet` +
+          (r ? ` (Lufelnet's release schedule lists that pairing for version ${String(r.version).replace(/\s*\(.*\)\s*$/, '')}${r.date ? ', ' + r.date : ''})` : '');
       note = (note ? note + ' ' : '') +
-        `Lufelnet's top build for this unit is ${st} + ${sp}; ${gone} ` +
-        `${gone.includes(' and ') ? 'are' : 'is'} not released yet, so the target above is the ` +
+        `Lufelnet's top build for this unit is ${st} + ${sp}; ${why}, so the target above is the ` +
         `best obtainable alternative.`;
     }
     const ov = {};
@@ -658,10 +795,11 @@ function main() {
     let line = `  { ${parts.join(', ')},\n    sets:[${sets.map(q).join(',')}], space:${q(space)}`;
     if (Object.keys(ov).length) {
       const ovBits = [];
-      // A slot with one answer stays a bare string; alternatives become a list.
+      // A slot with one answer stays a bare string; alternatives become a list, and an
+      // open slot (lufel's "-") the empty one.
       if (ov.main) ovBits.push(`main:{${Object.entries(ov.main).map(([k, v]) => {
         const l = asList(v);
-        return `${k}:${l.length > 1 ? '[' + l.map(q).join(',') + ']' : q(l[0])}`;
+        return `${k}:${l.length !== 1 ? '[' + l.map(q).join(',') + ']' : q(l[0])}`;
       }).join(',')}}`);
       if (ov.w) ovBits.push(`w:{${Object.entries(ov.w).map(([k, v]) => `${q(k)}:${v}`).join(',')}}`);
       if (ov.targets) ovBits.push('targets:[' + ov.targets.map(t =>
@@ -688,15 +826,25 @@ function main() {
     // 0% innate Crit Rate and Crit Multiplier — no crit stat at all) as missing and
     // silently substitute the 5/150 most characters carry. `??` only falls back when
     // lufel omits the field entirely.
-    bits.push(`spd:${l1.speed ?? 100}, cr:${l1.crit_rate ?? 5}, cm:${l1.crit_mult ?? 150}`);
+    /* ...but a Speed of 0 is lufel's gap, not a stat: every character acts, and Fuuka's page
+       reads Speed 0 and SP 0 where hers is 100. Keep the value src/data.js has. */
+    const prevCS = (ours.CHAR_STATS || {})[ourName] || {};
+    const spd = l1.speed > 0 ? l1.speed : (prevCS.spd || 100);
+    if (!(l1.speed > 0)) notes.push(`${ourName}: lufel gives no Speed, kept ${spd}`);
+    bits.push(`spd:${spd}, cr:${l1.crit_rate ?? 5}, cm:${l1.crit_mult ?? 150}`);
     for (const [key, src] of [['l80', 'a0_lv80'], ['l80a6', 'a6_lv80'], ['l100', 'a0_lv100'], ['l100a6', 'a6_lv100']])
       if (trip(src)) bits.push(`${key}:${trip(src)}`);
-    if (base.awake7 && Object.keys(base.awake7).length)
-      bits.push(`aw:{${Object.entries(base.awake7).map(([k, v]) => `${q(k)}:${n1(v)}`).join(',')}}`);
+    /* One Awakening-7 ATK bonus is filed under `attack` (Hatsune Miku's 29) where the other 34
+       read `attack_per`, all 29 at 5 stars; charBaseStat reads only `attack_per`, so it would
+       be dropped. */
+    const aw7 = Object.entries(base.awake7 || {}).map(([k, v]) => [k === 'attack' ? 'attack_per' : k, v]);
+    if (aw7.length) bits.push(`aw:{${aw7.map(([k, v]) => `${q(k)}:${n1(v)}`).join(',')}}`);
 
-    const mind = [parseMind(s && s.mind_stats1), parseMind(s && s.mind_stats2)].filter(Boolean);
+    const glb = GLB_STAT_OVERRIDES[ourName];
+    const mind = glb && glb.mind ? glb.mind : [parseMind(s && s.mind_stats1), parseMind(s && s.mind_stats2)].filter(Boolean);
+    if (glb && glb.mind) notes.push(`${ourName}: Mindscape from GLB_STAT_OVERRIDES — ${glb.why}`);
     if (mind.length) bits.push('mind:[' + mind.map(m =>
-      `{s:${q(m.s)},v:${m.v},pct:${m.pct}${m.tag ? `,tag:${q(m.tag)}` : ''}}`).join(',') + ']');
+      `{s:${q(m.s)},v:${m.v},pct:${m.pct}${m.tag ? `,tag:${q(m.tag)}` : ''}}`).join(',') + ']' + (glb && glb.mind ? ` /* ${glb.why} */` : ''));
 
     for (const [key, wk] of [['w4', 'weapon4-1'], ['w5', 'weapon5-1']]) {
       const e = w && w[wk];

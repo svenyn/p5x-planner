@@ -76,8 +76,20 @@ reads both rows and refuses the value rather than picking a side if they disagre
 is what keeps that claim checkable per card instead of assumed.
 
 **`characters`** — keyed by exact character name from `CHARACTERS`. `owned` drives the
-roster and Triage. `targets` is `null` to use the built-in defaults, or a full override
-object with `sets`, `space`, `main`, `w`, `targets`, `bp` and `note`.
+roster and Triage. `targets` is `null` to use the built-in defaults, or the user's edits
+from the Targets dialog as a **diff** over them: `{ "v": 2, "sets"?, "space"?, "main"?,
+"w"? }`, carrying only what was changed — `main` only the slots changed, `w` only the
+stats changed, e.g. `{ "v": 2, "space": "Growth", "w": { "Speed": 6 } }`. A slot's `main` is
+a best-first list; an empty list is an open slot ("any" in the dialog), where no main is
+preferred. Everything absent,
+and always the stat targets, `bp` and `note`, comes from the data, so a later fix to it
+still reaches the character. Files saved before Sep 2026 carry a full snapshot instead
+(`sets`, `space`, `main`, `w`, `targets`, `bp`, `note`, no `v`); `load()` converts it,
+keeping set, Space and main choices that differ from the data and handing any differing
+weight back to the data with a note saying which — the old dialog wrote the whole weight
+grid on every save, so those were almost always values the data had since corrected. A main
+saved for a slot the data now leaves open is handed back the same way and for the same
+reason: the data used to fill those slots with a placeholder, and the old dialog saved it.
 
 **`characters[].benched`** — optional, defaults to `false`. Marks a character you own but
 are not building. `ownedChars()` filters on `owned && !benched`, so a benched character
@@ -188,6 +200,11 @@ keep loading unchanged:
   `src/logic.js`. Ignored if absent, so v1/v2 files keep loading unchanged; any field the
   loading build no longer recognises (a renamed set, a dropped filter option) is likewise
   ignored rather than rejected.
+- **`settings`** — scoring assumptions, as opposed to view state. Today one:
+  `teamCritRate`, the Roster tab's team crit rate, in percentage points (0-100): the crit
+  rate the user's usual supports add to every damage dealer when cards are valued. Written
+  by `savePayload()`. Absent, or anything that is not a positive number, reads as 0, which
+  is how files saved before it existed load.
 
 ## Importing a rescan without losing your inventory
 
