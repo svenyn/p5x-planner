@@ -514,6 +514,21 @@ and 0.162 for Kiyoshi on the real inventory, so ranking on raw gains (until Sep 
 the largest yardsticks first. A suggestion is listed only from `UPGRADE_MIN_GAIN` (0.1 build
 points, the column's precision) up; it was one raw point, a different amount for everyone.
 
+**A trade is priced on both sides.** With "Ignore cards equipped on someone else" unticked, a
+proposed card may be worn by another character, and the gains above count only the receiver.
+On the real inventory 62 such rows were listed, and for 39 the giver lost more than the
+receiver gained even after putting their best free card back (six characters were each told to
+take Futaba's Resolve Space card, worth 0.8-3.3 to them and 4.3 to her). So each trade row
+carries `giverPts`, and each move `lossPts` — for a 4-piece switch, everything it takes from
+everyone, priced jointly — from `giverLoss`: the giver's build points with the taken cards
+replaced by their best free card of each slot, same set first, against the giver keeping the
+better of the worn card and that free one (a free card that beats the worn one is an upgrade
+they have anyway, and crediting it to the trade once made a loss negative and a net larger than
+the gain). `upPts` is net of `lossPts`, so characters are ordered by the net; the "on X" tag
+shows X's loss and the footer or row shows the net. Nothing is hidden, since the user may value
+one character over another and build points cannot know that — but the box is now ticked by
+default, which is what the user had chosen, and with it no trade is ever proposed. The Optimise tab, whose Card pool defaults to "All cards", prices its trades the same way: each "on X" tag carries X's loss (`onTagHtml`), and the build-score panel says what the loadout takes, from whom, and the net for the account.
+
 **The optimiser does not need a second refinement pass.** One was built and measured:
 brute-forcing every combination of the top six candidates per slot against the full build
 score found at most **1 point** of headroom, on 2 of 65 characters, mean 0.03. The
@@ -564,16 +579,52 @@ same marginal maxed over the *whole* roster, so a strong Fire card is not marked
 because you have not pulled a Fire character yet. The "best fit" cell then reads
 "— no one in scope".
 
+**A card the Upgrades tab recommends is never feed.** The marginal prices one card at a
+time against what is worn now, but most of a set switch is its 4-piece bonus, which lands
+only with the fourth card, so each card of a recommended switch can read as a loss on its
+own. On a synthetic inventory 54 of the 340 unequipped cards in the optimiser's 4-piece
+plans came out feed (53 of 340 under `pref`). So `runTriage` calls `upgradesFor` for every
+character in scope, at the Upgrades tab's own current settings, and a card it names carries
+`rec`: the verdict is keep whatever `pct` says, and the Best fit cell names that character,
+tagged "upgrade" (the character whose upgrade is worth most if two want the card). `who`
+keeps its own meaning, the eligibility argmax. The real inventory had no such card marked
+feed at the defaults (Sep 2026) — its 13 recommended cards graded 66-100% on their own —
+but the case is one set switch away, and a fed card does not come back. The Optimise tab's
+other policies are not asked: it is a per-character exploration tool, and Leo's four level-25
+Peace cards, which its `pref`, `any4` and `stats` policies use and nobody on the roster lists,
+are what the Vault tab and the "no one in scope" note are for.
+
+**The Vault's answer is read too.** Triage is relative to the characters you own, so it
+calls feed a card nobody you own gains from now; the Vault prices the same card against
+every role, blind to the roster. `runTriage` runs `vaultRate` — the Vault's scoring pass
+without the DOM — over the Vault tab's own card set (its percentiles depend on the
+population, so the two tabs then say the same about the same card), and `trVerdict` marks a
+would-be feed the Vault rates worth a lock **lock**; one it rates worth holding keeps its feed
+verdict with a "vault: hold" note. On the real inventory (Sep 2026) that was 76 locks and 266
+notes among 1322 feed candidates, leaving 980 plain feed — which only a card-by-card
+cross-check of the two tabs used to catch. About 20 ms.
+
+**The default order is the verdict's.** With no column clicked, the "Show" control sorts on
+`quality` (`TR_SORT_COLS`): the `trTier` — plain feed, Vault-held feed, lock, hold, keep, an
+Upgrades pick — then `pct`. It used to sort on the raw Score, which differs by slot by
+construction — a Space card's best is worth about eight points, a Moon card's several times
+that — so "worst first" interleaved slots: on the real inventory the first 800 rows, all the
+table draws, held 199 hold cards while 723 of the 1322 feed candidates sat below them. They
+are now all plain feed. Clicking Score still sorts on Score.
+
 Performance: `runTriage` precomputes `t` / `lo` / `idl` once per character and passes them
-into `buildScore`. `npm run triage-perf` benchmarks the worst case (4000 cards × 65
-characters) in a real browser — check it after touching any of this.
+into `buildScore`. `npm run triage-perf` benchmarks the worst case (4000 cards × 68
+characters) in a real browser — check it after touching any of this. The Upgrades guard is
+most of its cost now: 1.6 s → 2.8 s on the benchmark, 0.9 s → 1.4 s on the real inventory.
 
 ### `runVault()` — what deserves a lock
 
 The counterweight to Triage's element gate. Once Triage refuses to name anyone it will
 happily call a card junk that a future character would want, and a fed card does not come
 back. So `runVault` answers its question **without reference to the roster** — pulling a
-character cannot change a verdict. Two yardsticks:
+character cannot change a verdict. Its scoring pass is `vaultRate(cards)`, which Triage also
+calls, so a card the Vault rates worth a lock is marked lock on the Triage tab rather than
+feed (see above). Two yardsticks:
 
 1. `VAULT_TARGET`, a synthetic generic-damage weight vector. Support stats are 0 on
    purpose, and it is spelled out rather than borrowed from `ARCHETYPES` so a balance
@@ -693,7 +744,7 @@ reports any stored archetype that disagrees. See `docs/DATA-SOURCES.md`.
 
 Do not ship a scoring change on reasoning alone. Four tools, cheapest first:
 
-**`npm test`** — 273 assertions in `test/optimizer.test.js`, in ten blocks: plan legality and
+**`npm test`** — 278 assertions in `test/optimizer.test.js`, in ten blocks: plan legality and
 set-plan integrity over the whole roster (every plan's total is the build score's numerator,
 and no allowed alternative builds higher than the pick); data integrity (sets and their `bonus2Also` terms,
 Space pairings, roll tiers, `MAIN_MAGNITUDE`, the hand-kept judgement tables, weapon `extra`
@@ -755,7 +806,7 @@ Nothing should clamp at 100. If a change moves those, either the change is wrong
 `BUILD_BANDS` needs re-cutting — check before shipping. A rise in the non-recommended-main
 count means the optimiser is trading the main away for substats again.
 
-**`npm run triage-perf`** — 4000 cards by 65 characters in a real browser, for anything
+**`npm run triage-perf`** — 4000 cards by 68 characters in a real browser, for anything
 touching Triage or the memoisation.
 
 **An ad-hoc browser probe** — the fastest way to measure one character's real numbers,

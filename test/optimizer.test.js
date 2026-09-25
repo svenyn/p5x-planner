@@ -1071,6 +1071,38 @@ function weightOverrideDrift() {
       return locked.length === 0 || locked.some(x => x.best > 0);
     })());
     fail('Triage renders a verdict per row', $('#trTable').querySelectorAll('tbody tr').length > 0 && $('#trTable').innerHTML.indexOf('NaN') < 0);
+    /* A card the Upgrades tab tells someone to equip is never feed: Triage prices one card
+       at a time, and a set switch pays off only with the fourth card. */
+    {
+      const upR = +$('#upRar').value, same = $('#upSameSet').checked, free = $('#upIgnoreEquipped').checked;
+      const byId = new Map(rated.map(x => [x.card.id, x]));
+      const want = new Map();
+      ownedChars().forEach(c => upgradesFor(c, upR, same, free).forEach(row => {
+        const card = row.rec, prev = card && want.get(card.id);
+        if (card && !card.equipped && card.rarity >= 2 && (!prev || upPts(row) > prev.pts)) want.set(card.id, { n: c.n, pts: upPts(row) });
+      }));
+      const bad = [...want].filter(([id, w]) => !byId.get(id) || byId.get(id).rec !== w.n);
+      const low = [...want.keys()].filter(id => byId.get(id) && byId.get(id).pct < 0.35).length;
+      fail('Triage keeps every card the Upgrades tab recommends, for the character it recommends it to',
+        want.size > 0 && bad.length === 0 && rated.filter(x => x.rec).length === want.size,
+        `${want.size} recommended, ${bad.length} not kept, ${low} would have read feed on their own swap score`);
+    }
+    fail('Triage\'s default "worst first" order is the verdict\'s: feed, then Vault-held feed, lock, hold, keep', (() => {
+      const was = trSort.key; trSort.key = null; $('#trShow').value = 'worst';
+      const rank = x => x.rec ? 5 : { keep: 4, hold: 3, lock: 2, feed: x.vault === 'watch' ? 1 : 0 }[trVerdict(x)];
+      const order = sortTrRows(rated).map(rank);
+      trSort.key = was;
+      return order.every((v, i) => i === 0 || v >= order[i - 1]);
+    })());
+    /* Triage is relative to the owned roster and the Vault is not; a fed card does not come
+       back, so a would-be feed the Vault rates worth a lock is marked lock. */
+    fail('Triage marks lock, never feed, a card the Vault rates worth a lock (at the Vault tab\'s own floor)', (() => {
+      const va = new Map(vaultRate(state.cards.filter(c => c.rarity >= +$('#vaRar').value)).rated.map(v => [v.card.id, v]));
+      const vOf = x => (va.get(x.card.id) || {}).verdict || '';
+      const low = rated.filter(x => !x.rec && x.pct < 0.35);
+      return rated.every(x => x.vault === vOf(x)) && low.every(x => trVerdict(x) === (vOf(x) === 'lock' ? 'lock' : 'feed')) &&
+        rated.filter(x => trVerdict(x) === 'lock').every(x => vOf(x) === 'lock' && x.pct < 0.35);
+    })(), `${rated.filter(x => trVerdict(x) === 'lock').length} marked lock of ${rated.filter(x => !x.rec && x.pct < 0.35).length} below 35%`);
     fail('Triage marks the main at its level cap: a level-0 card of a wanted main can grade as a keeper', (() => {
       const set = tj.sets[0];
       const c0 = mk('Star', set, mainTop(tj, 'Star'), [['Crit Multiplier', 4.1], ['ATK%', 3.5], ['Damage Multiplier', 2.8]], { level: 0, id: 'lv0probe', equipped: null });
@@ -1141,7 +1173,8 @@ function weightOverrideDrift() {
         const grouped = rows.filter(x => x.group != null);
         if (grouped.length && (new Set(grouped.map(x => x.group)).size !== 1 || grouped.length < 2)) upBad.push(`${n}: grouped rows disagree on the group total`);
         if (grouped.length && !(grouped[0].groupPts >= UPGRADE_MIN_GAIN)) upBad.push(`${n}: group below the gate`);
-        rows.forEach(row => { if (!(upPts(row) >= UPGRADE_MIN_GAIN - 1e-9) && row.group == null) upBad.push(`${n}: ${row.slot} row below the gate`); });
+        // the gate reads the receiver's own gain; a trade's net (upPts) may fall below it and is shown, not hidden
+        rows.forEach(row => { if (!(row.pts >= UPGRADE_MIN_GAIN - 1e-9) && row.group == null) upBad.push(`${n}: ${row.slot} row below the gate`); });
         for (let i = 1; i < rows.length; i++) if (upGain(rows[i]) > upGain(rows[i - 1]) + 1e-9) upBad.push(`${n}: rows not sorted by upGain`);
       });
     });
@@ -1173,6 +1206,57 @@ function weightOverrideDrift() {
       const best = names.map(n => Math.max(...upgradesFor(charDef(n), +document.getElementById('upRar').value,
         document.getElementById('upSameSet').checked, document.getElementById('upIgnoreEquipped').checked).map(upPts)));
       return names.length >= 2 && best.every((v, i) => i === 0 || v <= best[i - 1] + 1e-9);
+    })());
+    /* A trade is priced on both sides: a card taken off someone else carries what it costs
+       them (giverLoss: build points lost after they put back their best free card of the slot),
+       and upPts nets it off. If the synthetic roster offers no trade, one is made by putting a
+       character's best free upgrade on someone else first. */
+    const tradeCheck = (() => {
+      const find = () => {
+        for (const n of own) { const rows = upgradesFor(charDef(n), 4, false, false); const row = rows.find(x => x.rec.equipped && x.rec.equipped !== n); if (row) return { n, rows, row }; }
+        return null;
+      };
+      let hit = find(), undo = null;
+      if (!hit) for (const n of own) {
+        const r = upgradesFor(charDef(n), 4, false, true).find(x => !x.rec.equipped);
+        if (!r) continue;
+        const other = own.find(m => m !== n), prev = state.cards.find(c => c.equipped === other && c.slot === r.rec.slot);
+        undo = () => { r.rec.equipped = null; if (prev) prev.equipped = other; };
+        if (prev) prev.equipped = null;
+        r.rec.equipped = other;
+        hit = find();
+        break;
+      }
+      let ok = false, why = 'no trade found or made';
+      if (hit) {
+        const { n, rows, row } = hit, giver = charDef(row.rec.equipped);
+        const own1 = giverLoss(giver, [row.rec], new Set(rows.map(x => x.rec.id)), 4);
+        const grouped = rows.filter(x => x.group != null);
+        ok = near(row.giverPts, own1, 1e-9) &&
+          (row.group == null ? near(row.lossPts, row.giverPts, 1e-9) && near(upPts(row), row.pts - row.lossPts, 1e-9)
+            : grouped.every(x => near(x.lossPts, row.lossPts, 1e-12)) && near(upPts(row), row.groupPts - row.lossPts, 1e-9)) &&
+          upgradesFor(charDef(n), 4, false, true).every(x => !x.lossPts && x.giverPts == null);
+        why = `${n} takes ${row.rec.slot} ${row.rec.set} from ${giver.n}: gain ${upPts(row) + row.lossPts}, giver loss ${row.giverPts}, net ${upPts(row)}`;
+      }
+      if (undo) undo();
+      return { ok, why };
+    })();
+    fail('Upgrades prices a trade on both sides: the giver\'s loss is charged, and upPts is net of it', tradeCheck.ok, tradeCheck.why);
+    fail('Optimise says what a loadout that takes cards off someone else costs them, and nets it', (() => {
+      const n = own[0], other = own[1];
+      const r0 = bestPlan(charDef(n), poolFor('free', 2, n), { policy: 'force4', p4value: 55 });
+      const c = r0.best && heavens.map(sl => r0.best.picks[sl] && r0.best.picks[sl].c).find(x => x && !x.equipped);
+      if (!c) return false;
+      const prev = state.cards.find(x => x.equipped === other && x.slot === c.slot);
+      const was = { pool: $('#optPool').value, rar: $('#optRarity').value, ch: $('#optChar').value };
+      if (prev) prev.equipped = null;
+      c.equipped = other;
+      renderOpt(n); $('#optChar').value = n; $('#optPool').value = 'all'; $('#optRarity').value = '2';
+      runOpt();
+      const html = $('#optOut').innerHTML;
+      c.equipped = null; if (prev) prev.equipped = other;
+      $('#optPool').value = was.pool; $('#optRarity').value = was.rar; renderOpt(); $('#optChar').value = was.ch;
+      return /It takes \d+ cards? off /.test(html) && /net <b>[−+]\d/.test(html) && /on [^<]+ · [−+]\d/.test(html);
     })());
 
     // ---- Headroom ----

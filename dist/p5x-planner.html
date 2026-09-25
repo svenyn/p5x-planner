@@ -494,7 +494,7 @@ dialog::-webkit-scrollbar-thumb:hover{background:var(--dim2)}
           <option value="5">5★ only</option>
           <option value="2">Everything</option></select></div>
         <label class="check"><input type="checkbox" id="upSameSet"> Stay in currently-equipped set</label>
-        <label class="check"><input type="checkbox" id="upIgnoreEquipped"> Ignore cards equipped on someone else</label>
+        <label class="check"><input type="checkbox" id="upIgnoreEquipped" checked> Ignore cards equipped on someone else</label>
         <button class="primary" id="upRun">Find upgrades</button>
       </div>
       <div id="upSummary" style="margin-top:12px"></div>
@@ -5731,7 +5731,17 @@ function slotEquipHtml(charName, slotName, card) {
     data-card="${esc(card.id)}">${card.equipped ? 'Take it' : 'Equip'}</button>`;
 }
 
-function planCardHtml(slot, o, t, charName) {
+/* The "on X" tag for a card worn by someone else, carrying what taking it costs X — giverLoss,
+   the same pricing as the Upgrades tab's trades — so a recommendation that is really a trade
+   does not read as free. `used` is the plan's own cards (none of them can refill X's slot). */
+function onTagHtml(card, charName, used, minR) {
+  const by = card.equipped && card.equipped !== charName ? card.equipped : null;
+  if (!by) return '';
+  const loss = giverLoss(charDef(by), [card], used, minR);
+  return `<span class="tag" title="Currently equipped on ${esc(by)} — swapping unequips it from them, which costs them ${esc(loss.toFixed(1))} build points even after they put back their best free card of this slot (same set first; a full Optimise run may find them better)">on ${esc(by)} · ${esc(gainStr(-loss))}</span>`;
+}
+
+function planCardHtml(slot, o, t, charName, trade) {
   if (!o) return `<div class="lo empty"><h4><span class="slot ${slot}">${slot.slice(0,3)}</span> ${slot}</h4>
     <div class="tiny muted">Nothing in inventory for this slot.</div></div>`;
   const c = o.c;
@@ -5768,7 +5778,8 @@ function planCardHtml(slot, o, t, charName) {
     </div>
     ${subs || '<div class="tiny muted">No substats recorded.</div>'}
     <div class="tiny muted" style="margin-top:6px">Lv ${c.level}${c.equipped === charName ? ' · already equipped here' : ''}
-      ${ownedBy ? ` · <span class="tag" title="Currently equipped on ${esc(ownedBy)} — swapping unequips it from them">on ${esc(ownedBy)}</span>` : ''}</div>
+      ${ownedBy ? ` · ${trade ? onTagHtml(c, charName, trade.used, trade.minR)
+        : `<span class="tag" title="Currently equipped on ${esc(ownedBy)} — swapping unequips it from them">on ${esc(ownedBy)}</span>`}` : ''}</div>
     <div style="margin-top:8px">${slotEquipHtml(charName, c.slot, c)}</div>
   </div>`;
 }
@@ -6029,6 +6040,21 @@ function runOpt() {
   const nowBand = now ? buildBand(now.score) : null;
   const delta = now && rec ? rec.score - now.score : null;
 
+  /* Cards this loadout would take off someone else, and what that costs them (giverLoss, as
+     on the Upgrades tab: after each puts back their best free card of the slot). The pool
+     defaults to "All cards", so a recommendation can be a trade, and "(+5)" alone reads as
+     free. Priced per giver, jointly over everything taken from them. */
+  const trade = { used: new Set(recCards.map(c => c.id)), minR: +$('#optRarity').value };
+  const takenFrom = {};
+  recCards.forEach(c => { if (c.equipped && c.equipped !== name) (takenFrom[c.equipped] = takenFrom[c.equipped] || []).push(c); });
+  const givers = Object.keys(takenFrom);
+  const tradeLoss = givers.reduce((s, g) => s + giverLoss(charDef(g), takenFrom[g], trade.used, trade.minR), 0);
+  const tradeHtml = givers.length ? `<div class="tiny muted" style="text-align:right;margin:4px 0 0 auto;max-width:560px">
+      It takes ${givers.map(g => `${takenFrom[g].length} card${takenFrom[g].length > 1 ? 's' : ''} off ${esc(g)}`).join(' and ')},
+      which costs them <b>${esc(tradeLoss.toFixed(1))}</b> build points
+      after they put back their best free cards${now && rec ? ` — net <b>${esc(gainStr(rec.raw - now.raw - tradeLoss))}</b> for the account` : ''}.
+      Set <b>Card pool</b> to “Only unequipped cards” to see a loadout that takes nothing.</div>` : '';
+
   const bsHtml = `<div class="panel">
     <h2>Build score</h2>
     ${now ? `<div class="bscore">
@@ -6041,14 +6067,14 @@ function runOpt() {
           The loadout below would score <b class="score">${rec.score}</b>
           ${delta > 0 ? `<span style="color:var(--ok)">(+${delta})</span>`
                       : delta < 0 ? `<span class="muted">(${delta})</span>`
-                      : '<span class="muted">(no change)</span>'}</div>` : ''}
+                      : '<span class="muted">(no change)</span>'}${tradeHtml}</div>` : ''}
       </div>
       <div class="bparts">${partHtml(now)}</div>
       ${statsSummaryHtml(char, worn, lo, false, idealLo.cards)}
       ${targetHtml(now, rec)}
       ${spreadHtml(now)}`
     : `<p class="muted" style="margin:0">Nothing is equipped on ${esc(char.n)} yet, so there is no build to score.
-         ${rec ? `The loadout below would score <b class="score">${rec.score}</b>/100.` : ''}</p>
+         ${rec ? `The loadout below would score <b class="score">${rec.score}</b>/100.` : ''}</p>${tradeHtml}
        ${statsSummaryHtml(char, recCards, lo, true, idealLo.cards)}
        ${targetHtml(rec, null, true)}
        ${spreadHtml(rec)}`}
@@ -6075,7 +6101,7 @@ function runOpt() {
         <span>${esc(s.stat)}</span><b>${s.value}${SUBSTATS[s.stat].flat ? '' : '%'}</b></div>`).join('')}
       <div class="tiny muted" style="margin-top:6px">${esc(spaceEffectText(sp.c.set, r.best))}</div>
       <div class="tiny muted" style="margin-top:4px">Lv ${sp.c.level}${sp.c.equipped === name ? ' · already equipped here' : ''}
-        ${spOwnedBy ? ` · <span class="tag" title="Currently equipped on ${esc(spOwnedBy)} — swapping unequips it from them">on ${esc(spOwnedBy)}</span>` : ''}</div>
+        ${spOwnedBy ? ` · ${onTagHtml(sp.c, name, trade.used, trade.minR)}` : ''}</div>
       <div style="margin-top:8px">${slotEquipHtml(name, 'Space', sp.c)}</div>
     </div>` : `<div class="lo empty"><h4><span class="slot Space">Spa</span> Space</h4>
       <div class="tiny muted">No Space cards in inventory. Preferred: <b>${esc(t.space || '—')}</b>.</div></div>`;
@@ -6085,7 +6111,7 @@ function runOpt() {
   <div class="panel">
     <h2>Recommended loadout — ${esc(r.best.label)}</h2>
     <div class="loadout">
-      ${['Sun','Moon','Star','Sky'].map(sl => planCardHtml(sl, r.best.picks[sl], t, name)).join('')}
+      ${['Sun','Moon','Star','Sky'].map(sl => planCardHtml(sl, r.best.picks[sl], t, name, trade)).join('')}
       ${spHtml}
     </div>
     <div class="row" style="margin-top:14px">
@@ -6132,7 +6158,7 @@ function runOpt() {
         return `<tr class="slotrow-${sl}${i === 0 ? ' grp-start' : ''}">
         <td>${i === 0 ? `<span class="slot ${sl}">${sl.slice(0,3)}</span>` : ''}</td>
         <td>${esc(o.c.set)} <span class="tag r${o.c.rarity}">${o.c.rarity}★</span>
-          ${ownedBy ? ` <span class="tag" title="Currently equipped on ${esc(ownedBy)} — swapping unequips it from them">on ${esc(ownedBy)}</span>` : ''}</td>
+          ${ownedBy ? ` ${onTagHtml(o.c, name, trade.used, trade.minR)}` : ''}</td>
         <td class="tiny">${esc(o.c.main)}</td>
         <td class="tiny muted">${(o.c.subs || []).map(s => esc(s.stat) + ' ' + s.value).join(' · ')}</td>
         <td class="right score">${cardPct(o.s, sl, t)}</td>
@@ -6509,24 +6535,46 @@ function editCard(id, onDone) {
 // `rated` rows ({ card, best, who, pct, ... }) rather than raw cards. Persists across
 // filter changes and across a fresh "Rate inventory" run, same as invSort does.
 const trSort = { key: null, dir: 1 };
+/* Triage's verdict, in one place. A card the Upgrades tab recommends is kept whatever its
+   share; otherwise the within-slot share decides (70% keep, 35% hold), except that a would-be
+   feed the Vault rates worth a lock is marked lock. */
+function trVerdict(r) {
+  if (r.rec || r.pct >= 0.7) return 'keep';
+  if (r.pct >= 0.35) return 'hold';
+  return r.vault === 'lock' ? 'lock' : 'feed';
+}
+/* The order "worst first" walks: plain feed, feed the Vault would hold, Vault lock, hold,
+   keep, an Upgrades pick — so the top of the list is the safest to feed. */
+function trTier(r) {
+  if (r.rec) return 5;
+  const v = trVerdict(r);
+  return v === 'keep' ? 4 : v === 'hold' ? 3 : v === 'lock' ? 2 : r.vault === 'watch' ? 1 : 0;
+}
+/* `quality` is what the verdict reads: the tier above, then the card's share of the best card
+   in its own slot. The default order sorts on it, not on the raw Score. Raw scores differ by
+   slot — a Space card's best is worth about eight points, a Moon card's several times that —
+   so "worst first" by Score mixed slots: on the real inventory (Sep 2026) the first 800 rows,
+   all the table shows, held 199 hold cards while 723 of the 1322 feed candidates sat below
+   them. */
 const TR_SORT_COLS = { slot: r => r.card.slot, set: r => r.card.set, rarity: r => r.card.rarity,
-  fit: r => r.who || '', score: r => r.best };
+  fit: r => r.rec || r.who || '', score: r => r.best, quality: r => [trTier(r), r.pct] };
 function sortTrRows(rows) {
   // No explicit column clicked yet: fall back to the existing "Show" control, which is a
-  // sort by Score in one direction or the other, so the table isn't left in creation order.
-  const key = trSort.key || 'score';
+  // sort by quality in one direction or the other, so the table isn't left in creation order.
+  const key = trSort.key || 'quality';
   const dir = trSort.key ? trSort.dir : ($('#trShow').value === 'worst' ? 1 : -1);
   const getter = TR_SORT_COLS[key];
   return rows.slice().sort((a, b) => {
     const av = getter(a), bv = getter(b);
-    const cmp = typeof av === 'number' ? av - bv : String(av).localeCompare(String(bv));
+    const cmp = Array.isArray(av) ? (av[0] - bv[0]) || (av[1] - bv[1])
+      : typeof av === 'number' ? av - bv : String(av).localeCompare(String(bv));
     return cmp * dir;
   });
 }
-function trSortHeader(key, label, title) {
+function trSortHeader(key, label, title, style) {
   const active = trSort.key === key;
   const arrow = active ? `<span class="arrow">${trSort.dir > 0 ? '▲' : '▼'}</span>` : '';
-  return `<th class="sortH"${title ? ` title="${title}"` : ''} data-sort="${key}">${label}${arrow}</th>`;
+  return `<th class="sortH"${title ? ` title="${title}"` : ''}${style ? ` style="${style}"` : ''} data-sort="${key}">${label}${arrow}</th>`;
 }
 
 // The last full rating pass, kept around so changing a filter or a sort column redraws
@@ -6565,6 +6613,22 @@ function runTriage() {
     });
     return { c, t, lo, idl, others, baseRaw };
   });
+
+  /* A card the Upgrades tab tells someone to equip is never feed. The marginal below prices
+     one card at a time against what is worn now, and a card whose worth is a set switch —
+     most of a new 4-piece is its bonus, which lands only with the fourth card — reads as a
+     loss on its own: on a synthetic inventory 54 of the 340 unequipped cards the optimiser's
+     4-piece plans put on someone came out feed. So Triage asks the Upgrades tab, at that
+     tab's own current settings, about every character in scope, and a card it names is kept
+     for that character (`rec`, the one whose upgrade is worth most if two want it) whatever
+     its own swap score. The real inventory had no such card at the defaults (Sep 2026); the
+     case is one set switch away, and a fed card does not come back. */
+  const upR = +$('#upRar').value, upSame = $('#upSameSet').checked, upFree = $('#upIgnoreEquipped').checked;
+  const recFor = new Map();
+  chars.forEach(c => upgradesFor(c, upR, upSame, upFree).forEach(row => {
+    const card = row.rec, pts = upPts(row), prev = card && recFor.get(card.id);
+    if (card && !card.equipped && (!prev || pts > prev.pts)) recFor.set(card.id, { n: c.n, pts });
+  }));
 
   /* Marginal buildScore points from equipping `card` into its slot, given everything else
      this character actually wears. Comparable across characters (buildScore already is —
@@ -6611,7 +6675,8 @@ function runTriage() {
     // crediting whichever off-set character has the broadest raw stat weights).
     const elemOwned = !(def && def.elem) || vals.some(v => v.o.c.e === def.elem);
     const best = elig.length ? bestFit : (elemOwned ? 0 : rawBest);
-    return { card, best, who, noSetMatch: !elig.length && elemOwned };
+    const rec = recFor.get(card.id);
+    return { card, best, who, rec: rec ? rec.n : '', noSetMatch: !elig.length && elemOwned };
   });
   /* Grade each card against the best card OF ITS SLOT, not the best card in the inventory.
      A Sun card's main is always flat HP and a Space card's is flat ATK+DEF, so neither can
@@ -6623,10 +6688,30 @@ function runTriage() {
   rated.forEach(r => { if (!(r.card.slot in topBySlot) || r.best > topBySlot[r.card.slot]) topBySlot[r.card.slot] = r.best; });
   rated.forEach(r => { const top = topBySlot[r.card.slot]; r.pct = top > 0 ? r.best / top : 0; });
 
-  const junk = rated.filter(r => r.pct < 0.35).length;
+  /* The Vault's answer, beside Triage's. Triage is relative to the characters you own, so it
+     calls feed a card nobody you own gains from now, and a fed card does not come back; the
+     Vault prices the same card against every role, blind to the roster. A would-be feed the
+     Vault rates worth a lock is marked lock instead (`trVerdict`), and one it rates worth
+     holding keeps its feed verdict with a note and sorts after the rest. On the real
+     inventory (Sep 2026) 76 of the 1322 feed candidates were Vault locks and 266 Vault holds,
+     which only a card-by-card cross-check of the two tabs would have caught. Rated at the
+     Vault tab's own rarity floor, so the two tabs say the same about the same card (its
+     percentiles depend on the population); about 30 ms. */
+  const vault = new Map(vaultRate(state.cards.filter(c => c.rarity >= +$('#vaRar').value)).rated.map(v => [v.card.id, v]));
+  rated.forEach(r => { const v = vault.get(r.card.id); r.vault = v ? v.verdict : ''; r.vaultRole = v ? v.role : ''; });
+
+  const n = f => rated.filter(f).length;
+  const junk = n(r => trVerdict(r) === 'feed' && r.vault !== 'watch');
+  const soft = n(r => trVerdict(r) === 'feed' && r.vault === 'watch');
+  const locks = n(r => trVerdict(r) === 'lock');
+  const kept = n(r => r.rec);
+  const are = k => k === 1 ? 'is' : 'are';
   $('#trSummary').innerHTML = `<div class="notice info">
     Rated <b>${rated.length}</b> unequipped cards against <b>${chars.length}</b> characters.
-    <b>${junk}</b> score below 35% of your best card in the same slot — those are your safest feed candidates.
+    <b>${junk}</b> score below 35% of your best card in the same slot, and the Vault does not rate them either — those are your safest feed candidates.
+    ${soft ? `<b>${soft}</b> more score that low but the Vault rates them worth holding; they are noted, and sort after the rest.` : ''}
+    ${locks ? `<b>${locks}</b> ${are(locks)} marked lock instead of feed: the Vault rates ${locks === 1 ? 'it' : 'them'} worth a lock in the game client.` : ''}
+    ${kept ? `<b>${kept}</b> ${are(kept)} part of an upgrade the Upgrades tab recommends, and ${are(kept)} kept whatever ${kept === 1 ? 'its' : 'their'} own score.` : ''}
     Always double-check before feeding: this only knows the characters you have marked as owned.</div>`;
   $('#trPanel').classList.remove('hide');
   trCache = { rated, tc: teamCritRate() };
@@ -6644,25 +6729,32 @@ function renderTriageTable() {
   $('#trFlCount').textContent = `${rows.length} shown of ${trCache.rated.length}`;
   $('#trTable').innerHTML = `<thead><tr>
       ${trSortHeader('slot', 'Slot')}${trSortHeader('set', 'Set')}${trSortHeader('rarity', '★')}<th>Main</th><th>Substats</th>
-      ${trSortHeader('fit', 'Best fit', 'Who would actually equip this — whoever\'s real build gains the most buildScore points from swapping it in, restricted to characters who actually list this set as one of their own (t.sets for Heavens, t.space for Space). An element-locked set also rules out everyone off that element.')}
+      ${trSortHeader('fit', 'Best fit', 'Who would actually equip this — whoever\'s real build gains the most buildScore points from swapping it in, restricted to characters who actually list this set as one of their own (t.sets for Heavens, t.space for Space). An element-locked set also rules out everyone off that element. A card the Upgrades tab tells someone to equip names that character instead, tagged upgrade.')}
       ${trSortHeader('score', 'Score', 'How many buildScore points equipping this actually adds for whoever\'s eligible to wear it, given what they already have equipped — stats, set fit AND stat spread against their real weapon and ascension, so a card that just piles onto a stat their build already has plenty of scores low even if its raw stats look strong. If nobody owned is of the right element yet, this ranges over everyone instead, so a strong card is not marked feed just because you haven\'t pulled that element — but if the element is on the roster and nobody there actually runs this set, the score reflects that nobody wants it rather than crediting an off-set character\'s raw stats.')}
-      <th style="width:110px">Quality</th><th>Verdict</th>
+      ${trSortHeader('quality', 'Quality', 'This card\'s Score as a share of the best card in the same slot — what the verdict reads: 70% and up keep, 35% and up hold, below that feed, unless the Vault rates the card worth a lock (marked lock). A card the Upgrades tab recommends is kept whatever its share.', 'width:110px')}<th>Verdict</th>
     </tr></thead><tbody>` +
     rows.slice(0, 800).map(r => {
       const p = Math.round(r.pct * 100);
-      const verdict = r.pct >= 0.7 ? '<span class="tag hit">keep</span>'
-        : r.pct >= 0.35 ? '<span class="tag">hold</span>'
-        : '<span class="tag miss">feed</span>';
-      const noOneTitle = r.noSetMatch
-        ? `Someone owned is the right element for ${esc(r.card.set)}, but nobody has it as one of their own sets. Check the Vault tab before feeding it.`
-        : `${esc(r.card.set)} only works on ${esc((SETS[r.card.set] || {}).elem || '')} characters, and none are in scope. Check the Vault tab before feeding it.`;
+      const v = trVerdict(r);
+      const role = esc((ARCHETYPES[r.vaultRole] || {}).label || r.vaultRole || '');
+      const verdict = r.rec ? `<span class="tag hit" title="Part of ${esc(r.rec)}'s upgrade on the Upgrades tab. Its own swap score can be low, because most of a set switch is the 4-piece bonus, which lands only with the fourth card.">keep</span>`
+        : v === 'keep' ? '<span class="tag hit">keep</span>'
+        : v === 'hold' ? '<span class="tag">hold</span>'
+        : v === 'lock' ? `<span class="tag hit" title="The Vault rates this in the top 2% of ${esc(r.card.slot)} cards for the ${role} role: worth a lock in the game client, though nobody you own gains much from it now.">lock</span>`
+        : `<span class="tag miss">feed</span>${r.vault === 'watch' ? ` <span class="tiny muted" title="The Vault rates this in the top 7% of ${esc(r.card.slot)} cards for the ${role} role, worth holding. Feed it after the rest.">vault: hold</span>` : ''}`;
+      const setElem = (SETS[r.card.set] || {}).elem;
+      const noOneTitle = (r.noSetMatch
+        ? `${setElem ? `Someone owned is ${esc(setElem)}, but n` : 'N'}obody in scope has ${esc(r.card.set)} as one of their own sets.`
+        : `${esc(r.card.set)} only works on ${esc(setElem || '')} characters, and none are in scope.`) +
+        ' The verdict already counts the Vault\'s view: a card it rates worth a lock reads lock, not feed.';
       return `<tr>
         <td><span class="slot ${r.card.slot}">${r.card.slot.slice(0,3)}</span></td>
         <td>${esc(r.card.set)}</td>
         <td><span class="tag r${r.card.rarity}">${r.card.rarity}★</span></td>
         <td class="tiny">${esc(r.card.main)}</td>
         <td class="tiny muted">${(r.card.subs || []).map(s => esc(s.stat) + ' ' + s.value).join(' · ')}</td>
-        <td class="tiny">${r.who ? esc(r.who)
+        <td class="tiny">${r.rec ? `${esc(r.rec)} <span class="tag" title="The Upgrades tab recommends equipping this on ${esc(r.rec)}.">upgrade</span>`
+          : r.who ? esc(r.who)
           : `<span class="muted" title="${noOneTitle}">— no one in scope</span>`}</td>
         <td class="right score">${r.best.toFixed(1)}</td>
         <td><div class="bar"><i style="width:${p}%"></i></div></td>
@@ -6797,7 +6889,32 @@ function runVault() {
   const minR = +$('#vaRar').value;
   const cards = state.cards.filter(c => c.rarity >= minR);
   if (!cards.length) { $('#vaSummary').innerHTML = '<p class="muted">No cards at that rarity yet — add some on the Inventory tab.</p>'; $('#vaPanel').classList.add('hide'); return; }
+  const { rated, roles, haveRole, rosterRole } = vaultRate(cards);
 
+  const locks = rated.filter(r => r.verdict === 'lock').length;
+  const watch = rated.filter(r => r.verdict === 'watch').length;
+  const unfielded = rated.filter(r => r.unfielded).length;
+  const missing = roles.filter(r => !haveRole[r]);
+
+  $('#vaSummary').innerHTML = `<div class="notice info">
+    Of <b>${rated.length}</b> cards, <b>${locks}</b> are worth locking in the game client and
+    <b>${watch}</b> more are worth holding.
+    <b>${unfielded}</b> of those are for a role you cannot field yet${missing.length
+      ? ` — you own no ${missing.map(m => esc(ARCHETYPES[m].label) + ' (' + rosterRole[m] + ' on the roster)').join(', no ')}`
+      : ''}.
+    Feeding those is the expensive kind of mistake, because Triage will happily call them junk
+    until the day you pull the character.</div>`;
+  $('#vaPanel').classList.remove('hide');
+  vaCache = { rated, tc: teamCritRate() };
+  renderVaultTable();
+}
+
+/* The Vault's scoring pass, without the DOM: every card in `cards` against the damage
+   yardstick and every archetype, turned into within-slot percentiles over `cards` itself.
+   runVault renders it; runTriage reads it to mark a would-be feed the Vault rates worth a
+   lock. The percentiles depend on the population, so a caller that wants the Vault tab's
+   own verdicts passes the Vault tab's own card set. */
+function vaultRate(cards) {
   const roles = Object.keys(ARCHETYPES);
   // Which roles the current roster can already field. Not part of any score — it is the
   // difference between "good card" and "good card you cannot use yet", which is the whole
@@ -6852,23 +6969,7 @@ function runVault() {
     return { card, genPct: genP[i], rolePct, role, verdict, unfielded: !!verdict && !haveRole[role],
       lines: damageLines(card), rank: best };
   });
-
-  const locks = rated.filter(r => r.verdict === 'lock').length;
-  const watch = rated.filter(r => r.verdict === 'watch').length;
-  const unfielded = rated.filter(r => r.unfielded).length;
-  const missing = roles.filter(r => !haveRole[r]);
-
-  $('#vaSummary').innerHTML = `<div class="notice info">
-    Of <b>${rated.length}</b> cards, <b>${locks}</b> are worth locking in the game client and
-    <b>${watch}</b> more are worth holding.
-    <b>${unfielded}</b> of those are for a role you cannot field yet${missing.length
-      ? ` — you own no ${missing.map(m => esc(ARCHETYPES[m].label) + ' (' + rosterRole[m] + ' on the roster)').join(', no ')}`
-      : ''}.
-    Feeding those is the expensive kind of mistake, because Triage will happily call them junk
-    until the day you pull the character.</div>`;
-  $('#vaPanel').classList.remove('hide');
-  vaCache = { rated, tc: teamCritRate() };
-  renderVaultTable();
+  return { rated, roles, haveRole, rosterRole };
 }
 
 /* Triage and the Vault score on their Run buttons and keep the result, so a new team crit
@@ -6963,9 +7064,11 @@ const HEAVENS = ['Sun', 'Moon', 'Star', 'Sky'];
    is what orders characters against each other and what the Gain column shows. The two
    differ by the character's perfect total: one raw point was 0.10 of a build point for
    Tropical Motoha and 0.17 for Kiyoshi, so ranking characters on raw gains put whoever has
-   the largest yardstick first. */
+   the largest yardstick first. `upPts` is net of what a trade costs the character it takes a
+   card from (`lossPts`, set only when cards on someone else are allowed): build points are one
+   scale for everyone, so the two sides of a trade subtract. */
 function upGain(row) { return row.group != null ? row.group : row.delta; }
-function upPts(row) { return row.groupPts != null ? row.groupPts : row.pts; }
+function upPts(row) { return (row.groupPts != null ? row.groupPts : row.pts) - (row.lossPts || 0); }
 
 /* Signed, because a per-slot marginal genuinely can be negative — one card out of a
    complete 4-piece is a set bonus lost for a stat gain that rarely covers it, and printing
@@ -7097,11 +7200,72 @@ function upgradesFor(char, minR, sameSetOnly, ignoreEquipped) {
       rec: bestSpace.c, recScore: cardScore(bestSpace.c, t), delta, pts: delta * perPt });
   }
 
+  /* A card taken off someone else is a trade, and every Gain above counts only this side of
+     it. On the real inventory (Sep 2026, with this box unticked) 62 rows took a card from
+     another character, and for 39 of them the giver lost more than the receiver gained, even
+     after putting back their best free card of that slot: six characters were each told to
+     take Futaba's Resolve Space card, worth 0.8-3.3 to them and 4.3 to her. So each trade
+     carries what it costs the giver (`lossPts`, build points, see giverLoss) — for a 4-piece
+     switch, everything the switch takes, from everyone — and upPts nets it off, which is what
+     orders the characters. Nothing is hidden: the user may value one character over another,
+     and build points cannot know that. */
+  if (!ignoreEquipped) {
+    const isTrade = x => x.rec.equipped && x.rec.equipped !== char.n;
+    const used = new Set(rows.map(x => x.rec.id));
+    const lossOf = subset => {
+      const byGiver = {};
+      subset.filter(isTrade).forEach(x => (byGiver[x.rec.equipped] = byGiver[x.rec.equipped] || []).push(x.rec));
+      return Object.keys(byGiver).reduce((s, n) => s + giverLoss(charDef(n), byGiver[n], used, minR), 0);
+    };
+    const grouped = rows.filter(x => x.group != null);
+    const groupLoss = grouped.some(isTrade) ? lossOf(grouped) : 0;
+    rows.forEach(x => {
+      x.lossPts = x.group != null ? groupLoss : isTrade(x) ? lossOf([x]) : 0;
+      if (isTrade(x)) x.giverPts = lossOf([x]);
+    });
+  }
+
   /* Grouped rows rank by what the bundle is worth, so a 4-piece swap stays contiguous and
      above/below the Space row as one block rather than being interleaved by its members'
      individual marginals — some of which are small or negative precisely because the value
      is in the set. Within the block the biggest single win comes first. */
   return rows.sort((a, b) => upGain(b) - upGain(a) || b.delta - a.delta);
+}
+
+/* What `giver` loses, in build points, when the cards in `taken` (all worn by them) go to
+   someone else and each vacated slot gets the giver's best free card of that slot — the same
+   set first, so a like-for-like replacement keeps their set bonus — from cards nobody in this
+   plan is about to take (`used`). That is the immediate cost, not a re-plan: a full Optimise
+   run for the giver may find them better, so read it as an upper bound on the damage.
+
+   It is measured against the giver keeping, per slot, the better of the card they wear and
+   that free one — never against what they wear now. A free card that beats the worn one is
+   an upgrade the giver can make anyway, trade or no trade, so crediting it to the trade made a
+   loss negative: on the real inventory Yaoling "lost" -9.6 giving up a Prosperity Sky whose
+   free replacement was better, and the receiver's net read 12.1 on a 4.4 gain. So a loss is
+   never below 0, and a net never above the receiver's own gain. */
+function giverLoss(giver, taken, used, minR) {
+  const t = target(giver), lo = charLoadout(giver.n), idl = idealLoadout(giver, t, 55);
+  const score = cards => { const b = buildScoreOf(giver, cards, 55, lo, idl, t); return b ? b.raw : 0; };
+  const worn = state.cards.filter(c => c.equipped === giver.n);
+  const refill = new Map();
+  taken.forEach(c => {
+    const free = state.cards.filter(x => !x.equipped && !x.locked && !used.has(x.id) && x.slot === c.slot && x.rarity >= minR);
+    const same = free.filter(x => x.set === c.set);
+    let best = null;
+    (same.length ? same : free).forEach(x => { const s = cardScore(x, t); if (!best || s > best.s) best = { x, s }; });
+    if (best) refill.set(c.id, best.x);
+  });
+  let keep = worn;
+  taken.forEach(c => {
+    const alt = refill.get(c.id);
+    if (!alt) return;
+    const tried = keep.map(x => x.id === c.id ? alt : x);
+    if (score(tried) > score(keep)) keep = tried;
+  });
+  const gone = new Set(taken.map(c => c.id));
+  const lose = worn.filter(c => !gone.has(c.id)).concat(taken.map(c => refill.get(c.id)).filter(Boolean));
+  return Math.max(0, score(keep) - score(lose));
 }
 
 function runUpgrades() {
@@ -7122,7 +7286,7 @@ function runUpgrades() {
     <b>${results.length}</b> of <b>${chars.length}</b> owned characters have a better card sitting
     somewhere in the inventory than what they currently wear. ${ignoreEquipped
       ? 'Restricted to unequipped cards plus whatever each character already wears — nothing here requires taking a card off someone else.'
-      : 'Checked against every card you own, including ones equipped on someone else — those are tagged, and swapping unequips them from that character.'}
+      : 'Checked against every card you own, including ones equipped on someone else — those are tagged with what taking the card costs that character (their build points lost after they put back their best free card of the slot), and each move shows its <b>net</b>, which is how the characters are ordered.'}
     The number in brackets after each card is out of 100 for a perfect card in that slot for that
     character; <b>Gain</b> is what that one swap adds to the character's build score, with their other
     slots left as they are — build points, the same scale for everyone, which is also how the
@@ -7158,7 +7322,8 @@ function runUpgrades() {
                 numbers above, not a share of this one.`
             : ` — one plan, inside the set already worn. The parts do not quite add up to it, because
                 stat spread and the stat targets are not additive across slots.`}</td>
-          <td class="right score">${gainStr(row.groupPts)}</td>
+          <td class="right score">${gainStr(row.groupPts)}${row.lossPts
+            ? `<div class="tiny muted" title="What the whole switch adds here, minus what the cards it takes cost the characters wearing them now">net ${gainStr(upPts(row))}</div>` : ''}</td>
           <td><button class="ghost tiny upSwapAll" data-char="${esc(c.n)}"
             data-swaps="${esc(groupRows.map(x => x.slot + ':' + x.rec.id).join(','))}">Equip all</button></td>
         </tr>` : '';
@@ -7171,12 +7336,14 @@ function runUpgrades() {
           <td class="tiny muted">&rarr;</td>
           <td class="tiny">${esc(row.rec.set)} <span class="tag r${row.rec.rarity}">${row.rec.rarity}★</span> ·
             ${esc(row.rec.main)} <span class="muted">(${cardPct(row.recScore, row.slot, t)})</span>
-            ${ownedBy ? ` <span class="tag" title="Currently equipped on ${esc(ownedBy)} — swapping unequips it from them">on ${esc(ownedBy)}</span>` : ''}
+            ${ownedBy ? ` <span class="tag" title="Currently equipped on ${esc(ownedBy)} — swapping unequips it from them${row.giverPts != null
+              ? `, and costs them ${esc(row.giverPts.toFixed(1))} build points even after they put back their best free card of this slot (same set first; a full Optimise run may find them better)` : ''}">on ${esc(ownedBy)}${row.giverPts != null ? ` · ${esc(gainStr(-row.giverPts))}` : ''}</span>` : ''}
             <div class="tiny muted">${subsHtml(row.rec)}</div></td>
           <td class="right score${row.delta > 0 ? '' : ' muted'}"
             title="${row.group != null
               ? 'Build points this one card adds on its own, with the other slots left as they are — see the total below'
-              : 'Build points this card adds, with the character\'s other slots left as they are'}">${gainStr(row.pts)}</td>
+              : 'Build points this card adds, with the character\'s other slots left as they are'}">${gainStr(row.pts)}${row.group == null && row.lossPts
+              ? `<div class="tiny muted" title="What this card adds here, minus what taking it costs the character wearing it now">net ${gainStr(upPts(row))}</div>` : ''}</td>
           <td><button class="ghost tiny upSwap" data-char="${esc(c.n)}" data-slot="${esc(row.slot)}" data-card="${esc(row.rec.id)}">
             ${ownedBy ? 'Take it' : 'Equip'}</button></td>
         </tr>${foot}`;

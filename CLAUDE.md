@@ -11,7 +11,7 @@ npm install          # playwright only, used for tests
 npm run build        # src/ -> dist/p5x-planner.html
 npm test             # build, then run assertions headlessly; exits non-zero on failure
 npm run scale        # 4000-card synthetic benchmark, compares set policies
-npm run triage-perf  # 4000-card x 65-character Triage timing, in a real browser
+npm run triage-perf  # 4000-card x 68-character Triage timing, in a real browser
 npm run shots        # writes docs/shot-*.png for visual review
 npm run export-tables # build, then write dist/tables.json — the slot/set/substat/alias/
                        # character vocabulary the OCR pipeline should read instead of
@@ -357,6 +357,19 @@ counts what the card's substats do for the stat targets and spread and sits on t
 scale as the Heavens rows. (It used to be `cardScore` + `SPACE_PAIR_VALUE`, comparable only to
 other Space candidates, because the evaluator priced four Heavens cards and knew nothing
 about the Space slot.) Its candidate is still chosen by the pairing/pref rule.
+
+**A trade is priced on both sides.** With "Ignore cards equipped on someone else" unticked,
+a proposed card may be worn by another character, and every gain above counts only the
+receiver: on the real inventory 39 of the 62 rows that took a card off someone cost the giver
+more than the receiver gained. `giverLoss` prices the giver's side — their build points with
+the taken cards replaced by their best free card of each slot (same set first), against their
+keeping the better of the worn card and that free one, so a free upgrade they could make
+anyway is never credited to the trade and a loss is never negative. Each trade row carries
+`giverPts`, each move `lossPts` (a 4-piece switch prices everything it takes, from everyone,
+jointly), and `upPts` nets it off, which is what orders characters. The "on X" tag shows X's
+loss and the footer or row shows the net. Nothing is hidden, because the user may value one
+character above another; but the box is ticked by default now, which is what the user had
+chosen, and then no trade is proposed at all. The Optimise tab, whose Card pool defaults to "All cards", prices its trades the same way: every "on X" tag carries X's loss (`onTagHtml`), and the build-score panel states what the loadout takes, from whom, and the net.
 
 Absolute in-battle numbers remain `totalStat()`'s job, not this one — `damageFactors`
 counts each main at its `MAIN_MAGNITUDE` value for the card's level, the same figure
@@ -805,6 +818,25 @@ Ranking alone was not enough — the set bonus is worth roughly `bonus2 / 2 + bo
 weight vector on the roster, and so the named "best fit" for Fire-locked Strife cards she
 can never benefit from.
 
+**A card the Upgrades tab tells someone to equip is never feed.** The marginal prices one
+card at a time, and most of a set switch is the 4-piece bonus, which lands only with the
+fourth card — so every card of a recommended switch can read as a loss on its own. On a
+synthetic inventory 54 of the 340 unequipped cards in the optimiser's 4-piece plans came out
+feed. `runTriage` therefore runs `upgradesFor` for every character in scope, at the Upgrades
+tab's own current settings, and a card it names carries `rec`: kept whatever its share, and
+named in the Best fit cell with an "upgrade" tag. `who` is still the eligibility argmax the
+tests above pin. The real inventory had no such feed at the defaults (Sep 2026); it is a guard,
+because the case is one set switch away and feeding cannot be undone. It is most of Triage's
+cost now (below). The Optimise tab's other policies are deliberately not asked — see
+`docs/SCORING.md` §6.
+
+**The default order is the verdict's order.** With no column clicked, the "Show" control
+sorts on `quality` — the verdict's tier (`trTier`: plain feed, Vault-held feed, Vault lock,
+hold, keep, an Upgrades pick) and then the within-slot share — not on the raw Score. Raw
+scores differ by slot, so "worst first" by Score interleaved them: on the real inventory the
+first 800 rows, all the table draws, held 199 hold cards while 723 of the 1322 feed
+candidates sat below them. A test pins the order.
+
 Performance matters here: Triage rates up to a few thousand cards against every eligible
 character, so a naive per-(card, character) `buildScore` call recomputes `idealLoadout` and
 re-derives `target()` from scratch every time. `runTriage()` precomputes `t`/`lo`/`idl` once
@@ -816,8 +848,9 @@ call was pure waste shared by every caller, not just Triage. Passing `t` through
 more than the obvious reason: `couplingFactors` memoises on the identity of the target
 object, and `target()` hands back a fresh object every call for characters running on
 generated archetype defaults, so skipping this would silently defeat that cache on every
-single call. `npm run triage-perf` benchmarks the worst case (4000 cards, all 65 characters)
-in a real browser — check it after touching any of this.
+single call. `npm run triage-perf` benchmarks the worst case (4000 cards, all 68 characters)
+in a real browser — check it after touching any of this. It reads about 2.8 s since the
+Upgrades guard (1.6 s before it); the real inventory takes about 1.4 s (0.9 s).
 
 ### Upgrades is two views of two different questions
 
@@ -871,7 +904,12 @@ from Optimise while this is the selected view still refreshes it.
 Once Triage refuses to name anyone, it will happily call a card junk that a future character
 would want, and a fed card does not come back. `runVault()` answers the other question —
 what deserves a lock in the game client — and answers it **without reference to the roster**,
-so pulling a character cannot change a verdict. Two reasons:
+so pulling a character cannot change a verdict. The two answers used to meet only if the user
+cross-checked the tabs card by card; Triage now reads the Vault's scoring pass
+(`vaultRate`, at the Vault tab's own rarity floor) and marks a would-be feed the Vault rates
+worth a lock **lock**, and one it rates worth holding with a "vault: hold" note that sorts
+after the plain feeds (`trVerdict` / `trTier`). On the real inventory that was 76 locks and
+266 notes among 1322 feed candidates (Sep 2026). The Vault itself is unchanged. Two reasons:
 
 1. `VAULT_TARGET`, a synthetic generic-damage weight vector. Support stats are 0 on purpose;
    it is spelled out rather than borrowed from `ARCHETYPES` so a balance tweak cannot
