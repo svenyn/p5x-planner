@@ -744,7 +744,7 @@ reports any stored archetype that disagrees. See `docs/DATA-SOURCES.md`.
 
 Do not ship a scoring change on reasoning alone. Four tools, cheapest first:
 
-**`npm test`** — 278 assertions in `test/optimizer.test.js`, in ten blocks: plan legality and
+**`npm test`** — 280 assertions in `test/optimizer.test.js`, in ten blocks: plan legality and
 set-plan integrity over the whole roster (every plan's total is the build score's numerator,
 and no allowed alternative builds higher than the pick); data integrity (sets and their `bonus2Also` terms,
 Space pairings, roll tiers, `MAIN_MAGNITUDE`, the hand-kept judgement tables, weapon `extra`

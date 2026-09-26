@@ -1252,6 +1252,14 @@ function statSupply(cards, char, stat) { return supplyOf(cards, char, [stat])[st
    `mind` boolean did. */
 const DEFAULT_LOADOUT = { level: 80, asc: 7, weapon: '5', refine: 1, mindSkill: false, mind1: 0, mind2: 0, awareness: 0 };
 
+/* A character whose Setup was never saved is scored on DEFAULT_LOADOUT, and nothing said so:
+   on the real inventory (Sep 2026) that was 21 of the 36 active characters. The default's one
+   generous assumption is the 5★ signature weapon (Kumi's grants +15-30 Speed where her 4★
+   grants none); Mindscape off and Awareness 0 err the other way. The Roster, the Loadout
+   popup and Optimise say which characters rest on it. */
+function setupIsDefault(name) { return !(state.chars[name] && state.chars[name].loadout); }
+const DEFAULT_SETUP_NOTE = 'Scored on the default Setup — the 5★ weapon at refinement 1, no Mindscape, Awareness 0 — because none was ever saved for this character. The weapon alone can move a stat target a long way.';
+
 function charLoadout(name) {
   const saved = state.chars[name] && state.chars[name].loadout;
   const L = Object.assign({}, DEFAULT_LOADOUT, saved || {});
@@ -1274,7 +1282,7 @@ function charLoadout(name) {
    error is under half a point, orders of magnitude below the My Palace contribution that
    nothing here models anyway. */
 function baseTriple(cs, lo) {
-  // lufel publishes Lv100 figures for only 13 of the 65 characters. For the rest a
+  // lufel publishes Lv100 figures for only 15 of the 68 characters. For the rest a
   // Lv100 request falls back to the Lv80 table rather than dropping the base stat
   // entirely — an undercount, but a stated one; `approx` carries it to the UI.
   const want100 = lo.level >= 100;
@@ -3211,6 +3219,8 @@ function runOpt() {
       which costs them <b>${esc(tradeLoss.toFixed(1))}</b> build points
       after they put back their best free cards${now && rec ? ` — net <b>${esc(gainStr(rec.raw - now.raw - tradeLoss))}</b> for the account` : ''}.
       Set <b>Card pool</b> to “Only unequipped cards” to see a loadout that takes nothing.</div>` : '';
+  const setupNote = setupIsDefault(name) ? `<p class="tiny muted" style="margin:10px 0 0">${esc(DEFAULT_SETUP_NOTE)}
+      Set it from ${esc(char.n)}'s card on the Roster tab.</p>` : '';
 
   const bsHtml = `<div class="panel">
     <h2>Build score</h2>
@@ -3227,11 +3237,13 @@ function runOpt() {
                       : '<span class="muted">(no change)</span>'}${tradeHtml}</div>` : ''}
       </div>
       <div class="bparts">${partHtml(now)}</div>
+      ${setupNote}
       ${statsSummaryHtml(char, worn, lo, false, idealLo.cards)}
       ${targetHtml(now, rec)}
       ${spreadHtml(now)}`
     : `<p class="muted" style="margin:0">Nothing is equipped on ${esc(char.n)} yet, so there is no build to score.
          ${rec ? `The loadout below would score <b class="score">${rec.score}</b>/100.` : ''}</p>${tradeHtml}
+       ${setupNote}
        ${statsSummaryHtml(char, recCards, lo, true, idealLo.cards)}
        ${targetHtml(rec, null, true)}
        ${spreadHtml(rec)}`}
@@ -4734,7 +4746,7 @@ function renderHeadroomTable() {
         <td class="tiny">${r.alt
           ? `${esc(r.alt.set)} <span class="tag r${r.alt.rarity}">${r.alt.rarity}★</span> · ${esc(r.alt.main)}
              <span class="score">+${r.altGain.toFixed(1)}</span>
-             ${r.alt.equipped ? ` <span class="tag" title="Currently equipped on ${esc(r.alt.equipped)} — equipping it here unequips it from them">on ${esc(r.alt.equipped)}</span>` : ''}
+             ${r.alt.equipped && r.alt.equipped !== r.ch.n ? ` ${onTagHtml(r.alt, r.ch.n, new Set([r.alt.id]), 2)}` : ''}
              <div class="tiny muted">${subsHtml(r.alt)}</div>`
           : '<span class="muted">nothing better in set</span>'}</td>
         <td>${r.alt
@@ -4760,7 +4772,14 @@ function renderHeadroomTable() {
    not pay 300ms per equip (65 owned characters over 4000 cards) for a table nobody is
    looking at. The hidden flag tracks the SUB-tab, not the Upgrades tab, so equipping from
    Optimise while this view is the selected one still refreshes it. */
+let upViewsStale = false;
 function runUpgradeViews() {
+  /* Nor does anyone pay for the Upgrades pass while the Upgrades tab is not on screen: it
+     runs the plan search for every owned character, and was nearly all of every Equip click on
+     any tab — about 0.47 s on the real inventory (Sep 2026, 36 characters). It is marked
+     stale instead, and showTab runs it on the way in, so it cannot be shown stale either. */
+  if ($('#tab-upgrades').classList.contains('hide')) { upViewsStale = true; return; }
+  upViewsStale = false;
   runUpgrades();
   if (!$('#up-pane-headroom').classList.contains('hide')) runHeadroom();
 }
@@ -4877,7 +4896,9 @@ function renderRoster() {
     return true;
   });
   if (ROSTER_SORTERS[sortBy]) list.sort((a, b) => ROSTER_SORTERS[sortBy](a, b, worn));
-  $('#rsCount').textContent = `${list.length} shown · ${ownedChars().length} owned`;
+  const onDefault = ownedChars().filter(c => setupIsDefault(c.n)).length;
+  $('#rsCount').textContent = `${list.length} shown · ${ownedChars().length} owned` +
+    (onDefault ? ` · ${onDefault} on the default setup` : '');
   $('#rsGrid').innerHTML = list.map(c => {
     const t = target(c);
     const cs = state.chars[c.n];
@@ -4907,6 +4928,7 @@ function renderRoster() {
         <div class="mt">
           <span class="tag">${esc(c.arch)}</span>
           ${b ? '<span class="tag benched">benched</span>' : ''}
+          ${o && !b && setupIsDefault(c.n) ? `<span class="tag" title="${esc(DEFAULT_SETUP_NOTE)} Click the card to set yours.">default setup</span>` : ''}
           ${buildScoreTag(c, worn)}
         </div>
         <div class="tiny muted" style="margin-top:7px">${esc((t.sets[0] || '—'))} 4pc · ${esc(t.space || '—')}</div>
@@ -5077,6 +5099,7 @@ function openLoadout(name) {
       ${buildScoreTag(c, { [c.n]: worn })}</p>
     <h3 style="margin:0 0 8px;font-size:13px">Setup
       <span class="tiny muted" style="font-weight:400;text-transform:none;letter-spacing:0">— level, ascension, weapon, Mindscape, Awareness</span></h3>
+    ${setupIsDefault(name) ? `<p class="tiny muted" style="margin:0 0 8px">These are the defaults, and ${esc(c.n)} is scored on them until you change one — check the weapon first.</p>` : ''}
     ${fields}
     ${statsSummaryHtml(c, worn, L, false, idealLo.cards)}
     ${targetHtml(bs)}
@@ -5604,6 +5627,7 @@ function showTab(tab) {
   $$('nav button').forEach(x => x.classList.toggle('on', x.dataset.tab === tab));
   TABS.forEach(t => $('#tab-' + t).classList.toggle('hide', t !== tab));
   window.scrollTo(0, 0);
+  if (tab === 'upgrades' && upViewsStale) runUpgradeViews();   // deferred while hidden — see runUpgradeViews
 }
 $$('nav button').forEach(b => b.onclick = () => showTab(b.dataset.tab));
 // A click that lands on the dialog element itself (its padding or the ::backdrop,
@@ -5624,7 +5648,15 @@ $('#flClear').onclick = () => {
 };
 $('#optRun').onclick = runOpt;
 $('#optChar').onchange = runOpt;
-$('#trRun').onclick = runTriage;
+/* Triage takes a second or two on a full inventory (it runs the Upgrades search for everyone
+   in scope), and the page cannot paint while it works, so the button looked dead. Say so
+   first, give the browser a frame to show it, then run; the button is off meanwhile. */
+$('#trRun').onclick = () => {
+  const b = $('#trRun');
+  b.disabled = true;
+  $('#trSummary').innerHTML = '<p class="muted">Rating the inventory…</p>';
+  requestAnimationFrame(() => setTimeout(() => { try { runTriage(); } finally { b.disabled = false; } }, 0));
+};
 $('#trShow').onchange = () => { if (trCache) renderTriageTable(); };
 $('#trFlSlot').onchange = () => { syncFilterSetOptions('trFl'); renderTriageTable(); };
 ['#trFlSet','#trFlRar','#trFlMain','#trFlSubMode'].forEach(s => $(s).onchange = renderTriageTable);

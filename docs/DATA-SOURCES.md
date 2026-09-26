@@ -172,7 +172,7 @@ now modelled, from these lufel files:
 
 | Path | Gives |
 |---|---|
-| `/data/characters/<name>/base_stats.js` | HP/ATK/DEF at A0 and A6 for Lv80 (and Lv100 for 13 characters), base Speed / Crit Rate / Crit Multiplier, and the Awakening-7 bonus |
+| `/data/characters/<name>/base_stats.js` | HP/ATK/DEF at A0 and A6 for Lv80 (and Lv100 for 15 characters), base Speed / Crit Rate / Crit Multiplier, and the Awakening-7 bonus |
 
 | `/data/characters/<name>/weapon.js` | Both weapons: flat HP/ATK/DEF plus the passive with its 7-step refinement ladder |
 | `mind_stats1` / `mind_stats2` in `setting.js` | Mindscape nodes (59 of 65 characters) |

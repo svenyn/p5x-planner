@@ -1042,6 +1042,16 @@ function weightOverrideDrift() {
     });
     fail('every owned character got dressed for the tab checks', own.every(n => state.cards.some(c => c.equipped === n)));
     fail('ownedChars honours the benched flag', (() => { state.chars['Morgana'].benched = true; const ok = !ownedChars().some(c => c.n === 'Morgana'); state.chars['Morgana'].benched = false; return ok && ownedChars().length === own.length; })());
+    fail('the Roster flags an owned character still on the default Setup, and stops once one is saved', (() => {
+      const n = own[0], was = state.chars[n].loadout;
+      const card = () => document.querySelector(`#rsGrid .cc[data-ch="${n}"]`);
+      state.chars[n].loadout = null; renderRoster();
+      const flagged = !!card() && /default setup/.test(card().textContent) && /on the default setup/.test($('#rsCount').textContent);
+      state.chars[n].loadout = Object.assign({}, DEFAULT_LOADOUT); renderRoster();
+      const cleared = !!card() && !/default setup/.test(card().textContent);
+      state.chars[n].loadout = was; renderRoster();
+      return flagged && cleared;
+    })());
 
     // ---- Triage ----
     $('#trScope').value = 'owned'; $('#trRar').value = '2';
@@ -1298,6 +1308,19 @@ function weightOverrideDrift() {
       toggleLoadoutLock('Morgana');
       return ok && worn.every(c => !c.locked);
     })());
+    fail('an equip made while the Upgrades tab is hidden defers its pass, and opening the tab runs it', (() => {
+      showTab('roster');
+      const c = state.cards.find(x => x.equipped === 'Ren Amamiya');
+      upViewsStale = false;
+      const before = document.getElementById('upList').innerHTML;
+      unequipCard(c.id);
+      const deferred = upViewsStale === true && document.getElementById('upList').innerHTML === before;
+      swapCard('Ren Amamiya', c.slot, c.id);
+      showTab('upgrades');
+      const ran = upViewsStale === false;
+      showTab('roster');
+      return deferred && ran && c.equipped === 'Ren Amamiya';
+    })());
     fail('unequipCard clears the wearer and the lock', (() => {
       const c = state.cards.find(x => x.equipped === 'Ryuji Sakamoto' && x.slot === 'Sun'); if (!c) return false;
       c.locked = true; unequipCard(c.id); const ok = c.equipped === null && !c.locked; swapCard('Ryuji Sakamoto', 'Sun', c.id); return ok && c.equipped === 'Ryuji Sakamoto';
@@ -1434,9 +1457,14 @@ function weightOverrideDrift() {
 
   // Triage and Vault through their buttons
   await p.click('nav button[data-tab="triage"]');
-  await p.click('#trRun'); await p.waitForTimeout(300);
+  // the button says so first and runs on the next frame; click and read in one task, or the
+  // run can finish before a separate read arrives — then wait for the fresh summary, not a fixed delay
+  const trBusy = await p.evaluate(() => { const b = document.getElementById('trRun'); b.click();
+    return /Rating the inventory/.test(document.getElementById('trSummary').textContent) && b.disabled; });
+  await p.waitForFunction(() => /Rated \d+/.test(document.getElementById('trSummary').textContent), null, { timeout: 20000 }).catch(() => {});
   const trRows = await p.evaluate(() => document.querySelectorAll('#trTable tbody tr').length);
-  check('Triage renders rows from its Run button', trRows > 0);
+  const trDone = await p.evaluate(() => !document.getElementById('trRun').disabled);
+  check('Triage renders rows from its Run button, saying it is working first', trRows > 0 && trBusy && trDone, JSON.stringify({ trRows, trBusy, trDone }));
   await p.click('nav button[data-tab="vault"]');
   await p.click('#vaRun'); await p.waitForTimeout(300);
   const vaRows = await p.evaluate(() => document.querySelectorAll('#vaTable tbody tr').length);

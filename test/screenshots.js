@@ -44,7 +44,9 @@ const PAGE = 'file://' + path.join(__dirname, '..', 'dist', 'p5x-planner.html');
   await p.selectOption('#optChar','Ryuji Sakamoto');
   await p.waitForTimeout(300);
   await p.screenshot({ path:path.join(__dirname,'..','docs','shot-opt.png') });
-  await p.click('nav button[data-tab="triage"]'); await p.click('#trRun'); await p.waitForTimeout(400);
+  await p.click('nav button[data-tab="triage"]'); await p.click('#trRun');
+  // Triage runs on the frame after its "Rating the inventory…" message, so wait for the result
+  await p.waitForFunction(() => /Rated \d+/.test(document.getElementById('trSummary').textContent), null, { timeout: 20000 });
   await p.screenshot({ path:path.join(__dirname,'..','docs','shot-triage.png') });
   await p.click('nav button[data-tab="vault"]'); await p.click('#vaRun'); await p.waitForTimeout(400);
   await p.screenshot({ path:path.join(__dirname,'..','docs','shot-vault.png') });

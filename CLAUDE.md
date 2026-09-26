@@ -391,7 +391,10 @@ Weights alone cannot express these: weights make stats fungible, a threshold doe
 Awakening-7 bonus, Mindscape nodes, and both weapons with their 7-step refinement ladders —
 and `characters[].loadout` says which of it applies. This is not a detail: Kumi Katayama's
 180 Speed is 73 Speed from cards on a 4★ weapon at A0 with no Mindscape, and 14 on a 5★ R7
-at A7 with it.
+at A7 with it. A character whose Setup was never saved runs on `DEFAULT_LOADOUT` — the 5★
+weapon at R1, no Mindscape, Awareness 0 (Level 80 and Ascension 7 are always forced) — and
+`setupIsDefault` makes the Roster, the Loadout popup and Optimise say so: on the real inventory
+that was 21 of the 36 active characters (Sep 2026), with nothing on screen to tell them apart.
 
 **Every stat starts from the game's own panel baseline**: Speed, Crit Rate and Crit
 Multiplier from `CHAR_STATS` (Awakening 7 replacing them where it publishes a value), SP
@@ -896,8 +899,10 @@ pass. Measured worst case (65 owned characters, 4000 cards, everything equipped)
 for the pass, 53 ms to redraw. Every equip/unequip path goes through `runUpgradeViews()`,
 which skips the headroom pass while its sub-tab is closed — the sub-tab's own handler runs
 it on the way in, so it cannot be shown stale, and nobody pays 300 ms per equip for a table
-they never opened. The flag it reads is the sub-tab's, not the Upgrades tab's, so equipping
-from Optimise while this is the selected view still refreshes it.
+they never opened. Since Sep 2026 it skips both passes while the Upgrades **tab** is not on
+screen, sets `upViewsStale`, and `showTab('upgrades')` runs them on the way in: the Upgrades
+pass was nearly all of every Equip click on any tab (about 0.47 s on the real inventory,
+now 37 ms). A test pins the deferral.
 
 ### The Vault tab is the counterweight to that gate
 

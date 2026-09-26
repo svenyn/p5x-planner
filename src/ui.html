@@ -611,24 +611,28 @@ dialog::-webkit-scrollbar-thumb:hover{background:var(--dim2)}
     <div class="panel">
       <h2>Where this data came from, and what to distrust</h2>
       <p class="tiny muted" style="margin:0 0 8px">
-        Everything here was assembled from community guides in August 2026, not from the game client.
-        Three things are worth knowing before you trust a recommendation:
+        Sets, Space cards, character builds and base stats come from lufel.net, regenerated on
+        25 Sep 2026 under the Global client's names. Main stat values and substat roll tiers were
+        measured from your own scanned 5★ cards. Four things are worth knowing before you trust a
+        recommendation:
       </p>
       <ol class="tiny muted" style="margin:0;padding-left:18px;line-height:1.7">
-        <li><b>Guide sites use different set names.</b> Game8 and Prydwen translate the same sets
-            differently, and Fragster uses a third scheme. Confirmed equivalences are handled on import
-            (Strength is Power, Abundance is Prosperity, and so on), but two names —
-            <b>Ruin</b> and <b>Prudence</b> — could not be matched to anything, so they are listed as
-            separate sets with unknown 2-piece effects.</li>
-        <li><b>Main stat magnitudes are not published anywhere.</b> No source lists what a main stat is
-            actually worth at level 25, so the optimiser weights main stats by priority rather than by
-            real numbers.</li>
-        <li><b>Substat roll values come from a single source</b> and were never checked against the
-            client. If a number looks wrong, it may be.</li>
+        <li><b>Stat totals are floors.</b> My Palace and party buffs are not counted, so you may already
+            clear a target this says you miss. The one party buff you can set is the team crit rate on
+            the Roster tab.</li>
+        <li><b>Only 5★ main stat values are measured.</b> Other rarities are assumed to follow the same
+            curve, and a lower-rarity card with no scanned main value is treated as unknown, never as
+            zero.</li>
+        <li><b>Release status is lufel's.</b> Its tags can lag the Global client by a patch. A set or
+            Space card marked unreleased stays in the tables so imports still resolve, but is never
+            recommended; if you can already farm one, the tags are behind the game.</li>
+        <li><b>Weights are lufel's order, not lufel's numbers.</b> Lufel ranks each character's substats;
+            turning that ranking into weights is this tool's own judgement, and a few characters carry
+            recorded exceptions.</li>
       </ol>
       <p class="tiny muted" style="margin:8px 0 0">
-        All of it is editable, and all of it gets much better the moment it is checked against real
-        screenshots from your own game.
+        All of it gets better the moment it is checked against your own game: a screenshot that
+        disagrees with a number here is worth more than any change to the scoring.
       </p>
     </div>
     <div class="panel">
