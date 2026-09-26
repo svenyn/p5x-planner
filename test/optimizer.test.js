@@ -1025,6 +1025,44 @@ function weightOverrideDrift() {
       return m.s === 'ATK%' && near(at(5) - at(0), m.v) && near(at(2) - at(0), m.v * 2 / 5);
     })());
 
+    /* The user's own Miku, card for card (26 Sep 2026): Awareness 0, 5★ weapon at R0, both
+       Mindscape paths at 5. Her character screen read ATK 4627, HP 9358, DEF 1790, crit rate 38,
+       crit multiplier 58.5; in battle, with the Thieves Den, ATK 4746, HP 9831, crit 39, crit
+       multiplier 60.5. Pins her Awakening 7 (+19% on Global), her Labor 4-piece's +8% on her own
+       stats, the weapon's party crit damage staying out of them, and the Den being flat. */
+    {
+      const miku = charDef('Hatsune Miku');
+      const mc = (slot, set, main, mainValue, subs) => ({ slot, set, rarity: 5, level: 25, main, mainValue, subs: subs.map(([stat, value]) => ({ stat, value })) });
+      const cards = [
+        mc('Sun', 'Labor', 'HP', 1080, [['DEF%', 5.2], ['Crit Rate', 3.3], ['Crit Multiplier', 13.9], ['Damage Multiplier', 5.3]]),
+        mc('Moon', 'Labor', 'Damage Multiplier', 25.1, [['DEF%', 8.9], ['ATK%', 7.7], ['Crit Rate', 1.7], ['Crit Multiplier', 11.2]]),
+        mc('Star', 'Labor', 'Crit Rate', 18.8, [['Ailment Accuracy', 7.1], ['Crit Multiplier', 9.2], ['ATK%', 3.2], ['Damage Multiplier', 7.8]]),
+        mc('Sky', 'Labor', 'ATK%', 31.4, [['Damage Multiplier', 5], ['Crit Rate', 2], ['Resistance Pierce', 4.6], ['Crit Multiplier', 10.9]]),
+        mc('Space', 'Hope', 'ATK + DEF', 359, [['DEF%', 10.9], ['SP Recovery', 7.5], ['HP%', 12.8], ['Crit Multiplier', 13.1]])
+      ];
+      const lo = Object.assign({}, DEFAULT_LOADOUT, { weapon: '5', refine: 1, awareness: 0, mind1: 5, mind2: 5, mindSkill: true });
+      const tot = (st, sub) => totalStat(miku, st, sub, cards, lo).total;
+      const screen = { ATK: tot('ATK', 'ATK%'), HP: tot('HP', 'HP%'), DEF: tot('DEF', 'DEF%'), CR: tot('Crit Rate', null), CM: tot('Crit Multiplier', null) };
+      const within = (v, want, rel) => Math.abs(v - want) <= want * rel;
+      fail('the planner reproduces Miku\'s character screen card for card (ATK/HP/DEF within 1.2%, crit exact to the display)',
+        within(screen.ATK, 4627, 0.012) && within(screen.HP, 9358, 0.012) && within(screen.DEF, 1790, 0.012) &&
+        Math.abs(screen.CR - 38) <= 0.5 && Math.abs(screen.CM - 58.5) <= 0.5, JSON.stringify(screen));
+      const noLabor = Object.assign({}, miku, { arch: 'ST DPS' });
+      fail('a Labor 4-piece adds its +8% HP/ATK/DEF only when an Elucidator wears it',
+        near(set4StatLines(cards, miku)['ATK%'], 8) && Object.keys(set4StatLines(cards, noLabor)).length === 0 &&
+        Object.keys(set4StatLines(cards.slice(1), miku)).length === 0);
+      const was = state.den;
+      state.den = { ATK: 119, HP: 473, 'Crit Rate': 1, 'Crit Multiplier': 2 };
+      const row = breakpointRows(cards, idealLoadout(miku, target(miku), 55).cards, miku, target(miku), lo).find(r => r.stat === 'ATK');
+      const summary = statsSummaryHtml(miku, cards, lo, false, null);
+      state.den = was;
+      fail('the Thieves Den is added to the in-battle totals a stat target reads (Miku in battle: ATK 4746)',
+        row && within(row.total, 4746, 0.012) && near(row.den, 119) && /Thieves Den is counted/.test(summary),
+        JSON.stringify(row && { total: row.total, den: row.den }));
+      fail('refinement reads as the game counts it: R0 for a weapon with no extra copies, R6 at the top',
+        refineLabel(1) === 'R0' && refineLabel(7) === 'R6' && refineLabel(undefined) === 'R0');
+    }
+
     /* ================================================================================
        8. Triage, Vault, Upgrades, Headroom on the synthetic inventory
        ================================================================================ */
@@ -1435,7 +1473,7 @@ function weightOverrideDrift() {
 
   // Roster: an owned, dressed character shows a build chip; the owned toggle is wired
   await p.click('nav button[data-tab="roster"]');
-  await p.evaluate(() => { document.getElementById('rsHideUnowned').checked = false; renderRoster(); });
+  await p.evaluate(() => { document.getElementById('rsFilter').value = 'all'; renderRoster(); });
   const chip = await p.evaluate(() => { const g = document.getElementById('rsGrid').innerHTML; return { build: /build <b>\d+<\/b>/.test(g), cards: document.querySelectorAll('#rsGrid [data-own]').length }; });
   check('the roster renders a build chip for a dressed character and an owned toggle per card', chip.build && chip.cards >= 65, JSON.stringify(chip));
   const toggled = await p.evaluate(() => { const before = state.chars['Ann Takamaki'].owned; document.querySelector('[data-own="Ann Takamaki"]').click(); const after = state.chars['Ann Takamaki'].owned; document.querySelector('[data-own="Ann Takamaki"]').click(); return before === false && after === true && state.chars['Ann Takamaki'].owned === false; });
@@ -1455,20 +1493,30 @@ function weightOverrideDrift() {
   const slotBtn = await p.evaluate(() => { const b = document.querySelector('#optOut .slotEquip'); if (!b) return null; const id = b.dataset.card, slot = b.dataset.slot; b.click(); return { ok: state.cards.find(c => c.id === id).equipped === 'Makoto Yuki', slot, one: state.cards.filter(c => c.equipped === 'Makoto Yuki' && c.slot === slot).length }; });
   check('a per-slot Equip button swaps that one card in and leaves one card in the slot', slotBtn && slotBtn.ok && slotBtn.one === 1, JSON.stringify(slotBtn));
 
-  // Triage and Vault through their buttons
+  // Triage and Vault through their buttons. A run already exists, so opening the tab starts none
+  // (the first-visit run has its own check below) and the click here is the button's own.
+  await p.evaluate(() => { if (!trCache) runTriage(); });
   await p.click('nav button[data-tab="triage"]');
   // the button says so first and runs on the next frame; click and read in one task, or the
   // run can finish before a separate read arrives — then wait for the fresh summary, not a fixed delay
-  const trBusy = await p.evaluate(() => { const b = document.getElementById('trRun'); b.click();
-    return /Rating the inventory/.test(document.getElementById('trSummary').textContent) && b.disabled; });
+  const trBusy = await p.evaluate(() => { const b = document.getElementById('trRun'); const idle = !b.disabled; b.click();
+    return idle && /Rating the inventory/.test(document.getElementById('trSummary').textContent) && b.disabled; });
   await p.waitForFunction(() => /Rated \d+/.test(document.getElementById('trSummary').textContent), null, { timeout: 20000 }).catch(() => {});
   const trRows = await p.evaluate(() => document.querySelectorAll('#trTable tbody tr').length);
   const trDone = await p.evaluate(() => !document.getElementById('trRun').disabled);
   check('Triage renders rows from its Run button, saying it is working first', trRows > 0 && trBusy && trDone, JSON.stringify({ trRows, trBusy, trDone }));
-  await p.click('nav button[data-tab="vault"]');
+  // The Vault is Triage's second view now
+  await p.click('#trSubtabs button[data-trtab="vault"]');
   await p.click('#vaRun'); await p.waitForTimeout(300);
   const vaRows = await p.evaluate(() => document.querySelectorAll('#vaTable tbody tr').length);
-  check('Vault renders rows from its Run button', vaRows > 0);
+  check('Vault renders rows from its Run button, inside the Triage tab', vaRows > 0 &&
+    await p.evaluate(() => !document.getElementById('tab-triage').classList.contains('hide') && !document.getElementById('tr-pane-vault').classList.contains('hide')));
+  check('showTab("vault") still lands on the Vault, now Triage\'s "Lock for later" view', await p.evaluate(() => {
+    showTab('roster'); showTab('vault');
+    const ok = !document.getElementById('tab-triage').classList.contains('hide') && !document.getElementById('tr-pane-vault').classList.contains('hide') &&
+      document.getElementById('tr-pane-feed').classList.contains('hide') && !document.querySelector('nav button[data-tab="vault"]');
+    showTrPane('feed'); return ok;
+  }));
 
   // Upgrades: both sub-tabs
   await p.click('nav button[data-tab="upgrades"]');
@@ -1479,27 +1527,54 @@ function weightOverrideDrift() {
   const hrState = await p.evaluate(() => ({ rows: document.querySelectorAll('#hrTable tbody tr').length, cache: hrRowsCache.length, owned: ownedChars().length, nan: document.getElementById('hrTable').innerHTML.indexOf('NaN') >= 0 }));
   check('the Weakest slots sub-tab runs its pass on the way in (five rows per owned character)', hrState.cache === hrState.owned * 5 && hrState.rows > 0 && !hrState.nan, JSON.stringify(hrState));
 
-  // Targets dialog: open, save, reset
+  // Targets dialog: open, save, reset. The Setup is edited in one place, the Loadout popup; the
+  // Targets dialog used to carry a second copy that saved on its own button.
   await p.click('nav button[data-tab="roster"]');
-  await p.evaluate(() => editTargets('Hatsune Miku'));   // has stat targets, so the Setup editor is in the dialog
+  await p.evaluate(() => editTargets('Hatsune Miku'));   // has stat targets, so the dialog shows her Setup line
   await p.waitForTimeout(150);
-  const dlgOpen = await p.evaluate(() => document.getElementById('dlg').open && !!document.getElementById('tSave') && !!document.getElementById('lWeapon'));
-  check('the Targets dialog opens with the loadout editor inside it', dlgOpen);
-  await p.evaluate(() => { document.getElementById('tMMoon2').value = 'HP%'; document.getElementById('lRefine').value = '5'; document.getElementById('tSave').click(); });
+  const dlgOpen = await p.evaluate(() => document.getElementById('dlg').open && !!document.getElementById('tSave') &&
+    !document.getElementById('lWeapon') && !!document.getElementById('tOpenSetup'));
+  check('the Targets dialog opens without a second Setup editor, and links to the Loadout popup for it', dlgOpen);
+  await p.evaluate(() => { document.getElementById('tMMoon2').value = 'HP%'; document.getElementById('tSave').click(); });
   await p.waitForTimeout(150);
-  const savedT = await p.evaluate(() => { const t = state.chars['Hatsune Miku'].targets, L = charLoadout('Hatsune Miku'); return { moon: t && t.main.Moon, refine: L.refine, closed: !document.getElementById('dlg').open, stamped: target(charDef('Hatsune Miku')).n }; });
-  check('saving targets stores a best-first main list and the Setup fields', savedT.moon && savedT.moon.length === 3 && savedT.moon[2] === 'HP%' && savedT.refine === 5 && savedT.closed && savedT.stamped === 'Hatsune Miku', JSON.stringify(savedT));
+  const savedT = await p.evaluate(() => { const t = state.chars['Hatsune Miku'].targets; return { moon: t && t.main.Moon, closed: !document.getElementById('dlg').open, stamped: target(charDef('Hatsune Miku')).n }; });
+  check('saving targets stores a best-first main list', savedT.moon && savedT.moon.length === 3 && savedT.moon[2] === 'HP%' && savedT.closed && savedT.stamped === 'Hatsune Miku', JSON.stringify(savedT));
+  const setupSaved = await p.evaluate(() => {
+    editTargets('Hatsune Miku'); document.getElementById('tOpenSetup').click();
+    const body = document.getElementById('dlgBody');
+    const r = { inPopup: body.dataset.view === 'loadout' && body.dataset.name === 'Hatsune Miku' && !!document.getElementById('lRefine') };
+    const sel = document.getElementById('lRefine'); sel.value = '5'; sel.dispatchEvent(new Event('change'));
+    Object.assign(r, { refine: charLoadout('Hatsune Miku').refine, stillOpen: document.getElementById('dlg').open,
+      setupKeptOpen: !!document.querySelector('#dlgBody details.sect[data-k="setup"][open]'), targetsKept: !!state.chars['Hatsune Miku'].targets });
+    document.getElementById('dlg').close(); return r;
+  });
+  check('the Setup link opens the Loadout popup, whose fields save on change, keep the popup and its open section, and leave the target alone',
+    setupSaved.inPopup && setupSaved.refine === 5 && setupSaved.stillOpen && setupSaved.setupKeptOpen && setupSaved.targetsKept, JSON.stringify(setupSaved));
   const editedOnly = await p.evaluate(() => { const t = state.chars['Hatsune Miku'].targets; editTargets('Hatsune Miku');
     const r = { keys: Object.keys(t).sort().join(','), slots: Object.keys(t.main).join(','), hint: /data: ATK% \/ Damage Multiplier/.test(document.getElementById('dlgBody').innerHTML) };
     document.getElementById('dlg').close(); return r; });
   check('the save keeps only the edit (the Moon list) and the dialog shows the data\'s value beside it', editedOnly.keys === 'main,v' && editedOnly.slots === 'Moon' && editedOnly.hint, JSON.stringify(editedOnly));
   await p.evaluate(() => { editTargets('Hatsune Miku'); document.getElementById('tReset').click(); });
   await p.waitForTimeout(100);
-  check('"Reset to default" clears the saved target', await p.evaluate(() => state.chars['Hatsune Miku'].targets === null && state.chars['Hatsune Miku'].loadout && state.chars['Hatsune Miku'].loadout.refine === 5 && !document.getElementById('dlg').open));
-  await p.evaluate(() => { editTargets('Hatsune Miku'); document.getElementById('lRefine').value = '3'; document.getElementById('tSave').click(); });
-  await p.waitForTimeout(100);
-  check('saving the Targets dialog with only its Setup fields changed stores no target, so the character keeps following the data',
-    await p.evaluate(() => state.chars['Hatsune Miku'].targets === null && charLoadout('Hatsune Miku').refine === 3));
+  check('"Reset to default" clears the saved target, keeps the Setup, and offers undo', await p.evaluate(() => state.chars['Hatsune Miku'].targets === null &&
+    state.chars['Hatsune Miku'].loadout && state.chars['Hatsune Miku'].loadout.refine === 5 && !document.getElementById('dlg').open &&
+    !document.getElementById('toast').classList.contains('hide') && !!undoSnap));
+  check('undo brings the reset target back, and a second undo has nothing left to take', await p.evaluate(() => {
+    document.getElementById('toastUndo').click();
+    const t = state.chars['Hatsune Miku'].targets;
+    const back = !!t && t.main.Moon.length === 3 && document.getElementById('toast').classList.contains('hide') && undoSnap === null;
+    undo();   // nothing to undo: a no-op
+    const still = !!state.chars['Hatsune Miku'].targets;
+    editTargets('Hatsune Miku'); document.getElementById('tReset').click(); hideToast();
+    return back && still && state.chars['Hatsune Miku'].targets === null;
+  }));
+  check('a Setup change in the Loadout popup stores no target, so the character keeps following the data',
+    await p.evaluate(() => {
+      openLoadout('Hatsune Miku');
+      const sel = document.getElementById('lRefine'); sel.value = '3'; sel.dispatchEvent(new Event('change'));
+      document.getElementById('dlg').close();
+      return state.chars['Hatsune Miku'].targets === null && charLoadout('Hatsune Miku').refine === 3;
+    }));
   const teamCritUi = await p.evaluate(() => {
     const input = document.getElementById('rsTeamCrit'), ren = charDef('Ren Amamiya');
     const r = { field: input.value, before: buildScoreOf(ren, state.cards.filter(c => c.equipped === ren.n)).raw };
@@ -1585,27 +1660,337 @@ function weightOverrideDrift() {
   });
   check('an ambiguous row set to "Replace existing" overwrites in place under the same id', decided.replaced && decided.same);
 
+  /* ================================================================================
+     11. The page's safety net and layout (the Sep 2026 UI pass). Each of these was a real
+         defect on the user's 4000-card save, or is the invariant a fix rests on.
+     ================================================================================ */
+  const noCjk = await p.evaluate(() => {
+    const re = /[가-힣ᄀ-ᇿ㄰-㆏぀-ヿ一-鿿]/, bad = [];
+    const walk = (v, where) => {
+      if (typeof v === 'string') { if (re.test(v)) bad.push(where); }
+      else if (v && typeof v === 'object') Object.keys(v).forEach(k => walk(v[k], where + '.' + k));
+    };
+    walk(CHARACTERS, 'CHARACTERS'); walk(SETS, 'SETS'); walk(SPACE_SETS, 'SPACE_SETS'); walk(CHAR_STATS, 'CHAR_STATS');
+    return bad;
+  });
+  check('no character, set, Space card or stat text the page shows carries Korean or Japanese script', noCjk.length === 0, noCjk.slice(0, 3).join(' | '));
+  const tiles = await p.evaluate(() => {
+    let nulls = 0, notNeeded = 0;
+    CHARACTERS.forEach(c => {
+      const t = target(c), h = statsSummaryHtml(c, [], charLoadout(c.n), false, idealLoadout(c, t, 55).cards);
+      if (/width:null/.test(h)) nulls++;
+      if (/not in the perfect build/.test(h)) notNeeded++;
+    });
+    return { nulls, notNeeded };
+  });
+  check('a stat the perfect build carries none of reads "not in the perfect build", never a full bar from width:null%', tiles.nulls === 0 && tiles.notNeeded > 0, JSON.stringify(tiles));
+
+  const saveUi = await p.evaluate(() => {
+    markSaved();
+    const st = () => document.getElementById('saveState').textContent;
+    const r = { clean0: !isDirty() && !/Unsaved/.test(st()) };
+    toggleOwned('Aigis');
+    r.dirty = isDirty() && /Unsaved changes/.test(st()) && document.getElementById('hdrSave').classList.contains('primary');
+    r.toast = !document.getElementById('toast').classList.contains('hide');
+    undo();
+    r.cleanAgain = !isDirty() && !/Unsaved/.test(st()) && state.chars['Aigis'].owned === false;
+    return r;
+  });
+  check('the header says when there are unsaved changes, and an undo back to the saved state clears it', saveUi.clean0 && saveUi.dirty && saveUi.toast && saveUi.cleanAgain, JSON.stringify(saveUi));
+
+  const delUi = await p.evaluate(() => {
+    showTab('inv');
+    const n0 = state.cards.length, c = state.cards.find(x => x.equipped === 'Ren Amamiya');
+    document.getElementById('flQ').value = 'Ren Amamiya'; renderInv();
+    const chip = () => document.querySelector('#rsGrid .cc[data-ch="Ren Amamiya"] .tag.bs').getAttribute('title');
+    const before = chip();
+    document.querySelector(`#invTable [data-del="${c.id}"]`).click();
+    const r = { gone: !state.cards.some(x => x.id === c.id) && state.cards.length === n0 - 1, rosterRedrawn: chip() !== before,
+      toast: /Deleted/.test(document.getElementById('toastMsg').textContent) && !document.getElementById('toast').classList.contains('hide') };
+    document.getElementById('toastUndo').click();
+    const back = state.cards.find(x => x.id === c.id);
+    r.restored = !!back && back.equipped === 'Ren Amamiya' && state.cards.length === n0 && chip() === before;
+    document.getElementById('flQ').value = ''; renderInv();
+    return r;
+  });
+  check('deleting a card from the Inventory redraws the Roster too, and offers an undo that brings it back where it was', delUi.gone && delUi.rosterRedrawn && delUi.toast && delUi.restored, JSON.stringify(delUi));
+
+  const staleUi = await p.evaluate(() => {
+    runTriage();
+    const r = { fresh: !document.querySelector('#trSummary .stale-run') };
+    const c = state.cards.find(x => x.equipped === 'Morgana' && x.slot === 'Sun' && !x.locked);
+    unequipCard(c.id);
+    r.stale = !!document.querySelector('#trSummary .stale-run') && !document.querySelector('#trSummary .stale-tc');
+    swapCard('Morgana', 'Sun', c.id);
+    r.freshAgain = !document.querySelector('#trSummary .stale-run');
+    return r;
+  });
+  check('a Triage run says it is stale after any change it read (an unequip), and not once the change is put back', staleUi.fresh && staleUi.stale && staleUi.freshAgain, JSON.stringify(staleUi));
+
+  const vaultStale = await p.evaluate(() => {
+    runVault();
+    const banner = () => !!document.querySelector('#vaSummary .stale-run');
+    const worn = state.cards.find(x => x.equipped && !x.locked), who = worn.equipped;
+    unequipCard(worn.id);
+    const r = { afterUnequip: banner() };     // the Vault never reads who wears a card
+    swapCard(who, worn.slot, worn.id);
+    const c = state.cards.find(x => x.subs && x.subs.length);
+    c.subs[0].value = +(c.subs[0].value + 0.1).toFixed(1); commit();
+    r.afterRoll = banner();                    // ...but it does read the card itself
+    c.subs[0].value = +(c.subs[0].value - 0.1).toFixed(1); commit();
+    r.afterRevert = banner();
+    return r;
+  });
+  check('the Vault is not marked stale by an equip it never reads, and is by a change to a card', !vaultStale.afterUnequip && vaultStale.afterRoll && !vaultStale.afterRevert, JSON.stringify(vaultStale));
+
+  const undoExpiry = await p.evaluate(() => {
+    const before = snapshotState();
+    const c = state.cards.find(x => !x.equipped);
+    deleteCard(c.id);
+    const r = { offered: !!undoSnap };
+    // a later change that offers no undo of its own: the delete's undo must not survive it, or
+    // pressing it would silently revert this change too
+    openLoadout('Ren Amamiya');
+    const sel = document.getElementById('lRefine'); sel.value = sel.value === '7' ? '6' : '7'; sel.dispatchEvent(new Event('change'));
+    document.getElementById('dlg').close();
+    r.expired = undoSnap === null && document.getElementById('toast').classList.contains('hide');
+    undoSnap = before; undo();                 // put everything back for the checks below
+    r.restored = state.cards.some(x => x.id === c.id);
+    return r;
+  });
+  check('an undo is only offered until the next change, so it can never revert a later edit', undoExpiry.offered && undoExpiry.expired && undoExpiry.restored, JSON.stringify(undoExpiry));
+
+  const optPick = await p.evaluate(() => {
+    const sel = () => document.getElementById('optChar').value;
+    openCharacterDetail('Aigis');                                      // not owned: a roster click-through
+    const c = state.cards.find(x => x.equipped && !x.locked), who = c.equipped;
+    unequipCard(c.id); swapCard(who, c.slot, c.id);                    // two commits
+    const r = { forcedHolds: sel() === 'Aigis' };
+    const opt = document.getElementById('optChar'); opt.value = 'Ren Amamiya'; opt.dispatchEvent(new Event('change'));
+    toggleBenched('Ren Amamiya');                                      // benching the one being looked at
+    r.benchedLeaves = sel() !== 'Ren Amamiya' && !/not owned/.test(opt.options[opt.selectedIndex].text);
+    toggleBenched('Ren Amamiya'); hideToast(); showTab('roster');
+    return r;
+  });
+  check('Optimise holds a character it was sent to, but an ordinary pick follows the owned list', optPick.forcedHolds && optPick.benchedLeaves, JSON.stringify(optPick));
+
+  const loSect = await p.evaluate(() => {
+    const secOpen = k => !!document.querySelector(`#dlgBody details.sect[data-k="${k}"][open]`);
+    openLoadout('Ren Amamiya');
+    document.querySelector('#dlgBody details.sect[data-k="stats"]').open = true;
+    document.querySelector('#dlgBody [data-pick-slot]').click();      // to the card picker...
+    document.getElementById('cpBack').click();                        // ...and back
+    const r = { statsKept: secOpen('stats') };
+    // a character whose Setup was saved, with the section collapsed: the Setup link still opens it
+    openLoadout('Hatsune Miku');
+    document.querySelector('#dlgBody details.sect[data-k="setup"]').open = false;
+    document.getElementById('dlg').close();
+    editTargets('Hatsune Miku'); document.getElementById('tOpenSetup').click();
+    r.linkOpensSetup = !setupIsDefault('Hatsune Miku') && secOpen('setup');
+    document.getElementById('dlg').close();
+    return r;
+  });
+  check('the Loadout popup keeps its open sections through the card picker, and a Setup link opens the Setup', loSect.statsKept && loSect.linkOpensSetup, JSON.stringify(loSect));
+
+  const sameScore = await p.evaluate(() => {
+    openLoadout('Ren Amamiya');
+    const block = [...document.querySelectorAll('#dlgBody .loadout .lo')].find(b => b.querySelector('[data-edit-slot]'));
+    const sl = block.querySelector('[data-edit-slot]').dataset.editSlot;
+    const popup = block.querySelector('h4 .score').textContent.trim();
+    openCardPicker('Ren Amamiya', sl);
+    const picker = document.querySelector('#dlgBody .pick tr.cur td.score').textContent.trim();
+    document.getElementById('dlg').close();
+    return { sl, popup, picker };
+  });
+  check('an equipped card reads the same score in the Loadout popup and in the card picker it opens', sameScore.popup === sameScore.picker, JSON.stringify(sameScore));
+
+  /* confirm() answers an instant false in a sandboxed frame without allow-modals, which would
+     make Load do nothing whenever there is unsaved work, so the question is asked in the toast. */
+  const askUi = await p.evaluate(() => {
+    const snap = snapshotState();
+    toggleBenched('Ren Amamiya');                                    // something unsaved
+    const fi = document.getElementById('fileIn'); let picked = 0; fi.click = () => { picked++; };
+    requestLoad();
+    const r = { asked: !document.getElementById('toast').classList.contains('hide') &&
+      document.getElementById('toastUndo').textContent === 'Load anyway' && picked === 0 };
+    document.getElementById('toastUndo').click();
+    r.yesOpensPicker = picked === 1;
+    markSaved(); requestLoad(); r.noQuestionWhenSaved = picked === 2;
+    delete fi.click; undoSnap = snap; undo();
+    return r;
+  });
+  check('Load over unsaved changes asks in the toast, and its button opens the file picker; with nothing unsaved it just opens',
+    askUi.asked && askUi.yesOpensPicker && askUi.noQuestionWhenSaved, JSON.stringify(askUi));
+
+  const bindUi = await p.evaluate(() => {
+    showTab('inv'); renderInv(); renderRoster();   // the Roster drawn last used to capture Inventory's Edit buttons
+    document.querySelector('#invTable [data-edit]').click();
+    const view = () => document.getElementById('dlg').open && document.getElementById('dlgBody').dataset.view;
+    const r = { invEdit: view() === 'card' };
+    document.getElementById('dlg').close();
+    renderRoster(); renderInv();                     // ...and the Inventory drawn last, the Roster's Targets buttons
+    document.querySelector('#rsGrid [data-edit]').click();
+    r.rosterTargets = view() === 'targets';
+    document.getElementById('dlg').close();
+    const was = { tr: trSort.key, trDir: trSort.dir, inv: invSort.key };
+    document.querySelector('#trTable th.sortH[data-sort="set"] button').click();
+    r.triageSorted = trSort.key === 'set' && invSort.key === was.inv;
+    trSort.key = was.tr; trSort.dir = was.trDir; renderTriageTable();
+    return r;
+  });
+  check('every table and grid binds its own buttons: Inventory Edit, Roster Targets and a Triage column header each do their own job', bindUi.invEdit && bindUi.rosterTargets && bindUi.triageSorted, JSON.stringify(bindUi));
+
+  const chipUi = await p.evaluate(() => {
+    trVerdictSel = []; renderTriageTable();
+    const chip = [...document.querySelectorAll('#trChips [data-tier]')].find(b => !b.disabled);
+    const tier = +chip.dataset.tier, count = +chip.querySelector('b').textContent;
+    chip.click();
+    const shown = parseInt(document.getElementById('trFlCount').textContent, 10);
+    const want = trCache.rated.filter(x => trTier(x) === tier).length;
+    const r = { tier, count, shown, want, pressed: document.querySelector(`#trChips [data-tier="${tier}"]`).getAttribute('aria-pressed') === 'true' };
+    document.querySelector(`#trChips [data-tier="${tier}"]`).click();
+    r.cleared = trVerdictSel.length === 0;
+    return r;
+  });
+  check('a Triage verdict chip counts its verdict and narrows the table to it', chipUi.count === chipUi.want && chipUi.shown === chipUi.want && chipUi.pressed && chipUi.cleared, JSON.stringify(chipUi));
+
+  await p.evaluate(() => { showTab('roster'); trCache = null; vaCache = null; document.getElementById('trPanel').classList.add('hide'); document.getElementById('trSummary').innerHTML = ''; });
+  await p.click('nav button[data-tab="triage"]');
+  await p.waitForFunction(() => /Rated \d+/.test(document.getElementById('trSummary').textContent), null, { timeout: 20000 }).catch(() => {});
+  check('Triage runs by itself the first time it is opened, and so does its Lock for later view', await p.evaluate(() => {
+    const ran = !!trCache && document.querySelectorAll('#trTable tbody tr').length > 0;
+    showTrPane('vault'); const vault = !!vaCache && document.querySelectorAll('#vaTable tbody tr').length > 0;
+    showTrPane('feed'); return ran && vault;
+  }));
+
+  const dlgClick = await p.evaluate(() => {
+    editCard(state.cards[0].id);
+    const d = document.getElementById('dlg'), rc = d.getBoundingClientRect();
+    d.dispatchEvent(new MouseEvent('click', { bubbles: true, clientX: rc.left + 6, clientY: rc.top + 6 }));   // its own padding
+    const stays = d.open;
+    d.dispatchEvent(new MouseEvent('click', { bubbles: true, clientX: 1, clientY: 1 }));                       // the backdrop
+    return { stays, closes: !d.open };
+  });
+  check('a click in the dialog\'s own padding leaves it open; a click on the backdrop closes it', dlgClick.stays && dlgClick.closes, JSON.stringify(dlgClick));
+
+  const a11y = await p.evaluate(() => {
+    showTab('roster'); renderRoster();
+    const fields = [...document.querySelectorAll('main .field')].filter(f => f.querySelector('input, select, textarea'));
+    const unlinked = fields.filter(f => { const l = f.querySelector('label'); return !l || !l.htmlFor || !document.getElementById(l.htmlFor); });
+    const heads = [...document.querySelectorAll('th.sortH')];
+    const cards = document.querySelectorAll('#rsGrid .cc');
+    return { fields: fields.length, unlinked: unlinked.length, heads: heads.length,
+      buttons: heads.filter(h => h.querySelector('button.thBtn') && h.hasAttribute('aria-sort')).length,
+      cardsFocusable: cards.length > 0 && [...cards].every(c => c.tabIndex === 0 && c.getAttribute('role') === 'button') };
+  });
+  check('every field has a linked label, every sortable header is a button with aria-sort, and roster cards are focusable buttons',
+    a11y.fields > 20 && a11y.unlinked === 0 && a11y.heads > 0 && a11y.buttons === a11y.heads && a11y.cardsFocusable, JSON.stringify(a11y));
+
+  const kb = await p.evaluate(() => {
+    const card = document.querySelector('#rsGrid .cc[data-ch]');
+    card.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
+    const body = document.getElementById('dlgBody');
+    const r = { opened: document.getElementById('dlg').open && body.dataset.view === 'loadout' && body.dataset.name === card.dataset.ch };
+    const lo = body.querySelector('.loadout'), setup = body.querySelector('details.sect[data-k="setup"]');
+    r.cardsFirst = !!lo && !!setup && !!(lo.compareDocumentPosition(setup) & Node.DOCUMENT_POSITION_FOLLOWING);
+    document.getElementById('dlg').close();
+    return r;
+  });
+  check('Enter on a roster card opens its Loadout popup, which shows the five cards before the Setup', kb.opened && kb.cardsFirst, JSON.stringify(kb));
+
+  const listUi = await p.evaluate(() => {
+    rosterView = 'list'; renderRoster();
+    const r = { rows: document.querySelectorAll('#rsList tr.rrow').length, shown: parseInt(document.getElementById('rsCount').textContent, 10),
+      gridEmpty: document.getElementById('rsGrid').children.length === 0, panel: !document.getElementById('rsListPanel').classList.contains('hide') };
+    document.querySelector('#rsList tr.rrow').click();
+    r.opens = document.getElementById('dlg').open; document.getElementById('dlg').close();
+    rosterView = 'cards'; renderRoster();
+    return r;
+  });
+  check('the Roster\'s list view draws one row per character shown, and a row opens the Loadout popup', listUi.rows === listUi.shown && listUi.gridEmpty && listUi.panel && listUi.opens, JSON.stringify(listUi));
+  check('a save that ticked the old "Hide not owned" box opens the Roster on owned characters', await p.evaluate(() => {
+    const was = document.getElementById('rsFilter').value;
+    document.getElementById('rsFilter').value = 'all'; applyPrefs({ rsHideUnowned: true });
+    const ok = document.getElementById('rsFilter').value === 'owned';
+    document.getElementById('rsFilter').value = was; renderRoster(); return ok;
+  }));
+
+  const optUi = await p.evaluate(() => {
+    const n = 'Makoto Yuki';
+    renderOpt(n); optStale = false; showTab('opt'); runOpt();
+    const panels = [...document.querySelectorAll('#optOut > .panel')];
+    const plans = panels.filter(pn => /Other set plans considered/.test(pn.textContent))
+      .flatMap(pn => [...pn.querySelectorAll('tbody td.score')].map(td => parseFloat(td.textContent)));
+    // the first alternative's figure is the build score its own five cards would earn
+    const ch = charDef(n), t = target(ch), P4 = +document.getElementById('optP4').value;
+    const rr = bestPlan(ch, poolFor(document.getElementById('optPool').value, +document.getElementById('optRarity').value, n),
+      { policy: document.getElementById('optPolicy').value, p4value: P4 });
+    const a0 = rr.alternatives[0];
+    const a0cards = a0 ? ['Sun', 'Moon', 'Star', 'Sky'].map(sl => a0.picks[sl].c).concat(a0.space ? [a0.space.c] : []) : [];
+    const want = a0 ? buildScoreOf(ch, a0cards, P4, charLoadout(n), idealLoadout(ch, t, P4), t).raw : NaN;
+    const r = { recFirst: panels.length > 1 && /Recommended loadout/.test(panels[0].querySelector('h2').textContent) && /Build score/.test(panels[0].textContent),
+      plans: plans.length, onScale: plans.length > 0 && plans.every(v => v > 0 && v <= 100.5) && Math.abs(plans[0] - want) < 0.051, first: plans[0], want };
+    // "Mark these as equipped" can be taken back
+    const worn = () => state.cards.filter(c => c.equipped === 'Makoto Yuki').map(c => c.id).sort().join();
+    const one = state.cards.find(c => c.equipped === 'Makoto Yuki');
+    unequipCard(one.id);
+    const stripped = worn();
+    document.getElementById('equipBtn').click();
+    r.equipped = worn() !== stripped;
+    document.getElementById('toastUndo').click();
+    r.undone = worn() === stripped;
+    swapCard('Makoto Yuki', one.slot, one.id); hideToast();
+    return r;
+  });
+  check('Optimise leads with the recommendation, scores other plans on the 0-100 build scale, and "Mark these as equipped" can be undone',
+    optUi.recFirst && optUi.onScale && optUi.equipped && optUi.undone, JSON.stringify(optUi));
+
+  const dropUi = await p.evaluate(() => new Promise(res => {
+    const drop = files => { const dt = new DataTransfer(); files.forEach(f => dt.items.add(f));
+      document.body.dispatchEvent(new DragEvent('drop', { dataTransfer: dt, bubbles: true, cancelable: true })); };
+    const n = state.cards.length;
+    drop([new File([JSON.stringify({ cards: [state.cards[0]] })], 'cards.json', { type: 'application/json' })]);
+    setTimeout(() => {
+      const r = { scanToReview: document.getElementById('dlg').open && document.getElementById('dlgBody').dataset.view === 'import' && state.cards.length === n };
+      document.getElementById('dlg').close();
+      markSaved();
+      drop([new File([JSON.stringify(savePayload())], 'p5x-planner-save.json', { type: 'application/json' })]);
+      setTimeout(() => { r.saveLoaded = /Loaded/.test(document.getElementById('dataMsg').textContent) && state.cards.length === n && !isDirty(); res(r); }, 400);
+    }, 300);
+  }));
+  check('a dropped scan file goes to the import review, a dropped save file loads', dropUi.scanToReview && dropUi.saveLoaded, JSON.stringify(dropUi));
+
+  await p.setViewportSize({ width: 390, height: 844 });
+  const phone = await p.evaluate(() => { showTab('opt'); runOpt(); const w = document.documentElement.scrollWidth; showTab('roster'); return w; });
+  await p.setViewportSize({ width: 1280, height: 720 });
+  check('on a phone-width screen the Optimise tab does not scroll sideways (its tables scroll inside themselves)', phone <= 390, `${phone}px wide`);
+
   // Save / load round trip through the real load() path, with an in-page File
   const roundTrip = await p.evaluate(() => new Promise(res => {
     const prefsBefore = collectPrefs();
     document.getElementById('trRar').value = '4';
-    state.teamCrit = 12.5;
+    state.teamCrit = 12.5; state.den = { ATK: 119, HP: 473 };
+    trVerdictSel = [0, 2]; rosterView = 'list';
     const payload = savePayload();
     const json = JSON.stringify(payload);
     const n = state.cards.length, worn = state.cards.filter(c => c.equipped).length;
-    state.cards = []; state.chars['Ren Amamiya'].owned = false; document.getElementById('trRar').value = '2'; state.teamCrit = 0;
+    state.cards = []; state.chars['Ren Amamiya'].owned = false; document.getElementById('trRar').value = '2'; state.teamCrit = 0; state.den = {};
+    trVerdictSel = []; rosterView = 'cards';
     load(new File([json], 'p5x-planner-save.json', { type: 'application/json' }));
     setTimeout(() => {
       res({ n, worn, after: state.cards.length, wornAfter: state.cards.filter(c => c.equipped).length, owned: state.chars['Ren Amamiya'].owned,
         trRar: document.getElementById('trRar').value, msg: document.getElementById('dataMsg').textContent, ids: new Set(state.cards.map(c => c.id)).size, saveShape: Object.keys(payload).join(','),
-        teamCrit: state.teamCrit, teamCritField: document.getElementById('rsTeamCrit').value });
+        teamCrit: state.teamCrit, teamCritField: document.getElementById('rsTeamCrit').value,
+        den: JSON.stringify(state.den), denField: document.querySelector('.denIn[data-stat="ATK"]').value,
+        verdicts: trVerdictSel.join(','), view: rosterView, listShown: !document.getElementById('rsListPanel').classList.contains('hide') });
       document.getElementById('trRar').value = prefsBefore.trRar;
-      state.teamCrit = 0; document.getElementById('rsTeamCrit').value = 0;
+      state.teamCrit = 0; document.getElementById('rsTeamCrit').value = 0; state.den = {}; syncTeamCritField();
+      trVerdictSel = []; rosterView = 'cards'; renderRoster();
     }, 400);
   }));
-  check('a save file round-trips through load(): cards, equips, ownership, the team crit rate and view prefs all come back',
+  check('a save file round-trips through load(): cards, equips, ownership, the team crit rate, the Thieves Den and view prefs (verdict chips, roster view) all come back',
     roundTrip.after === roundTrip.n && roundTrip.wornAfter === roundTrip.worn && roundTrip.owned === true && roundTrip.trRar === '4' && /Loaded/.test(roundTrip.msg) && roundTrip.ids === roundTrip.after &&
-    roundTrip.teamCrit === 12.5 && roundTrip.teamCritField === '12.5',
+    roundTrip.teamCrit === 12.5 && roundTrip.teamCritField === '12.5' && roundTrip.den === JSON.stringify({ ATK: 119, HP: 473 }) && roundTrip.denField === '119' && roundTrip.verdicts === '0,2' && roundTrip.view === 'list' && roundTrip.listShown,
     JSON.stringify(roundTrip));
   check('the save payload has the documented shape', roundTrip.saveShape === 'version,savedAt,nextId,cards,characters,settings,prefs');
   const badLoad = await p.evaluate(() => new Promise(res => {
@@ -1626,7 +2011,7 @@ function weightOverrideDrift() {
 
   // Tabs: the scanning guide is reached from an in-prose link, not the nav
   await p.click('nav button[data-tab="data"]');
-  await p.click('[data-goto="howto"]'); await p.waitForTimeout(100);
+  await p.click('#tab-data [data-goto="howto"] >> nth=0'); await p.waitForTimeout(100);
   check('the in-prose link opens the scanning guide tab', await p.evaluate(() => !document.getElementById('tab-howto').classList.contains('hide') && document.getElementById('tab-data').classList.contains('hide')));
   check('no browser storage is touched (Cowork artifact constraint)', await p.evaluate(() => { try { return localStorage.length === 0 && sessionStorage.length === 0; } catch (e) { return true; } }));
 

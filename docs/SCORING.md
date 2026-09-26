@@ -440,8 +440,8 @@ Four different questions, four different functions. Picking the wrong one is a b
 | Optimise | `bestPlan` | Best loadout for this character from the whole inventory? |
 | Upgrades &rarr; Better cards available | `upgradesFor` | Which swaps improve what they already wear? |
 | Upgrades &rarr; Weakest slots | `headroomRows` | Which equipped card is furthest from the best one that could exist there? |
-| Triage | `runTriage` | For each card I own — keep, hold, or feed? |
-| Vault | `runVault` | Which cards deserve a lock in the game client? |
+| Triage &rarr; Keep or feed | `runTriage` | For each card I own — keep, hold, or feed? |
+| Triage &rarr; Lock for later (the Vault) | `runVault` | Which cards deserve a lock in the game client? |
 
 The two Upgrades views are sub-tabs of one page and are not the same question. The first
 is bounded by what you own; the second is bounded by what the game can mint, so a slot
@@ -567,7 +567,7 @@ the user's inventory is 92% level 0. The Vault applies the same rule. The optimi
 among cards *of the same slot* (`topBySlot`), not in the whole inventory. A Sun card's main
 is always flat HP and a Space card's flat ATK+DEF, so neither can carry a main a damage
 dealer wants; ranked against Moon and Star cards, whose main alone is worth nine rolls,
-every Sun card read as feed. The Vault tab ranks within slot for the same reason.
+every Sun card read as feed. The Vault ranks within slot for the same reason.
 
 The **element gate is hard, not a ranking nudge**: characters off an element-locked set's
 element are removed before either argmax. Ranking alone was not enough — a broad weight
@@ -592,12 +592,12 @@ feed at the defaults (Sep 2026) — its 13 recommended cards graded 66-100% on t
 but the case is one set switch away, and a fed card does not come back. The Optimise tab's
 other policies are not asked: it is a per-character exploration tool, and Leo's four level-25
 Peace cards, which its `pref`, `any4` and `stats` policies use and nobody on the roster lists,
-are what the Vault tab and the "no one in scope" note are for.
+are what the Vault (Triage's "Lock for later" view) and the "no one in scope" note are for.
 
 **The Vault's answer is read too.** Triage is relative to the characters you own, so it
 calls feed a card nobody you own gains from now; the Vault prices the same card against
 every role, blind to the roster. `runTriage` runs `vaultRate` — the Vault's scoring pass
-without the DOM — over the Vault tab's own card set (its percentiles depend on the
+without the DOM — over the Vault view's own card set (its percentiles depend on the
 population, so the two tabs then say the same about the same card), and `trVerdict` marks a
 would-be feed the Vault rates worth a lock **lock**; one it rates worth holding keeps its feed
 verdict with a "vault: hold" note. On the real inventory (Sep 2026) that was 76 locks and 266
@@ -744,7 +744,7 @@ reports any stored archetype that disagrees. See `docs/DATA-SOURCES.md`.
 
 Do not ship a scoring change on reasoning alone. Four tools, cheapest first:
 
-**`npm test`** — 280 assertions in `test/optimizer.test.js`, in ten blocks: plan legality and
+**`npm test`** — 309 assertions in `test/optimizer.test.js`, in ten blocks: plan legality and
 set-plan integrity over the whole roster (every plan's total is the build score's numerator,
 and no allowed alternative builds higher than the pick); data integrity (sets and their `bonus2Also` terms,
 Space pairings, roll tiers, `MAIN_MAGNITUDE`, the hand-kept judgement tables, weapon `extra`
@@ -884,7 +884,7 @@ they read as 0% otherwise. Measured against the roster's top DPS at 100%:
 |---|---|
 | **Main stat magnitudes are measured for 5★ only** | `MAIN_MAGNITUDE` comes from the user's scan of 3947 5★ cards. Other rarities are assumed to sit on the same curve to their level cap; a scanned `mainValue` wins, and an unscanned non-5★ main is unknown, never zero. |
 | **Substat roll tables** | Verified against 3947 real cards for all 13 stats, both layouts. No longer a gap. |
-| **My Palace and party buffs are not modelled** | Every `totalStat` total is a **floor**. Say so wherever one is shown. |
+| **Party buffs are not modelled; the Thieves Den is a user entry** | Every total is a **floor** until the Thieves Den is filled in (header settings, flat points the game shows in battle: see CLAUDE.md). It reaches only the stat targets and the in-battle totals on screen, never `totalStat` or the damage model. Say so wherever a total is shown. |
 | **Party crit rate is a user setting, 0 by default** | Lufel's DPS builds put Crit Multiplier on the Star (35 of the 62 who weight both crit stats list it first, 9 list Crit Rate first) and Crit Rate in the substats. That is right in a party that supplies crit rate: an Elucidator's 20% share, Starlight Ren's, Summer Ichigo's or Beachflower Minami's buffs. On the character's own board crit rate is scarce, so at 0 the engine prefers a Crit Rate Star for most of them. It also recommends splitting the preferred 4-piece with Triumph's +7.5% crit-rate 2-piece for about 15 DPS on the real inventory; both predate Sep 2026 (14 splits in the Aug build). Wavecatcher Miyu, who lists only Crit Multiplier, is the one ceiling exception at 0: her Resonance crit rate (`extraCr`) narrows the gap from 2.6% to 1.7% of a perfect build, 0.5% on the real inventory's setup. The Roster's **team crit rate** is that party's crit rate, one number for the roster (§3). At 20 the perfect Star follows lufel's first choice for 24 of 32 (13 at 0), nothing breaks the ceiling, and the Triumph splits drop from 16 to 14 (5 at 40). It is not a kit fact, so it stays the user's to set. From 30 up, Summer Ichigo's HP% Star falls 0.2-0.7% behind a Crit Multiplier one, because her own party buff is counted once in her kit and again in the setting. |
 | **Weights run past a kit's cap** | A weight prices a stat linearly, so a buffer's ATK% past the target where their buffs stop growing, Kira's Ailment Accuracy past the 90% his Bleed passive reads, and a healer's SP Recovery past what her rotation spends all keep their full weight. The stat-target term values reaching a cap; nothing discounts running past it. For sets, `prefSetLift` stops this from overturning lufel's order. For mains and substats it remains, and it is why an Elucidator's ATK% Star ties lufel's crit Star (0.002% apart). |
 | **A healer's ATK% is coupled with her own Damage Multiplier** | The ATK% / Damage Multiplier product assumes ATK% buys damage. For an ATK-scaling healer it mostly buys healing, yet with any Damage Multiplier weight (the Healer archetype's 1 is enough) it is priced at its marginal against her own damage product — 0.76 of its weight for Lufel. `BUFF_SOURCE_STATS` is the mechanism for taking a stat out; no healer is listed, because none changes a ceiling today. |

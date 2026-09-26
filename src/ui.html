@@ -1,15 +1,22 @@
 <style>
 :root{
+  /* --dim2 labels every field and table header, so it has to clear WCAG AA (4.5:1) on all
+     five backgrounds it sits on; #6e6e7a read 3.4-3.9:1. --red-text is the brand red lifted
+     for text on dark panels, where --red itself reads 4.1:1 — fills and borders keep --red. */
   --bg:#0b0b0d; --panel:#141419; --panel2:#1c1c23; --line:#2c2c36;
-  --ink:#f2f2f4; --dim:#9a9aa6; --dim2:#6e6e7a;
-  --red:#e6274a; --red-dim:#7a1528; --gold:#e8b64c; --purple:#a86fd0; --blue:#4c8fe8;
+  --ink:#f2f2f4; --dim:#9a9aa6; --dim2:#83838f;
+  --red:#e6274a; --red-text:#ee4265; --red-dim:#7a1528; --gold:#e8b64c; --purple:#a86fd0; --blue:#4c8fe8;
   --ok:#3fbf7f;
 }
 *{box-sizing:border-box}
 body{margin:0;background:var(--bg);color:var(--ink);
   font:14px/1.5 "Segoe UI",-apple-system,system-ui,sans-serif;-webkit-font-smoothing:antialiased}
 h1,h2,h3{margin:0;font-weight:700;letter-spacing:-.01em}
-a{color:var(--red)}
+a{color:var(--red-text)}
+/* Where the keyboard is, on everything focusable. Text fields already show it with their
+   border colour, so they are left out rather than double-ringed. */
+:focus-visible{outline:2px solid var(--gold);outline-offset:2px}
+input:focus-visible,select:focus-visible,textarea:focus-visible{outline:none}
 button{font:inherit;cursor:pointer;border:1px solid var(--line);background:var(--panel2);
   color:var(--ink);border-radius:6px;padding:7px 12px;transition:.12s}
 button:hover{border-color:var(--red);background:#26262f}
@@ -21,6 +28,14 @@ button.unequip:hover{border-color:var(--ok);background:#153a28}
 button.gold{background:var(--gold);border-color:var(--gold);color:#1a1508;font-weight:600}
 button.gold:hover{background:#ffd257}
 button.sm{padding:3px 8px;font-size:12px}
+button.danger{color:#ff8a9e;border-color:var(--red-dim)}
+button.danger:hover{background:#2a1218;border-color:var(--red)}
+/* Disabled buttons still take the pointer, so their tooltips (the Loadout lock, an empty Triage
+   chip) explain why; they just do not light up. */
+button:disabled{opacity:.45;cursor:default}
+button:disabled:hover{border-color:var(--line);background:var(--panel2)}
+button.ghost:disabled:hover{background:transparent}
+button.primary:disabled:hover{border-color:var(--red);background:var(--red)}
 input,select,textarea{font:inherit;background:#0f0f13;color:var(--ink);
   border:1px solid var(--line);border-radius:6px;padding:6px 9px;outline:none}
 input:focus,select:focus,textarea:focus{border-color:var(--red)}
@@ -30,8 +45,14 @@ th{text-align:left;font-size:11px;text-transform:uppercase;letter-spacing:.06em;
   position:sticky;top:0;background:var(--panel);z-index:2}
 td{padding:7px 10px;border-bottom:1px solid #1e1e26;vertical-align:middle}
 tr:hover td{background:#16161c}
-th.sortH{cursor:pointer;user-select:none}
+/* A sortable header holds a real <button>, so it is reachable and operable from the keyboard;
+   the button fills the cell and the click bubbles to the <th>, which owns the handler. */
+th.sortH{cursor:pointer;user-select:none;padding:0}
 th.sortH:hover{color:var(--ink)}
+th.sortH .thBtn{all:unset;display:block;box-sizing:border-box;width:100%;padding:8px 10px;cursor:pointer}
+th.sortH.right .thBtn{text-align:right}
+th.sortH .thBtn:focus-visible{outline:2px solid var(--gold);outline-offset:-2px}
+.targets th.sortH .thBtn{padding:5px 8px}
 th.sortH .arrow{opacity:.5;margin-left:3px}
 
 header{background:linear-gradient(180deg,#17171d,#0e0e12);border-bottom:1px solid var(--line);
@@ -40,10 +61,27 @@ header{background:linear-gradient(180deg,#17171d,#0e0e12);border-bottom:1px soli
 header .logo{font-size:17px;font-weight:800;display:flex;align-items:center;gap:8px}
 header .logo em{color:var(--red);font-style:normal}
 header .logo img{height:24px;width:24px}
-nav{display:flex;gap:4px;margin-left:auto;flex-wrap:wrap}
+nav{display:flex;gap:4px;flex-wrap:wrap}
 nav button{border:none;background:transparent;color:var(--dim);padding:7px 13px;border-radius:6px;font-weight:600}
 nav button:hover{color:var(--ink);background:#20202a}
 nav button.on{background:var(--red);color:#fff}
+/* The header's right side: the one scoring setting every tab reads, and the file actions
+   every session starts and ends with — nothing persists on its own, so Save is always one
+   click away and says when it is needed. */
+.hdr-right{display:flex;align-items:center;gap:8px;margin-left:auto;flex-wrap:wrap}
+.chipbtn{display:inline-flex;align-items:center;gap:6px;padding:5px 11px;border-radius:20px;font-size:12px;color:var(--dim)}
+.chipbtn b{color:var(--ink);font-family:ui-monospace,monospace}
+.savestate{font-size:12px;color:var(--dim);display:inline-flex;align-items:center;gap:6px;white-space:nowrap}
+.savestate.dirty{color:var(--gold)}
+.savestate .dot{width:8px;height:8px;border-radius:50%;background:var(--gold);box-shadow:0 0 0 3px rgba(232,182,76,.18)}
+.popwrap{position:relative}
+.pop{position:absolute;top:calc(100% + 8px);right:0;z-index:30;width:340px;background:var(--panel2);
+  border:1px solid var(--line);border-radius:10px;padding:14px;box-shadow:0 10px 28px rgba(0,0,0,.55)}
+.pop h3{font-size:13px;margin:0 0 10px}
+.pop h3.sep{margin-top:16px;padding-top:12px;border-top:1px solid var(--line)}
+.dengrid{display:grid;grid-template-columns:1fr 1fr;gap:6px 14px}
+.dengrid label{display:flex;align-items:center;justify-content:space-between;gap:8px;font-size:12px;color:var(--dim)}
+.dengrid input{width:74px}
 main{padding:20px;max-width:1500px;margin:0 auto}
 /* In-page tab strip inside one section (Upgrades). Deliberately not the header nav's
    look — these switch a view within a tab, not the tab itself, so they read as a
@@ -107,10 +145,25 @@ main{padding:20px;max-width:1500px;margin:0 auto}
 .cc.benched{border-left:3px solid var(--gold);opacity:.72}
 .cc.benched:hover{opacity:1}
 .tag.benched{color:var(--gold);border-color:#5c4a1d;background:#241f10}
-.cc .body{padding:10px 11px 11px}
+/* The body fills the card and its buttons sit at the bottom, so a card whose tags wrap to a
+   second line does not leave its Targets/Optimize buttons out of line with its neighbours'. */
+.cc .body{padding:10px 11px 11px;flex:1;display:flex;flex-direction:column}
+.cc .body .acts{margin-top:auto;padding-top:9px;gap:6px}
+.cc:focus-visible{outline:2px solid var(--gold);outline-offset:2px}
 .cc .nm{font-weight:700;font-size:14px;line-height:1.25}
 .cc .al{color:var(--dim2);font-size:12px}
 .cc .mt{display:flex;gap:5px;margin-top:7px;flex-wrap:wrap}
+/* Segmented control: a choice between views of the same thing (Roster cards / list). */
+.seg{display:inline-flex;background:#0f0f13;border:1px solid var(--line);border-radius:7px;padding:2px;gap:2px}
+.seg button{border:none;background:transparent;color:var(--dim);padding:5px 12px;border-radius:5px;font-weight:600}
+.seg button:hover{color:var(--ink);background:#20202a}
+.seg button.on{background:var(--panel2);color:var(--ink);box-shadow:inset 0 0 0 1px var(--line)}
+/* Roster list view: every owned character on one screen, one row each. */
+.rlist tr.rrow{cursor:pointer}
+.rlist tr.rrow:focus-visible{outline:2px solid var(--gold);outline-offset:-2px}
+.rlist .nm{font-weight:700}
+.rlist tr.benched td{opacity:.6}
+.rlist td.acts{white-space:nowrap;text-align:right}
 
 /* Character card, laid out like lufel.net's: portrait first, name and rarity
    over the bottom of the art, details underneath. --el is the element colour,
@@ -145,8 +198,11 @@ main{padding:20px;max-width:1500px;margin:0 auto}
 .portrait .corner.more .moreBtn:hover{background:rgba(10,10,13,.8)}
 .moreMenu{position:absolute;top:26px;right:0;display:flex;flex-direction:column;gap:5px;
   background:var(--panel2);border:1px solid var(--line);border-radius:8px;padding:6px;
-  min-width:118px;box-shadow:0 6px 18px rgba(0,0,0,.45)}
-.moreMenu button{width:100%;text-align:left}
+  min-width:132px;box-shadow:0 6px 18px rgba(0,0,0,.45)}
+.moreMenu button{width:100%;text-align:left;display:flex;align-items:center;gap:8px}
+/* Menu items are toggles that show their state as a tick, not as a coloured button that
+   reads like a label — "Owned" in red used to be the control that un-owns. */
+.moreMenu .ck{display:inline-block;width:12px;color:var(--ok);font-weight:800}
 .el-dot{display:inline-block;width:8px;height:8px;border-radius:50%;
   background:var(--el);box-shadow:0 0 0 2px rgba(0,0,0,.45)}
 .tag.el{border-color:color-mix(in srgb, var(--el) 45%, transparent);
@@ -258,28 +314,154 @@ dialog::-webkit-scrollbar{width:11px}
 dialog::-webkit-scrollbar-track{background:var(--panel)}
 dialog::-webkit-scrollbar-thumb{background:var(--line);border-radius:6px;border:3px solid var(--panel)}
 dialog::-webkit-scrollbar-thumb:hover{background:var(--dim2)}
+/* ---- how-to-read notes, folded: the first sentence stays visible, the rest opens on click ---- */
+details.explain{margin:8px 0 0;font-size:12px;color:var(--dim);line-height:1.6}
+details.explain>summary{cursor:pointer;list-style:none}
+details.explain>summary::-webkit-details-marker{display:none}
+details.explain>summary::after{content:' More';color:var(--red-text);font-weight:600;white-space:nowrap}
+details.explain[open]>summary::after{content:' Less'}
+details.explain>.body{margin-top:6px}
+details.explain>.body p{margin:0 0 6px}
+/* Collapsible sections of a dialog (the Loadout popup's Setup and stats). */
+details.sect{border-top:1px solid var(--line);margin-top:14px;padding-top:10px}
+details.sect>summary{cursor:pointer;list-style:none;font-size:13px;font-weight:700;display:flex;align-items:baseline;gap:8px;flex-wrap:wrap}
+details.sect>summary::-webkit-details-marker{display:none}
+details.sect>summary::before{content:'▸';color:var(--dim2);display:inline-block;width:10px}
+details.sect[open]>summary::before{content:'▾'}
+details.sect>summary .tiny{font-weight:400}
+details.sect>.inner{margin-top:10px}
+
+/* ---- Triage verdict chips: the result's headline counts, and the filter on them ---- */
+.vchips{display:flex;gap:6px;flex-wrap:wrap;margin:0 0 12px}
+.vchip{display:inline-flex;align-items:center;gap:7px;padding:5px 11px;border-radius:20px;font-size:12px;font-weight:600;
+  background:#17171d;color:var(--dim);border:1px solid var(--line)}
+.vchip b{font-family:ui-monospace,monospace;color:var(--ink)}
+.vchip.feed b,.vchip.soft b{color:#e87a5c}
+.vchip.keep b,.vchip.lock b,.vchip.rec b{color:var(--ok)}
+.vchip[aria-pressed="true"]{background:var(--panel2);color:var(--ink);border-color:var(--dim)}
+.vchip.feed[aria-pressed="true"],.vchip.soft[aria-pressed="true"]{background:#2a1712;border-color:#e87a5c}
+.vchip.keep[aria-pressed="true"],.vchip.lock[aria-pressed="true"],.vchip.rec[aria-pressed="true"]{background:#10241a;border-color:var(--ok)}
+.vchip:disabled{opacity:.4}
+
+/* ---- a result scored on data that has changed since ---- */
+.notice.stale-run{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;
+  background:#221c10;border-color:#5c4a1d;border-left-color:var(--gold)}
+
+/* ---- one card line everywhere: substats with their units, coloured by worth when a character is in view ---- */
+.subs .s{white-space:nowrap}
+.subs .s.good{color:var(--ok)}
+.subs .s.bad{opacity:.5}
+.subs .s.hi{color:var(--ok);font-weight:700}
+.subs .sep{color:var(--dim2);margin:0 5px}
+
+/* ---- Optimise: the recommendation's headline ---- */
+.rechead{display:flex;align-items:flex-start;gap:12px 20px;flex-wrap:wrap;margin-bottom:14px}
+.rechead h2{font-size:14px;text-transform:uppercase;letter-spacing:.07em;color:var(--dim);margin:0 0 6px}
+.rechead .headline{font-size:15px}
+.rechead .headline .big{font-family:ui-monospace,monospace;font-size:24px;font-weight:700}
+.rechead .headline .arrow{color:var(--dim2);margin:0 6px}
+.rechead .acts{margin-left:auto;display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.notice.trade{margin:0 0 12px}
+.notice.trade.bad{background:#2a1218;border-color:#6b2433;border-left-color:var(--red)}
+.gainpos{color:var(--ok)}
+
+/* ---- card picker: one compact row per candidate ---- */
+.pick td{padding:6px 8px}
+.pick tr.cur td{background:#10241a}
+
+/* ---- undo, and file drop ---- */
+/* Centred with auto margins, not left:50% + translate: that caps a shrink-to-fit box at half
+   the viewport, which on a phone wrapped the message into a column one word wide. */
+.toast{position:fixed;left:0;right:0;bottom:22px;margin:0 auto;width:fit-content;max-width:calc(100vw - 32px);
+  z-index:80;display:flex;align-items:center;gap:10px;
+  background:#22222b;border:1px solid var(--line);border-radius:10px;padding:8px 8px 8px 16px;font-size:13px;
+  box-shadow:0 10px 30px rgba(0,0,0,.55)}
+.toast .tmsg{margin-right:4px}
+.dropzone{position:fixed;inset:12px;z-index:90;display:flex;flex-direction:column;align-items:center;justify-content:center;
+  text-align:center;border:2px dashed var(--red);border-radius:16px;background:rgba(11,11,13,.88);
+  font-size:18px;font-weight:700;pointer-events:none}
+.dropzone small{display:block;font-size:13px;font-weight:400;color:var(--dim);margin-top:8px;max-width:520px}
+
 .hide{display:none!important}
 .right{text-align:right}
 .nowrap{white-space:nowrap}
+
+/* ---- narrow screens: a laptop tool first, but nothing should need sideways scrolling ---- */
+@media (max-width:760px){
+  header{position:static;padding:10px 12px;gap:8px 10px}
+  header .logo{font-size:15px}
+  nav{order:3;width:100%;flex-wrap:nowrap;overflow-x:auto;scrollbar-width:none}
+  nav button{flex:0 0 auto;padding:6px 10px}
+  .hdr-right{margin-left:0;width:100%}
+  .pop{left:0;right:auto;width:min(340px,calc(100vw - 24px))}
+  main{padding:12px}
+  .panel{padding:12px}
+  /* tables scroll inside themselves instead of widening the page; the .scroll boxes
+     already do, and keep their sticky headers */
+  .panel table,dialog table{display:block;overflow-x:auto}
+  .scroll table{display:table;overflow:visible}
+  .cards{grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
+  .portrait .initials{font-size:36px}
+  .cc .nm{font-size:13px}
+  .rechead .acts{margin-left:0}
+  dialog{padding:14px;width:100%}
+}
 </style>
 
 <header>
   <div class="logo"><img src="data:image/png;base64,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" alt="">P5<em>X</em> &nbsp;Revelation Planner</div>
-  <span class="tiny muted" id="stamp"></span>
-  <nav>
+  <nav aria-label="Sections">
     <button data-tab="roster" class="on">Roster</button>
     <button data-tab="opt">Optimise</button>
     <button data-tab="inv">Inventory</button>
     <button data-tab="triage">Triage</button>
-    <button data-tab="vault">Vault</button>
     <button data-tab="upgrades">Upgrades</button>
-    <button data-tab="data">Save / Load</button>
+    <button data-tab="data">Data</button>
   </nav>
+  <div class="hdr-right">
+    <div class="popwrap">
+      <button class="ghost chipbtn" id="setBtn" aria-haspopup="true" aria-expanded="false" aria-controls="setPop"
+        title="Scoring settings every tab reads">Team crit <b id="setTc">0%</b></button>
+      <div class="pop hide" id="setPop" role="dialog" aria-label="Scoring settings">
+        <h3>Scoring settings</h3>
+        <div class="field">
+          <label for="rsTeamCrit">Team crit rate %</label>
+          <input id="rsTeamCrit" type="number" value="0" min="0" max="100" step="0.1" style="width:90px">
+        </div>
+        <p class="tiny muted" style="margin:8px 0 0">Crit rate your supports add to every damage dealer: about 15 for
+          one crit buffer such as Summer Ichigo, plus 5-10 from your Elucidator. At 0, only each character's own counts.
+          Lufel's Crit Multiplier picks assume a crit support, so at 0 the tool reads crit rate as scarce and favours
+          Crit Rate instead. It changes every build score, recommendation and Triage score; stat totals and stat
+          targets stay each character's own.</p>
+        <h3 class="sep">Thieves Den <span class="tiny muted" style="font-weight:400">in battle</span></h3>
+        <div class="dengrid">
+          <label>ATK <input class="denIn" data-stat="ATK" type="number" min="0" step="1" value="0"></label>
+          <label>HP <input class="denIn" data-stat="HP" type="number" min="0" step="1" value="0"></label>
+          <label>DEF <input class="denIn" data-stat="DEF" type="number" min="0" step="1" value="0"></label>
+          <label>Speed <input class="denIn" data-stat="Speed" type="number" min="0" step="1" value="0"></label>
+          <label>Crit rate % <input class="denIn" data-stat="Crit Rate" type="number" min="0" step="0.1" value="0"></label>
+          <label>Crit mult % <input class="denIn" data-stat="Crit Multiplier" type="number" min="0" step="0.1" value="0"></label>
+          <label>Ailment acc % <input class="denIn" data-stat="Ailment Accuracy" type="number" min="0" step="0.1" value="0"></label>
+          <label>SP recovery % <input class="denIn" data-stat="SP Recovery" type="number" min="0" step="0.1" value="0"></label>
+        </div>
+        <p class="tiny muted" style="margin:8px 0 0">What the Thieves Den — its level's items and its Qualia rating — adds
+          to every character in combat. The game shows it on the stat screen once a battle starts, not on the character
+          screen, so the difference between the two is the number to enter. It counts toward stat targets and the
+          in-battle totals shown beside them, as lufel's targets include it; nothing else.</p>
+      </div>
+    </div>
+    <span class="savestate" id="saveState" aria-live="polite"></span>
+    <button class="sm" id="hdrLoad" title="Replace everything here with a save file">Load</button>
+    <button class="sm" id="hdrImport" title="Merge a scan's cards.json files into this inventory">Import scan</button>
+    <button class="sm" id="hdrSave" title="Download a save file. This tool keeps nothing between sessions on its own.">Save</button>
+  </div>
 </header>
 
 <main>
   <div id="nodata" class="notice hide">
-    No cards yet. Add a few on the <b>Inventory</b> tab, or load a save file on the <b>Save / Load</b> tab.
+    No cards yet. <button class="primary sm" id="emptyLoad">Load save file</button> or drop one anywhere on this page.
+    Starting fresh? Add cards on the <button class="linky" data-goto="inv">Inventory</button> tab, or
+    <button class="linky" data-goto="howto">scan them in</button>.
   </div>
 
   <!-- ===================== OPTIMISE ===================== -->
@@ -373,13 +555,31 @@ dialog::-webkit-scrollbar-thumb:hover{background:var(--dim2)}
   </section>
 
   <!-- ===================== TRIAGE ===================== -->
+  <!-- Two answers about the same cards, side by side like Upgrades' two views: what the
+       roster you own can use (Keep or feed), and what deserves a lock in the game client
+       whoever you own (Lock for later, the Vault). Triage already reads the Vault's pass, so
+       the verdicts agree; this puts the two halves of "what do I do with this card" together. -->
   <section id="tab-triage" class="hide">
+    <div class="subtabs" id="trSubtabs" role="tablist" aria-label="Triage views">
+      <button data-trtab="feed" class="on" role="tab" aria-selected="true">Keep or feed</button>
+      <button data-trtab="vault" role="tab" aria-selected="false">Lock for later</button>
+    </div>
+
+    <div id="tr-pane-feed">
     <div class="panel">
       <h2>Keep or feed</h2>
-      <p class="tiny muted" style="margin:0 0 10px">
-        Every card is scored against every character you own, and rated by its best match.
-        With a large inventory this is the fastest way to find what is safe to feed away.
-      </p>
+      <details class="explain" style="margin:0 0 12px"><summary>Every unequipped card is scored against every character
+        you own and rated by its best match, graded against the best card of the same slot.</summary>
+        <div class="body">
+          <p>70% of the best card in its slot and up is <b>keep</b>, 35% and up <b>hold</b>, below that <b>feed</b>.
+            A card the Vault rates in the top 2% of its slot for some role reads <b>lock</b> instead of feed, and one it
+            rates in the top 7% keeps its feed verdict with a note and sorts after the rest. A card the Upgrades tab
+            recommends equipping is kept whatever its own score, because most of a set switch is the 4-piece bonus,
+            which lands only with the fourth card.</p>
+          <p>The Score is the build-score points equipping the card adds for whoever gains most from it, against what
+            they really wear, with the card's main stat priced at its level cap. It only knows the characters you have
+            marked as owned — the <b>Lock for later</b> view is the counterweight.</p>
+        </div></details>
       <div class="row">
         <div class="field"><label>Rate against</label><select id="trScope">
           <option value="owned">Characters I own</option>
@@ -392,9 +592,10 @@ dialog::-webkit-scrollbar-thumb:hover{background:var(--dim2)}
           <option value="5">5★ only</option></select></div>
         <button class="primary" id="trRun">Rate inventory</button>
       </div>
-      <div id="trSummary" style="margin-top:12px"></div>
+      <div id="trSummary" style="margin-top:12px" aria-live="polite"></div>
     </div>
     <div class="panel hide" id="trPanel">
+      <div id="trChips" class="vchips" role="group" aria-label="Show only these verdicts"></div>
       <div class="row" style="margin-bottom:10px">
         <div class="field"><label>Slot</label><select id="trFlSlot"><option value="">Any</option></select></div>
         <div class="field"><label>Set</label><select id="trFlSet"><option value="">Any</option></select></div>
@@ -413,21 +614,22 @@ dialog::-webkit-scrollbar-thumb:hover{background:var(--dim2)}
       <div class="subpills" id="trFlSubPills" style="margin-bottom:10px"></div>
       <div class="scroll"><table id="trTable"></table></div>
     </div>
-  </section>
+    </div><!-- /tr-pane-feed -->
 
-  <!-- ===================== VAULT ===================== -->
-  <section id="tab-vault" class="hide">
+    <!-- ===================== VAULT (Lock for later) ===================== -->
+    <div id="tr-pane-vault" class="hide">
     <div class="panel">
       <h2>Lock these</h2>
-      <p class="tiny muted" style="margin:0 0 10px">
-        Triage only knows the characters you own today, so it will mark a card 'feed' when nobody
-        on your current roster can wear it. This tab is the counterweight: cards worth locking in
-        the game client because they will still be good later. Two reasons qualify a card — it is
-        loaded with the stats every damage dealer wants, or it is near the top of your inventory
-        for one of the eight archetypes, which is the whole space of stat profiles the game asks
-        for. Rankings are within a slot and take no notice of who you own, so pulling a character
-        cannot change them.
-      </p>
+      <details class="explain" style="margin:0 0 12px"><summary>Cards worth locking in the game client because they will
+        still be good later, whoever you own.</summary>
+        <div class="body">
+          <p>Keep or feed only knows the characters you own today, so it will mark a card feed when nobody on your
+            current roster can wear it. This view is the counterweight. Two reasons qualify a card: it is loaded with
+            the stats every damage dealer wants, or it is near the top of your inventory for one of the eight
+            archetypes, which is the whole space of stat profiles the game asks for.</p>
+          <p>Rankings are within a slot and take no notice of who you own, so pulling a character cannot change them.
+            Lock is the top 2% of a slot for its best role, hold the top 7%.</p>
+        </div></details>
       <div class="row">
         <div class="field"><label>Minimum rarity</label><select id="vaRar">
           <option value="4">4★ and up</option><option value="5">5★ only</option>
@@ -459,6 +661,7 @@ dialog::-webkit-scrollbar-thumb:hover{background:var(--dim2)}
       <div class="subpills" id="vaFlSubPills" style="margin-bottom:10px"></div>
       <div class="scroll"><table id="vaTable"></table></div>
     </div>
+    </div><!-- /tr-pane-vault -->
   </section>
 
   <!-- ===================== UPGRADES ===================== -->
@@ -475,13 +678,19 @@ dialog::-webkit-scrollbar-thumb:hover{background:var(--dim2)}
     <div id="up-pane-better">
     <div class="panel">
       <h2>Better cards available</h2>
-      <p class="tiny muted" style="margin:0 0 10px">
-        For every character you own, this compares what they currently wear against the best card
-        for that slot anywhere in your inventory — including cards equipped on someone else, which
-        are tagged with their current owner. This reuses the same optimiser as the Optimise tab, so
-        it agrees with what you would get running that tab per character; it just does all of them
-        at once and shows only the slots that would actually change.
-      </p>
+      <details class="explain" style="margin:0 0 12px"><summary>Every owned character's current cards against the best
+        whole loadout your inventory can give them, showing only the slots that would change.</summary>
+        <div class="body">
+          <p>This reuses the Optimise tab's optimiser, so it agrees with what you would get running that tab per
+            character; it just does all of them at once. With "Ignore cards equipped on someone else" unticked it
+            also proposes cards worn by another character, tagged with their current owner and what taking the card
+            costs them.</p>
+          <p>The number in brackets after each card is out of 100 for a perfect card in that slot for that character.
+            <b>Gain</b> is what that one swap adds to the character's build score with their other slots left as they
+            are, in build points, the same scale for everyone, which is also how characters are ordered. Rows that make
+            up one 4-piece switch are bracketed with what the whole switch is worth; that is the number to read, since
+            most of it is the set bonus, which lands only once all of them are equipped.</p>
+        </div></details>
       <div class="row">
         <div class="field"><label>Minimum rarity to consider</label><select id="upRar">
           <option value="4">4★ and up</option>
@@ -501,17 +710,16 @@ dialog::-webkit-scrollbar-thumb:hover{background:var(--dim2)}
     <div id="up-pane-headroom" class="hide">
       <div class="panel">
         <h2>Weakest slots</h2>
-        <p class="tiny muted" style="margin:0 0 10px">
-          One row per equipped slot on every character you own, ranked by how much room is left in it.
-          <b>Headroom</b> is the raw score a perfect card for that slot would add over the one worn now
-          &mdash; the same number shown beside every card score elsewhere in the tool. It is measured
-          against a card that may not exist in your inventory, so this is "where is this character
-          weakest", not "what can I equip today"; the other view answers that.
-          Headroom is in one character's own score units, so it compares that character's five slots
-          against each other and nothing else &mdash; <b>Build&nbsp;+</b> is the cross-character
-          version of the same question, the build-score points a perfect card in this slot would add,
-          and the table is sorted by it out of the box.
-        </p>
+        <details class="explain" style="margin:0 0 12px"><summary>One row per slot on every character you own, ranked by the
+          build-score points a perfect card there would add.</summary>
+          <div class="body">
+            <p>This is "where is this character weakest", measured against a card that may not exist in your inventory,
+              not "what can I equip today"; the other view answers that. <b>Build&nbsp;+</b> is the build-score points a
+              perfect card in the slot would add, and compares across characters; the table is sorted by it out of the box.</p>
+            <p><b>Headroom</b> is the raw score a perfect card for that slot would add over the one worn now, the same
+              number shown beside every card score elsewhere in the tool. It is in one character's own score units, so it
+              compares that character's five slots against each other and nothing else.</p>
+          </div></details>
         <div class="row">
           <div class="field"><label>Show</label><select id="hrShow">
             <option value="all">Every slot</option>
@@ -546,7 +754,8 @@ dialog::-webkit-scrollbar-thumb:hover{background:var(--dim2)}
       <div class="row">
         <div class="field"><label>Show</label><select id="rsFilter">
           <option value="all">All characters</option>
-          <option value="owned">Owned only</option></select></div>
+          <option value="owned">Owned</option>
+          <option value="unowned">Not owned</option></select></div>
         <div class="field"><label>Element</label><select id="rsElement"><option value="">Any</option></select></div>
         <div class="field"><label>Sort</label><select id="rsSort">
           <option value="release-desc" selected>Release order (newest first)</option>
@@ -557,21 +766,17 @@ dialog::-webkit-scrollbar-thumb:hover{background:var(--dim2)}
           <option value="build">Build score (high-low)</option>
           <option value="owned">Owned first</option></select></div>
         <div class="field"><label>Search</label><input id="rsQ" placeholder="name or element"></div>
-        <label class="check"><input type="checkbox" id="rsHideUnowned"> Hide not owned</label>
         <label class="check"><input type="checkbox" id="rsHideBenched"> Hide benched</label>
-        <span class="tiny muted" id="rsCount"></span>
-      </div>
-      <div class="row" style="margin-top:10px">
-        <div class="field">
-          <label title="Lufel's Crit Multiplier picks assume a crit support in the team. At 0 the tool reads crit rate as scarce and favours Crit Rate instead. Changes every build score, recommendation and Triage score; stat totals and stat targets stay each character's own.">Team crit rate %</label>
-          <input id="rsTeamCrit" type="number" value="0" min="0" max="100" step="0.1" style="width:75px">
-        </div>
-        <span class="tiny muted" style="max-width:560px;padding-bottom:8px">Crit rate your supports add to every damage dealer:
-          about 15 for one crit buffer such as Summer Ichigo, plus 5-10 from your Elucidator. At 0, only each
-          character's own counts.</span>
+        <div class="field"><label>View</label>
+          <div class="seg" id="rsView" role="group" aria-label="Roster view">
+            <button type="button" data-view="cards" class="on" aria-pressed="true">Cards</button>
+            <button type="button" data-view="list" aria-pressed="false">List</button>
+          </div></div>
+        <span class="tiny muted" id="rsCount" style="padding-bottom:8px"></span>
       </div>
     </div>
     <div class="grid cards" id="rsGrid"></div>
+    <div class="panel hide" id="rsListPanel"><table class="rlist" id="rsList"></table></div>
   </section>
 
   <!-- ===================== DATA ===================== -->
@@ -580,7 +785,9 @@ dialog::-webkit-scrollbar-thumb:hover{background:var(--dim2)}
       <h2>Save your work</h2>
       <p class="tiny muted" style="margin:0 0 10px">
         This tool keeps nothing between sessions on its own — download a save file when you are done,
-        and load it back next time. The file is plain JSON, so the OCR pipeline can write it directly.
+        and load it back next time. The header's <b>Save</b> button does the same and turns red when there is
+        something unsaved; you can also drop a save file anywhere on the page to load it. The file is plain
+        JSON, so the OCR pipeline can write it directly.
       </p>
       <div class="row">
         <button class="primary" id="dlSave">Download save file</button>
@@ -618,8 +825,8 @@ dialog::-webkit-scrollbar-thumb:hover{background:var(--dim2)}
       </p>
       <ol class="tiny muted" style="margin:0;padding-left:18px;line-height:1.7">
         <li><b>Stat totals are floors.</b> My Palace and party buffs are not counted, so you may already
-            clear a target this says you miss. The one party buff you can set is the team crit rate on
-            the Roster tab.</li>
+            clear a target this says you miss. The one party buff you can set is the team crit rate, from
+            the header.</li>
         <li><b>Only 5★ main stat values are measured.</b> Other rarities are assumed to follow the same
             curve, and a lower-rarity card with no scanned main value is treated as unknown, never as
             zero.</li>
@@ -634,10 +841,12 @@ dialog::-webkit-scrollbar-thumb:hover{background:var(--dim2)}
         All of it gets better the moment it is checked against your own game: a screenshot that
         disagrees with a number here is worth more than any change to the scoring.
       </p>
+      <p class="tiny muted" style="margin:8px 0 0" id="stamp"></p>
     </div>
     <div class="panel">
       <h2>Danger zone</h2>
-      <button id="wipe">Clear everything</button>
+      <button class="danger" id="wipe">Clear everything</button>
+      <span class="tiny muted" style="margin-left:8px">You can undo it for 15 seconds afterwards.</span>
     </div>
   </section>
 
@@ -648,7 +857,7 @@ dialog::-webkit-scrollbar-thumb:hover{background:var(--dim2)}
       <p class="tiny muted">
         Typing four thousand cards into the Inventory tab is not a plan. The <code>ocr/</code> folder
         in this repository reads card detail panels straight off the screen while you click through the
-        card list, and writes the JSON file the <b>Save / Load</b> tab imports. The install, the
+        card list, and writes the JSON file the <b>Import scan</b> button imports. The install, the
         calibration and the one-off check are done once; after that a scan is a single command.
       </p>
       <div class="notice info tiny" style="margin:12px 0 0">
@@ -841,7 +1050,7 @@ python ocr/autowalk.py --rarity 5                        <span class="cm"># just
             leave it running.
           </p>
           <p class="tiny muted" style="margin-top:10px">
-            <b>Catching up after a few pulls.</b> Export a save from the <b>Save / Load</b> tab first, sort
+            <b>Catching up after a few pulls.</b> Save first (the header's <b>Save</b> button), sort
             the inventory by order obtained, and start from the newest end:
           </p>
           <pre class="cmd">python ocr/watch.py --rarity 5 --known p5x-save.json --expect 12</pre>
@@ -896,7 +1105,7 @@ python ocr/autowalk.py --rarity 5                        <span class="cm"># just
         <div class="step">
           <h3>Import into the planner <span class="when">per scan</span></h3>
           <p class="tiny muted">
-            Go to <button class="linky" data-goto="data">Save / Load</button> → <b>Import cards (merge)</b>
+            Press <b>Import scan</b> in the header (or <button class="linky" data-goto="data">Data</button> → <b>Import cards (merge)</b>)
             and pick <code>cards.json</code>. You can select several at once, and you should: a session
             leaves one file per rarity tier, and importing them separately merges each against an inventory
             the previous import already changed. Picked together they are read into a single review.
@@ -996,7 +1205,7 @@ python ocr/review_cards.py cards-2 <span class="cm"># for a batch run with --out
               <td class="muted">Not your fault and not fixable by recalibrating. Two set names from the
                 community guides — <b>Ruin</b> and <b>Prudence</b> — could not be matched to any verified
                 set list. See the provenance notes on the
-                <button class="linky" data-goto="data">Save / Load</button> tab.</td></tr>
+                <button class="linky" data-goto="data">Data</button> tab.</td></tr>
           <tr><td>A substat value is rejected as out of range</td>
               <td class="muted">That <code>sub{n}_value</code> box is overlapping the row above or below.
                 Recalibrate the one box.</td></tr>
@@ -1014,7 +1223,7 @@ python ocr/review_cards.py cards-2 <span class="cm"># for a batch run with --out
       <p class="tiny muted" style="margin:0">
         Nothing here is required. The <button class="linky" data-goto="inv">Inventory</button> tab takes
         cards one at a time through a keyboard-driven form, and the
-        <button class="linky" data-goto="data">Save / Load</button> tab's file picker takes a whole
+        <button class="linky" data-goto="data">Data</button> tab's file picker takes a whole
         <code>cards.json</code> or saved file at once, merging it into what you already have. For a few
         dozen cards the form is faster than calibrating anything. It is the four-thousand-card case the
         pipeline exists for.
@@ -1027,3 +1236,14 @@ python ocr/review_cards.py cards-2 <span class="cm"># for a batch run with --out
   <button class="ghost dlg-close" onclick="document.getElementById('dlg').close()" aria-label="Close" title="Close">✕</button>
   <div id="dlgBody"></div>
 </dialog>
+
+<!-- One-level undo for the actions that are easy to regret. Moved into the dialog while one
+     is open, since a modal dialog sits above everything else on the page. -->
+<div id="toast" class="toast hide" role="status" aria-live="polite">
+  <span class="tmsg" id="toastMsg"></span>
+  <button class="sm" id="toastUndo">Undo</button>
+  <button class="ghost sm" id="toastClose" aria-label="Dismiss" title="Dismiss">✕</button>
+</div>
+<div id="dropzone" class="dropzone hide" aria-hidden="true">Drop to load
+  <small>A save file replaces everything here. Scan files (cards.json, one or several) are merged into this
+    inventory through the import review instead.</small></div>

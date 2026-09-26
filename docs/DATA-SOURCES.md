@@ -193,15 +193,29 @@ was silently dropped. The generator writes Hatsune Miku's ATK awakening, which l
 under `attack`, as `attack_per` — every other 5★ ATK awakening is `attack_per: 29`, and
 `charBaseStat` reads only that key. Her value also changed in the Sep 2026 refresh, from
 `{hp_per: 20, crit_rate: 12}` (the only two-stat awakening lufel has ever listed) to that
-`attack: 29`; lufel's new value is followed, and an A7 Miku's panel is the check.
+`attack: 29`. The user's own panels settled it (26 Sep 2026): both of lufel's values are
+wrong for Global, which is **ATK +19%**. The old one cannot be right — with +20% HP her HP could
+not read below about 9470 whatever the rest of her Setup, and her screen reads 9358 — and with
+every other ATK% source pinned (weapon R0 30, cards 42.3, Mindscape ATK path 5 = 20% read off the
+game's own Mindscape screen, her Labor 4-piece 8%) her screen's ATK 4627 leaves 19 for the
+awakening. It is in `GLB_STAT_OVERRIDES`, and a test reproduces her whole screen card for card.
+The old value's `crit_rate: 12` was her Mindscape crit node (+12% at level 5), which the screen
+does show.
 
 Two more corrections live in the generator rather than in `src/data.js`, so a regeneration
 keeps them. Lufel gives Fuuka Speed 0 (and SP 0) where every character acts at 100, so a
 Speed of 0 keeps the value `src/data.js` already has and says so on stderr. And
 `GLB_STAT_OVERRIDES` holds Global numbers that differ from lufel's JP ones, with the in-game
-evidence beside each: today only Makoto Niijima's second Mindscape node, which reads
-Resistance Pierce 7.5% on Global where lufel has Crit Rate 12% — the user's own panel. It had been
-a hand edit that the next regeneration would have reverted.
+evidence beside each. Two today: Makoto Niijima's second Mindscape node, which reads
+Resistance Pierce 7.5% on Global where lufel has Crit Rate 12% — the user's own panel, and a hand
+edit until the generator carried it — and Hatsune Miku's Awakening 7 (ATK +19%, above). Either
+field (`mind`, `aw`) can be overridden.
+
+**What the game's own screens showed about the stat model** (Miku, 26 Sep 2026): a 4-piece's
+unconditional line is part of the wearer's stats (her Labor +8% is on her character screen, so
+`SET4_STATS` counts such lines); a weapon's *party* buff is not (her "+18.1% party crit damage"
+is on neither screen, so it left `KIT_STAT_BUFFS`); the Thieves Den adds only in battle, as
+lufel's guide says; and the game counts weapon refinement from R0.
 
 **Awakening 7 is live on Global**, contrary to an earlier reading of this file. It is worth
 a great deal — Kasumi Yoshizawa's `attack_per: 29` moves her zero-card ATK from 1986 to

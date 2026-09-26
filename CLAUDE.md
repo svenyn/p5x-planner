@@ -12,7 +12,8 @@ npm run build        # src/ -> dist/p5x-planner.html
 npm test             # build, then run assertions headlessly; exits non-zero on failure
 npm run scale        # 4000-card synthetic benchmark, compares set policies
 npm run triage-perf  # 4000-card x 68-character Triage timing, in a real browser
-npm run shots        # writes docs/shot-*.png for visual review
+npm run shots        # writes docs/shot-*.png for visual review, laptop and phone width;
+                     # `npm run shots -- path/to/save.json` shoots a real save instead
 npm run export-tables # build, then write dist/tables.json — the slot/set/substat/alias/
                        # character vocabulary the OCR pipeline should read instead of
                        # hand-copying src/data.js
@@ -51,6 +52,77 @@ executes immediately on load and depends on both of the others:
 artifact where those APIs fail. Persistence is explicit JSON download/upload only
 (`save()` / `load()` in `logic.js`). Do not add browser storage; it will silently break
 the artifact build.
+
+Because the save file is the only persistence, the page guards it without storage: the header
+says "Unsaved changes" and turns Save red whenever the state differs from the last load or save
+(`isDirty`), the page asks before it is closed on unsaved work (`beforeunload`), and loading over
+unsaved work asks first. A dropped file loads too: a save (it carries `characters`) replaces
+everything, a scan's card list goes to the import review.
+
+### The page's plumbing: `commit()`, fingerprints, undo
+
+Added in the Sep 2026 UI pass; each piece closes a defect found on the real inventory.
+
+- **Every change to state goes through `commit()`** — cards, equips, locks, ownership and
+  benching, targets, setups, the team crit rate, imports. It redraws Inventory, Roster and the
+  Optimise picker, runs Optimise and Upgrades if they are on screen (both defer while hidden —
+  `optStale`, `upViewsStale` — and `showTab` runs them on the way in), marks Triage/Vault runs
+  stale and updates the save indicator. Before it, each action redrew its own pick of views:
+  Inventory's ✕ redrew only Inventory, a target reset never re-ran Optimise, "Mark these as
+  equipped" left the Roster's chip stale. A new mutation path must call it.
+- **"Changed" is a fingerprint comparison, not a counter.** `dataSignature()` hashes the cards,
+  ownership, targets, setups and team crit (about 2 ms over 4000 cards). The save indicator
+  compares it with `savedSig`. A Triage run stores `triageSig()` and the Vault `vaultSig()`, and
+  `markStaleRuns` shows a "Scored before your latest changes" banner with Re-run when they differ.
+  Until Sep 2026 only the team crit rate was checked, so a Triage run kept its verdicts after an
+  import without a word, on the one screen whose "feed" cannot be undone. Because it compares
+  content, an undo or a value set back reads as current again. **Each run's fingerprint holds what
+  that run reads and nothing else**, or the banner cries wolf: Triage hashes every card with its
+  wearer and lock, ownership, the targets and setups of the characters it rated and of anyone
+  wearing a card (Upgrades' trade pricing reads the giver's), the team crit rate and its controls;
+  the Vault hashes only the cards' contents (`cardsSig(false)`: not who wears them, not locks),
+  ownership (for "unfielded"), team crit and its floor. Hashing wearers had the Vault flagged
+  stale after every equip.
+- **Undo is one level, in memory, offered in a toast for 15 s** (and Ctrl+Z outside a text field)
+  by the actions that are easy to regret: deleting a card, un-owning or benching, resetting a
+  target, taking a card off someone else (`swapCard`), "Equip all", "Mark these as equipped", an
+  import, "Clear everything". `snapshotState()` is the card list and characters as JSON; `undo()`
+  restores into the surviving card objects, so anything holding one still points at the live card.
+  **An undo expires at the next `commit()`** — it restores a whole snapshot, so taken after a later
+  edit it would silently revert that too — and each undoable action commits, then offers its own.
+  A modal dialog sits in the browser's top layer, so an undo offered from inside `#dlg` (the
+  Loadout popup, its card picker) lives in it and Undo redraws that popup; a dialog opened later
+  takes in a plain message but never a pending undo, which would close it and lose an edit.
+- **Questions are asked in the toast, not with `confirm()`** (`askToast`): a sandboxed artifact
+  frame without `allow-modals` answers `confirm()` with an instant false, which would make Load
+  over unsaved work, a dropped save and "Clear everything" silently do nothing. The toast's button
+  is a real click, so it may open the file picker itself.
+- **First visit runs, later edits only mark stale.** Triage, its Vault view, Upgrades and
+  Optimise run on their first visit of a session (an empty tab behind a Run button was a click
+  every session); after that Triage and the Vault are never re-run on their own.
+- **Bind a container's buttons with a selector scoped to that container.** `renderInv` and
+  `renderRoster` both used page-wide `[data-edit]`, and `renderInv` a page-wide `.sortH`, so
+  whichever drew last won: after a load (which ends on the Roster) Inventory's Edit called
+  `editTargets` with a card id and threw, the Roster's Targets buttons went dead after any
+  Inventory redraw, and a Triage header click re-sorted the Inventory. A test clicks each.
+
+- **Optimise holds only a character it was sent to.** `optForced` is the roster click-through's
+  character, kept selected through every redraw even when not owned; a pick from the list clears
+  it, and so does a load. Forcing whatever happened to be selected kept an unowned default over
+  the first character marked owned, and a benched character selected as "not owned".
+
+The UI rules that go with it: answers before explanations (Optimise shows the recommended
+loadout first, the Loadout popup the five cards first, with Setup and stats in collapsible
+sections whose open state is remembered per character through the card picker and the card
+editor — `loSections` — and whose Setup the two Setup links open outright; the popup prices its
+cards against the other four slots, as the picker does, so a card reads one number in both);
+how-to-read prose is folded with `explainHtml(gist, body)`, never deleted; a substat
+is printed with its unit through `subVal`/`subsInlineHtml` (coloured by the character's coupled
+weights when one is in view) and a card block through `cardBlockHtml`; sortable headers come
+from `sortThHtml` (a real button, `aria-sort`); `.field` labels are tied to their controls by
+`linkLabels` (page once, each dialog in `showDlg`). The Vault is Triage's second view ("Lock for
+later"); `showTab('vault')` still lands there. The Setup is edited only in the Loadout popup; the
+Targets dialog links to it.
 
 ### Scoring engine
 
@@ -231,7 +303,8 @@ only, which her kit's coefficients put at about half her damage at Awareness 0. 
 two rates, and the coupling reads her Crit Rate supply `share × extra` higher (a Crit
 Multiplier point is then worth `cr + share × extra`), gated on the weapon being held.
 
-**The team crit rate** (Roster tab, `state.teamCrit`, saved as `settings.teamCritRate`) is
+**The team crit rate** (the header's scoring-settings popover — it sat in the Roster's filter
+bar until Sep 2026 though every tab reads it — `state.teamCrit`, saved as `settings.teamCritRate`) is
 the crit rate the user's usual supports add, in points, one number for the roster. Every
 crit rate above is the character's own, but a real team adds more: an Elucidator's 20%
 share, and a crit-rate buffer such as Summer Ichigo (+14.6%), Starlight Ren (+15.6%) or
@@ -249,7 +322,8 @@ totals and stat targets stay what the character has alone. Lufel's own crit-rate
 the same: Starlight Morgana's 50% counts the Elucidator share and My Palace, not another
 party member's buff. Three memos read it and check it (`damageBase`'s key, `targetMemo`,
 `prefSetLift`). Triage and the Vault keep their last run and mark it stale
-(`markStaleRuns`) rather than re-run a several-second sweep on each edit.
+(`markStaleRuns`) rather than re-run a several-second sweep on each edit — on any change the
+run read, not only this one (see "The page's plumbing" above).
 
 Measured on the default setups: at 10 the perfect Star follows lufel's first choice for
 20 of 32 (13 at 0); at 20, 24 of 32, and perfect is a ceiling for everyone, Wavecatcher
@@ -369,7 +443,12 @@ anyway is never credited to the trade and a loss is never negative. Each trade r
 jointly), and `upPts` nets it off, which is what orders characters. The "on X" tag shows X's
 loss and the footer or row shows the net. Nothing is hidden, because the user may value one
 character above another; but the box is ticked by default now, which is what the user had
-chosen, and then no trade is proposed at all. The Optimise tab, whose Card pool defaults to "All cards", prices its trades the same way: every "on X" tag carries X's loss (`onTagHtml`), and the build-score panel states what the loadout takes, from whom, and the net.
+chosen, and then no trade is proposed at all. The Optimise tab, whose Card pool defaults to "All cards" (the user's choice, kept in Sep 2026), prices its trades the same way: every "on X" tag carries X's loss (`onTagHtml`), and the recommendation's headline states what the loadout takes, from whom, and the net — as a warning when the net is negative, with a one-click "Show a loadout that takes nothing". On the real inventory Kumi's recommendation read "+3" in green while netting −25.1 for the account; the net used to be small print under it.
+
+**The Optimise tab shows plan totals on the build score's 0-100 scale** (`100 × total ÷ idealTotal`,
+both at the tab's 4-piece value), in "Other set plans considered" and the "ignoring set bonuses"
+line. At the default 55 that is exactly the build score each plan would earn. They used to be
+raw (643.6, "598.5 / −45.2") beside the /100 score, a second scale for the same thing.
 
 Absolute in-battle numbers remain `totalStat()`'s job, not this one — `damageFactors`
 counts each main at its `MAIN_MAGNITUDE` value for the card's level, the same figure
@@ -465,10 +544,38 @@ about other rarities. Missing is still **unknown, never zero**: an unscanned 4�
 `mainsMissing` and the target falls back to the relative measure rather than reporting an
 undercount as fact.
 
-**My Palace and party buffs are not modelled** — lufel lists My Palace as its own separate
-requirement — so every total is a floor. Say so wherever a total is shown. The one party
+**Party buffs are not modelled, and the Thieves Den (My Palace) is the user's entry** — so a
+total is a floor unless the Den is filled in. Say so wherever a total is shown. The one party
 buff the scoring can assume, the team crit rate, is kept out of these totals on purpose (see
-`CRIT_PROFILE` above).
+`CRIT_PROFILE` above). The Thieves Den — its level's items and its rating, Qualia, which follows
+the roster's overall power — adds flat stats to everyone **in combat only**: lufel's guide says
+they never show on the character screen before a battle, and lufel's targets count them
+("Thieves Den 50LV 65 / 70LV 110 / Thieves Den Rating"). No formula for them is published, so
+the header settings take the numbers the game shows (`state.den`, `denBonus`, saved as
+`settings.thievesDen`): the in-battle stat screen minus the character screen. `breakpointRows`
+adds them to the worn, perfect and no-card totals alike, after its ideal-side memo, and the
+on-screen totals add them too — **never `totalStat`**, whose conversions feed the damage model.
+Measured on the user's account (26 Sep 2026, Den 56, Qualia 355): ATK +119, HP +473, crit rate
++1, crit multiplier +2.
+
+**A 4-piece's unconditional stat line counts in the totals** (`SET4_STATS`, read by
+`cardStatContribution` through `set4StatLines`), the same rule as a weapon's unconditional
+passive. None did until Sep 2026, and Miku's character screen showed the gap: her HP, ATK and DEF
+all carry her Labor 4-piece's +8% ("when equipped by an Elucidator: all allies' HP, ATK and DEF
++8%"), and the planner matched her screen only with it. Labor (Elucidators only), Reconciliation
+(+15% HP/ATK/DEF in combat), Strife (+15% ATK; the Fire-weak half is conditional) and the
+unreleased Cruelty carry one; everything else in a 4-piece needs a turn, a trigger or an enemy
+state. `bonus4Value` still prices the set as a whole — this is its stat in the in-battle totals.
+It moved one build score on the real inventory (Miku, +1.05) and nothing in the calibration.
+
+**Miku's reference panel** (the user's, 26 Sep 2026, cards exactly as saved) is the one full
+check against the game there is, and a test reproduces it: character screen ATK 4627 / HP 9358 /
+DEF 1790 / crit 38 / crit multiplier 58.5 at Awareness 0, R0, Mindscape 5/5; in battle ATK 4746 /
+HP 9831 / crit 39 / crit multiplier 60.5. It settled three things besides the two above: her
+Awakening 7 is +19% ATK on Global, not lufel's 29 (`GLB_STAT_OVERRIDES`, with every other ATK%
+source pinned), her weapon's "party crit damage +18.1%" is not on her own screen (dropped from
+`KIT_STAT_BUFFS`), and weapon refinement is counted from **R0** in the game — `refine` stays a
+1-7 ladder index, and `refineLabel` shows it one lower.
 
 Four things the score does that look odd until you know why:
 
@@ -554,7 +661,7 @@ Two separate things move a stat here, and only one comes from lufel:
   re-running `gen-awareness.js` after a game patch is what would pick up a future
   character whose kit actually adds one.
 
-The Loadout popup and Targets dialog show both: the universal percentage at the selected
+The Loadout popup's Setup section shows both (the Targets dialog only links to it now): the universal percentage at the selected
 level, and which named abilities are unlocked (name plus a hover tooltip with the full
 effect text) — mostly for reference, since almost none of them add anything beyond that
 percentage. `awareness` defaults to `0`, not maxed like Ascension and weapon do — the
@@ -801,7 +908,7 @@ The Vault uses the same rule; the optimiser does not. A Sun card's main is
 always flat HP and a Space card's flat ATK+DEF, so neither can ever carry a main a damage
 dealer wants; with mains priced at nine rolls, ranking them against Star and Moon cards
 marked essentially every Sun card feed, which is a fact about the slot, not the card — the
-same reason the Vault tab ranks within slot. A test asserts every slot has a 100% card — the user plays almost exclusively in-set, so a
+same reason the Vault ranks within slot. A test asserts every slot has a 100% card — the user plays almost exclusively in-set, so a
 card that completes a preferred set's 4-piece scores a large jump the same way `bestPlan`'s
 Space pick hard-prefers a character's literal preferred set over raw score (see the
 Space-card comment in `bestPlan`). The one carve-out: when **no eligible character is owned
@@ -839,6 +946,12 @@ hold, keep, an Upgrades pick) and then the within-slot share — not on the raw 
 scores differ by slot, so "worst first" by Score interleaved them: on the real inventory the
 first 800 rows, all the table draws, held 199 hold cards while 723 of the 1322 feed
 candidates sat below them. A test pins the order.
+
+**The same six tiers are the verdict chips over the table** (`TR_TIERS`, `trVerdictSel`, saved
+in prefs as `trVerdict`): each counts the cards the other filters leave in its tier, and pressing
+chips narrows the table to them. The counts used to be five numbers inside a sentence, and the
+table could be sorted by verdict but never filtered by it. A test pins that a chip's count is
+the rows it shows.
 
 Performance matters here: Triage rates up to a few thousand cards against every eligible
 character, so a naive per-(card, character) `buildScore` call recomputes `idealLoadout` and
@@ -896,7 +1009,7 @@ Split run/render like Triage and Vault: `runHeadroom()` does the scoring pass in
 `hrRowsCache`, `renderHeadroomTable()` filters and sorts it. Only the "may take a card off
 someone else" toggle changes what is in scope, so it is the one control that re-runs the
 pass. Measured worst case (65 owned characters, 4000 cards, everything equipped): 301 ms
-for the pass, 53 ms to redraw. Every equip/unequip path goes through `runUpgradeViews()`,
+for the pass, 53 ms to redraw. Every change goes through `commit()`, which calls `runUpgradeViews()`,
 which skips the headroom pass while its sub-tab is closed — the sub-tab's own handler runs
 it on the way in, so it cannot be shown stale, and nobody pays 300 ms per equip for a table
 they never opened. Since Sep 2026 it skips both passes while the Upgrades **tab** is not on
@@ -904,14 +1017,18 @@ screen, sets `upViewsStale`, and `showTab('upgrades')` runs them on the way in: 
 pass was nearly all of every Equip click on any tab (about 0.47 s on the real inventory,
 now 37 ms). A test pins the deferral.
 
-### The Vault tab is the counterweight to that gate
+### The Vault is the counterweight to that gate
+
+The Vault is the Triage tab's second view, "Lock for later" (`#tr-pane-vault`, `showTrPane`); it
+had a tab of its own until Sep 2026, and was folded in at the user's request so the two halves
+of "what do I do with this card" sit together. Its ids and functions kept their names.
 
 Once Triage refuses to name anyone, it will happily call a card junk that a future character
 would want, and a fed card does not come back. `runVault()` answers the other question —
 what deserves a lock in the game client — and answers it **without reference to the roster**,
 so pulling a character cannot change a verdict. The two answers used to meet only if the user
 cross-checked the tabs card by card; Triage now reads the Vault's scoring pass
-(`vaultRate`, at the Vault tab's own rarity floor) and marks a would-be feed the Vault rates
+(`vaultRate`, at the Vault view's own rarity floor) and marks a would-be feed the Vault rates
 worth a lock **lock**, and one it rates worth holding with a "vault: hold" note that sorts
 after the plain feeds (`trVerdict` / `trTier`). On the real inventory that was 76 locks and
 266 notes among 1322 feed candidates (Sep 2026). The Vault itself is unchanged. Two reasons:
@@ -1039,9 +1156,15 @@ code change. Prefer fixing `src/data.js` over tuning the scoring constants.
   order, taken from lufel.net's GLB/JP schedule (`/apps/schedule/data.js`) by
   `gen-data-from-lufel.js`, not `release_order` from `character_info.js`, which shares one
   value across the whole launch roster. Do not re-sort it by name.
+- Every change to state ends in `commit()`; an easy-to-regret one takes a `snapshotState()`
+  first and offers `offerUndo()` after (see "The page's plumbing").
+- Event bindings are scoped to their container (`#invTable [data-edit]`, not `[data-edit]`).
+- One name per stat on screen — the canonical `SUBSTATS` names — and every substat is printed
+  through `subVal`, with its unit.
 - Add an assertion to `test/optimizer.test.js` for any invariant you rely on. The existing
   ones cover slot legality, set-plan integrity, off-element rejection, alias resolution and
-  main-stat legality across the whole roster.
+  main-stat legality across the whole roster, and section 11 the page's safety net (unsaved
+  state, undo, staleness, scoped bindings, chips, keyboard and label access, phone width).
 
 ### Import merge: matched by confidence, and growth has to be affordable
 

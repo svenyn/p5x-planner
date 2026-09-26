@@ -1,10 +1,15 @@
 const { chromium } = require('playwright');
 const path = require('path');
 const PAGE = 'file://' + path.join(__dirname, '..', 'dist', 'p5x-planner.html');
+const DOCS = path.join(__dirname, '..', 'docs');
+/* `npm run shots -- path/to/save.json` shoots a real save instead of the synthetic board — the
+   only way to see the tool at the size it is actually used at (4000 cards, three dozen owned). */
+const SAVE = process.argv[2] || null;
 
-(async () => {
-  const b = await chromium.launch(); const p = await b.newPage({ viewport:{width:1440,height:1000} });
-  await p.goto(PAGE); await p.waitForTimeout(300);
+/* The synthetic board: 900 cards, six owned characters, dressed from a shrinking pool so there
+   is still visible room in every build. Roster, Upgrades and the Weakest slots view all read
+   equipped cards and show nothing without this. */
+async function dressSynthetic(p) {
   await p.evaluate(() => {
     let seed=11; const rnd=()=>(seed=(seed*1103515245+12345)%2147483648)/2147483648;
     const pk=a=>a[Math.floor(rnd()*a.length)];
@@ -21,10 +26,6 @@ const PAGE = 'file://' + path.join(__dirname, '..', 'dist', 'p5x-planner.html');
     }
     const own=['Ren Amamiya','Ryuji Sakamoto','Morgana','Kira Kitazato','Yusuke Kitagawa','Makoto Yuki'];
     own.forEach(n=>state.chars[n].owned=true);
-    /* Dress everyone from the optimiser, but only the first four slots and from a pool
-       that shrinks as it goes — the point of these shots is a board with real gear on it
-       that still has visible room in it, not a finished account. Roster, Upgrades and the
-       Weakest slots view all read equipped cards and show nothing without this. */
     own.forEach((n,k)=>{
       const ch=charDef(n);
       // Half the roster is geared from a deliberately narrow slice of the inventory, so
@@ -36,29 +37,55 @@ const PAGE = 'file://' + path.join(__dirname, '..', 'dist', 'p5x-planner.html');
       ['Sun','Moon','Star','Sky'].slice(0,k===0?4:3).forEach(sl=>{const pk=r.best.picks[sl]; if(pk)pk.c.equipped=n;});
       if(r.space&&k%2===0)r.space.c.equipped=n;
     });
-    renderInv(); renderRoster(); renderOpt();
+    commit(); markSaved();
   });
-  // The roster is the landing tab, so Optimise has to be opened before its picker is
-  // visible — selectOption on a hidden <select> just times out.
+}
+
+(async () => {
+  const b = await chromium.launch();
+  const p = await b.newPage({ viewport:{width:1440,height:1000} });
+  await p.goto(PAGE); await p.waitForTimeout(300);
+  if (SAVE) {
+    await p.setInputFiles('#fileIn', SAVE);
+    await p.waitForFunction(() => /Loaded/.test(document.getElementById('dataMsg').textContent), null, { timeout: 60000 });
+    await p.evaluate(() => hideToast());
+  } else await dressSynthetic(p);
+  const first = SAVE ? null : 'Ryuji Sakamoto';
+
   await p.click('nav button[data-tab="opt"]');
-  await p.selectOption('#optChar','Ryuji Sakamoto');
+  if (first) await p.selectOption('#optChar', first);
   await p.waitForTimeout(300);
-  await p.screenshot({ path:path.join(__dirname,'..','docs','shot-opt.png') });
-  await p.click('nav button[data-tab="triage"]'); await p.click('#trRun');
-  // Triage runs on the frame after its "Rating the inventory…" message, so wait for the result
-  await p.waitForFunction(() => /Rated \d+/.test(document.getElementById('trSummary').textContent), null, { timeout: 20000 });
-  await p.screenshot({ path:path.join(__dirname,'..','docs','shot-triage.png') });
-  await p.click('nav button[data-tab="vault"]'); await p.click('#vaRun'); await p.waitForTimeout(400);
-  await p.screenshot({ path:path.join(__dirname,'..','docs','shot-vault.png') });
+  await p.screenshot({ path:path.join(DOCS,'shot-opt.png') });
+  // Triage runs itself on the first visit; wait for that run rather than start another
+  await p.click('nav button[data-tab="triage"]');
+  await p.waitForFunction(() => /Rated \d+/.test(document.getElementById('trSummary').textContent), null, { timeout: 60000 });
+  await p.screenshot({ path:path.join(DOCS,'shot-triage.png') });
+  // the Vault is Triage's second view, and also runs itself on the first visit
+  await p.click('#trSubtabs button[data-trtab="vault"]');
+  await p.waitForSelector('#vaPanel:not(.hide)', { timeout: 60000 });
+  await p.screenshot({ path:path.join(DOCS,'shot-vault.png') });
   await p.click('nav button[data-tab="upgrades"]');
   await p.click('#upSubtabs button[data-uptab="headroom"]'); await p.waitForTimeout(500);
-  await p.screenshot({ path:path.join(__dirname,'..','docs','shot-headroom.png') });
+  await p.screenshot({ path:path.join(DOCS,'shot-headroom.png') });
   await p.click('nav button[data-tab="roster"]'); await p.waitForTimeout(300);
-  await p.screenshot({ path:path.join(__dirname,'..','docs','shot-roster.png') });
-  // The scanning guide has no nav button of its own any more — it is reached from the two
-  // in-prose links on Save / Load. Capture the whole thing, not a viewport of it.
+  await p.screenshot({ path:path.join(DOCS,'shot-roster.png') });
+  await p.click('#rsGrid .cc[data-ch] >> nth=0', { position: { x: 100, y: 150 } });
+  await p.waitForSelector('#dlg[open]'); await p.waitForTimeout(200);
+  await p.screenshot({ path:path.join(DOCS,'shot-loadout.png') });
+  await p.keyboard.press('Escape');
+  // The scanning guide has no nav button of its own — it is reached from the in-prose links
+  // on the Data tab. Capture the whole thing, not a viewport of it.
   await p.click('nav button[data-tab="data"]');
-  await p.click('[data-goto="howto"]'); await p.waitForTimeout(200);
-  await p.screenshot({ path:path.join(__dirname,'..','docs','shot-howto.png'), fullPage:true });
+  await p.click('#tab-data [data-goto="howto"] >> nth=0'); await p.waitForTimeout(200);
+  await p.screenshot({ path:path.join(DOCS,'shot-howto.png'), fullPage:true });
+
+  // A phone-width pass: nothing should scroll sideways, and the roster runs two columns.
+  await p.setViewportSize({ width: 390, height: 844 });
+  await p.click('nav button[data-tab="roster"]'); await p.waitForTimeout(300);
+  await p.screenshot({ path:path.join(DOCS,'shot-phone-roster.png') });
+  await p.click('nav button[data-tab="opt"]'); await p.waitForTimeout(300);
+  await p.screenshot({ path:path.join(DOCS,'shot-phone-opt.png') });
+  const wide = await p.evaluate(() => document.documentElement.scrollWidth);
+  if (wide > 390) console.warn(`phone-width Optimise is ${wide}px wide — something no longer scrolls inside itself`);
   await b.close();
 })();

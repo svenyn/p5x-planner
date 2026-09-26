@@ -265,6 +265,14 @@ const GLB_STAT_OVERRIDES = {
   'Makoto Niijima': {
     mind: [{ s: 'ATK%', v: 20, pct: true }, { s: 'Resistance Pierce', v: 7.5, pct: true, tag: '!' }],
     why: "GLB Mindscape reads Resistance Pierce, not lufel's (JP) Crit Rate - confirmed in-game by the user"
+  },
+  /* Settled from the user's own panels (26 Sep 2026), every other ATK% source pinned: at
+     Awareness 0, weapon R0 and both Mindscape paths at 5, her character screen reads ATK 4627,
+     which needs 47% from Awakening 7 + Mindscape + her Labor 4-piece; Mindscape is +20% (read
+     off the game's Mindscape screen) and Labor +8% (her HP and DEF carry it too), leaving 19. */
+  'Hatsune Miku': {
+    aw: { attack_per: 19 },
+    why: "GLB Awakening 7 is ATK +19%, not lufel's 29 - solved from the user's character screen with every other ATK% source confirmed"
   }
 };
 
@@ -837,8 +845,12 @@ function main() {
     /* One Awakening-7 ATK bonus is filed under `attack` (Hatsune Miku's 29) where the other 34
        read `attack_per`, all 29 at 5 stars; charBaseStat reads only `attack_per`, so it would
        be dropped. */
-    const aw7 = Object.entries(base.awake7 || {}).map(([k, v]) => [k === 'attack' ? 'attack_per' : k, v]);
-    if (aw7.length) bits.push(`aw:{${aw7.map(([k, v]) => `${q(k)}:${n1(v)}`).join(',')}}`);
+    const glbAw = GLB_STAT_OVERRIDES[ourName] && GLB_STAT_OVERRIDES[ourName].aw;
+    const aw7 = glbAw ? Object.entries(glbAw)
+      : Object.entries(base.awake7 || {}).map(([k, v]) => [k === 'attack' ? 'attack_per' : k, v]);
+    if (glbAw) notes.push(`${ourName}: Awakening 7 from GLB_STAT_OVERRIDES — ${GLB_STAT_OVERRIDES[ourName].why}`);
+    if (aw7.length) bits.push(`aw:{${aw7.map(([k, v]) => `${q(k)}:${n1(v)}`).join(',')}}` +
+      (glbAw ? ` /* ${GLB_STAT_OVERRIDES[ourName].why} */` : ''));
 
     const glb = GLB_STAT_OVERRIDES[ourName];
     const mind = glb && glb.mind ? glb.mind : [parseMind(s && s.mind_stats1), parseMind(s && s.mind_stats2)].filter(Boolean);

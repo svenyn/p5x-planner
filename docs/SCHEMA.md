@@ -93,8 +93,8 @@ reason: the data used to fill those slots with a placeholder, and the old dialog
 
 **`characters[].benched`** — optional, defaults to `false`. Marks a character you own but
 are not building. `ownedChars()` filters on `owned && !benched`, so a benched character
-disappears from the optimiser dropdown, Triage's "owned" scope, Upgrades and the Vault
-tab's fielded-role count — everywhere except the Roster tab, which shows it (dimmed, with
+disappears from the optimiser dropdown, Triage's "owned" scope, Upgrades and the Vault's
+fielded-role count — everywhere except the Roster tab, which shows it (dimmed, with
 a "benched" tag) so it can be un-benched later without losing its saved `targets` or
 `loadout`. Absent on files saved before this existed, which is read as `false`.
 
@@ -111,10 +111,10 @@ character that is not a revelation card, because Lufelnet's stat targets are in-
 totals: `{ level: 80|100, asc: 0-7, weapon: ""|"4"|"5", refine: 1-7, mindSkill: bool,
 mind1: 0-5, mind2: 0-5, awareness: 0-6 }`. It matters more than it looks — Kumi Katayama's
 180 Speed target needs 73 Speed from cards on a 4★ weapon at A0 with no Mindscape, and 14
-on a 5★ R7 at A7 with it fully invested. Only shown in the Targets dialog for the 37
-characters that have a stat target, since for everyone else there is nothing to total
-against — the roster's own Loadout popup shows the same fields for every character, since
-they still move the build score's spread term. My Palace and party buffs are deliberately
+on a 5★ R7 at A7 with it fully invested. Edited in the roster's Loadout popup (its Setup
+section), for every character, since the fields move the build score's spread term even
+without a stat target; the Targets dialog shows a one-line summary that links there, and
+until Sep 2026 carried a second copy of the fields. My Palace and party buffs are deliberately
 **not** modelled, so every total is a floor.
 
 Mindscape is 4 paths, not one lock. `mind1`/`mind2` are the two that grant a flat/percent
@@ -192,25 +192,34 @@ keep loading unchanged:
 
 ## Optional fields (schema v3)
 
-- **`prefs`** — an object of UI view state: the Roster tab's `rsFilter` / `rsElement` /
-  `rsSort` / `rsHideUnowned` / `rsHideBenched` / `rsQ`, the Inventory tab's `flSlot` /
-  `flSet` / `flRar` / `flMain` / `flSub` / `flQ` and its column sort (`invSort: { key,
-  dir }`), and the Triage/Vault/Upgrades scope selects (`trScope`, `trShow`, `trRar`,
-  `vaRar`, `vaShow`, `upRar`). Written by `collectPrefs()`, read by `applyPrefs()` in
+- **`prefs`** — an object of UI view state: the Roster tab's `rsFilter` (`all` / `owned` /
+  `unowned`) / `rsElement` / `rsSort` / `rsHideBenched` / `rsQ` and its view (`rsView`:
+  `cards` or `list`), the Inventory tab's `flSlot` / `flSet` / `flRar` / `flMain` / `flSub` /
+  `flQ` and its column sort (`invSort: { key, dir }`), the Triage/Vault/Upgrades scope selects
+  (`trScope`, `trShow`, `trRar`, `vaRar`, `vaShow`, `upRar`) and Triage's verdict chips
+  (`trVerdict`, the pressed tiers 0-5). Written by `collectPrefs()`, read by `applyPrefs()` in
   `src/logic.js`. Ignored if absent, so v1/v2 files keep loading unchanged; any field the
   loading build no longer recognises (a renamed set, a dropped filter option) is likewise
-  ignored rather than rejected.
-- **`settings`** — scoring assumptions, as opposed to view state. Today one:
-  `teamCritRate`, the Roster tab's team crit rate, in percentage points (0-100): the crit
-  rate the user's usual supports add to every damage dealer when cards are valued. Written
-  by `savePayload()`. Absent, or anything that is not a positive number, reads as 0, which
-  is how files saved before it existed load.
+  ignored rather than rejected. Files saved before Sep 2026 may carry `rsHideUnowned`, the
+  Roster's old "Hide not owned" checkbox: when true it opens the Roster on `owned`.
+- **`settings`** — scoring assumptions, as opposed to view state. Two today, both written by
+  `savePayload()`:
+  - `teamCritRate`, the team crit rate (the header's scoring settings), in percentage points (0-100): the crit
+    rate the user's usual supports add to every damage dealer when cards are valued. Absent, or anything
+    that is not a positive number, reads as 0, which is how files saved before it existed load.
+  - `thievesDen`, the Thieves Den's battle effects (same popover): an object of flat points per stat, from
+    `ATK`, `HP`, `DEF`, `Speed`, `Crit Rate`, `Crit Multiplier`, `Ailment Accuracy` and `SP Recovery`, e.g.
+    `{ "ATK": 119, "HP": 473, "Crit Rate": 1, "Crit Multiplier": 2 }`. Only stats with a value are written.
+    It is added to the in-battle totals a stat target is checked against, nothing else. Absent keys, and
+    anything not a positive number, read as 0.
 
 ## Importing a rescan without losing your inventory
 
-Loading a file on the Save/Load tab **replaces** `cards` and `characters` wholesale — it is
-meant for resuming your own previously-downloaded save, not for merging in newly scanned
-cards. For that, the same tab's **Import cards (merge)** control reads a `{ "cards": [...] }`
+Loading a file (the header's **Load**, the Data tab, or dropping a save file on the page)
+**replaces** `cards` and `characters` wholesale — it is meant for resuming your own
+previously-downloaded save, not for merging in newly scanned cards. For that, **Import scan**
+(the header, or the Data tab's **Import cards (merge)**; a dropped file with no `characters`
+goes the same way) reads a `{ "cards": [...] }`
 file and merges it into the current inventory via `mergeImport()`. The Inventory tab's
 bulk-paste box accepts the same JSON pasted as text — anything starting with `{` or `[` is
 parsed as JSON and routed to the same review rather than to the one-card-per-line parser.

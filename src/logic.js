@@ -1,5 +1,5 @@
 /* ============================ state ============================ */
-const state = { cards: [], chars: {}, nextId: 1, teamCrit: 0 };
+const state = { cards: [], chars: {}, nextId: 1, teamCrit: 0, den: {} };
 const $  = (s, r) => (r || document).querySelector(s);
 const $$ = (s, r) => Array.from((r || document).querySelectorAll(s));
 const esc = s => String(s == null ? '' : s).replace(/[&<>"]/g, c => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;' }[c]));
@@ -791,10 +791,10 @@ function prefSetLift(char, t, B) {
      edits and nothing else — so those two identities (and the Setup's) are the version stamp,
      with the team crit rate, which the damage-spread term reads. The preferred set is checked
      too, as a cheap guard against a caller handing in some other target with the same name. */
-  const who = state.chars[char.n] || {}, pref = (t.sets || [])[0], tc = teamCritRate();
+  const who = state.chars[char.n] || {}, pref = (t.sets || [])[0], tc = teamCritRate(), den = denSig();
   let m = setLiftMemo[char.n];
-  if (!m || m.lo !== who.loadout || m.saved !== who.targets || m.pref !== pref || m.tc !== tc)
-    m = setLiftMemo[char.n] = { lo: who.loadout, saved: who.targets, pref, tc, byBase: {} };
+  if (!m || m.lo !== who.loadout || m.saved !== who.targets || m.pref !== pref || m.tc !== tc || m.den !== den)
+    m = setLiftMemo[char.n] = { lo: who.loadout, saved: who.targets, pref, tc, den, byBase: {} };
   if (m.byBase[B] == null) m.byBase[B] = computePrefSetLift(char, t, B);
   return m.byBase[B];
 }
@@ -1251,6 +1251,10 @@ function statSupply(cards, char, stat) { return supplyOf(cards, char, [stat])[st
    `mindSkill` toggle that drives pickTier's "+5" tier bump, same as the old unified
    `mind` boolean did. */
 const DEFAULT_LOADOUT = { level: 80, asc: 7, weapon: '5', refine: 1, mindSkill: false, mind1: 0, mind2: 0, awareness: 0 };
+/* `refine` is 1-7, an index into a weapon's seven-step ladder. The game counts refinements from
+   0 (a weapon with no extra copies is R0), so the label is one lower than the value; saves and
+   the ladders keep the 1-7 index. */
+function refineLabel(r) { return 'R' + (Math.max(1, Math.min(7, +r || 1)) - 1); }
 
 /* A character whose Setup was never saved is scored on DEFAULT_LOADOUT, and nothing said so:
    on the real inventory (Sep 2026) that was 21 of the 36 active characters. The default's one
@@ -1485,9 +1489,10 @@ const KIT_STAT_BUFFS = {
     { s: 'Damage Multiplier', v: 30, pct: true, aw: 2, why: 'Guardian Fist: +30% damage for 3 turns after Flash Blow, which fires every 3 turns' },
     { s: 'ATK%', pct: true, weapon: '4', ladder: [22, 29, 29, 36, 36, 43, 43], why: 'Wicked Cestus: +ATK while Grit is at 2+ stacks' }
   ],
-  'Hatsune Miku': [
-    { s: 'Crit Multiplier', pct: true, weapon: '5', ladder: [18.1, 23.5, 23.5, 28.9, 28.9, 34.3, 34.3], why: 'Light Up Your World: party +crit damage, unconditional but written after the ATK line' }
-  ],
+  /* Hatsune Miku had Light Up Your World's "Increase party's critical damage by 18.1%" here.
+     Her own stat screen does not carry it: in battle it reads Crit Mult 60.5, which is her
+     cards' 58.3 plus the Thieves Den's 2 (the user's panels, 26 Sep 2026). It is a party
+     buff, not a stat of hers, so it is not listed. */
   'Miyu Sahara [Wavecatcher]': [
     { s: 'Damage Multiplier', v: 30, pct: true, why: 'Ride it Out!: +30% damage while Surf is active, the state her rotation keeps' },
     { s: 'ATK%', v: 25, pct: true, aw: 0, why: 'Surfing Mermaid: +25% ATK at 100 SP recovered, reached in the first turns' },
@@ -1768,8 +1773,42 @@ function mainMagnitude(slot, stat) {
   return (mainMagnitudeMemo.by[key] = best);
 }
 
+/* A 4-piece's unconditional stat lines, counted in a character's totals while that 4-piece is
+   worn — the rule a weapon's unconditional passive already follows. Until Sep 2026 no 4-piece
+   line was counted anywhere, and a character screen showed the gap: Hatsune Miku's HP, ATK and
+   DEF all carry her Labor 4-piece's +8% (ATK 4627 / HP 9358 / DEF 1790 on her screen, which the
+   planner matches only with it). Only a set's plain stat clause is here; one that needs a turn,
+   a trigger or an enemy state stays out, the same bar as KIT_STAT_BUFFS. `arch` is a wearer
+   condition the set states. bonus4Value still prices the set as a whole; this is its stat line
+   in the in-battle totals the stat targets read. */
+const SET4_STATS = {
+  Labor:          { arch: 'Navigator', stats: { 'HP%': 8, 'ATK%': 8, 'DEF%': 8 },
+                    why: "When equipped by an Elucidator: all allies' HP, ATK and DEF +8%, the wearer's own screen included" },
+  Reconciliation: { stats: { 'HP%': 15, 'ATK%': 15, 'DEF%': 15 }, why: 'During combat: HP, ATK and DEF +15%' },
+  Strife:         { stats: { 'ATK%': 15 }, why: 'Attack +15%; the second +15% needs a Fire-weak enemy and is not counted' },
+  Cruelty:        { stats: { 'ATK%': 15 }, why: 'Attack +15%; the crit damage needs Rhapsody Beat and is not counted' }
+};
+/* The stat lines of whichever 4-piece `cards` complete, for `char` — {} when none applies. A set
+   off the character's element grants nothing, as bonus4Value has it. */
+const NO_SET4_LINES = Object.freeze({});
+function set4StatLines(cards, char) {
+  // Called inside every stat total, so it only looks for the few sets that have a line, and
+  // allocates nothing on the way.
+  if (!cards || cards.length < 4) return NO_SET4_LINES;
+  for (const set in SET4_STATS) {
+    let k = 0;
+    for (let i = 0; i < cards.length; i++) { const c = cards[i]; if (c && c.set === set && c.slot !== 'Space') k++; }
+    if (k < 4) continue;
+    const line = SET4_STATS[set], def = SETS[set];
+    if ((line.arch && char.arch !== line.arch) || (def && def.elem && def.elem !== char.e)) return NO_SET4_LINES;
+    return line.stats;
+  }
+  return NO_SET4_LINES;
+}
+
 /* What the equipped cards add to one target stat, in real game units. Substats and
-   2-piece bonuses are exact. The main stat is counted from the card's own scanned
+   2-piece bonuses are exact, and so are a 4-piece's unconditional stat lines (SET4_STATS).
+   The main stat is counted from the card's own scanned
    `mainValue`, or failing that from `mainMagnitude` — and when neither is available
    `mainsMissing` records it so the caller can fall back rather than under-report. */
 function cardStatContribution(cards, char, stat, sub) {
@@ -1798,6 +1837,9 @@ function cardStatContribution(cards, char, stat, sub) {
     s + ((c && c.subs) || []).reduce((t, x) => t + (x.stat === (sub || stat) ? x.value : 0), 0), 0);
   const setPart = bonus - subOnly;
   if (pctSub && (sub || stat) === pctSub) pct += setPart; else flat += setPart;
+  const four = set4StatLines(cards, char);
+  if (pctSub && four[pctSub]) pct += four[pctSub];
+  else if (!pctSub && four[stat]) flat += four[stat];
   return { flat, pct, mainsMissing };
 }
 
@@ -1819,17 +1861,20 @@ function totalStat(char, stat, sub, cards, lo) {
 }
 
 /* The five numbers worth watching on any build, regardless of whether lufel publishes a
-   target for this character: ATK, Crit Rate, Crit Damage and Damage Multiplier feed the
-   damage formula's ⓐⓑⓓ (see damageFactors below), and Pierce Rate (Resistance Pierce)
-   is the one damage stat the formula leaves unmodelled but the user still wants to see.
+   target for this character: ATK, Crit Rate, Crit Multiplier and Damage Multiplier feed the
+   damage formula's ⓐⓑⓓ (see damageFactors below), and Resistance Pierce is the one damage
+   stat the formula leaves unmodelled but the user still wants to see.
    [stat, label, sub, pct] — `stat`/`sub` are totalStat's own args; `sub` differs from
-   `stat` only for ATK, whose card contribution comes in as ATK%. */
+   `stat` only for ATK, whose card contribution comes in as ATK%. The labels are the canonical
+   stat names every other screen uses: they read "Crit Damage", "Pierce Rate" and "Damage
+   Mult" until Sep 2026, so one number went by two names on one screen (the targets table
+   right below says Crit Multiplier). */
 const STATS_SUMMARY_ROWS = [
   ['ATK', 'ATK', 'ATK%', false],
   ['Crit Rate', 'Crit Rate', 'Crit Rate', true],
-  ['Crit Multiplier', 'Crit Damage', 'Crit Multiplier', true],
-  ['Resistance Pierce', 'Pierce Rate', 'Resistance Pierce', true],
-  ['Damage Multiplier', 'Damage Mult', 'Damage Multiplier', true]
+  ['Crit Multiplier', 'Crit Multiplier', 'Crit Multiplier', true],
+  ['Resistance Pierce', 'Resistance Pierce', 'Resistance Pierce', true],
+  ['Damage Multiplier', 'Damage Multiplier', 'Damage Multiplier', true]
 ];
 
 /* Renders those five as a row of tiles for the given cards and setup — the character's
@@ -1840,10 +1885,13 @@ const STATS_SUMMARY_ROWS = [
    totalled against the perfect build for this character, on the same footing as the
    build score itself: same base stats, weapon and Mindscape, only the cards differ. */
 function statsSummaryHtml(char, cards, lo, hypothetical, idealCards) {
+  // the Thieves Den's battle effects are in-battle totals too (see denBonus), on both sides
+  const plus = (t0, stat) => t0 && denBonus(stat) ? Object.assign({}, t0, { total: t0.total + denBonus(stat) }) : t0;
   const rows = STATS_SUMMARY_ROWS.map(([stat, label, sub, pct]) => ({
-    label, pct, tot: totalStat(char, stat, sub, cards, lo),
-    idealTot: idealCards ? totalStat(char, stat, sub, idealCards, lo) : null
+    label, pct, tot: plus(totalStat(char, stat, sub, cards, lo), stat),
+    idealTot: idealCards ? plus(totalStat(char, stat, sub, idealCards, lo), stat) : null
   }));
+  const denOn = DEN_STATS.some(st => denBonus(st) > 0);
   if (!rows.some(r => r.tot)) return '';
   const anyMissing = rows.some(r => (r.tot && r.tot.mainsMissing > 0) || (r.idealTot && r.idealTot.mainsMissing > 0));
   const tiles = rows.map(r => {
@@ -1851,24 +1899,28 @@ function statsSummaryHtml(char, cards, lo, hypothetical, idealCards) {
     const flag = r.tot && r.tot.mainsMissing > 0
       ? ' <span class="tiny muted" title="A main stat magnitude is missing on a card that could contribute here — this number is an undercount">*</span>' : '';
     const iv = r.idealTot ? (r.pct ? r.idealTot.total.toFixed(1) + '%' : Math.round(r.idealTot.total).toLocaleString()) : null;
+    /* A perfect build that carries none of the stat has no "share of perfect" to draw. It
+       used to come out as width:null% — invalid CSS, so the bar rendered full, and "Resistance
+       Pierce 1.9% of 0.0% perfect" read as a stat maxed out rather than one nobody asks for. */
+    const noIdeal = !!r.idealTot && !(r.idealTot.total > 0);
     const pctOfIdeal = (r.tot && r.idealTot && r.idealTot.total > 0)
-      ? Math.min(100, Math.round(100 * r.tot.total / r.idealTot.total)) : null;
+      ? Math.min(100, Math.round(100 * r.tot.total / r.idealTot.total)) : 0;
     return `<div class="p"><div class="tiny muted">${esc(r.label)}</div>
       <div><span class="score">${v}</span>${flag}</div>
-      ${iv != null ? `<div class="tiny muted">of ${iv} perfect${r.idealTot.mainsMissing > 0 ? '*' : ''}</div>
+      ${noIdeal ? '<div class="tiny muted" title="The perfect build for this character carries none of this stat">not in the perfect build</div>'
+        : iv != null ? `<div class="tiny muted">of ${iv} perfect${r.idealTot.mainsMissing > 0 ? '*' : ''}</div>
         <div class="bar"><i style="width:${pctOfIdeal}%"></i></div>` : ''}</div>`;
   }).join('');
+  const kit = kitStatBuffs(char, lo);
   return `<div class="targets">
-    <h3>Your stats <span class="tiny muted">— ATK, crit, pierce and damage mult, in-battle</span></h3>
+    <h3>Your stats <span class="tiny muted">— in-battle totals${hypothetical ? ' with the recommended cards' : ''}</span></h3>
     <div class="bparts" style="margin-bottom:6px">${tiles}</div>
-    <p class="tiny muted" style="margin:0">
-      ${hypothetical ? 'If you equip the recommendation below — ' : ''}base stats, weapon, ascension,
-      Mindscape and Awareness at this setup, plus ${hypothetical ? 'the recommended' : 'these'} cards' main stats,
-      substats and 2-piece bonuses. My Palace and party buffs are not counted, so treat these as a floor.
-      ${kitStatBuffs(char, lo).length ? 'Also counted, as always-on in this kit\'s rotation: ' +
-        kitStatBuffs(char, lo).map(b => esc(`${b.s} +${b.v}${b.pct ? '%' : ''} (${b.why.split(':')[0]})`)).join(', ') + '. ' : ''}
-      ${idealCards ? '<b>Perfect</b> is the same setup with a flawless five-card loadout for this character — five max-level 5★ cards, the preferred 4-piece, a recommended main in every slot, every substat roll maxed on the four best stats the main leaves free. ' : ''}
-      ${anyMissing ? '<b>*</b> undercounted where a card\'s main stat magnitude has not been scanned yet.' : ''}</p>
+    ${explainHtml(`In-battle totals at this Setup, and a floor: ${denOn ? 'the Thieves Den is counted as entered in the header settings, but party buffs are not' : 'the Thieves Den (enter it in the header settings) and party buffs are not counted'}.${anyMissing ? ' <b>*</b> undercounted where a card\'s main stat magnitude has not been scanned yet.' : ''}`,
+      `Base stats, weapon, ascension, Mindscape and Awareness at this setup, plus ${hypothetical ? 'the recommended' : 'these'} cards' main stats,
+      substats, 2-piece bonuses and any 4-piece's unconditional stat line (Labor's +8% on an Elucidator, Strife's +15% ATK, Reconciliation's +15%).
+      ${kit.length ? 'Also counted, as always-on in this kit\'s rotation: ' +
+        kit.map(b => esc(`${b.s} +${b.v}${b.pct ? '%' : ''} (${b.why.split(':')[0]})`)).join(', ') + '. ' : ''}
+      ${idealCards ? '<b>Perfect</b> is the same setup with a flawless five-card loadout for this character — five max-level 5★ cards, the preferred 4-piece, a recommended main in every slot, every substat roll maxed on the four best stats the main leaves free.' : ''}`)}
   </div>`;
 }
 
@@ -1949,9 +2001,15 @@ function breakpointRows(cards, idealCards, char, t, lo) {
        of which is modelled. Scoring against the raw bar would make 100 unreachable for
        her no matter what the user does, so the bar the SCORE uses is capped at what a
        perfect build achieves. The UI still shows the real number and flags the shortfall. */
-    const reach = idealTot ? idealTot.total : null;
+    /* The Thieves Den's battle effects are in-battle only, as lufel's targets are, so they are
+       added here — to the worn, perfect and no-card totals alike — and never inside totalStat,
+       whose conversions and callers read the character's own stats. Added after the ideal
+       side's memo, so a changed setting is never served a stale total. */
+    const den = denBonus(x.s);
+    const reach = idealTot ? idealTot.total + den : null;
     const effBar = reach != null && reach < bar ? reach : bar;
     const exact = !!(tot && tot.mainsMissing === 0 && effBar > 0);
+    const totalNow = tot ? tot.total + den : null;
     /* A target the character already meets with NO cards — base stats, weapon, Awareness
        and kit lines alone — is not something cards can earn. buildScoreOf leaves it out of
        the stat-target block (the UI still shows it): scored, it handed every loadout the
@@ -1963,21 +2021,22 @@ function breakpointRows(cards, idealCards, char, t, lo) {
        ATK target, the one gear moves, got the other half. Mitsuru's LV10 ATK target sits
        under her no-card ATK the same way. */
     const bare = ic.bareTot;
-    const metBare = !!(bare && bare.mainsMissing === 0 && effBar > 0 && bare.total >= effBar - 1e-9);
+    const bareNow = bare ? bare.total + den : null;
+    const metBare = !!(bare && bare.mainsMissing === 0 && effBar > 0 && bareNow >= effBar - 1e-9);
     /* Progress is measured from where the character stands with no cards, not from zero:
        the share of the gap between that and the bar the cards close. Measured from zero,
        base stats alone earned the median target 64% of its points (61% on average, across
        the 45 scored), so a naked character took about 49 of the block's 80 and every
        loadout differed only in the rest — which blunted the one term that exists to say
        "reach this number". The relative fallback already counts cards only. */
-    const floor = bare ? bare.total : 0;
+    const floor = bare ? bareNow : 0;
     const ratio = !exact ? relative : metBare ? 1
-      : Math.max(0, Math.min(1, (tot.total - floor) / (effBar - floor)));
+      : Math.max(0, Math.min(1, (totalNow - floor) / (effBar - floor)));
     return {
       stat: x.s, sub: x.sub, pct: x.pct, tiers: x.tiers, tierKey: tier.key, got, want, bar, effBar,
-      total: tot ? tot.total : null, reach, shortOfBar: reach != null && reach < bar,
+      total: totalNow, reach, shortOfBar: reach != null && reach < bar,
       mainsMissing: tot ? tot.mainsMissing : 0, approx: !!(tot && tot.approx), exact, relative,
-      bare: bare ? bare.total : null, metBare, ratio
+      bare: bareNow, den, metBare, ratio
     };
   });
 }
@@ -2264,6 +2323,29 @@ function damagePoints(cards, char) {
    the Elucidator share and My Palace, not another party member's buff). 0, the default, is
    the model without it. */
 function teamCritRate() { const v = +state.teamCrit; return v > 0 ? Math.min(100, v) : 0; }
+
+/* ---- the Thieves Den's battle effects: a user entry (header settings, "Thieves Den") -----
+   The Thieves Den — its level's collection items and its rating (Qualia, which follows the
+   roster's overall power) — adds flat stats to every character, in combat only: lufel's guide
+   says they never show on the character screen before a battle, only on the stat screen once
+   in one, and lufel's own stat targets count them ("Thieves Den 50LV 65 / 70LV 110 (or higher)
+   / Thieves Den Rating"). Measured on the user's account (26 Sep 2026, Thieves Den 56, Qualia
+   355): Miku's stat screen reads ATK +119, HP +473, crit rate +1 and crit multiplier +2 in
+   battle over her character screen. Nothing here can derive those from a level, so the user
+   enters what the game shows. They are added only where a stat target is checked
+   (breakpointRows) and to the in-battle totals on screen — never inside totalStat, whose
+   conversions feed the damage model — so builds and recommendations move only through the
+   stat targets. Flat points for every stat, as the game adds them; 0 is not counted. */
+const DEN_STATS = ['ATK', 'HP', 'DEF', 'Speed', 'Crit Rate', 'Crit Multiplier', 'Ailment Accuracy', 'SP Recovery'];
+function denBonus(stat) { const v = +((state.den || {})[stat]); return v > 0 ? v : 0; }
+function denSig() { return DEN_STATS.map(s => denBonus(s)).join(','); }
+// What the save file keeps (only the stats with a value) and what a loaded one may set (numbers only).
+function denSaved() { const o = {}; DEN_STATS.forEach(s => { const v = denBonus(s); if (v) o[s] = v; }); return o; }
+function denFrom(o) {
+  const d = {};
+  DEN_STATS.forEach(s => { const v = +((o || {})[s]); if (v > 0 && isFinite(v)) d[s] = Math.min(v, 100000); });
+  return d;
+}
 function teamCritFor(char) { return char && !spreadApplies(char) ? 0 : teamCritRate(); }
 
 const damageBaseCache = {};
@@ -2854,6 +2936,67 @@ function poolFor(mode, rar, exclude) {
     (!c.locked || c.equipped === exclude));
 }
 
+/* A section's how-to-read notes, folded: `gist` stays visible as the summary line and `body`
+   opens on click. The notes are the tool's honesty about what a number means, so none is
+   deleted — but a repeat reader should see the answer, not a page of prose above it (the
+   Optimise tab carried 816 words of it, the Loadout popup 328 of its 578). Native <details>,
+   so it needs no script and works from the keyboard. Both arguments are HTML the caller has
+   already escaped, like every other template here. */
+function explainHtml(gist, body) {
+  return `<details class="explain"><summary>${gist}</summary><div class="body">${body}</div></details>`;
+}
+
+/* A substat's value with its unit — "%" unless the stat is flat or its name already carries
+   the sign: ATK% 3.5, Crit Rate 7.9%, Speed 5.6, HP 307. One rule for every table and card;
+   the tables used to print bare numbers, so "Crit Rate 7.9" and "Speed 7.9" looked alike. */
+function subVal(s) {
+  const def = SUBSTATS[s.stat] || {};
+  return s.value + (def.flat || /%$/.test(s.stat) ? '' : '%');
+}
+
+/* A card's substats on one line, the way every table prints them. With a character's target
+   `t`, each is coloured by what it is worth to them — the coupled weight cardScore prices it
+   at, so the colour agrees with the score beside it: 6 and up reads good, 1 or less faded.
+   `hi` names stats to highlight instead (the Level 0 table's best-case upgrade target). */
+function subsInlineHtml(card, t, hi) {
+  const f = t ? couplingFactors(t, card.slot, card.main) : null;
+  return `<span class="subs">${(card.subs || []).map(s => {
+    const w = f ? (t.w[s.stat] || 0) * cf(f, s.stat) : null;
+    const cls = hi && hi.includes(s.stat) ? 'hi' : w == null ? '' : w >= 6 ? 'good' : w <= 1 ? 'bad' : '';
+    return `<span class="s${cls ? ' ' + cls : ''}">${esc(s.stat)} ${esc(subVal(s))}</span>`;
+  }).join('<span class="sep">·</span>')}</span>`;
+}
+
+/* One card drawn as a block. The Optimise plan, its Space pick and the Loadout popup's five
+   slots all use it, so a card looks the same wherever it appears: slot, set and rarity, the
+   out-of-100 figure and headroom when `o.score` (its cardScore for `t`) is given, the main
+   with its level, then the substats coloured as subsInlineHtml colours them. `o.tags` go in the
+   header, `o.mainTag` under the main, `o.body` after the substats and `o.foot` at the bottom;
+   `o.rolls` adds each substat's roll value. */
+function cardBlockHtml(card, t, o) {
+  o = o || {};
+  const slot = card.slot;
+  const f = t ? couplingFactors(t, slot, card.main) : null;
+  const subs = (card.subs || []).map(s => {
+    const w = f ? (t.w[s.stat] || 0) * cf(f, s.stat) : null;   // cf: a capped Crit Rate's 0 is an answer, not "no coupling"
+    const cls = w == null ? '' : w >= 6 ? 'good' : w <= 1 ? 'bad' : '';
+    const rv = o.rolls ? ` <span class="muted tiny">(${(s.value / maxRoll(s.stat, slot)).toFixed(1)}r)</span>` : '';
+    return `<div class="sub ${cls}"><span>${esc(s.stat)}</span><b>${esc(subVal(s))}${rv}</b></div>`;
+  }).join('');
+  return `<div class="lo${o.cls ? ' ' + o.cls : ''}">
+    <h4><span class="slot ${slot}">${slot.slice(0, 3)}</span> ${esc(card.set)}
+      <span class="tag r${card.rarity}">${card.rarity}★</span>${o.tags || ''}
+      ${o.score != null && t ? `<span style="margin-left:auto;white-space:nowrap">${cardPctHtml(o.score, slot, t)}</span>` : ''}</h4>
+    <div class="lo-mainrow">
+      <div class="sub" style="border:none;padding:0"><span class="muted">Main · Lv${card.level}</span><b>${esc(card.main)}</b></div>
+      ${o.mainTag != null ? `<div class="lo-tagrow">${o.mainTag || '&nbsp;'}</div>` : ''}
+    </div>
+    ${subs || '<div class="tiny muted">No substats recorded.</div>'}
+    ${o.body || ''}
+    ${o.foot ? `<div style="margin-top:8px">${o.foot}</div>` : ''}
+  </div>`;
+}
+
 /* The dropdown normally lists owned characters only — the tab exists to gear
    characters you actually have. `forceSelect` lets a caller (the roster card
    click-through) land on an unowned character anyway, without changing what
@@ -2877,10 +3020,14 @@ function renderOpt(forceSelect) {
 
 /* Roster card click-through: land on the Optimiser tab with this character loaded,
    which is where the stat bars, recommended loadout and slot alternatives already
-   live — no separate detail view to keep in sync with that one. */
+   live — no separate detail view to keep in sync with that one. The selection is made
+   before the tab opens, and the deferred run showTab would do is claimed here, so the
+   optimiser runs once, for this character. */
 function openCharacterDetail(name) {
-  showTab('opt');
+  optForced = name;
   renderOpt(name);
+  optStale = false;
+  showTab('opt');
   runOpt();
 }
 
@@ -2914,39 +3061,22 @@ function planCardHtml(slot, o, t, charName, trade) {
   const wanted = mainList(t, c.slot);
   const fixed = SLOT_INFO[c.slot].fixed;
   const rank = wanted.indexOf(c.main);
-  /* Which of the alternatives this card took decides what its substats are worth, so
-     the substat colouring uses the coupled weights rather than the raw ones — the same
-     numbers that scored it. */
-  const f = couplingFactors(t, c.slot, c.main);
-  const subs = (c.subs || []).map(s => {
-    const w = (t.w[s.stat] || 0) * cf(f, s.stat);   // cf: a capped Crit Rate's 0 is an answer, not "no coupling"
-    const rv = s.value / maxRoll(s.stat, c.slot);
-    return `<div class="sub ${w >= 6 ? 'good' : w <= 1 ? 'bad' : ''}">
-      <span>${esc(s.stat)}</span><b>${s.value}${SUBSTATS[s.stat].flat ? '' : '%'}
-      <span class="muted tiny">(${rv.toFixed(1)}r)</span></b></div>`;
-  }).join('');
   /* Every listed main is on target — lufel names alternatives, not a single answer —
      but say which one was taken when there was a choice, because that is what shifts
-     the substats the character then wants. */
+     the substats the character then wants. (Which alternative a card took decides what its
+     substats are worth, which is why cardBlockHtml colours them by the coupled weights —
+     the same numbers that scored it.) */
   const mainTag = fixed ? ''
     : !wanted.length ? '<span class="tag hit" title="Lufelnet recommends no particular main for this slot">any main</span>'
     : rank === 0 ? '<span class="tag hit">on target</span>'
     : rank > 0 ? `<span class="tag hit">on target</span> <span class="tiny muted">alternative to ${esc(wanted[0])}</span>`
     : `<span class="tag miss">wants ${esc(wanted.join(' or ')) || '—'}</span>`;
-  return `<div class="lo">
-    <h4><span class="slot ${c.slot}">${c.slot.slice(0,3)}</span> ${esc(c.set)}
-      <span class="tag r${c.rarity}">${c.rarity}★</span>
-      <span style="margin-left:auto;white-space:nowrap">${cardPctHtml(o.s, c.slot, t)}</span></h4>
-    <div class="lo-mainrow">
-      <div class="sub" style="border:none;padding:0"><span class="muted">Main</span><b>${esc(c.main)}</b></div>
-      <div class="lo-tagrow">${mainTag || '&nbsp;'}</div>
-    </div>
-    ${subs || '<div class="tiny muted">No substats recorded.</div>'}
-    <div class="tiny muted" style="margin-top:6px">Lv ${c.level}${c.equipped === charName ? ' · already equipped here' : ''}
-      ${ownedBy ? ` · ${trade ? onTagHtml(c, charName, trade.used, trade.minR)
-        : `<span class="tag" title="Currently equipped on ${esc(ownedBy)} — swapping unequips it from them">on ${esc(ownedBy)}</span>`}` : ''}</div>
-    <div style="margin-top:8px">${slotEquipHtml(charName, c.slot, c)}</div>
-  </div>`;
+  const where = [c.equipped === charName ? 'already equipped here' : '',
+    ownedBy ? (trade ? onTagHtml(c, charName, trade.used, trade.minR)
+      : `<span class="tag" title="Currently equipped on ${esc(ownedBy)} — swapping unequips it from them">on ${esc(ownedBy)}</span>`) : ''].filter(Boolean).join(' · ');
+  return cardBlockHtml(c, t, { score: o.s, rolls: true, mainTag,
+    body: where ? `<div class="tiny muted" style="margin-top:6px">${where}</div>` : '',
+    foot: slotEquipHtml(charName, c.slot, c) });
 }
 
 /* Level-0 cards worth a look before spending resources levelling them: their potential
@@ -2984,8 +3114,7 @@ function level0Html(t, r, pool) {
     // substat the card does not have yet is the fourth its first upgrade would mint.
     const up = bestCaseUpgrades(o.c, t), best = up.onto;
     const minted = up.mint.map(x => x.stat);
-    const subs = (o.c.subs || []).map(s => best.includes(s.stat)
-      ? `<b style="color:var(--ok)">${esc(s.stat)} ${s.value}</b>` : `${esc(s.stat)} ${s.value}`).join(' · ');
+    const subs = subsInlineHtml(o.c, null, best);
     const bestCell = best.length
       ? `<b style="color:var(--ok)">${best.map(s => esc(s) + (minted.includes(s) ? ' (new 4th substat)' : '')).join(' / ')}</b>` +
         minted.filter(s => !best.includes(s)).map(s => ` <span class="muted">· first upgrade adds ${esc(s)}</span>`).join('')
@@ -3003,21 +3132,19 @@ function level0Html(t, r, pool) {
       <td><button class="sm ghost" data-edit-l0="${o.c.id}">Edit</button></td></tr>`;
   }).join('');
   return `<div class="panel"><h2>Level 0 cards worth checking before you level anything</h2>
-    <p class="tiny muted" style="margin:0 0 10px">
-      <b>Potential</b> assumes every upgrade roll this card has left lands at maximum value on
-      whichever substat is worth the most here — the best case the card could possibly reach, not a
-      prediction of what it will roll. A card minted with three substats gains a fourth on its first
-      upgrade, and the best case takes that to be the most valuable stat the card does not already
-      carry; after that, upgrades only make an existing substat bigger, so a card with all four
-      substats and nothing this character wants stays put no matter how many rolls are left.
-      Restricted to the set the recommendation above is actually
-      using per slot, so a candidate here never costs that set bonus the moment it's equipped.
-      <b>Now</b> is what the card scores today, out of 100 for a perfect card in that slot, and <b>Headroom</b> the
-      raw points that perfect card would add over it; <b>could beat what's recommended</b> means its ceiling
-      clears the card currently picked for that slot — worth levelling to find out. Anything short of
-      that is safe to feed even in the best case. <b>Best substat</b> is highlighted above and is
-      whichever substat those future upgrades are assumed to land on — a fourth the card does not have
-      yet is marked as new, and tied stats both show, since an upgrade could land on either.</p>
+    ${explainHtml(`<b>Potential</b> is the best case: every upgrade this card has left landing at maximum on the substat worth
+      most here. <b>could beat what's recommended</b> means that ceiling clears the card picked above — worth levelling to find out.`,
+      `<p>It is the best case the card could possibly reach, not a prediction of what it will roll. A card minted with three
+      substats gains a fourth on its first upgrade, and the best case takes that to be the most valuable stat the card does not
+      already carry; after that, upgrades only make an existing substat bigger, so a card with all four substats and nothing
+      this character wants stays put no matter how many rolls are left.</p>
+      <p>Restricted to the set the recommendation above is actually using per slot, so a candidate here never costs that set
+      bonus the moment it's equipped. <b>Now</b> is what the card scores today, out of 100 for a perfect card in that slot, and
+      <b>Headroom</b> the raw points that perfect card would add over it. Anything short of "could beat" is safe to feed even in
+      the best case. <b>Best substat</b> is highlighted in the substats and is whichever substat those future upgrades are assumed
+      to land on — a fourth the card does not have yet is marked as new, and tied stats both show, since an upgrade could land
+      on either.</p>`)}
+    <div style="margin-top:10px"></div>
     <table><thead><tr><th>Slot</th><th>Set</th><th>Main</th><th>Substats</th><th>Best substat</th>
       <th class="right">Now</th><th class="right" title="Raw points a perfect card for this slot would add over this one today">Headroom</th><th class="right">Potential (best case)</th><th></th><th></th></tr></thead>
     <tbody>${body}</tbody></table></div>`;
@@ -3052,13 +3179,11 @@ function spreadHtml(b) {
     <h3>Damage factors <span class="tiny muted">— Lufelnet's damage formula</span></h3>
     <table><thead><tr><th>Factor</th><th class="right">Yours</th>
       <th class="right">Perfect build</th><th></th></tr></thead><tbody>${rows}</tbody></table>
-    <p class="tiny muted" style="margin:8px 0 0">
-      Damage is these <b>multiplied together</b>, not added, so the lowest one is where your
-      next good roll is worth the most — and why stacking a stat you are already deep in
-      scores worse than filling the gap. Only the three factors your cards move are shown;
-      enemy defence, skill, weakness and party buffs are the same whatever you equip.
-      A main stat counts at its real magnitude for the card's level (about nine maximum rolls
-      at max level) — these are ratios for comparing loadouts, not damage predictions.</p>
+    ${explainHtml('Damage is these <b>multiplied together</b>, so the lowest one is where your next good roll is worth the most.',
+      `That is also why stacking a stat you are already deep in scores worse than filling the gap. Only the three
+      factors your cards move are shown; enemy defence, skill, weakness and party buffs are the same whatever you
+      equip. A main stat counts at its real magnitude for the card's level (about nine maximum rolls at max level) —
+      these are ratios for comparing loadouts, not damage predictions.`)}
   </div>`;
 }
 
@@ -3107,14 +3232,13 @@ function targetHtml(b, other, hypothetical) {
       <th>${anyExact ? 'Your in-battle total' : 'From your cards'}</th>
       <th class="right">${other ? 'If you swap' : ''}</th></tr></thead>
     <tbody>${rows}</tbody></table>
-    <p class="tiny muted" style="margin:8px 0 0">
-      The <span style="color:var(--ok);font-weight:700">highlighted</span> column per row is the tier
-      scored against right now — reaching this character's Awareness threshold (usually 3, sometimes 5)
-      unlocks the higher skill-level cap over the lower one, and Mindscape unlocked adds its own further
-      "+5" bump on top; a character who only ever publishes one family (no low/high split) always uses
-      that one. Both are set from this character's <b>Setup</b> fields (Awareness, Mindscape).
-      These are <b>in-battle totals</b>. ${anyExact ? `The percentage is how much of the gap between the
-        character's no-card total and the target the cards close, so base stats earn nothing on their own.` : ''} ${anyExact
+    ${explainHtml(`The <span style="color:var(--ok);font-weight:700">highlighted</span> column is the tier scored now.${anyExact
+        ? ' The percentage is how much of the gap between your no-card total and the target your cards close.' : ''}`,
+      `<p>Reaching this character's Awareness threshold (usually 3, sometimes 5) unlocks the higher skill-level cap over
+      the lower one, and Mindscape unlocked adds its own further "+5" bump on top; a character who only ever publishes
+      one family (no low/high split) always uses that one. Both are set from this character's <b>Setup</b> (Awareness,
+      Mindscape). These are <b>in-battle totals</b>${anyExact ? ', so base stats earn nothing on their own' : ''}.</p>
+      <p>${anyExact
         ? `Yours counts base stats at the level and ascension set under <b>Setup</b>, the weapon
            at its refinement, Mindscape nodes, Awareness's universal HP/ATK/DEF percentage plus any
            level that grants a further flat stat, and your ${hypothetical ? 'recommended ' : ''}cards'
@@ -3123,15 +3247,15 @@ function targetHtml(b, other, hypothetical) {
            be clearing a target this says you miss.`
         : `Yours shows only what the cards supply, because ${anyMissing
             ? 'some equipped cards have no scanned main stat value yet'
-            : 'this character has no stat block'}.`}
-      ${anyShort ? `<br><b>Marked short of the stage number:</b> even a flawless build on this setup
+            : 'this character has no stat block'}.`}</p>
+      ${anyShort ? `<p><b>Marked short of the stage number:</b> even a flawless build on this setup
         cannot reach it, so the rest has to come from party buffs or My Palace. The score is measured
-        against what is actually reachable, not against a number nothing can hit.` : ''}
-      ${b.targets.some(r => r.metBare) ? `<br><b>Met without cards:</b> this character clears that target on this
+        against what is actually reachable, not against a number nothing can hit.</p>` : ''}
+      ${b.targets.some(r => r.metBare) ? `<p><b>Met without cards:</b> this character clears that target on this
         setup before any card is worn, so no loadout can earn or lose it, and the build score leaves it out
-        rather than hand every loadout the same free points.` : ''}
-      ${approx ? '<br>Lufelnet does not publish Lv100 figures for this character, so Lv80 numbers are used.' : ''}
-    </p></div>`;
+        rather than hand every loadout the same free points.</p>` : ''}
+      ${approx ? '<p>Lufelnet does not publish Lv100 figures for this character, so Lv80 numbers are used.</p>' : ''}`)}
+    </div>`;
 }
 
 function runOpt() {
@@ -3159,16 +3283,22 @@ function runOpt() {
     return;
   }
 
-  const maxT = r.best.total;
+  /* Plans on the build score's own 0-100 scale. A plan's total is the build score's numerator
+     (see bestPlan), so dividing it by the perfect total the build score divides by is exactly
+     the build score the plan would earn at the default 4-piece value of 55; at another value
+     it is that setting's version, still one character's plans on one scale. They used to show
+     raw (643.6, "598.5 / -45.2") beside the /100 score, a second scale for the same thing. */
+  const pts = p => p.idealTotal > 0 ? 100 * p.total / p.idealTotal : 0;
+  const bestPts = pts(r.best);
   const planSlots = p => p.kind === '4pc' || p.kind === 'raw' ? '' :
     ' <span class="muted tiny">(' + ['Sun','Moon','Star','Sky']
       .filter(sl => p.picks[sl].c.set === p.sets[0]).join('+') + ' carry ' + esc(p.sets[0]) + ')</span>';
   const alt = r.alternatives.map(p =>
-    `<tr><td>${esc(p.label)}${planSlots(p)}</td><td class="right score">${p.total.toFixed(1)}</td>
-     <td class="right muted tiny">${(p.total - maxT).toFixed(1)}</td></tr>`).join('');
+    `<tr><td>${esc(p.label)}${planSlots(p)}</td><td class="right score">${pts(p).toFixed(1)}</td>
+     <td class="right muted tiny">${gainStr(pts(p) - bestPts)}</td></tr>`).join('');
   const cost = (r.statMax && r.statMax !== r.best)
     ? `<p class="tiny muted" style="margin-top:8px">Ignoring set bonuses entirely would score
-       <b>${r.statMax.total.toFixed(1)}</b> (${(r.statMax.total - maxT >= 0 ? '+' : '')}${(r.statMax.total - maxT).toFixed(1)})
+       <b>${pts(r.statMax).toFixed(1)}</b> (${gainStr(pts(r.statMax) - bestPts)})
        using ${esc(r.statMax.label.toLowerCase())}. Switch <b>Set policy</b> to compare.</p>` : '';
   const missing = r.incomplete.map(p =>
     `<tr><td>${esc(p.label)}</td><td colspan="2" class="tiny" style="color:#e87a5c">missing ${p.missing.join(', ')}</td></tr>`).join('');
@@ -3214,100 +3344,95 @@ function runOpt() {
   recCards.forEach(c => { if (c.equipped && c.equipped !== name) (takenFrom[c.equipped] = takenFrom[c.equipped] || []).push(c); });
   const givers = Object.keys(takenFrom);
   const tradeLoss = givers.reduce((s, g) => s + giverLoss(charDef(g), takenFrom[g], trade.used, trade.minR), 0);
-  const tradeHtml = givers.length ? `<div class="tiny muted" style="text-align:right;margin:4px 0 0 auto;max-width:560px">
-      It takes ${givers.map(g => `${takenFrom[g].length} card${takenFrom[g].length > 1 ? 's' : ''} off ${esc(g)}`).join(' and ')},
+  /* The pool stays on "All cards" by default (the user's choice), so the trade is said up front,
+     beside the headline, rather than in small print under a green "+3": on the real inventory
+     Kumi's recommendation read +3 while taking three cards off two characters, net -25.1. */
+  const net = now && rec && givers.length ? rec.raw - now.raw - tradeLoss : null;
+  const losing = net != null && net < 0;
+  const tradeHtml = givers.length ? `<div class="notice trade ${losing ? 'bad' : 'info'}">
+      ${losing ? '<b>This trade loses build points overall.</b> ' : ''}It takes ${givers.map(g => `${takenFrom[g].length} card${takenFrom[g].length > 1 ? 's' : ''} off ${esc(g)}`).join(' and ')},
       which costs them <b>${esc(tradeLoss.toFixed(1))}</b> build points
-      after they put back their best free cards${now && rec ? ` — net <b>${esc(gainStr(rec.raw - now.raw - tradeLoss))}</b> for the account` : ''}.
-      Set <b>Card pool</b> to “Only unequipped cards” to see a loadout that takes nothing.</div>` : '';
-  const setupNote = setupIsDefault(name) ? `<p class="tiny muted" style="margin:10px 0 0">${esc(DEFAULT_SETUP_NOTE)}
-      Set it from ${esc(char.n)}'s card on the Roster tab.</p>` : '';
+      after they put back their best free cards${net != null ? ` — net <b>${esc(gainStr(net))}</b> for your account` : ''}.
+      ${$('#optPool').value !== 'free' ? '<button class="sm" id="optNoTrade" style="margin-left:6px">Show a loadout that takes nothing</button>' : ''}</div>` : '';
+  const setupNote = setupIsDefault(name) ? `<p class="tiny muted" style="margin:0 0 12px">${esc(DEFAULT_SETUP_NOTE)}
+      <button class="linky" id="optSetup">Set ${esc(char.n)}'s setup</button></p>` : '';
+  const headline = !rec ? '' : now
+    ? `Build score <span class="big">${now.score}</span><span class="arrow">→</span><span class="big">${rec.score}</span>
+       ${delta > 0 ? `<span class="${losing ? 'muted' : 'gainpos'}">(+${delta})</span>`
+         : delta < 0 ? `<span class="muted">(${delta})</span>` : '<span class="muted">(no change)</span>'}`
+    : `Would score <span class="big">${rec.score}</span><span class="muted">/100</span>
+       <span class="tiny muted">— nothing is equipped on ${esc(char.n)} yet</span>`;
 
+  /* What the character has now, broken down. Below the recommendation rather than above it:
+     it is the diagnosis, and the recommendation is the answer the tab is named for, which used
+     to start 976 px down a 900 px screen. */
   const bsHtml = `<div class="panel">
-    <h2>Build score</h2>
+    <h2>${now ? 'Build score now' : 'The recommendation, broken down'}</h2>
     ${now ? `<div class="bscore">
         <div><span class="big">${now.score}<small>/100</small></span></div>
         <div><span class="tag ${nowBand.cls}">${esc(nowBand.label)}</span>
           <div class="tiny muted" style="margin-top:4px">
             ${now.filled} of ${SLOTS.length} slots equipped${now.actual.active4 ? ' · ' + esc(now.actual.active4) + ' 4-piece' : ' · no 4-piece'}</div></div>
-        <div style="flex:1"></div>
-        ${rec ? `<div class="tiny ${delta > 0 ? '' : 'muted'}" style="text-align:right">
-          The loadout below would score <b class="score">${rec.score}</b>
-          ${delta > 0 ? `<span style="color:var(--ok)">(+${delta})</span>`
-                      : delta < 0 ? `<span class="muted">(${delta})</span>`
-                      : '<span class="muted">(no change)</span>'}${tradeHtml}</div>` : ''}
       </div>
       <div class="bparts">${partHtml(now)}</div>
-      ${setupNote}
       ${statsSummaryHtml(char, worn, lo, false, idealLo.cards)}
       ${targetHtml(now, rec)}
       ${spreadHtml(now)}`
-    : `<p class="muted" style="margin:0">Nothing is equipped on ${esc(char.n)} yet, so there is no build to score.
-         ${rec ? `The loadout below would score <b class="score">${rec.score}</b>/100.` : ''}</p>${tradeHtml}
-       ${setupNote}
+    : `<p class="muted" style="margin:0">Nothing is equipped on ${esc(char.n)} yet, so these are the recommended loadout's numbers.</p>
        ${statsSummaryHtml(char, recCards, lo, true, idealLo.cards)}
        ${targetHtml(rec, null, true)}
        ${spreadHtml(rec)}`}
-    <p class="tiny muted" style="margin-top:12px">
-      100 is a perfect loadout <i>for this character</i> — five max-level 5★ cards, the preferred 4-piece,
-      a recommended main stat in every slot, a Space card that pairs with it, and every substat roll landing
-      at maximum value on one of their four best stats that the card's main does not already carry, spread so no damage factor is starved.
-      Nobody reaches that, so treat around 70 as a finished build. Unlike the plan scores below, this number <b>is</b> comparable between characters —
-      which is also why <b>4-piece value</b> does not move it: that setting changes which loadout gets
-      recommended, not what a finished build is worth.
-    </p>
+    ${explainHtml('100 is a perfect loadout <i>for this character</i>; nobody reaches it, so treat around 70 as a finished build.',
+      `A perfect loadout is five max-level 5★ cards, the preferred 4-piece, a recommended main stat in every slot, a Space
+      card that pairs with it, and every substat roll landing at maximum value on one of their four best stats that the
+      card's main does not already carry, spread so no damage factor is starved. The build score <b>is</b> comparable
+      between characters, and the plan scores on this tab are on the same scale: at the default <b>4-piece value</b> of 55
+      they are exactly the build score each plan would earn. That setting changes which loadout gets recommended, not
+      what a finished build is worth, which is why it never moves the score above.`)}
   </div>`;
 
   const sp = r.space;
   const spOwnedBy = sp && sp.c.equipped && sp.c.equipped !== name ? sp.c.equipped : null;
-  const spHtml = sp ? `<div class="lo">
-      <h4><span class="slot Space">Spa</span> ${esc(sp.c.set)}
-        <span class="tag r${sp.c.rarity}">${sp.c.rarity}★</span>
-        <span style="margin-left:auto;white-space:nowrap">${cardPctHtml(sp.s, 'Space', t)}</span></h4>
-      <div class="tiny ${sp.pairs ? '' : 'muted'}" style="margin-bottom:5px">
-        ${sp.pairs ? '<span class="tag hit">pairs with your 4-piece</span>' : '<span class="tag miss">no synergy with this 4-piece</span>'}
-      </div>
-      ${(sp.c.subs || []).map(s => `<div class="sub ${(t.w[s.stat] || 0) >= 6 ? 'good' : ''}">
-        <span>${esc(s.stat)}</span><b>${s.value}${SUBSTATS[s.stat].flat ? '' : '%'}</b></div>`).join('')}
-      <div class="tiny muted" style="margin-top:6px">${esc(spaceEffectText(sp.c.set, r.best))}</div>
-      <div class="tiny muted" style="margin-top:4px">Lv ${sp.c.level}${sp.c.equipped === name ? ' · already equipped here' : ''}
-        ${spOwnedBy ? ` · ${onTagHtml(sp.c, name, trade.used, trade.minR)}` : ''}</div>
-      <div style="margin-top:8px">${slotEquipHtml(name, 'Space', sp.c)}</div>
-    </div>` : `<div class="lo empty"><h4><span class="slot Space">Spa</span> Space</h4>
+  const spWhere = sp ? [sp.c.equipped === name ? 'already equipped here' : '',
+    spOwnedBy ? onTagHtml(sp.c, name, trade.used, trade.minR) : ''].filter(Boolean).join(' · ') : '';
+  const spHtml = sp ? cardBlockHtml(sp.c, t, { score: sp.s,
+      mainTag: sp.pairs ? '<span class="tag hit">pairs with your 4-piece</span>' : '<span class="tag miss">no synergy with this 4-piece</span>',
+      body: `<div class="tiny muted" style="margin-top:6px">${esc(spaceEffectText(sp.c.set, r.best))}</div>` +
+        (spWhere ? `<div class="tiny muted" style="margin-top:4px">${spWhere}</div>` : ''),
+      foot: slotEquipHtml(name, 'Space', sp.c) })
+    : `<div class="lo empty"><h4><span class="slot Space">Spa</span> Space</h4>
       <div class="tiny muted">No Space cards in inventory. Preferred: <b>${esc(t.space || '—')}</b>.</div></div>`;
 
   out.innerHTML = `
-  ${bsHtml}
   <div class="panel">
-    <h2>Recommended loadout — ${esc(r.best.label)}</h2>
+    <div class="rechead">
+      <div><h2>Recommended loadout — ${esc(r.best.label)}</h2>
+        <div class="headline">${headline}</div></div>
+      <div class="acts"><button id="equipBtn" class="primary">Mark these as equipped on ${esc(char.n)}</button></div>
+    </div>
+    ${tradeHtml}
+    ${setupNote}
     <div class="loadout">
       ${['Sun','Moon','Star','Sky'].map(sl => planCardHtml(sl, r.best.picks[sl], t, name, trade)).join('')}
       ${spHtml}
     </div>
-    <div class="row" style="margin-top:14px">
-      <div class="stat-tile"><span class="muted tiny">Total score</span><br><span class="score" style="font-size:22px">${r.best.total.toFixed(1)}</span></div>
-      <div class="stat-tile"><span class="muted tiny">From set bonuses</span><br><span class="score" style="font-size:22px">${r.best.bonus.toFixed(1)}</span></div>
-      <div style="flex:1"></div>
-      <button id="equipBtn" class="primary">Mark these as equipped on ${esc(char.n)}</button>
-    </div>
-    <p class="tiny muted" style="margin-top:10px">
-      The number on each card is out of <b>100</b>, where 100 is a perfect card for that slot on this character —
-      max-level 5★, the best recommended main, every roll at maximum on the four best stats that main leaves free.
-      It is scaled per slot, so a 60 Sun card and a 60 Star card are equally far from perfect even though a Star's
-      main stat is worth far more in raw terms — a Moon, Star or Sky card with the right main is about half way to
-      perfect before its substats count, while a Sun or Space card is all substats, which is why those two usually
-      read lower. <b>n left</b> is the <b>headroom</b>: the raw points a perfect card for that slot would add over
-      this one. Those raw points are on one scale across this character's five slots, so the biggest headroom is
-      the biggest gain a replacement could bring — that is the number to sort upgrades by. Neither figure says
-      anything about how good the card would be for anyone else. The plan totals below are raw scores too, and
-      only compare plans for this same character.
-      <b>(n r)</b> next to a substat is its roll value: how many maximum rolls that number is worth.
-      Where a slot has more than one recommended main stat, every one of them counts as on target — and the one a
-      card carries changes what its substats are worth, because ATK total multiplies your damage multiplier and
-      crit rate multiplies crit multiplier. Take the Damage Multiplier main and ATK% substats are worth more; take
-      the ATK% main and the reverse. That is why two cards with the same substats can score differently here.
-    </p>
+    ${explainHtml(`The number on each card is out of <b>100</b> for a perfect card in that slot on this character;
+      <b>n left</b> is the raw headroom to it, on one scale across this character's five slots.`,
+      `<p>A perfect card is max-level 5★, the best recommended main, every roll at maximum on the four best stats that main
+      leaves free. The figure is scaled per slot, so a 60 Sun card and a 60 Star card are equally far from perfect even though
+      a Star's main stat is worth far more in raw terms — a Moon, Star or Sky card with the right main is about half way to
+      perfect before its substats count, while a Sun or Space card is all substats, which is why those two usually read lower.</p>
+      <p><b>n left</b> is the <b>headroom</b>: the raw points a perfect card for that slot would add over this one. Those raw
+      points are on one scale across this character's five slots, so the biggest headroom is the biggest gain a replacement
+      could bring. Neither figure says anything about how good the card would be for anyone else.
+      <b>(n r)</b> next to a substat is its roll value: how many maximum rolls that number is worth.</p>
+      <p>Where a slot has more than one recommended main stat, every one of them counts as on target — and the one a card
+      carries changes what its substats are worth, because ATK total multiplies your damage multiplier and crit rate
+      multiplies crit multiplier. Take the Damage Multiplier main and ATK% substats are worth more; take the ATK% main and
+      the reverse. That is why two cards with the same substats can score differently here.</p>`)}
     ${cost}
   </div>
+  ${bsHtml}
   <div class="panel"><h2>Best alternatives per slot</h2>
     <table><thead><tr><th>Slot</th><th>Set</th><th>Main</th><th>Substats</th><th class="right">Score</th><th class="right" title="Raw points a perfect card for this slot would add over this one">Headroom</th><th></th></tr></thead>
     <tbody>${['Sun','Moon','Star','Sky','Space'].flatMap(sl => {
@@ -3329,7 +3454,7 @@ function runOpt() {
         <td>${esc(o.c.set)} <span class="tag r${o.c.rarity}">${o.c.rarity}★</span>
           ${ownedBy ? ` ${onTagHtml(o.c, name, trade.used, trade.minR)}` : ''}</td>
         <td class="tiny">${esc(o.c.main)}</td>
-        <td class="tiny muted">${(o.c.subs || []).map(s => esc(s.stat) + ' ' + s.value).join(' · ')}</td>
+        <td class="tiny muted">${subsInlineHtml(o.c, t)}</td>
         <td class="right score">${cardPct(o.s, sl, t)}</td>
         <td class="right tiny muted">${cardHeadroom(o.s, sl, t).toFixed(1)}</td>
         <td>${slotEquipHtml(name, sl, o.c)}</td></tr>`;
@@ -3337,23 +3462,31 @@ function runOpt() {
     }).join('')}</tbody></table></div>
   ${level0Html(t, r, pool)}
   ${(alt || missing) ? `<div class="panel"><h2>Other set plans considered</h2>
-    <table><thead><tr><th>Plan</th><th class="right">Score</th><th class="right">vs best</th></tr></thead>
+    <table><thead><tr><th>Plan</th><th class="right" title="The build score this plan would earn, on the same 0-100 scale as the one above">Build score</th><th class="right">vs best</th></tr></thead>
     <tbody>${alt}${missing}</tbody></table></div>` : ''}`;
 
+  /* The whole loadout in one go, replacing what is worn — a real trade when it takes cards off
+     someone else — so it can be taken back. */
   const eq = $('#equipBtn');
   if (eq) eq.onclick = () => {
+    const snap = snapshotState();
     state.cards.forEach(c => { if (c.equipped === name) clearEquip(c); });
     ['Sun','Moon','Star','Sky'].forEach(sl => { const p = r.best.picks[sl]; if (p) p.c.equipped = name; });
     if (r.space) r.space.c.equipped = name;
-    renderInv(); runOpt();
+    commit();
+    offerUndo(`Equipped the recommended loadout on ${name}.`, snap);
   };
-  // swapCard/unequipCard already re-run the optimiser themselves.
-  $$('.slotEquip').forEach(b => b.onclick = () => swapCard(b.dataset.char, b.dataset.slot, b.dataset.card));
-  $$('.slotUnequip').forEach(b => b.onclick = () => unequipCard(b.dataset.card));
-  // editCard() already calls runOpt() on save, which redraws this whole panel (including
-  // the Level 0 table) with the card's new stats — no onDone needed, unlike the Loadout
-  // popup which has to reopen itself.
-  $$('[data-edit-l0]').forEach(b => b.onclick = () => editCard(b.dataset.editL0));
+  const noTrade = $('#optNoTrade');
+  if (noTrade) noTrade.onclick = () => { $('#optPool').value = 'free'; runOpt(); };
+  const setupBtn = $('#optSetup');
+  if (setupBtn) setupBtn.onclick = () => openLoadout(name, ['setup']);
+  // swapCard/unequipCard commit, which re-runs the optimiser.
+  $$('#optOut .slotEquip').forEach(b => b.onclick = () => swapCard(b.dataset.char, b.dataset.slot, b.dataset.card));
+  $$('#optOut .slotUnequip').forEach(b => b.onclick = () => unequipCard(b.dataset.card));
+  // editCard() commits on save, which redraws this whole panel (including the Level 0
+  // table) with the card's new stats — no onDone needed, unlike the Loadout popup which
+  // has to reopen itself.
+  $$('#optOut [data-edit-l0]').forEach(b => b.onclick = () => editCard(b.dataset.editL0));
 }
 
 /* Options for a set <select>. Sets lufel.net lists but the game has not shipped yet
@@ -3509,7 +3642,20 @@ function addCard() {
   state.cards.push(candidate);
   $$('.subVal').forEach(el => el.value = '');
   $('.subVal').focus();
-  renderInv();
+  commit();
+}
+
+/* One click, so it offers undo like every other easy-to-regret action here. `after` runs once
+   the change is committed and before the undo toast is placed — it is how the Loadout popup
+   redraws itself around the gap, or the edit dialog closes. */
+function deleteCard(id, after) {
+  const c = state.cards.find(x => x.id === id);
+  if (!c) return;
+  const snap = snapshotState();
+  state.cards = state.cards.filter(x => x.id !== id);
+  commit();
+  if (after) after();
+  offerUndo(`Deleted a ${c.rarity}★ ${c.slot} card (${c.set}${c.equipped ? `, worn by ${c.equipped}` : ''}).`, snap);
 }
 // Shared by the Inventory, Triage and Vault tabs, each of which filters a list of cards
 // (or, for Triage/Vault, rated rows wrapping a card) on the same slot/set/rarity/main/
@@ -3574,11 +3720,18 @@ function sortInvRows(rows) {
     return cmp * invSort.dir;
   });
 }
-function invSortHeader(key, label) {
-  const active = invSort.key === key;
-  const arrow = active ? `<span class="arrow">${invSort.dir > 0 ? '▲' : '▼'}</span>` : '';
-  return `<th class="sortH" data-sort="${key}">${label}${arrow}</th>`;
+/* A sortable column header, shared by every sortable table. The label is a real <button>, so
+   the header is reachable and operable from the keyboard (none of the 15 was, before Sep
+   2026); the click bubbles to the <th>, which owns the handler, and aria-sort says which way
+   the column is sorted. `sort` is the table's { key, dir }. */
+function sortThHtml(key, label, sort, title, style, cls) {
+  const active = sort.key === key;
+  const arrow = active ? `<span class="arrow" aria-hidden="true">${sort.dir > 0 ? '▲' : '▼'}</span>` : '';
+  return `<th class="sortH${cls ? ' ' + cls : ''}" aria-sort="${active ? (sort.dir > 0 ? 'ascending' : 'descending') : 'none'}"` +
+    `${title ? ` title="${esc(title)}"` : ''}${style ? ` style="${style}"` : ''} data-sort="${key}">` +
+    `<button type="button" class="thBtn">${label}${arrow}</button></th>`;
 }
+function invSortHeader(key, label) { return sortThHtml(key, label, invSort); }
 function renderInv() {
   renderSetOverview();
   const rows = sortInvRows(filteredCards());
@@ -3593,25 +3746,32 @@ function renderInv() {
       <td><span class="tag r${c.rarity}">${c.rarity}★</span></td>
       <td class="muted">${c.level}</td>
       <td class="tiny">${esc(c.main)}</td>
-      <td class="tiny muted">${(c.subs || []).map(s => esc(s.stat) + ' ' + s.value).join(' · ')}</td>
+      <td class="tiny muted">${subsInlineHtml(c)}</td>
       <td class="tiny">${c.equipped ? esc(c.equipped) : '<span class="muted">—</span>'}${c.locked
         ? ' <span class="tag hit" title="Excluded from every recommendation for anyone else">locked</span>' : ''}</td>
       <td class="right nowrap"><button class="sm ghost" data-edit="${c.id}">Edit</button>
-        <button class="sm ghost" data-del="${c.id}">✕</button></td>
+        <button class="sm ghost" data-del="${c.id}" aria-label="Delete this card" title="Delete this card">✕</button></td>
     </tr>`).join('') + '</tbody>';
   if (rows.length > 600) $('#invTable').insertAdjacentHTML('beforeend',
     `<tfoot><tr><td colspan="8" class="tiny muted">Showing the first 600 rows — narrow the filters to see more.</td></tr></tfoot>`);
-  $$('[data-edit]').forEach(b => b.onclick = () => editCard(b.dataset.edit));
-  $$('[data-del]').forEach(b => b.onclick = () => {
-    state.cards = state.cards.filter(c => c.id !== b.dataset.del); renderInv();
-  });
-  $$('.sortH').forEach(th => th.onclick = () => {
+  /* Every binding here is scoped to this table. They used to be page-wide — `[data-edit]` and
+     `.sortH` — and the Roster binds `[data-edit]` too, so whichever drew last won: after a Roster
+     redraw (the last thing a load does) Inventory's Edit called editTargets with a card id and
+     threw, after an Inventory redraw the Roster's Targets buttons did nothing, and a click on a
+     Triage, Vault or Weakest slots header re-sorted the Inventory instead. */
+  $$('#invTable [data-edit]').forEach(b => b.onclick = () => editCard(b.dataset.edit));
+  $$('#invTable [data-del]').forEach(b => b.onclick = () => deleteCard(b.dataset.del));
+  $$('#invTable .sortH').forEach(th => th.onclick = () => {
     const key = th.dataset.sort;
     invSort.dir = invSort.key === key ? -invSort.dir : 1;
     invSort.key = key;
     renderInv();
+    refocus(`#invTable th.sortH[data-sort="${key}"] .thBtn`);
   });
 }
+/* A redraw replaces the control that was just used; put the keyboard back on its successor,
+   or it falls to the page and a keyboard user starts again from the top. */
+function refocus(sel) { const el = $(sel); if (el) el.focus(); }
 
 /* Reuses the shared dialog (see editTargets) to edit slot/set/rarity/level/
    main/substats of an existing card in place, running it through the same
@@ -3623,7 +3783,9 @@ function renderInv() {
 function editCard(id, onDone) {
   const c = state.cards.find(x => x.id === id);
   if (!c) return;
+  rememberLoSections();   // opened from the Loadout popup, it goes back there (onDone)
   const subOpts = '<option value="">—</option>' + Object.keys(SUBSTATS).map(s => `<option>${s}</option>`).join('');
+  setDlgView('card', id);
   $('#dlgBody').innerHTML = `
     <h2>Edit card</h2>
     <div class="row">
@@ -3683,18 +3845,12 @@ function editCard(id, onDone) {
     });
     if (!wearer) c.locked = false;
     c.equipped = wearer;
-    // Bypasses swapCard/unequipCard (it can reassign rarity/subs in the same edit,
-    // not just who wears it), so it re-runs the optimiser itself rather than relying
-    // on them to. runOpt(), not renderOpt() — that only rebuilds the character
-    // dropdown, not the plan a changed card's stats or wearer should update.
-    renderInv(); renderRoster(); runOpt();
+    // Bypasses swapCard/unequipCard (it can reassign rarity/subs in the same edit, not just
+    // who wears it), so it commits itself — which redraws everything that reads the card.
+    commit();
     if (onDone) onDone(); else $('#dlg').close();
   };
-  $('#eDelete').onclick = () => {
-    state.cards = state.cards.filter(x => x.id !== id);
-    renderInv(); renderRoster(); runOpt();
-    if (onDone) onDone(); else $('#dlg').close();
-  };
+  $('#eDelete').onclick = () => deleteCard(id, onDone || (() => $('#dlg').close()));
 }
 
 /* ------------------------------ triage ------------------------------ */
@@ -3740,11 +3896,22 @@ function sortTrRows(rows) {
     return cmp * dir;
   });
 }
-function trSortHeader(key, label, title, style) {
-  const active = trSort.key === key;
-  const arrow = active ? `<span class="arrow">${trSort.dir > 0 ? '▲' : '▼'}</span>` : '';
-  return `<th class="sortH"${title ? ` title="${title}"` : ''}${style ? ` style="${style}"` : ''} data-sort="${key}">${label}${arrow}</th>`;
-}
+function trSortHeader(key, label, title, style) { return sortThHtml(key, label, trSort, title, style); }
+
+/* The verdict's six tiers (trTier's numbers), as the chips over the Triage table. Each shows
+   how many cards the other filters leave in it, and pressing chips narrows the table to those
+   tiers. Until Sep 2026 the counts were five numbers inside a sentence and the table could only
+   be sorted by verdict, never filtered — on the real inventory the 980 safest feeds were only
+   reachable by scrolling past everything else. */
+const TR_TIERS = [
+  { t: 0, cls: 'feed', label: 'Feed', title: 'Below 35% of your best card in the same slot, and the Vault does not rate it either: your safest feed candidates.' },
+  { t: 1, cls: 'soft', label: 'Feed · Vault would hold', title: 'Below 35%, but the Vault rates it in the top 7% of its slot for some role. Feed these after the rest.' },
+  { t: 2, cls: 'lock', label: 'Lock', title: 'Nobody you own gains much from it, but the Vault rates it in the top 2% of its slot for some role: worth a lock in the game client.' },
+  { t: 3, cls: 'hold', label: 'Hold', title: '35% to 70% of your best card in the same slot.' },
+  { t: 4, cls: 'keep', label: 'Keep', title: '70% or more of your best card in the same slot.' },
+  { t: 5, cls: 'rec', label: 'Upgrade pick', title: 'Part of an upgrade the Upgrades tab recommends, so kept whatever its own score.' }
+];
+let trVerdictSel = [];   // tiers the table is narrowed to; empty shows every verdict
 
 // The last full rating pass, kept around so changing a filter or a sort column redraws
 // the table instantly instead of re-running the per-character buildScore sweep above.
@@ -3869,21 +4036,14 @@ function runTriage() {
   const vault = new Map(vaultRate(state.cards.filter(c => c.rarity >= +$('#vaRar').value)).rated.map(v => [v.card.id, v]));
   rated.forEach(r => { const v = vault.get(r.card.id); r.vault = v ? v.verdict : ''; r.vaultRole = v ? v.role : ''; });
 
-  const n = f => rated.filter(f).length;
-  const junk = n(r => trVerdict(r) === 'feed' && r.vault !== 'watch');
-  const soft = n(r => trVerdict(r) === 'feed' && r.vault === 'watch');
-  const locks = n(r => trVerdict(r) === 'lock');
-  const kept = n(r => r.rec);
-  const are = k => k === 1 ? 'is' : 'are';
+  const junk = rated.filter(r => trTier(r) === 0).length;
   $('#trSummary').innerHTML = `<div class="notice info">
-    Rated <b>${rated.length}</b> unequipped cards against <b>${chars.length}</b> characters.
-    <b>${junk}</b> score below 35% of your best card in the same slot, and the Vault does not rate them either — those are your safest feed candidates.
-    ${soft ? `<b>${soft}</b> more score that low but the Vault rates them worth holding; they are noted, and sort after the rest.` : ''}
-    ${locks ? `<b>${locks}</b> ${are(locks)} marked lock instead of feed: the Vault rates ${locks === 1 ? 'it' : 'them'} worth a lock in the game client.` : ''}
-    ${kept ? `<b>${kept}</b> ${are(kept)} part of an upgrade the Upgrades tab recommends, and ${are(kept)} kept whatever ${kept === 1 ? 'its' : 'their'} own score.` : ''}
+    Rated <b>${rated.length}</b> unequipped cards against <b>${chars.length}</b> characters: <b>${junk}</b> are safe feed
+    candidates. The chips over the table count each verdict and narrow the table to it.
     Always double-check before feeding: this only knows the characters you have marked as owned.</div>`;
   $('#trPanel').classList.remove('hide');
-  trCache = { rated, tc: teamCritRate() };
+  // `sig` is what the run read (triageSig), so markStaleRuns can say when it no longer holds
+  trCache = { rated, tc: teamCritRate(), sig: triageSig() };
   renderTriageTable();
 }
 // Filters and sorts trCache.rated and draws #trTable — the cheap part, split out of
@@ -3894,7 +4054,22 @@ function renderTriageTable() {
     mn: $('#trFlMain').value, subSel: trFlSubSelected, subAny: $('#trFlSubMode').value === 'any',
     q: $('#trFlQ').value.trim().toLowerCase() };
   const filtered = trCache.rated.filter(r => cardMatchesFilter(r.card, f));
-  const rows = sortTrRows(filtered);
+  const counts = TR_TIERS.map(() => 0);
+  filtered.forEach(r => counts[trTier(r)]++);
+  $('#trChips').innerHTML = TR_TIERS.map(x => {
+    const on = trVerdictSel.includes(x.t);
+    return `<button type="button" class="vchip ${x.cls}" data-tier="${x.t}" aria-pressed="${on}" title="${esc(x.title)}"${counts[x.t] || on ? '' : ' disabled'}>` +
+      `${esc(x.label)} <b>${counts[x.t]}</b></button>`;
+  }).join('') + (trVerdictSel.length ? ' <button type="button" class="linky tiny" id="trChipsAll">Show every verdict</button>' : '');
+  $$('#trChips [data-tier]').forEach(b => b.onclick = () => {
+    const k = +b.dataset.tier, i = trVerdictSel.indexOf(k);
+    if (i < 0) trVerdictSel.push(k); else trVerdictSel.splice(i, 1);
+    renderTriageTable();
+    refocus(`#trChips [data-tier="${k}"]`);
+  });
+  if ($('#trChipsAll')) $('#trChipsAll').onclick = () => { trVerdictSel = []; renderTriageTable(); refocus('#trChips [data-tier]:not(:disabled)'); };
+  const shown = trVerdictSel.length ? filtered.filter(r => trVerdictSel.includes(trTier(r))) : filtered;
+  const rows = sortTrRows(shown);
   $('#trFlCount').textContent = `${rows.length} shown of ${trCache.rated.length}`;
   $('#trTable').innerHTML = `<thead><tr>
       ${trSortHeader('slot', 'Slot')}${trSortHeader('set', 'Set')}${trSortHeader('rarity', '★')}<th>Main</th><th>Substats</th>
@@ -3921,7 +4096,7 @@ function renderTriageTable() {
         <td>${esc(r.card.set)}</td>
         <td><span class="tag r${r.card.rarity}">${r.card.rarity}★</span></td>
         <td class="tiny">${esc(r.card.main)}</td>
-        <td class="tiny muted">${(r.card.subs || []).map(s => esc(s.stat) + ' ' + s.value).join(' · ')}</td>
+        <td class="tiny muted">${subsInlineHtml(r.card)}</td>
         <td class="tiny">${r.rec ? `${esc(r.rec)} <span class="tag" title="The Upgrades tab recommends equipping this on ${esc(r.rec)}.">upgrade</span>`
           : r.who ? esc(r.who)
           : `<span class="muted" title="${noOneTitle}">— no one in scope</span>`}</td>
@@ -3935,6 +4110,7 @@ function renderTriageTable() {
     trSort.dir = trSort.key === key ? -trSort.dir : 1;
     trSort.key = key;
     renderTriageTable();
+    refocus(`#trTable th.sortH[data-sort="${key}"] .thBtn`);
   });
 }
 
@@ -4045,11 +4221,7 @@ function sortVaRows(rows) {
     return cmp * vaSort.dir;
   });
 }
-function vaSortHeader(key, label, title) {
-  const active = vaSort.key === key;
-  const arrow = active ? `<span class="arrow">${vaSort.dir > 0 ? '▲' : '▼'}</span>` : '';
-  return `<th class="sortH"${title ? ` title="${title}"` : ''} data-sort="${key}">${label}${arrow}</th>`;
-}
+function vaSortHeader(key, label, title) { return sortThHtml(key, label, vaSort, title); }
 
 // The last full scoring pass, kept around so changing a filter, "Show" or a sort column
 // redraws instantly instead of re-scoring every card against every archetype.
@@ -4071,10 +4243,10 @@ function runVault() {
     <b>${unfielded}</b> of those are for a role you cannot field yet${missing.length
       ? ` — you own no ${missing.map(m => esc(ARCHETYPES[m].label) + ' (' + rosterRole[m] + ' on the roster)').join(', no ')}`
       : ''}.
-    Feeding those is the expensive kind of mistake, because Triage will happily call them junk
+    Feeding those is the expensive kind of mistake, because Keep or feed will happily call them junk
     until the day you pull the character.</div>`;
   $('#vaPanel').classList.remove('hide');
-  vaCache = { rated, tc: teamCritRate() };
+  vaCache = { rated, tc: teamCritRate(), sig: vaultSig() };
   renderVaultTable();
 }
 
@@ -4141,18 +4313,42 @@ function vaultRate(cards) {
   return { rated, roles, haveRole, rosterRole };
 }
 
-/* Triage and the Vault score on their Run buttons and keep the result, so a new team crit
-   rate leaves their verdicts at the old one until the next run. Say so over each result,
-   rather than re-run a sweep of several seconds on every edit of the field. */
+/* What a Triage run read, and nothing it did not, or the banner cries wolf: every card and who
+   wears it; who is owned; the targets and setups of the characters it rated and of anyone
+   wearing a card (Upgrades' trade pricing, which Triage reads for the cards it keeps, prices
+   what taking a card costs its wearer); the team crit rate; and the controls that shape the
+   run — its own scope and rarity floor, the Upgrades settings and the Vault's floor. */
+function triageSig() {
+  const detail = new Set(($('#trScope').value === 'owned' ? ownedChars() : CHARACTERS).map(c => c.n));
+  state.cards.forEach(c => { if (c.equipped) detail.add(c.equipped); });
+  return cardsSig(true) + ':' + charsSig(detail) + ':' + teamCritRate() + ':' + denSig() + '|' + [$('#trScope').value, $('#trRar').value,
+    $('#upRar').value, $('#upSameSet').checked, $('#upIgnoreEquipped').checked, $('#vaRar').value].join(',');
+}
+/* The Vault prices the cards' own contents against archetypes: not who wears them, not their
+   locks, not targets or setups. Ownership only decides which roles it reports as unfielded.
+   Hashing wearers flagged it stale after every equip, on the screen meant to stop a keeper
+   being fed, until the warning meant nothing. */
+function vaultSig() { return cardsSig(false) + ':' + charsSig(null) + ':' + teamCritRate() + '|' + $('#vaRar').value; }
+
+/* Triage and the Vault score on their Run buttons and keep the result; neither re-runs a sweep
+   of a second or two on every edit. So each result says when what it read has changed since —
+   an import, an equip, a newly owned character, a Setup or target edit, the team crit rate, or
+   its own controls — with a Re-run beside it. Until Sep 2026 only the team crit rate was
+   checked, and a Triage run went on showing its old verdicts after an import without a word,
+   on the one screen whose "feed" cannot be undone. The check is a comparison of fingerprints
+   (see dataSignature), so an undo, or a value set back, reads as current again. */
 function markStaleRuns() {
-  [['#trSummary', trCache], ['#vaSummary', vaCache]].forEach(([id, cache]) => {
+  [['#trSummary', trCache, triageSig, '#trRun'], ['#vaSummary', vaCache, vaultSig, '#vaRun']].forEach(([id, cache, sig, btn]) => {
     const box = $(id);
     if (!box || !cache) return;
-    const old = box.querySelector('.stale-tc');
+    const old = box.querySelector('.stale-run');
     if (old) old.remove();
-    if (cache.tc === teamCritRate()) return;
-    box.insertAdjacentHTML('afterbegin', `<div class="notice stale-tc">Scored with a team crit rate of ${esc(String(cache.tc))}% —
-      press Run to score with ${esc(String(teamCritRate()))}%.</div>`);
+    if (cache.sig === sig()) return;
+    const tc = cache.tc !== teamCritRate();
+    box.insertAdjacentHTML('afterbegin', `<div class="notice stale-run${tc ? ' stale-tc' : ''}"><span>Scored before your latest
+      changes${tc ? `, with a team crit rate of ${esc(String(cache.tc))}% (now ${esc(String(teamCritRate()))}%)` : ''}. The verdicts
+      below may be out of date.</span><button class="sm" type="button">Re-run</button></div>`);
+    box.querySelector('.stale-run button').onclick = () => $(btn).click();
   });
 }
 // Filters (Show + slot/set/rarity/main/substat/search) and sorts vaCache.rated and draws
@@ -4189,7 +4385,7 @@ function renderVaultTable() {
         <td>${esc(r.card.set)}</td>
         <td><span class="tag r${r.card.rarity}">${r.card.rarity}★</span></td>
         <td class="tiny">${esc(r.card.main)}</td>
-        <td class="tiny muted">${(r.card.subs || []).map(s => esc(s.stat) + ' ' + s.value).join(' · ')}</td>
+        <td class="tiny muted">${subsInlineHtml(r.card)}</td>
         <td class="right score">${Math.round(r.genPct * 100)}%</td>
         <td class="tiny">${esc(ARCHETYPES[r.role].label)}${r.unfielded ? ' <span class="tag miss">none owned</span>' : ''}</td>
         <td class="right score">${Math.round(r.rolePct * 100)}%</td>
@@ -4202,6 +4398,7 @@ function renderVaultTable() {
     vaSort.dir = vaSort.key === key ? -vaSort.dir : 1;
     vaSort.key = key;
     renderVaultTable();
+    refocus(`#vaTable th.sortH[data-sort="${key}"] .thBtn`);
   });
 }
 
@@ -4454,17 +4651,10 @@ function runUpgrades() {
   $('#upSummary').innerHTML = `<div class="notice info">
     <b>${results.length}</b> of <b>${chars.length}</b> owned characters have a better card sitting
     somewhere in the inventory than what they currently wear. ${ignoreEquipped
-      ? 'Restricted to unequipped cards plus whatever each character already wears — nothing here requires taking a card off someone else.'
-      : 'Checked against every card you own, including ones equipped on someone else — those are tagged with what taking the card costs that character (their build points lost after they put back their best free card of the slot), and each move shows its <b>net</b>, which is how the characters are ordered.'}
-    The number in brackets after each card is out of 100 for a perfect card in that slot for that
-    character; <b>Gain</b> is what that one swap adds to the character's build score, with their other
-    slots left as they are — build points, the same scale for everyone, which is also how the
-    characters are ordered. Rows that make up a single
-    4-piece switch are bracketed together with what the whole switch is worth — that is the number to
-    read, since most of it is the set bonus, which lands only once all of them are equipped.
-    This does not re-run the full set-plan search per slot the way Optimise's
-    "other plans considered" does; open Optimise for a character to see those.
-    ${sameSetOnly ? ' Restricted to each character\'s currently-equipped Heavens set and Space set — full switches to an alternate configured set are suppressed for both.' : ''}</div>`;
+      ? 'Only unequipped cards are proposed, plus whatever each character already wears — nothing here takes a card off someone else.'
+      : 'Cards equipped on someone else are proposed too, tagged with what taking the card costs that character (their build points lost after they put back their best free card of the slot); each move shows its <b>net</b>, which is how the characters are ordered.'}
+    ${sameSetOnly ? ' Each character stays in the Heavens set and Space set they wear now.' : ''}
+    Open Optimise for a character to see the other set plans it considered.</div>`;
   $('#upPanel').classList.toggle('hide', !results.length);
   if (!results.length) return;
 
@@ -4476,7 +4666,7 @@ function runUpgrades() {
         <th class="right">Gain</th><th></th>
       </tr></thead><tbody>${rows.map((row, i) => {
         const ownedBy = row.rec.equipped && row.rec.equipped !== c.n ? row.rec.equipped : null;
-        const subsHtml = card => (card.subs || []).map(s => esc(s.stat) + ' ' + s.value).join(' · ');
+        const subsHtml = card => subsInlineHtml(card, t);
         /* A grouped row's own Gain is only part of the story — the set bonus lands once,
            when the last of them is equipped — so the block gets one footer carrying the
            bundle's total and a button that equips all of it at once. Rendered after the
@@ -4519,9 +4709,13 @@ function runUpgrades() {
       }).join('')}</tbody></table>
     </div>`; }).join('');
 
-  $$('.upSwap').forEach(b => b.onclick = () => swapCard(b.dataset.char, b.dataset.slot, b.dataset.card));
-  $$('.upSwapAll').forEach(b => b.onclick = () => swapCards(b.dataset.char,
-    b.dataset.swaps.split(',').map(s => ({ slot: s.slice(0, s.indexOf(':')), id: s.slice(s.indexOf(':') + 1) }))));
+  $$('#upList .upSwap').forEach(b => b.onclick = () => swapCard(b.dataset.char, b.dataset.slot, b.dataset.card));
+  $$('#upList .upSwapAll').forEach(b => b.onclick = () => {
+    const swaps = b.dataset.swaps.split(',').map(s => ({ slot: s.slice(0, s.indexOf(':')), id: s.slice(s.indexOf(':') + 1) }));
+    const snap = snapshotState();
+    swapCards(b.dataset.char, swaps);
+    offerUndo(`Equipped ${swaps.length} cards on ${b.dataset.char}.`, snap);
+  });
 }
 
 /* --------------------- weakest slots (headroom) ---------------------
@@ -4635,10 +4829,7 @@ const HR_SORT_COLS = {
   char: r => r.ch.n, slot: r => SLOTS.indexOf(r.slot), card: r => r.pct,
   room: r => r.room, share: r => r.share, gain: r => r.gain, avail: r => r.altGain
 };
-function hrSortHeader(key, label, title) {
-  const arrow = hrSort.key === key ? `<span class="arrow">${hrSort.dir > 0 ? '▲' : '▼'}</span>` : '';
-  return `<th class="sortH"${title ? ` title="${esc(title)}"` : ''} data-sort="${key}">${label}${arrow}</th>`;
-}
+function hrSortHeader(key, label, title) { return sortThHtml(key, label, hrSort, title); }
 function sortHrRows(rows) {
   /* Default: biggest cross-character opportunity first, with the character's own headroom
      as the tie-break so their five slots stay in a sensible order among themselves. */
@@ -4706,16 +4897,13 @@ function renderHeadroomTable() {
     Across <b>${owned}</b> owned character${owned === 1 ? '' : 's'}, a perfect card in every slot would be worth
     <b>${totalGain.toFixed(0)}</b> build-score points in total, of which <b>${nowGain.toFixed(0)}</b> are already
     sitting in your inventory as a same-set swap${empties ? `, and <b>${empties}</b> slot${empties === 1 ? ' is' : 's are'} empty` : ''}.
-    <b>Available now</b> is deliberately restricted to a card of the same set as the one worn, so equipping it
-    cannot break a 4-piece — for switches that change the set, use <b>Better cards available</b>.
-    Both gain columns are build-score points, which compare across characters; <b>Headroom</b> is raw score and
-    compares only one character's five slots against each other.
+    <b>Available now</b> is always a card of the same set as the one worn, so equipping it cannot break a 4-piece;
+    for switches that change the set, use <b>Better cards available</b>.
     Showing <b>${list.length}</b> of ${hrRowsCache.length} slots.</div>`;
   $('#hrPanel').classList.toggle('hide', !list.length);
   if (!list.length) return;
 
   const maxRoom = Math.max.apply(null, list.map(r => r.room).concat([1]));
-  const subsHtml = c => (c.subs || []).map(x => esc(x.stat) + ' ' + x.value).join(' · ');
   $('#hrTable').innerHTML = `<thead><tr>
       ${hrSortHeader('char', 'Character')}
       ${hrSortHeader('slot', 'Slot')}
@@ -4723,7 +4911,7 @@ function renderHeadroomTable() {
       ${hrSortHeader('card', 'Card', 'How close the equipped card is to a perfect one for this slot and this character, out of 100.')}
       ${hrSortHeader('room', 'Headroom', 'Raw score a perfect card for this slot would add over the one worn. Comparable across this one character\'s five slots, not across characters.')}
       ${hrSortHeader('share', 'Share', 'This slot\'s share of all the headroom left on this character.')}
-      ${hrSortHeader('gain', 'Build +', 'Build-score points a perfect card in this slot would add. Divided by the character\'s own perfect loadout, so this column does compare across characters.')}
+      ${hrSortHeader('gain', 'Build&nbsp;+', 'Build-score points a perfect card in this slot would add. Divided by the character\'s own perfect loadout, so this column does compare across characters.')}
       ${hrSortHeader('avail', 'Available now', 'The best card of the same slot and the same set you already own, and what equipping it is worth on the build score.')}
       <th></th>
     </tr></thead><tbody>` +
@@ -4736,7 +4924,7 @@ function renderHeadroomTable() {
         <td class="tiny">${r.card
           ? `${esc(r.card.set)} <span class="tag r${r.card.rarity}">${r.card.rarity}★</span> · ${esc(r.card.main)}
              <span class="muted">Lv${r.card.level}</span>
-             <div class="tiny muted">${subsHtml(r.card)}</div>`
+             <div class="tiny muted">${subsInlineHtml(r.card, r.t)}</div>`
           : '<span class="tag miss">empty</span>'}</td>
         <td class="right score${r.card ? '' : ' muted'}">${r.card ? r.pct : '—'}</td>
         <td class="right">${r.room.toFixed(1)}
@@ -4747,7 +4935,7 @@ function renderHeadroomTable() {
           ? `${esc(r.alt.set)} <span class="tag r${r.alt.rarity}">${r.alt.rarity}★</span> · ${esc(r.alt.main)}
              <span class="score">+${r.altGain.toFixed(1)}</span>
              ${r.alt.equipped && r.alt.equipped !== r.ch.n ? ` ${onTagHtml(r.alt, r.ch.n, new Set([r.alt.id]), 2)}` : ''}
-             <div class="tiny muted">${subsHtml(r.alt)}</div>`
+             <div class="tiny muted">${subsInlineHtml(r.alt, r.t)}</div>`
           : '<span class="muted">nothing better in set</span>'}</td>
         <td>${r.alt
           ? `<button class="ghost tiny hrSwap" data-char="${esc(r.ch.n)}" data-slot="${esc(r.slot)}" data-card="${esc(r.alt.id)}">${r.alt.equipped ? 'Take it' : 'Equip'}</button>`
@@ -4763,6 +4951,7 @@ function renderHeadroomTable() {
     hrSort.dir = hrSort.key === key ? -hrSort.dir : 1;
     hrSort.key = key;
     renderHeadroomTable();
+    refocus(`#hrTable th.sortH[data-sort="${key}"] .thBtn`);
   });
 }
 
@@ -4793,18 +4982,21 @@ function clearEquip(card) { card.equipped = null; card.locked = false; }
 /* Moves one card onto one character's one slot, unequipping whoever had either end of the
    trade. Deliberately narrower than the "Mark these as equipped" button in Optimise, which
    replaces a whole loadout — this only ever touches the one slot the suggestion was about. */
-/* Every equip/unequip path funnels through swapCard or unequipCard, so refreshing
-   here is the one place that guarantees it happens everywhere — including the card
-   picker and Upgrades' swap button, neither of which otherwise touches the Optimise
-   tab. runOpt() re-derives `real` from whatever is equipped now (see bestPlan), so
-   this is also what makes the coupling-against-real-gear numbers stay live rather
-   than freezing at whatever the board looked like when Optimise was last opened. */
+/* Every equip/unequip path funnels through swapCard or unequipCard, and both commit, so the
+   refresh happens everywhere — including the card picker and Upgrades' swap button, neither
+   of which otherwise touches the Optimise tab. runOpt() re-derives `real` from whatever is
+   equipped now (see bestPlan), so this is also what keeps the coupling-against-real-gear
+   numbers live rather than frozen at whatever the board looked like when Optimise last ran.
+   A card taken off someone else is a trade against their build, so that move offers undo. */
 function swapCard(charName, slot, cardId) {
   const card = state.cards.find(c => c.id === cardId);
   if (!card) return;
+  const from = card.equipped && card.equipped !== charName ? card.equipped : null;
+  const snap = from ? snapshotState() : null;
   state.cards.forEach(c => { if (c.equipped === charName && c.slot === slot) clearEquip(c); });
   card.equipped = charName;
-  renderInv(); renderRoster(); runUpgradeViews(); runOpt();
+  commit();
+  if (from) offerUndo(`Moved ${from}'s ${slot} card to ${charName}.`, snap);
 }
 
 /* Several slots on one character in one action — Upgrades' "Equip all". Not a loop over
@@ -4816,14 +5008,14 @@ function swapCards(charName, swaps) {
   if (!moved.length) return;
   moved.forEach(({ slot }) => state.cards.forEach(c => { if (c.equipped === charName && c.slot === slot) clearEquip(c); }));
   moved.forEach(({ card }) => { card.equipped = charName; });
-  renderInv(); renderRoster(); runUpgradeViews(); runOpt();
+  commit();
 }
 
 function unequipCard(cardId) {
   const card = state.cards.find(c => c.id === cardId);
   if (!card) return;
   clearEquip(card);
-  renderInv(); renderRoster(); runUpgradeViews(); runOpt();
+  commit();
 }
 
 /* Locks or unlocks every card currently worn by `charName` in one action — the roster
@@ -4836,7 +5028,7 @@ function toggleLoadoutLock(charName) {
   if (!worn.length) return;
   const lock = !worn.every(c => c.locked);
   worn.forEach(c => { c.locked = lock; });
-  renderInv(); renderRoster(); runUpgradeViews();
+  commit();
 }
 
 /* ------------------------------ roster ------------------------------ */
@@ -4878,18 +5070,40 @@ const ROSTER_SORTERS = {
   owned: (a, b) => (state.chars[b.n].owned - state.chars[a.n].owned) ||
     CHARACTERS.indexOf(a) - CHARACTERS.indexOf(b),
 };
+/* The Roster's view: the portrait cards, or a dense list with one row per character — 36 owned
+   characters as cards need about 2,600 px of scrolling on a laptop, and fit one screen as rows.
+   Kept in the save's prefs like the filters. */
+let rosterView = 'cards';
+
+/* Ownership and benching are one click each from the roster, and un-owning a character also
+   clears their bench flag, so both toggles offer undo. */
+function toggleOwned(n) {
+  const snap = snapshotState(), cs = state.chars[n];
+  cs.owned = !cs.owned;
+  if (!cs.owned) cs.benched = false; // benched is meaningless once unowned
+  commit();
+  offerUndo(`${n} marked ${cs.owned ? 'owned' : 'not owned'}.`, snap);
+}
+function toggleBenched(n) {
+  const snap = snapshotState(), cs = state.chars[n];
+  cs.benched = !cs.benched;
+  commit();
+  offerUndo(`${n} ${cs.benched ? 'benched' : 'back from the bench'}.`, snap);
+}
+
 function renderRoster() {
   const f = $('#rsFilter').value, q = $('#rsQ').value.trim().toLowerCase();
   const elFilter = $('#rsElement').value, sortBy = $('#rsSort').value;
-  const hideUnowned = $('#rsHideUnowned').checked, hideBenched = $('#rsHideBenched').checked;
+  const hideBenched = $('#rsHideBenched').checked;
   const worn = equippedByChar();
+  /* One ownership control. There used to be two — "Show: Owned only" and a "Hide not owned"
+     checkbox that did the same thing — and a save that ticked the box keeps meaning it: see
+     applyPrefs, which maps the old checkbox onto this select. "Hide benched" stays its own
+     toggle, since benched is a state of an owned character, not an ownership filter. */
   const list = CHARACTERS.filter(c => {
     const cs = state.chars[c.n];
     if (f === 'owned' && !cs.owned) return false;
-    // These two toggles are independent of the Show dropdown above: hiding "not owned" or
-    // "benched" is a view preference someone leaves on across sessions, not a one-off scope
-    // change like switching to "owned only".
-    if (hideUnowned && !cs.owned) return false;
+    if (f === 'unowned' && cs.owned) return false;
     if (hideBenched && cs.owned && cs.benched) return false;
     if (elFilter && c.e !== elFilter) return false;
     if (q && !(c.n + ' ' + (c.a || '') + ' ' + c.e + ' ' + c.arch).toLowerCase().includes(q)) return false;
@@ -4899,78 +5113,113 @@ function renderRoster() {
   const onDefault = ownedChars().filter(c => setupIsDefault(c.n)).length;
   $('#rsCount').textContent = `${list.length} shown · ${ownedChars().length} owned` +
     (onDefault ? ` · ${onDefault} on the default setup` : '');
-  $('#rsGrid').innerHTML = list.map(c => {
-    const t = target(c);
-    const cs = state.chars[c.n];
-    const o = cs.owned, b = o && cs.benched;
-    const el = ELEMENT_COLORS[c.e] || ELEMENT_COLORS['None'];
-    return `<div class="cc ${o ? 'owned' : ''} ${b ? 'benched' : ''}" data-ch="${esc(c.n)}" style="--el:${esc(el)}">
-      <div class="portrait">
-        <div class="initials">${esc(initials(c.n))}</div>
-        <img src="${esc(artPath(c.n))}" alt="" loading="lazy" onerror="this.remove()">
-        <div class="veil"></div>
-        <div class="corner l"><span class="tag r${c.r}">${c.r}★</span></div>
-        <div class="corner r"><span class="tag el"><i class="el-dot"></i>${esc(c.e)}</span></div>
-        <div class="corner more">
-          <button class="sm ghost moreBtn" data-more="${esc(c.n)}" title="More actions" aria-label="More actions">&#8943;</button>
-          <div class="moreMenu hide" data-more-menu="${esc(c.n)}">
-            <button class="sm ${o ? 'primary' : ''}" data-own="${esc(c.n)}">${o ? 'Owned' : 'Mark owned'}</button>
-            ${o ? `<button class="sm ${b ? 'gold' : 'ghost'}" data-bench="${esc(c.n)}"
-              title="Benched characters are treated like unowned everywhere except the roster: hidden from the optimiser, Triage's owned scope and Upgrades.">${b ? 'Benched' : 'Bench'}</button>` : ''}
+  $$('#rsView button').forEach(b => { const on = b.dataset.view === rosterView; b.classList.toggle('on', on); b.setAttribute('aria-pressed', on); });
+  $('#rsGrid').classList.toggle('hide', rosterView !== 'cards');
+  $('#rsListPanel').classList.toggle('hide', rosterView !== 'list');
+  const defaultTag = c => `<span class="tag" title="${esc(DEFAULT_SETUP_NOTE)} Open the character to set yours.">default setup</span>`;
+  if (rosterView === 'list') {
+    $('#rsGrid').innerHTML = '';
+    $('#rsList').innerHTML = `<thead><tr><th>Character</th><th>Role</th><th>Build</th><th class="right">Slots</th>
+        <th>Sets</th><th>Setup</th><th></th></tr></thead><tbody>` + list.map(c => {
+      const t = target(c), cs = state.chars[c.n];
+      const o = cs.owned, b = o && cs.benched;
+      const el = ELEMENT_COLORS[c.e] || ELEMENT_COLORS['None'];
+      return `<tr class="rrow${b ? ' benched' : ''}" data-ch="${esc(c.n)}" tabindex="0" aria-label="Open ${esc(c.n)}'s loadout">
+        <td style="--el:${esc(el)}"><i class="el-dot" title="${esc(c.e)}"></i> <span class="nm">${esc(c.n)}</span>
+          ${c.a ? `<span class="tiny muted">${esc(c.a)}</span>` : ''} <span class="tag r${c.r}">${c.r}★</span></td>
+        <td class="tiny">${esc(c.arch)}${b ? ' <span class="tag benched">benched</span>' : ''}${o ? '' : ' <span class="tag">not owned</span>'}</td>
+        <td>${buildScoreTag(c, worn)}</td>
+        <td class="right tiny">${(worn[c.n] || []).length}/${SLOTS.length}</td>
+        <td class="tiny muted">${esc(t.sets[0] || '—')} 4pc · ${esc(t.space || '—')}</td>
+        <td class="tiny">${o && !b ? (setupIsDefault(c.n) ? defaultTag(c) : '<span class="muted">yours</span>') : ''}</td>
+        <td class="acts">
+          <button class="sm ghost" data-own="${esc(c.n)}" aria-pressed="${o}">${o ? '✓ Owned' : 'Mark owned'}</button>
+          ${o ? `<button class="sm ghost" data-bench="${esc(c.n)}" aria-pressed="${b}">${b ? '✓ Benched' : 'Bench'}</button>` : ''}
+          <button class="sm ghost" data-edit="${esc(c.n)}">Targets</button>
+          <button class="sm ghost" data-optimize="${esc(c.n)}">Optimize</button></td>
+      </tr>`;
+    }).join('') + '</tbody>';
+  } else {
+    $('#rsList').innerHTML = '';
+    $('#rsGrid').innerHTML = list.map(c => {
+      const t = target(c);
+      const cs = state.chars[c.n];
+      const o = cs.owned, b = o && cs.benched;
+      const el = ELEMENT_COLORS[c.e] || ELEMENT_COLORS['None'];
+      return `<div class="cc ${o ? 'owned' : ''} ${b ? 'benched' : ''}" data-ch="${esc(c.n)}" style="--el:${esc(el)}"
+          tabindex="0" role="button" aria-label="Open ${esc(c.n)}'s loadout">
+        <div class="portrait">
+          <div class="initials">${esc(initials(c.n))}</div>
+          <img src="${esc(artPath(c.n))}" alt="" loading="lazy" onerror="this.remove()">
+          <div class="veil"></div>
+          <div class="corner l"><span class="tag r${c.r}">${c.r}★</span></div>
+          <div class="corner r"><span class="tag el"><i class="el-dot"></i>${esc(c.e)}</span></div>
+          <div class="corner more">
+            <button class="sm ghost moreBtn" data-more="${esc(c.n)}" title="Owned and benched" aria-label="Owned and benched"
+              aria-haspopup="menu" aria-expanded="false">&#8943;</button>
+            <div class="moreMenu hide" data-more-menu="${esc(c.n)}" role="menu">
+              <button class="sm ghost" role="menuitemcheckbox" aria-checked="${o}" data-own="${esc(c.n)}"
+                title="${o ? 'Click to mark as not owned' : 'Click to mark as owned'}"><span class="ck">${o ? '✓' : ''}</span>Owned</button>
+              ${o ? `<button class="sm ghost" role="menuitemcheckbox" aria-checked="${b}" data-bench="${esc(c.n)}"
+                title="Benched characters are treated like unowned everywhere except the roster: hidden from the optimiser, Triage's owned scope and Upgrades."><span class="ck">${b ? '✓' : ''}</span>Benched</button>` : ''}
+            </div>
+          </div>
+          <div class="cap">
+            <div class="nm">${esc(c.n)}</div>
+            ${c.a ? `<div class="al">${esc(c.a)}</div>` : ''}
           </div>
         </div>
-        <div class="cap">
-          <div class="nm">${esc(c.n)}</div>
-          ${c.a ? `<div class="al">${esc(c.a)}</div>` : ''}
-        </div>
-      </div>
-      <div class="body">
-        <div class="mt">
-          <span class="tag">${esc(c.arch)}</span>
-          ${b ? '<span class="tag benched">benched</span>' : ''}
-          ${o && !b && setupIsDefault(c.n) ? `<span class="tag" title="${esc(DEFAULT_SETUP_NOTE)} Click the card to set yours.">default setup</span>` : ''}
-          ${buildScoreTag(c, worn)}
-        </div>
-        <div class="tiny muted" style="margin-top:7px">${esc((t.sets[0] || '—'))} 4pc · ${esc(t.space || '—')}</div>
-        <div class="row" style="margin-top:9px;gap:6px">
-          <button class="sm ghost" data-edit="${esc(c.n)}">Targets</button>
-          <button class="sm ghost" data-optimize="${esc(c.n)}">Optimize</button>
-        </div>
-      </div></div>`;
-  }).join('');
-  $$('[data-own]').forEach(b => b.onclick = e => {
-    e.stopPropagation();
-    const n = b.dataset.own;
-    const cs = state.chars[n];
-    cs.owned = !cs.owned;
-    if (!cs.owned) cs.benched = false; // benched is meaningless once unowned
-    renderRoster(); renderOpt();
-  });
-  $$('[data-bench]').forEach(b => b.onclick = e => {
-    e.stopPropagation();
-    const cs = state.chars[b.dataset.bench];
-    cs.benched = !cs.benched;
-    renderRoster(); renderOpt();
-  });
-  $$('[data-edit]').forEach(b => b.onclick = e => { e.stopPropagation(); editTargets(b.dataset.edit); });
-  $$('[data-optimize]').forEach(b => b.onclick = e => { e.stopPropagation(); openCharacterDetail(b.dataset.optimize); });
-  $$('[data-more]').forEach(b => b.onclick = e => {
+        <div class="body">
+          <div class="mt">
+            ${buildScoreTag(c, worn)}
+            <span class="tag">${esc(c.arch)}</span>
+            ${b ? '<span class="tag benched">benched</span>' : ''}
+            ${o && !b && setupIsDefault(c.n) ? defaultTag(c) : ''}
+          </div>
+          <div class="tiny muted" style="margin-top:7px">${esc((t.sets[0] || '—'))} 4pc · ${esc(t.space || '—')}</div>
+          <div class="row acts">
+            <button class="sm ghost" data-edit="${esc(c.n)}">Targets</button>
+            <button class="sm ghost" data-optimize="${esc(c.n)}">Optimize</button>
+          </div>
+        </div></div>`;
+    }).join('');
+  }
+  // Scoped to the roster: Inventory's rows carry `data-edit` too (see renderInv).
+  const R = '#rsGrid, #rsList';
+  const within = sel => R.split(', ').map(r => `${r} ${sel}`).join(', ');
+  $$(within('[data-own]')).forEach(b => b.onclick = e => { e.stopPropagation(); toggleOwned(b.dataset.own); });
+  $$(within('[data-bench]')).forEach(b => b.onclick = e => { e.stopPropagation(); toggleBenched(b.dataset.bench); });
+  $$(within('[data-edit]')).forEach(b => b.onclick = e => { e.stopPropagation(); editTargets(b.dataset.edit); });
+  $$(within('[data-optimize]')).forEach(b => b.onclick = e => { e.stopPropagation(); openCharacterDetail(b.dataset.optimize); });
+  $$('#rsGrid [data-more]').forEach(b => b.onclick = e => {
     e.stopPropagation();
     const menu = $(`[data-more-menu="${CSS.escape(b.dataset.more)}"]`);
     const wasOpen = menu && !menu.classList.contains('hide');
-    $$('.moreMenu').forEach(m => m.classList.add('hide'));
-    if (menu && !wasOpen) menu.classList.remove('hide');
+    closeMoreMenus();
+    if (menu && !wasOpen) { menu.classList.remove('hide'); b.setAttribute('aria-expanded', 'true'); }
   });
-  $$('.cc[data-ch]').forEach(el => el.onclick = () => openLoadout(el.dataset.ch));
+  /* The card (or row) itself opens the Loadout popup, from the mouse or — as a focusable
+     button — from the keyboard. Keys pressed on a button inside it belong to that button. */
+  $$(within('[data-ch]')).forEach(el => {
+    el.onclick = () => openLoadout(el.dataset.ch);
+    el.onkeydown = e => {
+      if (e.target !== el || (e.key !== 'Enter' && e.key !== ' ')) return;
+      e.preventDefault(); openLoadout(el.dataset.ch);
+    };
+  });
 }
-document.addEventListener('click', () => $$('.moreMenu').forEach(m => m.classList.add('hide')));
+function closeMoreMenus() {
+  $$('.moreMenu').forEach(m => m.classList.add('hide'));
+  $$('#rsGrid [data-more]').forEach(b => b.setAttribute('aria-expanded', 'false'));
+}
+document.addEventListener('click', closeMoreMenus);
 
-/* The level / ascension / weapon / refinement / Mindscape / Awareness selects, shared
-   by the Targets dialog's "Your setup" section (below) and the roster's Loadout popup.
-   This is not just flavour: it feeds charBaseStat -> damageBase -> damageFactors, so
-   it moves every character's build-score spread term, not only the 37 with a
-   published `ov.targets`. Returns the current loadout alongside the markup so a
-   caller does not have to call charLoadout(c.n) again. */
+/* The weapon / refinement / Mindscape / Awareness selects: the Loadout popup's Setup section.
+   This is not just flavour: it feeds charBaseStat -> damageBase -> damageFactors, so it moves
+   every character's build-score spread term, not only the 37 with a published `ov.targets`.
+   Returns the current loadout alongside the markup so a caller does not have to call
+   charLoadout(c.n) again. The Targets dialog used to carry a second copy of these fields that
+   saved on its own Save button while this one saved on every change; it links here instead. */
 function loadoutFieldsHtml(c) {
   const cs = CHAR_STATS[c.n];
   const L = charLoadout(c.n);
@@ -4982,7 +5231,7 @@ function loadoutFieldsHtml(c) {
     // A passive can be counted *and* still have an uncounted clause: Mermaid Dreamer
     // grants crit damage and Resonance crit rate in one sentence, and only the first
     // is a stat this tool models. Say so, rather than implying the whole line landed.
-    if (w.b) return `${w.b.s} +${w.b.r[Math.max(1, Math.min(7, L.refine)) - 1]}${w.b.pct ? '%' : ''} at R${L.refine}`
+    if (w.b) return `${w.b.s} +${w.b.r[Math.max(1, Math.min(7, L.refine)) - 1]}${w.b.pct ? '%' : ''} at ${refineLabel(L.refine)}`
       + (w.extra ? ' · rest of the passive not counted' : '');
     return w.extra ? 'conditional passive — not counted' : 'no flat stat passive';
   };
@@ -5010,7 +5259,7 @@ function loadoutFieldsHtml(c) {
       <div class="field"><label>Weapon</label><select id="lWeapon">
         ${opt('', L.weapon, 'none')}${cs.w4 ? opt('4', L.weapon, wName('w4')) : ''}${cs.w5 ? opt('5', L.weapon, wName('w5')) : ''}</select></div>
       <div class="field"><label>Refinement</label><select id="lRefine">
-        ${[1,2,3,4,5,6,7].map(a => opt(a, L.refine, 'R' + a)).join('')}</select></div>
+        ${[1,2,3,4,5,6,7].map(a => opt(a, L.refine, refineLabel(a))).join('')}</select></div>
       <div class="field"><label>Mindscape (skill paths)</label><select id="lMindSkill">
         ${opt('no', L.mindSkill ? 'yes' : 'no', 'locked')}${opt('yes', L.mindSkill ? 'yes' : 'no', 'unlocked')}</select></div>
       ${cs.mind && cs.mind[0] ? `<div class="field"><label title="${esc(cs.mind[0].s)}">Mindscape: ${esc(cs.mind[0].s)}</label><select id="lMind1">
@@ -5020,103 +5269,146 @@ function loadoutFieldsHtml(c) {
       ${awNodes.length ? `<div class="field"><label>Awareness</label><select id="lAwareness">
         ${[0,1,2,3,4,5,6].map(a => opt(a, L.awareness, 'Lv ' + a)).join('')}</select></div>` : ''}
     </div>
-    <p class="tiny muted" style="margin:6px 0 0">
-      <b>Level 80, Ascension 7</b> assumed for every character — the only level-80
-      configuration the game allows.
-      ${L.weapon ? `<b>${esc(bonusText(L.weapon === '4' ? 'w4' : 'w5'))}</b>. ` : ''}
+    ${explainHtml(`<b>Level 80, Ascension 7</b> assumed for every character.${L.weapon ? ` Weapon: <b>${esc(bonusText(L.weapon === '4' ? 'w4' : 'w5'))}</b>.` : ''}${awNodes.length ? ` Awareness adds <b>+${awPct || 0}% HP/ATK/DEF</b>.` : ''}`,
+      `<p>Level 80 at Ascension 7 is the only level-80 configuration the game allows.
       ${mind ? `Mindscape: ${esc(mind)}. ` : ''}
       Mindscape has 4 paths — the two above grant these stats (scaling linearly to their
       max at Lv5); the other two raise a skill's level cap instead, tracked by the
       "skill paths" toggle.
       Only unconditional passives count — a buff that needs a trigger is not a stat you always have.
       My Palace is not modelled at all, so totals are a floor.</p>
-    ${awUnlocked ? `<p class="tiny muted" style="margin:4px 0 0">Awareness ${awPct ? `<b>+${awPct}% HP/ATK/DEF</b>` : '+0% HP/ATK/DEF'} at this level.
-      Unlocked: ${awUnlocked}
-      <span class="tiny muted">(hover a name for its full effect — almost all of these are conditional kit passives on top of that flat percentage, not additional stats)</span></p>` : ''}`;
+      ${awUnlocked ? `<p>Awareness unlocked at this level: ${awUnlocked}
+        (hover a name for its full effect — almost all of these are conditional kit passives on top of that flat percentage, not additional stats).</p>` : ''}`)}`;
   return { L, fields };
 }
 
-/* Weapon / ascension / Mindscape, for the characters whose targets need totalling.
-   Only shown when there is something to total — most characters have no stat target,
-   and asking them to fill this in would be busywork with nothing on the other end.
-   (The Loadout popup on the roster shows the same fields unconditionally — see
-   openLoadout — because they matter for build score even without a stat target.) */
-function loadoutEditorHtml(c) {
-  const t = target(c);
-  if (!CHAR_STATS[c.n] || !(t.targets || []).length) return '';
-  return `
-    <h3 style="margin:16px 0 8px;font-size:13px">Your setup
-      <span class="tiny muted" style="font-weight:400;text-transform:none;letter-spacing:0">— needed to total a stat against its target</span></h3>
-    ${loadoutFieldsHtml(c).fields}`;
+/* The Setup in one line — the Loadout popup's section summary and the Targets dialog's link. */
+function setupSummary(c, L) {
+  const cs = CHAR_STATS[c.n] || {};
+  const w = L.weapon === '4' ? cs.w4 : L.weapon === '5' ? cs.w5 : null;
+  const mindStats = (cs.mind || []).length ? `, stat paths Lv${L.mind1 || 0}/${L.mind2 || 0}` : '';
+  return [w ? `${L.weapon}★ ${w.n} ${refineLabel(L.refine)}` : 'no weapon',
+    `Mindscape ${L.mindSkill ? 'unlocked' : 'locked'}${mindStats}`,
+    `Awareness ${L.awareness || 0}`].join(' · ');
+}
+
+/* Ties each `.field`'s label to its control. The markup here puts a <label> beside its
+   <select> or <input> rather than around it or with `for`, so 58 of the page's 63 controls had
+   no accessible name and a click on a label focused nothing. Run over the page once and over
+   every dialog as it opens. */
+let labelSeq = 0;
+function linkLabels(root) {
+  $$('.field', root || document).forEach(f => {
+    const label = $('label', f), ctl = $('input, select, textarea', f);
+    if (!label || !ctl || label.htmlFor) return;
+    if (!ctl.id) ctl.id = 'fld' + (++labelSeq);
+    label.htmlFor = ctl.id;
+  });
 }
 
 /* Opens `#dlg` if it is not already open — every screen in this file that redraws
    itself in place (openLoadout, openCardPicker) calls this rather than showModal()
    directly, since showModal() throws InvalidStateError on a dialog that is already
    open, and this whole popup family works by re-rendering #dlgBody while staying
-   open across a run of onchange handlers. */
-function showDlg() { if (!$('#dlg').open) $('#dlg').showModal(); }
+   open across a run of onchange handlers. It also ties the new content's labels to their
+   controls (linkLabels). */
+function showDlg() {
+  linkLabels($('#dlgBody'));
+  if (!$('#dlg').open) $('#dlg').showModal();
+  /* A message already on screen would sit under the dialog's backdrop, so the dialog takes it
+     in. A pending undo stays out: pressed from inside a dialog it was not offered from, it would
+     close that dialog (see undo) and lose whatever was being edited there. */
+  if (!$('#toast').classList.contains('hide') && !undoSnap) placeToast();
+}
+/* Which screen the dialog is showing and for whom, so an undo can redraw the Loadout popup it
+   was offered from, and a redraw of that popup knows it is the same one (see openLoadout). */
+function setDlgView(view, name) { const b = $('#dlgBody'); b.dataset.view = view; b.dataset.name = name || ''; }
 
-/* Roster "Loadout" popup: level/ascension/weapon/Mindscape plus which owned card
-   fills each of the five slots, for any character regardless of whether they carry a
-   published stat target. Card choices are immediate (swapCard/unequipCard already
-   handle the unequip-the-other-end bookkeeping); the dialog just redraws itself after
-   each change so the summaries reflect the new state. Picking a different card for a
-   slot goes through openCardPicker rather than a plain <select> — a 4000-card
-   inventory can hold hundreds of cards in one slot, spread across sets the character
-   can't even use, and a flat dropdown had no way to search or filter that down. */
-function openLoadout(name) {
+/* Roster "Loadout" popup: which card fills each of the five slots, then the Setup, then the
+   numbers behind the build score, for any character regardless of whether they carry a
+   published stat target. The cards come first because they are what the popup is opened for;
+   until Sep 2026 they started 849 px down a dialog that shows about 790, under the Setup
+   fields and every stats table. The Setup section opens by itself while the character is still
+   on the defaults, since that is the one thing to fix first.
+
+   Card choices are immediate (swapCard/unequipCard already handle the unequip-the-other-end
+   bookkeeping); the dialog redraws itself after each change, keeping whichever sections the
+   reader had open. Picking a different card for a slot goes through openCardPicker rather than
+   a plain <select> — a 4000-card inventory can hold hundreds of cards in one slot, spread
+   across sets the character can't even use, and a flat dropdown had no way to search or
+   filter that down. */
+/* The Loadout popup's sections as the reader last left them, per character — read off the DOM
+   whenever the popup is about to be replaced (its own redraw, the card picker, the card editor,
+   closing), so an Equip in the picker, or an Edit and Save, comes back with Stats still open.
+   Keyed on the popup's own view: until this, only a redraw of the popup itself kept them. */
+let loSections = null;   // { name, open: Set of section keys }
+function rememberLoSections() {
+  const b = $('#dlgBody');
+  if (b.dataset.view !== 'loadout' || !$('details.sect[data-k]', b)) return;
+  loSections = { name: b.dataset.name, open: new Set($$('details.sect[data-k]', b).filter(d => d.open).map(d => d.dataset.k)) };
+}
+/* `openKeys` names sections to open whatever was remembered: the Targets dialog's and
+   Optimise's Setup links send ['setup'], since that is what they were clicked for. */
+function openLoadout(name, openKeys) {
   const c = charDef(name);
+  const body = $('#dlgBody');
+  rememberLoSections();
+  const kept = loSections && loSections.name === name ? loSections.open : null;
+  const open = (k, dflt) => ((openKeys && openKeys.includes(k)) || (kept ? kept.has(k) : dflt) ? ' open' : '');
   const worn = state.cards.filter(cd => cd.equipped === name);
   const { L, fields } = loadoutFieldsHtml(c);
   const t = target(c);
   const idealLo = idealLoadout(c, t, 55);
   const bs = buildScore(c, worn, 55, L, idealLo, t);
+  const isDefault = setupIsDefault(name);
 
   const slotBlock = sl => {
     const cur = worn.find(cd => cd.slot === sl);
-    const subs = cur ? (cur.subs || []).map(s => `<div class="sub">
-      <span>${esc(s.stat)}</span><b>${s.value}${SUBSTATS[s.stat].flat ? '' : '%'}</b></div>`).join('') : '';
-    return `<div class="lo ${cur ? '' : 'empty'}">
-      <h4><span class="slot ${sl}">${sl.slice(0, 3)}</span> ${cur ? esc(cur.set) : sl}
-        ${cur ? `<span class="tag r${cur.rarity}">${cur.rarity}★</span>` : ''}
-        ${cur && cur.locked ? `<span class="tag hit" title="Locked to ${esc(name)} — excluded from every recommendation for anyone else">locked</span>` : ''}</h4>
-      ${cur ? `<div class="tiny muted" style="margin-bottom:4px">Main <b>${esc(cur.main)}</b> · Lv${cur.level}</div>` : ''}
-      ${subs || '<div class="tiny muted">Nothing equipped.</div>'}
-      <div class="row" style="margin-top:8px;gap:6px">
+    const btns = `<div class="row" style="gap:6px">
         <button class="ghost tiny" data-pick-slot="${esc(sl)}">${cur ? 'Swap' : 'Equip a card'}</button>
-        ${cur ? `<button class="ghost tiny" data-edit-slot="${esc(sl)}">Edit</button>` : ''}
-        ${cur ? `<button class="ghost tiny" data-unequip-slot="${esc(sl)}">Unequip</button>` : ''}
-      </div>
-    </div>`;
+        ${cur ? `<button class="ghost tiny" data-edit-slot="${esc(sl)}">Edit</button>
+        <button class="ghost tiny" data-unequip-slot="${esc(sl)}">Unequip</button>` : ''}</div>`;
+    if (!cur) return `<div class="lo empty"><h4><span class="slot ${sl}">${sl.slice(0, 3)}</span> ${sl}</h4>
+      <div class="tiny muted">Nothing equipped.</div><div style="margin-top:8px">${btns}</div></div>`;
+    /* Priced against what is really in the other four slots, as the card picker this opens
+       prices its candidates (realCoupleContext), so the equipped card reads the same number in
+       both; context-free it read 79 here and 78 in the picker for the same card. */
+    const real = realCoupleContext(c, worn.filter(x => x.slot !== sl), L);
+    return cardBlockHtml(cur, t, { score: cardScore(cur, t, real),
+      tags: cur.locked ? ` <span class="tag hit" title="Locked to ${esc(name)} — excluded from every recommendation for anyone else">locked</span>` : '',
+      foot: btns });
   };
 
   const wornLocked = worn.length > 0 && worn.every(cd => cd.locked);
+  const statsHtml = statsSummaryHtml(c, worn, L, false, idealLo.cards) + targetHtml(bs) + spreadHtml(bs);
 
-  $('#dlgBody').innerHTML = `
+  setDlgView('loadout', name);
+  body.innerHTML = `
     <h2 style="margin-bottom:4px">${esc(c.n)}${c.a ? ' · ' + esc(c.a) : ''}</h2>
     <p class="tiny muted" style="margin:0 0 14px">${esc(c.e)} · ${esc(ARCHETYPES[c.arch].label)} ·
       ${buildScoreTag(c, { [c.n]: worn })}</p>
-    <h3 style="margin:0 0 8px;font-size:13px">Setup
-      <span class="tiny muted" style="font-weight:400;text-transform:none;letter-spacing:0">— level, ascension, weapon, Mindscape, Awareness</span></h3>
-    ${setupIsDefault(name) ? `<p class="tiny muted" style="margin:0 0 8px">These are the defaults, and ${esc(c.n)} is scored on them until you change one — check the weapon first.</p>` : ''}
-    ${fields}
-    ${statsSummaryHtml(c, worn, L, false, idealLo.cards)}
-    ${targetHtml(bs)}
-    ${spreadHtml(bs)}
-    <h3 style="margin:16px 0 8px;font-size:13px">Cards
-      <span class="tiny muted" style="font-weight:400;text-transform:none;letter-spacing:0">— which card fills each slot</span></h3>
-    <div class="row" style="margin:0 0 10px">
+    <div class="row" style="margin:0 0 10px;align-items:center">
+      <h3 style="margin:0;font-size:13px">Cards</h3>
       <button class="ghost sm ${wornLocked ? 'gold' : ''}" id="loLock" ${worn.length ? '' : 'disabled'}
         title="${wornLocked
           ? `Stop reserving ${esc(name)}'s equipped cards — they become eligible for other characters' recommendations again.`
           : `Reserve ${esc(name)}'s equipped cards so they never show up as a suggestion for anyone else, in the Optimiser, Upgrades or Triage.`}">
         ${wornLocked ? 'Unlock these cards' : 'Lock these cards to ' + esc(c.n)}</button>
+      <span style="flex:1"></span>
+      <button class="ghost sm" id="loOpenOpt">Open in Optimiser for full recommendations →</button>
     </div>
     <div class="loadout">${SLOTS.map(slotBlock).join('')}</div>
-    <div class="row" style="margin-top:14px">
-      <button class="ghost sm" id="loOpenOpt">Open in Optimiser for full recommendations →</button>
-    </div>`;
+    <details class="sect" data-k="setup"${open('setup', isDefault)}>
+      <summary>Setup <span class="tiny muted">${esc(setupSummary(c, L))}${isDefault ? ' — the defaults, never saved' : ''}</span></summary>
+      <div class="inner">
+        ${isDefault ? `<p class="tiny muted" style="margin:0 0 8px">These are the defaults, and ${esc(c.n)} is scored on them until you change one — check the weapon first.</p>` : ''}
+        ${fields}
+      </div>
+    </details>
+    ${statsHtml ? `<details class="sect" data-k="stats"${open('stats', false)}>
+      <summary>Stats, stat targets and damage factors <span class="tiny muted">— what the build score is made of</span></summary>
+      <div class="inner">${statsHtml}</div>
+    </details>` : ''}`;
   showDlg();
 
   const applyLoadout = () => {
@@ -5128,18 +5420,18 @@ function openLoadout(name) {
       mind1: $('#lMind1') ? +$('#lMind1').value : 0, mind2: $('#lMind2') ? +$('#lMind2').value : 0,
       awareness: $('#lAwareness') ? +$('#lAwareness').value : 0
     };
-    openLoadout(name); renderRoster(); runOpt();
+    commit(); openLoadout(name);
   };
   ['#lWeapon', '#lRefine', '#lMindSkill', '#lMind1', '#lMind2', '#lAwareness']
     .forEach(sel => { if ($(sel)) $(sel).onchange = applyLoadout; });
   const lockBtn = $('#loLock');
-  if (lockBtn) lockBtn.onclick = () => { toggleLoadoutLock(name); openLoadout(name); runOpt(); };
-  $$('[data-pick-slot]').forEach(b => b.onclick = () => openCardPicker(name, b.dataset.pickSlot));
-  $$('[data-edit-slot]').forEach(b => b.onclick = () => {
+  if (lockBtn) lockBtn.onclick = () => { toggleLoadoutLock(name); openLoadout(name); };
+  $$('#dlgBody [data-pick-slot]').forEach(b => b.onclick = () => openCardPicker(name, b.dataset.pickSlot));
+  $$('#dlgBody [data-edit-slot]').forEach(b => b.onclick = () => {
     const cur = worn.find(cd => cd.slot === b.dataset.editSlot);
     if (cur) editCard(cur.id, () => openLoadout(name));
   });
-  $$('[data-unequip-slot]').forEach(b => b.onclick = () => {
+  $$('#dlgBody [data-unequip-slot]').forEach(b => b.onclick = () => {
     const cur = worn.find(cd => cd.slot === b.dataset.unequipSlot);
     if (cur) unequipCard(cur.id);
     openLoadout(name);
@@ -5148,19 +5440,23 @@ function openLoadout(name) {
 }
 
 /* Full-inventory card picker for one character's one slot, opened from the Loadout
-   popup's "Change card" / "Equip a card" buttons. Replaces a flat <select> that had no
-   way to search a 4000-card inventory or see anything past set/rarity/main/score — this
-   shows every substat on every candidate and lets the set, main stat and rarity be
-   filtered, defaulting the set filter to whatever is already equipped in that slot (or
-   the character's preferred set, if the slot is empty) since the user plays almost
-   exclusively in-set and starting from "every set" buries that one under the rest. */
+   popup's "Swap" / "Equip a card" buttons. Replaces a flat <select> that had no way to
+   search a 4000-card inventory or see anything past set/rarity/main/score. One compact row
+   per candidate — every substat, coloured by what it is worth to this character — so a
+   screen holds a dozen to compare, where the old card blocks showed two of forty; sortable
+   by score, headroom, level or set. The set filter defaults to whatever is already equipped
+   in that slot (or the character's preferred set, if the slot is empty) since the user plays
+   almost exclusively in-set and starting from "every set" buries that one under the rest. */
 function openCardPicker(charName, slot) {
+  rememberLoSections();   // the popup's open sections, for the way back
   const c = charDef(charName);
   const t = target(c);
   const cur = state.cards.find(cd => cd.equipped === charName && cd.slot === slot);
   const setTable = slot === 'Space' ? SPACE_SETS : SETS;
   const preferredSet = slot === 'Space' ? t.space : (t.sets || [])[0];
   const f = { set: (cur ? cur.set : preferredSet) || '', main: '', rarity: '', q: '' };
+  // null key: best score first. The equipped card is pinned to the top whatever the order.
+  const sort = { key: null, dir: -1 };
 
   /* Price every candidate against what's really equipped in the OTHER four slots plus
      the real weapon/ascension/Mindscape, not couplingFactors' generic "typical build"
@@ -5170,24 +5466,23 @@ function openCardPicker(charName, slot) {
   const lo = charLoadout(charName);
   const otherCards = state.cards.filter(cd => cd.equipped === charName && cd.slot !== slot);
   const real = realCoupleContext(c, otherCards, lo);
+  const SORTS = { score: o => o.s, left: o => cardHeadroom(o.s, slot, t), level: o => o.cd.level, set: o => o.cd.set };
+  const FIRST_DIR = { score: -1, left: 1, level: -1, set: 1 };
 
   const rowHtml = (card, score) => {
     const isCur = card === cur;
-    const subs = (card.subs || []).map(s => `<div class="sub">
-      <span>${esc(s.stat)}</span><b>${s.value}${SUBSTATS[s.stat].flat ? '' : '%'}</b></div>`).join('');
-    return `<div class="lo" style="margin-bottom:8px${isCur ? ';border-color:var(--ok)' : ''}">
-      <h4><span class="slot ${slot}">${slot.slice(0, 3)}</span> ${esc(card.set)}
-        <span class="tag r${card.rarity}">${card.rarity}★</span>
-        <span class="tiny muted">Lv${card.level}</span>
-        ${card.equipped && card.equipped !== charName
-          ? `<span class="tag" title="Currently equipped on ${esc(card.equipped)}">on ${esc(card.equipped)}</span>` : ''}
-        <span style="margin-left:auto;white-space:nowrap">${cardPctHtml(score, slot, t)}</span></h4>
-      <div class="tiny muted" style="margin-bottom:4px">Main <b>${esc(card.main)}</b></div>
-      ${subs || '<div class="tiny muted">No substats recorded.</div>'}
-      <div style="margin-top:8px">${isCur
-        ? '<span class="tag hit">equipped here</span>'
-        : `<button class="ghost tiny" data-equip-card="${esc(card.id)}">${card.equipped ? 'Take it' : 'Equip'}</button>`}</div>
-    </div>`;
+    const by = card.equipped && card.equipped !== charName ? card.equipped : null;
+    return `<tr class="${isCur ? 'cur' : ''}">
+      <td>${esc(card.set)} <span class="tag r${card.rarity}">${card.rarity}★</span></td>
+      <td class="right tiny muted">${card.level}</td>
+      <td class="tiny">${esc(card.main)}</td>
+      <td class="tiny">${subsInlineHtml(card, t)}</td>
+      <td class="right score" title="Out of 100 for a perfect ${esc(slot)} card for ${esc(c.n)}, priced against what is really in the other four slots">${cardPct(score, slot, t)}</td>
+      <td class="right tiny muted">${cardHeadroom(score, slot, t).toFixed(1)}</td>
+      <td class="tiny">${isCur ? '<span class="tag hit">equipped here</span>'
+        : by ? `<span class="tag" title="Currently equipped on ${esc(by)} — taking it unequips it from them">on ${esc(by)}</span>` : ''}</td>
+      <td class="right">${isCur ? '' : `<button class="ghost tiny" data-equip-card="${esc(card.id)}">${by ? 'Take it' : 'Equip'}</button>`}</td>
+    </tr>`;
   };
 
   const render = () => {
@@ -5201,7 +5496,15 @@ function openCardPicker(charName, slot) {
         if (!hay.includes(q)) return false;
       }
       return true;
-    }).map(cd => ({ cd, s: cardScore(cd, t, real) })).sort((a, b) => (b.cd === cur) - (a.cd === cur) || b.s - a.s);
+    }).map(cd => ({ cd, s: cardScore(cd, t, real) }));
+    const key = sort.key || 'score', get = SORTS[key], dir = sort.key ? sort.dir : -1;
+    rows.sort((a, b) => {
+      const pin = (b.cd === cur) - (a.cd === cur);
+      if (pin) return pin;
+      const av = get(a), bv = get(b);
+      const cmp = typeof av === 'number' ? av - bv : String(av).localeCompare(String(bv));
+      return cmp * dir || b.s - a.s;
+    });
     const CAP = 150;
 
     // Filtering re-renders #dlgBody wholesale — including the search box the user may
@@ -5211,10 +5514,12 @@ function openCardPicker(charName, slot) {
     const focusId = active && active.id;
     const selStart = active && typeof active.selectionStart === 'number' ? active.selectionStart : null;
 
+    setDlgView('picker', charName);
     $('#dlgBody').innerHTML = `
       <h2 style="margin-bottom:4px">Equip ${esc(slot)} on ${esc(c.n)}</h2>
       <p class="tiny muted" style="margin:0 0 14px">
-        ${rows.length} matching card${rows.length === 1 ? '' : 's'}${cur ? ` — currently ${esc(cur.set)} ${cur.rarity}★` : ' — nothing equipped yet'}.</p>
+        ${rows.length} matching card${rows.length === 1 ? '' : 's'}${cur ? ` — currently ${esc(cur.set)} ${cur.rarity}★` : ' — nothing equipped yet'}.
+        Substats in green are ones ${esc(c.n)} wants most, faded ones barely count.</p>
       <div class="row">
         <div class="field"><label>Set</label><select id="cpSet"><option value="">Any</option>${setOptionList(setTable, f.set)}</select></div>
         <div class="field"><label>Main stat</label><select id="cpMain"><option value="">Any</option>
@@ -5224,10 +5529,15 @@ function openCardPicker(charName, slot) {
         <div class="field" style="flex:1;min-width:180px"><label>Search</label>
           <input id="cpQ" placeholder="set, main, substat…" value="${esc(f.q)}"></div>
       </div>
-      <div class="scroll" style="max-height:48vh;margin-top:12px;padding:10px">
-        ${rows.length ? rows.slice(0, CAP).map(o => rowHtml(o.cd, o.s)).join('')
-          : '<p class="tiny muted">No cards match these filters.</p>'}
-        ${rows.length > CAP ? `<p class="tiny muted">Showing the first ${CAP} — narrow the filters to see the rest.</p>` : ''}
+      <div class="scroll" style="max-height:58vh;margin-top:12px">
+        ${rows.length ? `<table class="pick"><thead><tr>
+            ${sortThHtml('set', 'Set', sort)}${sortThHtml('level', 'Lv', sort, '', '', 'right')}<th>Main</th><th>Substats</th>
+            ${sortThHtml('score', 'Score', sort, 'Out of 100 for a perfect card in this slot', '', 'right')}
+            ${sortThHtml('left', 'Left', sort, 'Headroom: raw points a perfect card for this slot would add over this one', '', 'right')}
+            <th></th><th></th></tr></thead>
+          <tbody>${rows.slice(0, CAP).map(o => rowHtml(o.cd, o.s)).join('')}</tbody></table>`
+          : '<p class="tiny muted" style="padding:10px">No cards match these filters.</p>'}
+        ${rows.length > CAP ? `<p class="tiny muted" style="padding:0 10px">Showing the first ${CAP} — narrow the filters to see the rest.</p>` : ''}
       </div>
       <div class="row" style="margin-top:14px">
         <button class="ghost sm" id="cpBack">← Back to loadout</button>
@@ -5239,7 +5549,14 @@ function openCardPicker(charName, slot) {
     $('#cpRar').onchange = () => { f.rarity = $('#cpRar').value; render(); };
     $('#cpQ').oninput = () => { f.q = $('#cpQ').value; render(); };
     $('#cpBack').onclick = () => openLoadout(charName);
-    $$('[data-equip-card]').forEach(b => b.onclick = () => {
+    $$('#dlgBody .pick .sortH').forEach(th => th.onclick = () => {
+      const k = th.dataset.sort;
+      sort.dir = sort.key === k ? -sort.dir : FIRST_DIR[k];
+      sort.key = k;
+      render();
+      refocus(`#dlgBody .pick th.sortH[data-sort="${k}"] .thBtn`);
+    });
+    $$('#dlgBody [data-equip-card]').forEach(b => b.onclick = () => {
       swapCard(charName, slot, b.dataset.equipCard);
       openLoadout(charName);
     });
@@ -5268,7 +5585,10 @@ function editTargets(name) {
     <h2 style="margin-bottom:4px">${esc(c.n)}${c.a ? ' · ' + esc(c.a) : ''}</h2>
     <p class="tiny muted" style="margin:0 0 14px">${esc(c.e)} · ${esc(ARCHETYPES[c.arch].label)}</p>
     ${t.note ? `<div class="notice info tiny">${esc(t.note)}</div>` : ''}
-    ${t.bp ? `<div class="notice tiny"><b>Breakpoints.</b> ${esc(t.bp)}</div>` : ''}
+    ${t.bp ? `<div class="notice info tiny"><b>Breakpoints.</b> ${esc(t.bp)}</div>` : ''}
+    ${CHAR_STATS[c.n] ? `<p class="tiny muted" style="margin:0 0 12px">Setup: ${esc(setupSummary(c, charLoadout(c.n)))}${setupIsDefault(c.n) ? ' (the defaults)' : ''} —
+      <button class="linky" id="tOpenSetup">change it in the Loadout popup</button>, where the stat targets it feeds update as you go.
+      Unsaved edits here are left behind.</p>` : ''}
     <div class="row">
       <div class="field"><label>Preferred 4-piece</label><select id="tSet0"><option value="">—</option>${setOpts(t.sets[0])}</select>
         ${hint(JSON.stringify(t.sets) !== JSON.stringify(d.sets), d.sets.join(' / '))}</div>
@@ -5276,7 +5596,6 @@ function editTargets(name) {
       <div class="field"><label>Space card</label><select id="tSpace"><option value="">—</option>
         ${setOptionList(SPACE_SETS, t.space)}</select>${hint((t.space || '') !== (d.space || ''), d.space)}</div>
     </div>
-    ${loadoutEditorHtml(c)}
     <h3 style="margin:16px 0 8px;font-size:13px">Main stats
       <span class="muted tiny">best first — leave the lower boxes blank if there is only one answer, and "any" leaves the slot open</span></h3>
     <div class="row">
@@ -5309,8 +5628,10 @@ function editTargets(name) {
       <button class="primary" id="tSave">Save targets</button>
       <button id="tReset">Reset to default</button>
     </div>`;
+  setDlgView('targets', name);
   $('#dlgBody').innerHTML = body;
-  $('#dlg').showModal();
+  showDlg();
+  if ($('#tOpenSetup')) $('#tOpenSetup').onclick = () => openLoadout(name, ['setup']);
   $('#tSave').onclick = () => {
     const w = {}; $$('[data-w]').forEach(i => w[i.dataset.w] = +i.value || 0);
     state.chars[name].targets = targetEdits(d, {
@@ -5328,16 +5649,174 @@ function editTargets(name) {
       }, {}),
       w
     });
-    // Level and Ascension are forced in charLoadout — no control for either here either.
-    if ($('#lWeapon')) state.chars[name].loadout = {
-      level: 80, asc: 7, weapon: $('#lWeapon').value,
-      refine: +$('#lRefine').value, mindSkill: $('#lMindSkill').value === 'yes',
-      mind1: $('#lMind1') ? +$('#lMind1').value : 0, mind2: $('#lMind2') ? +$('#lMind2').value : 0,
-      awareness: $('#lAwareness') ? +$('#lAwareness').value : 0
-    };
-    $('#dlg').close(); renderRoster(); runOpt();
+    $('#dlg').close(); commit();
   };
-  $('#tReset').onclick = () => { state.chars[name].targets = null; $('#dlg').close(); renderRoster(); };
+  /* Reset throws away every edit at once, so it can be taken back. It used to redraw only the
+     Roster, leaving Optimise and Upgrades on the old target until something else re-ran them. */
+  $('#tReset').onclick = () => {
+    const snap = snapshotState();
+    state.chars[name].targets = null;
+    $('#dlg').close(); commit();
+    offerUndo(`Reset ${name}'s targets to the data.`, snap);
+  };
+}
+
+/* ------------------------ changes, saving and undo ------------------------
+   Every change to what the tool holds — the cards, who wears them, who is owned or benched,
+   targets, setups, the team crit rate — goes through commit(). Before it existed each action
+   redrew its own pick of views and forgot others: deleting a card on the Inventory tab redrew
+   only the Inventory, so the Roster and Optimise went on showing it; resetting a target never
+   re-ran Optimise; "Mark these as equipped" left the Roster's build chip stale; and nothing but
+   a team crit change ever told a Triage or Vault result it was out of date. */
+
+/* A fingerprint of everything a score reads, so "has this changed" is a comparison of two
+   strings rather than a counter: an undo, or a value set back, reads as unchanged again — for
+   the save indicator and for a Triage run's staleness alike. A few ms over 4000 cards. */
+function hashStr(h, s) {
+  for (let i = 0; i < s.length; i++) h = Math.imul(h ^ s.charCodeAt(i), 16777619);
+  return h;
+}
+/* The cards; `withWearers` adds who wears each and its lock, which the Vault never reads. */
+function cardsSig(withWearers) {
+  let h = 2166136261;
+  state.cards.forEach(c => {
+    h = hashStr(h, `${c.id}|${c.slot}|${c.set}|${c.rarity}|${c.level}|${c.main}|${c.mainValue == null ? '' : c.mainValue}|` +
+      (withWearers ? `${c.equipped || ''}|${c.locked ? 1 : 0}|` : ''));
+    (c.subs || []).forEach(s => { h = hashStr(h, s.stat + ':' + s.value + ','); });
+  });
+  return (h >>> 0).toString(36) + '.' + state.cards.length;
+}
+/* Who is owned and benched, plus the saved targets and setups of `detail`: 'all' for everyone,
+   a Set of names for just those, anything else for none. */
+function charsSig(detail) {
+  let h = 2166136261;
+  CHARACTERS.forEach(c => {
+    const cs = state.chars[c.n] || {};
+    h = hashStr(h, `${c.n}|${cs.owned ? 1 : 0}${cs.benched ? 1 : 0}|`);
+    if (detail === 'all' || (detail instanceof Set && detail.has(c.n)))
+      h = hashStr(h, JSON.stringify(cs.targets || null) + JSON.stringify(cs.loadout || null));
+  });
+  return (h >>> 0).toString(36);
+}
+function dataSignature() { return cardsSig(true) + ':' + charsSig('all') + ':' + teamCritRate() + ':' + denSig(); }
+
+/* The save file is the only persistence (no browser storage — see CLAUDE.md), so the header
+   says when there is something it does not have yet, and the page asks before it is closed on
+   unsaved work. `savedSig` is the fingerprint at the last load or save; a download cannot be
+   confirmed, so "saved" means a save was started. */
+let savedSig = '';
+function isDirty() { return dataSignature() !== savedSig; }
+function markSaved() { savedSig = dataSignature(); updateSaveState(); }
+function updateSaveState() {
+  const box = $('#saveState');
+  if (!box) return;
+  const dirty = isDirty(), has = state.cards.length > 0;
+  box.classList.toggle('dirty', dirty);
+  box.innerHTML = dirty ? '<span class="dot"></span>Unsaved changes' : '';
+  box.title = dirty ? 'Changed since you last loaded or saved a file. This tool keeps nothing between sessions on its own.' : '';
+  $('#hdrSave').classList.toggle('primary', dirty);
+  $('#hdrLoad').classList.toggle('primary', !has && !dirty);
+}
+window.addEventListener('beforeunload', e => { if (isDirty()) { e.preventDefault(); e.returnValue = ''; } });
+
+/* Optimise's plan search takes about a tenth of a second; like the Upgrades pass
+   (runUpgradeViews) it is only paid while its tab is on screen, and showTab runs it on the way
+   in, so it is never shown stale. */
+let optStale = false;
+function runOptIfShown() {
+  if ($('#tab-opt').classList.contains('hide')) { optStale = true; return; }
+  optStale = false;
+  runOpt();
+}
+/* The one character the Optimise tab was explicitly sent to (a roster click-through), who stays
+   selected through a redraw even when not owned. Anything else is the ordinary picker, which
+   follows the owned list — forcing whatever happened to be selected kept an unowned default
+   selected over the first character marked owned, and a benched one labelled "not owned". */
+let optForced = null;
+
+function commit() {
+  /* An undo restores a whole snapshot, so it is only offered until the next change: taken after
+     one, it would silently revert that change too. Each undoable action commits and then offers
+     its own. */
+  if (undoSnap) hideToast();
+  renderInv(); renderRoster(); renderOpt(optForced || undefined); runOptIfShown(); runUpgradeViews();
+  markStaleRuns(); updateSaveState();
+}
+
+/* One level of undo for the actions that are easy to regret — deleting a card, un-owning or
+   benching, resetting a target, taking a card off someone, equipping a whole loadout, applying
+   an import, clearing everything — offered in a toast for 15 seconds, or by Ctrl+Z outside a
+   text field. In memory only. A snapshot is the card list and character state as JSON, some
+   tens of ms on a 4000-card inventory, paid only by the actions that offer it. Restoring keeps
+   the card objects that survived, so anything still holding one points at the live card. */
+let undoSnap = null, toastTimer = 0;
+function snapshotState() {
+  return { cards: JSON.stringify(state.cards), chars: JSON.stringify(state.chars), nextId: state.nextId, teamCrit: state.teamCrit, den: JSON.stringify(state.den || {}) };
+}
+function showToast(text, button) {
+  $('#toastMsg').textContent = text;
+  const b = $('#toastUndo');
+  b.classList.toggle('hide', !button);
+  if (button) { b.textContent = button.label; b.onclick = button.run; }
+  placeToast();
+  $('#toast').classList.remove('hide');
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(hideToast, 15000);
+}
+function offerUndo(label, snap) { undoSnap = snap; showToast(label, { label: 'Undo', run: undo }); }
+/* The same toast without an undo: what a load did, said wherever the load was started from. */
+function notify(text, button) { undoSnap = null; showToast(text, button); }
+/* A yes/no question in the toast instead of confirm(). A sandboxed artifact frame without
+   `allow-modals` answers confirm() with an instant false, which would make Load and "Clear
+   everything" silently do nothing whenever there is unsaved work; and the toast's button is a
+   real click, so it may open the file picker itself. Ignoring the question is "no". */
+function askToast(text, label, run) { notify(text, { label, run: () => { hideToast(); run(); } }); }
+function hideToast() {
+  clearTimeout(toastTimer);
+  $('#toast').classList.add('hide');
+  undoSnap = null;
+}
+/* A modal dialog sits in the browser's top layer, above anything a z-index can reach, so while
+   one is open the toast lives inside it (and goes back to the page when it closes). */
+function placeToast() {
+  const t = $('#toast'), d = $('#dlg');
+  const host = d.open ? d : document.body;
+  if (t.parentNode !== host) host.appendChild(t);
+}
+function undo() {
+  const s = undoSnap;
+  if (!s) return;
+  hideToast();
+  const live = new Map(state.cards.map(c => [c.id, c]));
+  state.cards = JSON.parse(s.cards).map(sc => {
+    const cur = live.get(sc.id);
+    if (!cur) return sc;
+    Object.keys(cur).forEach(k => { if (!(k in sc)) delete cur[k]; });
+    return Object.assign(cur, sc);
+  });
+  const chars = JSON.parse(s.chars);
+  CHARACTERS.forEach(c => { state.chars[c.n] = chars[c.n] || { owned: false, benched: false, targets: null, loadout: null }; });
+  state.nextId = s.nextId;
+  state.teamCrit = s.teamCrit;
+  state.den = JSON.parse(s.den || '{}');
+  syncTeamCritField();
+  commit();
+  /* Redraw the Loadout popup (or its card picker) the undo was offered from; any other dialog
+     may now show a card or a target that no longer exists, so it closes. An undo toast is only
+     ever inside a dialog it was offered from — showDlg does not adopt one — so this never throws
+     away an unrelated dialog, such as a Targets edit in progress. */
+  const d = $('#dlg'), b = $('#dlgBody');
+  if (d.open) {
+    if ((b.dataset.view === 'loadout' || b.dataset.view === 'picker') && charDef(b.dataset.name)) openLoadout(b.dataset.name);
+    else d.close();
+  }
+}
+/* The team crit rate lives in the header's settings popover; its chip shows the value in use. */
+function syncTeamCritField() {
+  $('#rsTeamCrit').value = state.teamCrit;
+  // the popover's other setting rides along, and the chip says when any of it is in use
+  $$('.denIn').forEach(i => { i.value = denBonus(i.dataset.stat); });
+  $('#setTc').textContent = teamCritRate() + '%' + (denSig().split(',').some(v => +v > 0) ? ' · Den' : '');
 }
 
 /* ------------------------------ data io ------------------------------ */
@@ -5349,7 +5828,7 @@ const PREF_SELECTS = ['rsFilter', 'rsElement', 'rsSort', 'flSlot', 'flSet', 'flR
   'hrShow', 'hrElement', 'hrSlot', 'hrRar',
   'trFlSlot', 'trFlSet', 'trFlRar', 'trFlMain', 'trFlSubMode',
   'vaFlSlot', 'vaFlSet', 'vaFlRar', 'vaFlMain', 'vaFlSubMode'];
-const PREF_CHECKS = ['rsHideUnowned', 'rsHideBenched', 'upSameSet', 'upIgnoreEquipped', 'hrTakeEquipped'];
+const PREF_CHECKS = ['rsHideBenched', 'upSameSet', 'upIgnoreEquipped', 'hrTakeEquipped'];
 const PREF_TEXT = ['rsQ', 'flQ', 'trFlQ', 'vaFlQ', 'hrMin', 'hrQ'];
 function collectPrefs() {
   const p = { invSort: { key: invSort.key, dir: invSort.dir },
@@ -5361,6 +5840,8 @@ function collectPrefs() {
   p.flSub = flSubSelected.slice();
   p.trFlSub = trFlSubSelected.slice();
   p.vaFlSub = vaFlSubSelected.slice();
+  p.trVerdict = trVerdictSel.slice();
+  p.rsView = rosterView;
   return p;
 }
 // Every field is applied defensively: a select id absent from an older save, or holding a
@@ -5377,6 +5858,11 @@ function applyPrefs(p) {
   });
   PREF_CHECKS.forEach(id => { if (p[id] !== undefined && $('#' + id)) $('#' + id).checked = !!p[id]; });
   PREF_TEXT.forEach(id => { if (p[id] !== undefined && $('#' + id)) $('#' + id).value = p[id]; });
+  // The Roster's "Hide not owned" checkbox was folded into its Show select; a save that ticked
+  // it still opens on owned characters only.
+  if (p.rsHideUnowned && $('#rsFilter').value === 'all') $('#rsFilter').value = 'owned';
+  if (p.rsView === 'cards' || p.rsView === 'list') rosterView = p.rsView;
+  if (Array.isArray(p.trVerdict)) trVerdictSel = p.trVerdict.filter(k => TR_TIERS.some(x => x.t === k));
   if (Array.isArray(p.flSub) && $('#flSub')) {
     flSubSelected = p.flSub.slice();
     renderFlSub();
@@ -5397,7 +5883,7 @@ function applyPrefs(p) {
 // What save() writes — split out so the round trip in the tests reads the real shape.
 function savePayload() {
   return { version: 1, savedAt: new Date().toISOString(), nextId: state.nextId,
-    cards: state.cards, characters: state.chars, settings: { teamCritRate: state.teamCrit }, prefs: collectPrefs() };
+    cards: state.cards, characters: state.chars, settings: { teamCritRate: state.teamCrit, thievesDen: denSaved() }, prefs: collectPrefs() };
 }
 function save() {
   const payload = savePayload();
@@ -5407,6 +5893,7 @@ function save() {
   a.download = 'p5x-planner-save.json';
   a.click(); URL.revokeObjectURL(a.href);
   $('#dataMsg').textContent = 'Saved.';
+  markSaved();
 }
 function load(file) {
   const fr = new FileReader();
@@ -5426,16 +5913,37 @@ function load(file) {
       const dropped = migrateSavedTargets();
       const tc = +(d.settings && d.settings.teamCritRate);
       state.teamCrit = tc > 0 ? Math.min(100, tc) : 0;   // absent on files saved before it existed
-      $('#rsTeamCrit').value = state.teamCrit;
+      state.den = denFrom(d.settings && d.settings.thievesDen);   // likewise
+      syncTeamCritField();
       applyPrefs(d.prefs);
-      renderInv(); renderRoster(); renderOpt(); markStaleRuns();
+      /* A different file is a different session: last run's Triage and Vault results were for
+         another inventory, so they go, and the tabs run afresh on the next visit. An undo
+         offered before the load would restore that other inventory over this one. */
+      hideToast();
+      /* A dialog open over the old data (a file can be dropped on one) would act through closures
+         holding the old cards — and ids are reassigned by position on load, so its buttons could
+         reach whichever new card now has that id. The same goes for a forced Optimise pick. */
+      if ($('#dlg').open) $('#dlg').close();
+      optForced = null;
+      trCache = null; vaCache = null;
+      ['#trSummary', '#vaSummary'].forEach(id => { $(id).innerHTML = ''; });
+      ['#trPanel', '#vaPanel'].forEach(id => $(id).classList.add('hide'));
+      commit(); markSaved();
+      if (!$('#tab-triage').classList.contains('hide')) autoRunTriage();
       $('#dataMsg').innerHTML = `Loaded <b>${state.cards.length}</b> cards.` +
         (bad.length ? ` <span style="color:#e87a5c">${bad.length} skipped</span> — ${esc(bad.slice(0, 3).join('; '))}${bad.length > 3 ? ' …' : ''}` : '') +
         (dropped.length ? `<br><span class="tiny">Saved targets now keep only what you changed, so later data fixes reach
           everything else. ${dropped.length} saved value${dropped.length === 1 ? '' : 's'} that no longer matched the
           data ${dropped.length === 1 ? 'was' : 'were'} handed back to it — re-enter any you meant under Targets:
           ${esc(dropped.map(x => `${x.n} ${x.stat} ${x.saved} → ${x.data}`).join('; '))}.</span>` : '');
-    } catch (e) { $('#dataMsg').innerHTML = `<span style="color:#e87a5c">Could not read that file: ${esc(e.message)}</span>`; }
+      // Said wherever the load was started from, not only on the Data tab.
+      if ($('#tab-data').classList.contains('hide'))
+        notify(`Loaded ${state.cards.length} cards${bad.length ? `, ${bad.length} skipped` : ''}${dropped.length ? `; ${dropped.length} saved value${dropped.length === 1 ? '' : 's'} handed back to the data` : ''}.`,
+          bad.length || dropped.length ? { label: 'Details', run: () => { hideToast(); showTab('data'); } } : null);
+    } catch (e) {
+      $('#dataMsg').innerHTML = `<span style="color:#e87a5c">Could not read that file: ${esc(e.message)}</span>`;
+      if ($('#tab-data').classList.contains('hide')) notify(`Could not read that file: ${e.message}`, null);
+    }
   };
   fr.readAsText(file);
 }
@@ -5497,9 +6005,11 @@ function importScan(files) {
   const settle = (i, doc) => {
     docs[i] = doc;
     if (--remaining) return;
-    if (importCardDocs(docs) == null)
-      $('#dataMsg').innerHTML = `<span style="color:#e87a5c">No <code>cards</code> array in ` +
-        (picked.length > 1 ? 'any of those files' : 'that file') + `.</span>`;
+    if (importCardDocs(docs) == null) {
+      const where = picked.length > 1 ? 'any of those files' : 'that file';
+      $('#dataMsg').innerHTML = `<span style="color:#e87a5c">No <code>cards</code> array in ${where}.</span>`;
+      if ($('#tab-data').classList.contains('hide')) notify(`No cards array in ${where}.`, null);
+    }
   };
 
   picked.forEach((file, i) => {
@@ -5519,7 +6029,8 @@ function renderImportReview(result, invalid) {
   const near = result.unmatchedNear || [];
   const unmatchedWorn = unmatched.filter(c => c.equipped).length;
   const cardLine = c => `${esc(c.slot)}/${esc(c.set)} ${c.rarity}★ Lv${c.level} ${esc(c.main)} — ` +
-    (c.subs || []).map(s => esc(s.stat) + ' ' + s.value).join(', ');
+    (c.subs || []).map(s => esc(s.stat) + ' ' + esc(subVal(s))).join(', ');
+  setDlgView('import');
   $('#dlgBody').innerHTML = `
     <h2>Import review</h2>
     <p class="tiny muted">
@@ -5552,7 +6063,8 @@ function renderImportReview(result, invalid) {
       <p class="tiny muted" style="margin:0 0 8px">${unmatched.length} card${unmatched.length === 1 ? '' : 's'} already in
         the inventory matched nothing in what you imported${unmatchedWorn ? `, <b>${unmatchedWorn}</b> of them currently
         equipped` : ''}. On a partial scan that is expected. If this scan was your <b>complete</b> inventory, these are the
-        cards fed away since the last one and can be removed here. Save first — there is no undo.</p>
+        cards fed away since the last one and can be removed here. Applying can be undone for 15 seconds afterwards,
+        and not after that — save first if in doubt.</p>
       <label class="tiny"><input type="checkbox" id="impRemoveUnseen"> Remove these ${unmatched.length} cards — this scan was
         my whole inventory</label>
       <details style="margin-top:6px"><summary class="tiny muted">Show them</summary>
@@ -5585,8 +6097,9 @@ function renderImportReview(result, invalid) {
     <div class="row" style="margin-top:16px">
       <button class="primary" id="applyImport">Apply</button>
     </div>`;
-  $('#dlg').showModal();
+  showDlg();
   $('#applyImport').onclick = () => {
+    const snap = snapshotState();
     const removeUnseen = !!($('#impRemoveUnseen') && $('#impRemoveUnseen').checked);
     if (removeUnseen) {
       const gone = new Set(unmatched.map(c => c.id));
@@ -5605,9 +6118,11 @@ function renderImportReview(result, invalid) {
         if (idx >= 0) state.cards[idx] = Object.assign({}, state.cards[idx], a.incoming, { id: a.existing.id, equipped: state.cards[idx].equipped });
       }
     });
-    $('#dlg').close(); renderInv(); renderRoster(); renderOpt();
+    $('#dlg').close(); commit();
     $('#dataMsg').textContent = 'Import applied.' +
       (removeUnseen ? ` Removed ${unmatched.length} card${unmatched.length === 1 ? '' : 's'} not in the scan.` : '');
+    offerUndo(`Import applied: ${result.toAdd.length} added, ${result.toUpdate.length} levelled up` +
+      (removeUnseen ? `, ${unmatched.length} removed` : '') + '.', snap);
   };
 }
 function csv() {
@@ -5622,18 +6137,59 @@ function csv() {
 }
 
 /* ------------------------------ wiring ------------------------------ */
-const TABS = ['opt','inv','triage','vault','upgrades','roster','data','howto'];
+/* The Vault is the second view of the Triage tab now ("Lock for later"); 'vault' stays a name
+   showTab accepts, so an old link or a hand-typed call still lands on it. */
+const TABS = ['opt','inv','triage','upgrades','roster','data','howto'];
 function showTab(tab) {
-  $$('nav button').forEach(x => x.classList.toggle('on', x.dataset.tab === tab));
+  // pane first, so the tab's first-visit run is the Vault's, not a Triage run on the way past
+  if (tab === 'vault') { showTrPane('vault'); showTab('triage'); return; }
+  $$('nav button').forEach(x => {
+    const on = x.dataset.tab === tab;
+    x.classList.toggle('on', on);
+    if (on) x.setAttribute('aria-current', 'page'); else x.removeAttribute('aria-current');
+  });
   TABS.forEach(t => $('#tab-' + t).classList.toggle('hide', t !== tab));
   window.scrollTo(0, 0);
-  if (tab === 'upgrades' && upViewsStale) runUpgradeViews();   // deferred while hidden — see runUpgradeViews
+  if (tab === 'opt' && optStale) { optStale = false; runOpt(); }   // deferred while hidden — see runOptIfShown
+  if (tab === 'upgrades' && upViewsStale) runUpgradeViews();       // deferred while hidden — see runUpgradeViews
+  if (tab === 'triage') { autoRunTriage(); markStaleRuns(); }
 }
 $$('nav button').forEach(b => b.onclick = () => showTab(b.dataset.tab));
-// A click that lands on the dialog element itself (its padding or the ::backdrop,
-// never a descendant) is a click outside the popup's actual content — close it.
-$('#dlg').addEventListener('click', e => { if (e.target === e.currentTarget) $('#dlg').close(); });
-// in-prose cross-links, e.g. the scanning guide pointing at Save / Load
+
+/* Triage's two views, the same pattern as Upgrades': only the panes toggle. */
+function trPane() { return $('#tr-pane-vault').classList.contains('hide') ? 'feed' : 'vault'; }
+function showTrPane(p) {
+  $$('#trSubtabs button').forEach(b => { const on = b.dataset.trtab === p; b.classList.toggle('on', on); b.setAttribute('aria-selected', on); });
+  $('#tr-pane-feed').classList.toggle('hide', p !== 'feed');
+  $('#tr-pane-vault').classList.toggle('hide', p !== 'vault');
+  if (!$('#tab-triage').classList.contains('hide')) { autoRunTriage(); markStaleRuns(); }
+}
+$$('#trSubtabs button').forEach(b => b.onclick = () => showTrPane(b.dataset.trtab));
+
+/* The first visit of a session runs the view's pass: nothing is kept between sessions, and an
+   empty tab behind a Run button was one more click every time. After that a result is only ever
+   marked stale (markStaleRuns), never re-run on its own — a sweep of a second or two on every
+   edit is what the Run buttons exist to avoid. */
+function autoRunTriage() {
+  if (!state.cards.length) return;
+  if (trPane() === 'feed') {
+    if (!trCache && !$('#trRun').disabled && ($('#trScope').value === 'all' || ownedChars().length)) $('#trRun').click();
+  } else if (!vaCache) runVault();
+}
+
+/* Closes the dialog on a click outside its box, on the backdrop. The test is the box's own
+   rectangle, not the event target: the dialog element is also the target of a click in its own
+   20 px of padding, which used to close it — and throw away a Targets edit with it. */
+$('#dlg').addEventListener('click', e => {
+  if (e.target !== e.currentTarget) return;
+  const r = e.currentTarget.getBoundingClientRect();
+  if (e.clientX < r.left || e.clientX > r.right || e.clientY < r.top || e.clientY > r.bottom) $('#dlg').close();
+});
+$('#dlg').addEventListener('close', () => {
+  rememberLoSections();
+  const t = $('#toast'); if (t.parentNode !== document.body) document.body.appendChild(t);
+});
+// in-prose cross-links, e.g. the scanning guide pointing at the Data tab
 $$('[data-goto]').forEach(b => b.onclick = () => showTab(b.dataset.goto));
 $('#fSlot').onchange = () => { syncSetOptions(); syncMainOptions(); };
 $('#fAdd').onclick = addCard;
@@ -5647,7 +6203,7 @@ $('#flClear').onclick = () => {
   $('#flSubMode').value = 'all'; $('#flQ').value = ''; renderInv();
 };
 $('#optRun').onclick = runOpt;
-$('#optChar').onchange = runOpt;
+$('#optChar').onchange = () => { optForced = null; runOpt(); };   // a pick from the list is the ordinary picker again
 /* Triage takes a second or two on a full inventory (it runs the Upgrades search for everyone
    in scope), and the page cannot paint while it works, so the button looked dead. Say so
    first, give the browser a frame to show it, then run; the button is off meanwhile. */
@@ -5678,7 +6234,12 @@ $('#vaFlClear').onclick = () => {
   $('#vaFlMain').value = ''; vaFlSubSelected = []; renderVaFlSub();
   $('#vaFlSubMode').value = 'all'; $('#vaFlQ').value = ''; renderVaultTable();
 };
+// The controls a Triage or Vault run reads: changing one leaves the result on screen and says so.
+['#trScope', '#trRar', '#vaRar'].forEach(id => $(id).addEventListener('change', markStaleRuns));
 $('#upRun').onclick = runUpgrades;
+/* The Upgrades settings re-run its pass as soon as they change — it is on screen and takes under
+   a second — and Triage keeps the cards that pass recommends, so a Triage run is checked too. */
+['#upRar', '#upSameSet', '#upIgnoreEquipped'].forEach(id => $(id).addEventListener('change', () => { runUpgradeViews(); markStaleRuns(); }));
 
 /* Upgrades' two in-page views. Only the panes toggle — the tab itself, and everything
    that refreshes it, stays one thing. The headroom pass is cheap next to the plan search
@@ -5704,29 +6265,109 @@ $('#rsFilter').onchange = renderRoster;
 $('#rsElement').onchange = renderRoster;
 $('#rsSort').onchange = renderRoster;
 $('#rsQ').oninput = renderRoster;
-$('#rsHideUnowned').onchange = renderRoster;
 $('#rsHideBenched').onchange = renderRoster;
-/* The team crit rate reprices every character (see teamCritRate), so everything scored live is
-   redrawn; Triage and the Vault keep their last run and say it is stale. */
+$$('#rsView button').forEach(b => b.onclick = () => { rosterView = b.dataset.view; renderRoster(); });
+
+/* The team crit rate reprices every character (see teamCritRate). It lives in the header's
+   scoring-settings popover, since every tab reads it, and the chip there shows the value in use.
+   A change commits like any other: what is scored live is redrawn, and a Triage or Vault run
+   scored at the old value says so. */
 $('#rsTeamCrit').onchange = () => {
   const v = Math.max(0, Math.min(100, Math.round((+$('#rsTeamCrit').value || 0) * 10) / 10));
   $('#rsTeamCrit').value = v;
   if (v === state.teamCrit) return;
   state.teamCrit = v;
-  renderRoster(); runOpt(); runUpgradeViews(); markStaleRuns();
+  syncTeamCritField();
+  commit();
 };
+/* The Thieves Den fields (see denBonus): flat points, 0 or more, one per stat. */
+$$('.denIn').forEach(inp => inp.onchange = () => {
+  const s = inp.dataset.stat;
+  const v = Math.max(0, Math.round((+inp.value || 0) * 10) / 10);
+  if (v === denBonus(s)) { inp.value = v; return; }
+  state.den = Object.assign({}, state.den, { [s]: v });
+  if (!v) delete state.den[s];
+  syncTeamCritField();
+  commit();
+});
+function setPopOpen(open) {
+  $('#setPop').classList.toggle('hide', !open);
+  $('#setBtn').setAttribute('aria-expanded', open);
+  if (open) $('#rsTeamCrit').focus();
+}
+$('#setBtn').onclick = e => { e.stopPropagation(); setPopOpen($('#setPop').classList.contains('hide')); };
+$('#setPop').addEventListener('click', e => e.stopPropagation());
+document.addEventListener('click', () => { if (!$('#setPop').classList.contains('hide')) setPopOpen(false); });
+document.addEventListener('keydown', e => {
+  if (e.key === 'Escape' && !$('#setPop').classList.contains('hide')) { setPopOpen(false); $('#setBtn').focus(); return; }
+  // Ctrl+Z takes back the last undoable action, except in a text field, which has its own undo.
+  if (!(e.ctrlKey || e.metaKey) || e.shiftKey || e.altKey || e.key.toLowerCase() !== 'z' || !undoSnap) return;
+  const a = document.activeElement;
+  if (a && (/^(INPUT|TEXTAREA|SELECT)$/.test(a.tagName) || a.isContentEditable)) return;
+  e.preventDefault(); undo();
+});
+$('#toastClose').onclick = hideToast;
+
+/* Loading replaces everything here, so it asks first when that would drop unsaved changes.
+   Asked before the file picker opens rather than inside load(), which the drop handler (after
+   its own question) and the tests call directly. */
+const LOAD_OVER_UNSAVED = 'Loading a save file replaces everything here, including changes you have not saved.';
+function requestLoad() {
+  if (isDirty()) { askToast(LOAD_OVER_UNSAVED, 'Load anyway', () => $('#fileIn').click()); return; }
+  $('#fileIn').click();
+}
 $('#dlSave').onclick = save;
+$('#hdrSave').onclick = save;
 $('#dlCsv').onclick = csv;
-$('#upSave').onclick = () => $('#fileIn').click();
+$('#upSave').onclick = requestLoad;
+$('#hdrLoad').onclick = requestLoad;
+$('#emptyLoad').onclick = requestLoad;
 $('#fileIn').onchange = e => { if (e.target.files[0]) load(e.target.files[0]); e.target.value = ''; };
 $('#upImport').onclick = () => $('#fileImport').click();
+$('#hdrImport').onclick = () => $('#fileImport').click();
 $('#fileImport').onchange = e => { if (e.target.files.length) importScan(e.target.files); e.target.value = ''; };
-$('#wipe').onclick = () => {
-  if (!confirm('Clear all cards and character settings? Download a save file first if you want to keep them.')) return;
-  state.cards = []; state.nextId = 1; state.teamCrit = 0; $('#rsTeamCrit').value = 0;
-  CHARACTERS.forEach(c => state.chars[c.n] = { owned: false, benched: false, targets: null, loadout: null });
-  renderInv(); renderRoster(); renderOpt();
-};
 
-$('#stamp').textContent = `${CHARACTERS.length} characters · ${Object.keys(SETS).length} sets · ${Object.keys(SPACE_SETS).length} space cards`;
-fillSelects(); renderInv(); renderRoster(); renderOpt();
+/* Drop a file anywhere to load it. A save file — it carries `characters` — replaces everything,
+   like Load. Files that are only a card list, the OCR pipeline's cards.json (one or several),
+   go to the import review, like Import scan: replacing an inventory with a partial scan is never
+   what dropping one means. */
+let dragDepth = 0;
+const dragHasFiles = e => !!e.dataTransfer && Array.from(e.dataTransfer.types || []).includes('Files');
+document.addEventListener('dragenter', e => {
+  if (!dragHasFiles(e)) return;
+  e.preventDefault(); dragDepth++; $('#dropzone').classList.remove('hide');
+});
+document.addEventListener('dragover', e => { if (dragHasFiles(e)) e.preventDefault(); });
+document.addEventListener('dragleave', e => {
+  if (!dragHasFiles(e)) return;
+  if (--dragDepth <= 0) { dragDepth = 0; $('#dropzone').classList.add('hide'); }
+});
+document.addEventListener('drop', e => {
+  if (!dragHasFiles(e)) return;
+  e.preventDefault(); dragDepth = 0; $('#dropzone').classList.add('hide');
+  const files = Array.from(e.dataTransfer.files || []).filter(f => /\.json$/i.test(f.name) || f.type === 'application/json');
+  if (!files.length) { notify('Only .json files can be dropped here: a save file, or scan files from the OCR pipeline.', null); return; }
+  if (files.length > 1) { importScan(files); return; }
+  files[0].text().then(txt => {
+    let d = null;
+    try { d = JSON.parse(txt); } catch (err) { load(files[0]); return; }   // load() says what is wrong with it
+    if (d && !Array.isArray(d) && d.characters) {
+      if (isDirty()) askToast(`${LOAD_OVER_UNSAVED} Load ${files[0].name}?`, 'Load it', () => load(files[0]));
+      else load(files[0]);
+    } else importScan(files);
+  });
+});
+
+$('#wipe').onclick = () => askToast('Clear every card and character setting? You can undo it for 15 seconds afterwards.', 'Clear everything', () => {
+  const snap = snapshotState();
+  state.cards = []; state.nextId = 1; state.teamCrit = 0; state.den = {}; syncTeamCritField();
+  CHARACTERS.forEach(c => state.chars[c.n] = { owned: false, benched: false, targets: null, loadout: null });
+  commit();
+  offerUndo('Cleared every card and character setting.', snap);
+});
+
+$('#stamp').textContent = `This build knows ${CHARACTERS.length} characters, ${Object.keys(SETS).length} sets and ${Object.keys(SPACE_SETS).length} Space cards.`;
+fillSelects(); linkLabels(); syncTeamCritField(); renderInv(); renderRoster(); renderOpt();
+upViewsStale = true;   // nothing has run yet: the first visit to Upgrades runs its pass,
+optStale = true;       // and the first visit to Optimise its plan for the selected character
+markSaved();           // an empty page has nothing unsaved
