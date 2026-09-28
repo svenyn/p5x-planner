@@ -7,6 +7,8 @@
   --ink:#f2f2f4; --dim:#9a9aa6; --dim2:#83838f;
   --red:#e6274a; --red-text:#ee4265; --red-dim:#7a1528; --gold:#e8b64c; --purple:#a86fd0; --blue:#4c8fe8;
   --ok:#3fbf7f;
+  /* dark native scrollbars and form controls; without it the scroll boxes' tracks were white */
+  color-scheme:dark;
 }
 *{box-sizing:border-box}
 body{margin:0;background:var(--bg);color:var(--ink);
@@ -102,6 +104,13 @@ main{padding:20px;max-width:1500px;margin:0 auto}
 .tiny{font-size:12px}
 .mono{font-family:ui-monospace,"Cascadia Code",Consolas,monospace}
 .scroll{max-height:62vh;overflow:auto;border:1px solid var(--line);border-radius:8px}
+/* A long table that scrolls with the page instead of inside a box of its own; its header pins
+   under the page header (--hdrH, set in logic.js). No overflow here, or the header stops sticking. */
+.flowTable{background:var(--panel);border:1px solid var(--line);border-radius:10px;margin-bottom:16px}
+.flowTable th{top:var(--hdrH,0px)}
+.flowTable thead th:first-child{border-top-left-radius:10px}
+.flowTable thead th:last-child{border-top-right-radius:10px}
+.flowTable tbody tr:last-child td{border-bottom:none}
 
 .tag{display:inline-block;padding:1px 7px;border-radius:20px;font-size:11px;font-weight:600;
   border:1px solid var(--line);background:#202029;color:var(--dim);white-space:nowrap}
@@ -400,6 +409,7 @@ details.sect>.inner{margin-top:10px}
      already do, and keep their sticky headers */
   .panel table,dialog table{display:block;overflow-x:auto}
   .scroll table{display:table;overflow:visible}
+  .flowTable{overflow-x:auto}
   .cards{grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
   .portrait .initials{font-size:36px}
   .cc .nm{font-size:13px}
@@ -743,7 +753,7 @@ details.sect>.inner{margin-top:10px}
         <div id="hrSummary" style="margin-top:12px"></div>
       </div>
       <div class="hide" id="hrPanel">
-        <div class="scroll"><table id="hrTable"></table></div>
+        <div class="flowTable"><table id="hrTable"></table></div>
       </div>
     </div><!-- /up-pane-headroom -->
   </section>

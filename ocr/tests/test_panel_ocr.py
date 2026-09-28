@@ -403,3 +403,80 @@ def test_heavens_set_without_a_slot_is_flagged_not_guessed(vocab):
     assert card["slot"] is None
     assert conf["slot"] == 0.0
     assert any("no slot was given" in n for n in notes)
+
+
+# ---- the grid cursor -------------------------------------------------------
+#
+# A 1920x1080 frame drawn to the real `grid` box and tile geometry: the selection
+# frame is a red outline round one tile, the "art" is red blobs no wider than the
+# 18 px the widest measured card art reached (Departure's red-caped rider).
+
+GRID_BOX = (0.028, 0.225, 0.268, 0.8)
+SEL_RED = (249, 34, 3)
+TILE_X = {0: (54, 269), 1: (290, 505)}
+ROW_PITCH = 100  # six rows inside the box; the real pitch is ~104 with the list scrolled part-way
+
+
+def _tile_y(row):
+    y0 = int(250 + row * ROW_PITCH)
+    return y0, y0 + 85
+
+
+def _grid_frame(selected=None, art=(), extra_frames=()):
+    """selected: (row, col) wearing the red frame; art: (row, col) tiles carrying red art."""
+    img = Image.new("RGB", (1920, 1080), (90, 12, 10))  # the dark red backdrop fails R > 200
+    draw = ImageDraw.Draw(img)
+    for row, col in art:
+        x0, _ = TILE_X[col]
+        y0, _ = _tile_y(row)
+        for i in range(4):  # four cape-sized blobs, 16 px wide: ~2000 px of red a tile
+            draw.rectangle((x0 + 30 + 40 * i, y0 + 20, x0 + 45 + 40 * i, y0 + 50), fill=SEL_RED)
+    for row, col in ([selected] if selected else []) + list(extra_frames):
+        x0, x1 = TILE_X[col]
+        y0, y1 = _tile_y(row)
+        draw.rectangle((x0, y0, x1, y1), outline=SEL_RED, width=6)
+    return img
+
+
+def _row_fraction(row):
+    y0, y1 = _tile_y(row)
+    top, bottom = GRID_BOX[1] * 1080, GRID_BOX[3] * 1080
+    return ((y0 + y1) / 2 - top) / (bottom - top)
+
+
+def test_grid_cursor_is_found_by_its_frame_through_red_card_art():
+    """The Departure case: enough red art in view that the frame's column holds
+    under 75% of the red, which is where counting red pixels returned "no
+    cursor" and the Space walk stopped mid-list."""
+    import numpy as np
+    from panel_ocr import crop_fraction, detect_grid_cursor
+    art = [(3, 0), (3, 1), (4, 1), (2, 1), (1, 1)]
+    img = _grid_frame(selected=(5, 0), art=art)
+
+    a = np.asarray(crop_fraction(img, GRID_BOX)).astype(int)
+    red = (a[:, :, 0] > 200) & (a[:, :, 1] < 90) & (a[:, :, 2] < 90)
+    left = red[:, : a.shape[1] // 2].sum()
+    assert left / red.sum() < 0.75, "the fixture must defeat a red-pixel count to test anything"
+
+    col, yf = detect_grid_cursor(img, GRID_BOX)
+    assert col == 0
+    assert yf == pytest.approx(_row_fraction(5), abs=0.02)
+
+
+def test_grid_cursor_row_follows_the_frame_not_the_art():
+    from panel_ocr import detect_grid_cursor
+    for row in range(6):
+        col, yf = detect_grid_cursor(_grid_frame(selected=(row, 1), art=[(0, 1), (5, 1), (2, 0)]), GRID_BOX)
+        assert col == 1
+        assert yf == pytest.approx(_row_fraction(row), abs=0.02)
+
+
+def test_red_art_alone_is_never_taken_for_the_cursor():
+    from panel_ocr import detect_grid_cursor
+    assert detect_grid_cursor(_grid_frame(art=[(r, c) for r in range(6) for c in (0, 1)]), GRID_BOX) == (None, None)
+
+
+def test_frames_in_both_columns_are_not_guessed():
+    from panel_ocr import detect_grid_cursor
+    img = _grid_frame(selected=(2, 0), extra_frames=[(4, 1)])
+    assert detect_grid_cursor(img, GRID_BOX) == (None, None)

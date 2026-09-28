@@ -148,6 +148,21 @@ function weightOverrideDrift() {
         const aw = heavens.map(sl => alt.picks[sl].c).concat(alt.space ? [alt.space.c] : []);
         if (buildScoreOf(ch, aw, 55, charLoadout(ch.n), idlCh, t).raw > bsBest.raw + 1e-9) evalBad.push(`${ch.n}: "${alt.label}" builds higher than the pick`);
       }
+      // ...nor does any of the next POLISH_DEPTH cards of the same set in any slot, Space included —
+      // what Weakest slots' "Available now" prices; the per-card ranking alone let one build 1.25
+      // points higher (Kotone Shiomi), and until the polish covered Space it never tried one
+      const sameSet = sl => sl === 'Space'
+        ? pool.filter(c => c.slot === 'Space' && res.space && c.set === res.space.c.set).map(c => ({ c, s: cardScore(c, t) })).sort((a, b) => b.s - a.s)
+        : ((res.idx[sl] || {})[res.best.picks[sl].c.set] || []);
+      SLOTS.forEach(sl => {
+        const cur = sl === 'Space' ? res.space && res.space.c : res.best.picks[sl].c;
+        if (!cur) return;
+        sameSet(sl).slice(0, POLISH_DEPTH).forEach(o => {
+          if (o.c === cur) return;
+          const sw = worn.map(c => (c === cur ? o.c : c));
+          if (buildScoreOf(ch, sw, 55, charLoadout(ch.n), idlCh, t).raw > bsBest.raw + 1e-9) evalBad.push(`${ch.n}: swapping in ${o.c.set} ${sl} builds higher than the pick`);
+        });
+      });
       // Space: with a 4-piece active and a pairing card in the pool, the pick must pair
       if (res.best.kind === '4pc' && res.space) {
         const anyPairs = pool.some(c => c.slot === 'Space' && SPACE_SETS[c.set] && SPACE_SETS[c.set].pairs.includes(res.best.sets[0]));
@@ -516,13 +531,17 @@ function weightOverrideDrift() {
       state.chars[cz.n].targets = null;
       return ok;
     })());
-    /* Capped Crit Rate: once the board holds 100 points, a Crit Rate roll is worth zero. */
+    /* Capped Crit Rate: once what is held reaches 100 points, a Crit Rate roll is worth zero.
+       A team crit rate of 100 puts anyone there before a card is worn. */
     const morg = charDef('Morgana'), tm = target(morg);
-    const capped = realCoupleContext(morg, [mk('Star', 'Love', 'Crit Rate', [['Crit Rate', 60]], { mainValue: 18.8 })], charLoadout(morg.n));
-    fail('a board already at 100% crit rate prices a Crit Rate roll at zero',
-      capped['Crit Rate'] >= 100 && couplingFactors(tm, 'Moon', 'ATK%', capped)['Crit Rate'] === 0 &&
-      near(cardScore(mk('Moon', 'Love', 'ATK%', [['Crit Rate', 6]]), tm, capped), cardScore(mk('Moon', 'Love', 'ATK%', []), tm, capped)),
-      `held ${capped['Crit Rate']}`);
+    const cappedOk = (() => {
+      const was = state.teamCrit; state.teamCrit = 100;
+      const ok = heldCritRate(tm, 'ATK%') >= 100 && couplingFactors(tm, 'Moon', 'ATK%')['Crit Rate'] === 0 &&
+        near(cardScore(mk('Moon', 'Love', 'ATK%', [['Crit Rate', 6]]), tm), cardScore(mk('Moon', 'Love', 'ATK%', []), tm));
+      state.teamCrit = was;
+      return ok;
+    })();
+    fail('a crit rate already at 100% prices a Crit Rate roll at zero', cappedOk);
     fail('below the cap the generic path leaves Crit Rate live', couplingFactors(target(yui), 'Star', 'Crit Rate')['Crit Rate'] > 0);
     fail('cf() treats a hard zero as an answer and only a missing factor as neutral', cf({ 'Crit Rate': 0 }, 'Crit Rate') === 0 && cf({}, 'Crit Rate') === 1);
     /* A saved target is the same object for as long as it exists, and the coupling and the
@@ -545,7 +564,7 @@ function weightOverrideDrift() {
       couplingFactors(yt, 'Moon', 'DEF%')['DEF%'] != null && couplingFactors(yt, 'Moon', 'DEF%')['ATK%'] == null && scaleStat(yu) === 'DEF' && scalePctStat(charDef('Junpei Iori')) === 'HP%');
 
     /* ---- coupling arithmetic must always produce a number ------------------------
-       A live bug (18 Sep 2026). realCoupleContext's 'Crit Multiplier' is a TOTAL MINUS 100
+       A live bug (18 Sep 2026). A board's 'Crit Multiplier' supply is a TOTAL MINUS 100
        and the seven Buff-element supports carry a 0% crit damage base, so on a board that has
        not made up the difference it came back NEGATIVE; computeCoupling took Math.log of it
        and the whole crit product went NaN. cardScore's `if (!ws) continue` then dropped every
@@ -555,32 +574,30 @@ function weightOverrideDrift() {
        route (log 0 -> -Infinity -> 0/0), so the guard is on the supply, not the sign. */
     const nanSweep = [];
     CHARACTERS.forEach(c => {
-      const tc = target(c), lc = charLoadout(c.n);
-      const boards = [null, realCoupleContext(c, [], lc), realCoupleContext(c, idealLoadout(c, tc).cards, lc)];
-      SLOTS.forEach(sl => SLOT_INFO[sl].mains.forEach(m => boards.forEach((rb, bi) => {
-        const f = couplingFactors(tc, sl, m, rb);
-        Object.keys(f).forEach(k => { if (!isFinite(f[k])) nanSweep.push(`${c.n} ${sl}/${m} board${bi}: ${k}=${f[k]}`); });
+      const tc = target(c);
+      SLOTS.forEach(sl => SLOT_INFO[sl].mains.forEach(m => {
+        const f = couplingFactors(tc, sl, m);
+        Object.keys(f).forEach(k => { if (!isFinite(f[k])) nanSweep.push(`${c.n} ${sl}/${m}: ${k}=${f[k]}`); });
         const probe = mk(sl, 'Labor', m, [['Crit Rate', 6], ['Crit Multiplier', 8], ['ATK%', 10]]);
-        if (!isFinite(cardScore(probe, tc, rb))) nanSweep.push(`${c.n} ${sl}/${m} board${bi}: cardScore NaN`);
-      })));
+        if (!isFinite(cardScore(probe, tc))) nanSweep.push(`${c.n} ${sl}/${m}: cardScore NaN`);
+      }));
     });
-    fail('no coupling factor or card score is ever NaN, on any board', !nanSweep.length, nanSweep.slice(0, 4).join(' | '));
+    fail('no coupling factor or card score is ever NaN', !nanSweep.length, nanSweep.slice(0, 4).join(' | '));
     fail('a sub-100% crit damage total floors at zero supply, never goes negative',
-      CHARACTERS.every(c => { const rb = realCoupleContext(c, [], charLoadout(c.n)); return !rb || rb['Crit Multiplier'] >= 0; }),
-      CHARACTERS.filter(c => { const rb = realCoupleContext(c, [], charLoadout(c.n)); return rb && rb['Crit Multiplier'] < 0; }).map(c => c.n).join(', '));
-    /* An Elucidator's stats are donated, so like seedBaseline their real board is null and
-       every per-card price is the uncoupled one — otherwise the optimiser picks each slot by
-       one crit balance (their 0% / 0% board, crit switched off) while the build score and
-       bestPlan's own totals price it by another. */
-    fail('an Elucidator gets no real board, and everyone else does', CHARACTERS.every(c => (realCoupleContext(c, [], charLoadout(c.n)) === null) === !spreadApplies(c)));
-    fail('for an Elucidator the optimiser ranks each slot by the build score\'s own card price (Miku)', (() => {
-      const r = bestPlan(navi, state.cards.filter(c => c.rarity >= 2), { policy: 'pref' });
-      return r.scored.length > 0 && r.scored.every(o => near(o.s, cardScore(o.c, tn), 1e-9));
-    })());
+      CHARACTERS.every(c => { const sb = seedBaseline(target(c)); return !sb || sb['Crit Multiplier'] >= 0; }),
+      CHARACTERS.filter(c => { const sb = seedBaseline(target(c)); return sb && sb['Crit Multiplier'] < 0; }).map(c => c.n).join(', '));
+    /* An Elucidator's stats are donated, so they have no baseline of their own and every
+       per-card price is the uncoupled one (see computeCoupling). */
+    fail('an Elucidator gets no baseline of their own, and everyone else with a stat block does',
+      CHARACTERS.every(c => !CHAR_STATS[c.n] || (seedBaseline(target(c)) === null) === !spreadApplies(c)));
+    /* The optimiser shortlists on the build score's own card price — for everyone, since the
+       ranking against the plan's other cards went (Sep 2026). */
+    fail('the optimiser ranks each slot by the build score\'s own card price', [navi, charDef('Kotone Shiomi'), yui].every(ch => {
+      const r = bestPlan(ch, state.cards.filter(c => c.rarity >= 2), { policy: 'pref' }), tt = target(ch);
+      return r.scored.length > 0 && r.scored.every(o => near(o.s, cardScore(o.c, tt), 1e-9));
+    }));
     const mikuStar = mk('Star', 'Labor', 'Crit Rate', [['Crit Multiplier', 9.2], ['ATK%', 3.2], ['Damage Multiplier', 7.8]]);
-    fail('an Elucidator\'s crit-main Star prices the same with or without a board, finite and positive',
-      isFinite(cardScore(mikuStar, tn, realCoupleContext(navi, [], charLoadout(navi.n)))) && cardScore(mikuStar, tn, realCoupleContext(navi, [], charLoadout(navi.n))) > 0 &&
-      near(cardScore(mikuStar, tn, realCoupleContext(navi, [], charLoadout(navi.n))), cardScore(mikuStar, tn)));
+    fail('an Elucidator\'s crit-main Star prices finite and positive', isFinite(cardScore(mikuStar, tn)) && cardScore(mikuStar, tn) > 0);
 
     // ---- the ideal card, and the per-card percentage ----
     const idealBad = [];
@@ -988,6 +1005,13 @@ function weightOverrideDrift() {
       return cardStatContribution([four4], joker, 'ATK', 'ATK%').mainsMissing === 1 && near(cardStatContribution([scanned], joker, 'ATK', 'ATK%').flat, 300) &&
         near(mainMagnitudeFor(five), 4.6 + 14 * (31.4 - 4.6) / 25) && mainMagnitudeFor(four4) === null;
     })());
+    fail('a 5★ mainValue off its level\'s curve (scanned at Lv0, levelled up after) reads the level, as cardScore does; one display unit of rounding still counts', (() => {
+      const stale = mk('Sky', 'Strife', 'ATK%', [], { mainValue: 4.6 });            // Lv25, Lv0 value
+      const hp = mk('Sun', 'Strife', 'HP', [], { level: 20, mainValue: 897 });       // real panel, line gives 896.4
+      return near(mainMagnitudeFor(stale), 31.4) && !mainValueFitsLevel(stale) &&
+        mainMagnitudeFor(hp) === 897 && mainValueFitsLevel(hp) &&
+        near(cardStatContribution([stale], joker, 'ATK', 'ATK%').pct, cardStatContribution([mk('Sky', 'Strife', 'ATK%', [])], joker, 'ATK', 'ATK%').pct);
+    })());
     fail('a target whose mains are unknown falls back to the relative measure rather than an undercount', (() => {
       const bad4 = mk('Sky', 'Power', 'Speed', [['Speed', 4]], { rarity: 4, level: 20 });
       const row = breakpointRows([bad4], idealLoadout(kumi, tk).cards, kumi, tk, charLoadout(kumi.n))[0];
@@ -1061,6 +1085,29 @@ function weightOverrideDrift() {
         JSON.stringify(row && { total: row.total, den: row.den }));
       fail('refinement reads as the game counts it: R0 for a weapon with no extra copies, R6 at the top',
         refineLabel(1) === 'R0' && refineLabel(7) === 'R6' && refineLabel(undefined) === 'R0');
+    }
+
+    /* The user's Kotone Shiomi (28 Sep 2026): the damage model's ⓐ read 5316 beside her ATK tile's
+       5603, exactly Strife's +15% of her 1910 base, because a 4-piece's stat line was counted in the
+       in-battle totals and not in ⓐⓑⓓ. Both must see the same ATK, on her cards and on the perfect
+       build alike, and a broken 4-piece must lose the line in both. */
+    {
+      const kot = charDef('Kotone Shiomi'), kt = target(kot);
+      const kc = (slot, set, main, subs) => ({ slot, set, rarity: 5, level: 25, main, subs: subs.map(([stat, value]) => ({ stat, value })) });
+      const cards = [
+        kc('Sun', 'Strife', 'HP', [['ATK%', 6.3], ['Crit Multiplier', 6.7], ['Resistance Pierce', 3.5], ['HP%', 6.1]]),
+        kc('Moon', 'Strife', 'ATK%', [['Damage Multiplier', 3.7], ['HP', 321], ['Crit Rate', 1.7], ['Resistance Pierce', 2.6]]),
+        kc('Star', 'Strife', 'ATK%', [['HP%', 6.1], ['Crit Rate', 3.8], ['SP Recovery', 15.9], ['Damage Multiplier', 3.9]]),
+        kc('Sky', 'Strife', 'ATK%', [['DEF%', 8.3], ['Crit Rate', 4.7], ['HP%', 5.4], ['SP Recovery', 15]]),
+        kc('Space', 'Nativity', 'ATK + DEF', [['Resistance Pierce', 4.3], ['Crit Rate', 5.8], ['HP', 245], ['Speed', 4.2]])
+      ];
+      const lo = Object.assign({}, DEFAULT_LOADOUT);
+      const same = cs => { const a = damageFactors(cs, kot, kt, lo).atk, b = totalStat(kot, 'ATK', 'ATK%', cs, lo).total; return { a, b, ok: Math.abs(a - b) < 0.5 }; };
+      const worn = same(cards), ideal = same(idealLoadout(kot, kt, 55).cards);
+      const broken = same(cards.map(c => c.slot === 'Moon' ? Object.assign({}, c, { set: 'Ruin' }) : c));
+      fail('ⓐ counts a 4-piece\'s stat line exactly as the ATK tile does (Kotone\'s Strife: 5603 on both, perfect build too, and neither once the 4-piece breaks)',
+        worn.ok && ideal.ok && broken.ok && Math.abs(worn.a - 5603) < 1 && broken.a < worn.a - 280,
+        JSON.stringify({ worn, ideal, broken }));
     }
 
     /* ================================================================================
@@ -1944,6 +1991,78 @@ function weightOverrideDrift() {
   });
   check('Optimise leads with the recommendation, scores other plans on the 0-100 build scale, and "Mark these as equipped" can be undone',
     optUi.recFirst && optUi.onScale && optUi.equipped && optUi.undone, JSON.stringify(optUi));
+
+  /* The alternatives table is ordered by what the pick was made on (build score with the card in
+     the pick's place), not by the per-card Score: bestPlan's same-set swap can pick a card that
+     scores lower on its own, and sorted on the Score the table put the passed-over card first,
+     under a loadout that recommended the other (Kotone Shiomi, 28 Sep 2026). */
+  const altUi = await p.evaluate(() => {
+    const bad = [];
+    const was = $('#optChar').value;
+    ownedChars().slice(0, 8).forEach(ch => {
+      renderOpt(ch.n); $('#optChar').value = ch.n; runOpt();
+      const panel = [...document.querySelectorAll('#optOut > .panel')].find(pn => /Best alternatives per slot/.test(pn.textContent));
+      if (!panel) { bad.push(ch.n + ': no table'); return; }
+      const r = bestPlan(ch, poolFor($('#optPool').value, +$('#optRarity').value, ch.n), { policy: $('#optPolicy').value, p4value: +$('#optP4').value });
+      SLOTS.forEach(sl => {
+        const cells = [...panel.querySelectorAll('tr.slotrow-' + sl)].map(tr => tr.children[6].textContent.trim());
+        if (!cells.length) return;
+        const vals = cells.map(s => s === 'picked' ? 0 : parseFloat(s.replace('−', '-')));
+        if (cells.filter(s => s === 'picked').length !== 1) bad.push(`${ch.n} ${sl}: ${cells.join('/')}`);
+        if (vals.some((v, i) => i && v > vals[i - 1] + 0.05)) bad.push(`${ch.n} ${sl} out of order: ${cells.join('/')}`);
+        if (r.best.kind === '4pc' && sl !== 'Space' && cells[0] !== 'picked') bad.push(`${ch.n} ${sl}: pick not first (${cells.join('/')})`);
+      });
+    });
+    renderOpt(); $('#optChar').value = was;
+    return bad;
+  });
+  check('Optimise\'s alternatives are ordered by "vs pick", and in a 4-piece plan the pick heads every Heavens slot', altUi.length === 0, altUi.join('; '));
+
+  /* Every place that proposes a single swap chooses it on the build score, not on the card's own
+     score (they disagree where the stat targets or the damage balance have a say): the card
+     picker's default order, Weakest slots' "Available now", and each Optimise card's own gain. */
+  const swapUi = await p.evaluate(() => {
+    const bad = [];
+    const parse = s => parseFloat(s.replace('−', '-'));
+    const chars = ownedChars().filter(ch => state.cards.some(c => c.equipped === ch.n)).slice(0, 4);
+    chars.forEach(ch => {
+      const t = target(ch), lo = charLoadout(ch.n), idl = idealLoadout(ch, t, 55);
+      const worn = state.cards.filter(c => c.equipped === ch.n);
+      const base = buildScoreOf(ch, worn, 55, lo, idl, t).raw;
+      const gainOf = (sl, c) => buildScoreOf(ch, worn.filter(x => x.slot !== sl).concat([c]), 55, lo, idl, t).raw - base;
+      // the picker: default order is the Build column, which is that marginal
+      const sl = worn[0].slot;
+      openCardPicker(ch.n, sl);
+      const trs = [...document.querySelectorAll('#dlgBody .pick tbody tr')].filter(tr => !tr.classList.contains('cur'));
+      const vals = trs.map(tr => parse(tr.querySelector('.pickGain').textContent));
+      if (vals.some((v, i) => i && v > vals[i - 1] + 1e-9)) bad.push(`${ch.n} picker out of order`);
+      const btn = trs[0] && trs[0].querySelector('[data-equip-card]');
+      if (btn) { const c = state.cards.find(x => x.id === btn.dataset.equipCard); if (Math.abs(gainOf(sl, c) - vals[0]) > 0.051) bad.push(`${ch.n} picker gain ${vals[0]} vs ${gainOf(sl, c)}`); }
+      document.getElementById('dlg').close();
+      // Optimise: "equip only this" is the same marginal
+      renderOpt(ch.n); $('#optChar').value = ch.n; runOpt();
+      const r = bestPlan(ch, poolFor($('#optPool').value, +$('#optRarity').value, ch.n), { policy: $('#optPolicy').value, p4value: +$('#optP4').value });
+      const blocks = [...document.querySelectorAll('#optOut .loadout .lo')];
+      ['Sun', 'Moon', 'Star', 'Sky'].forEach((s, i) => {
+        const c = r.best.picks[s].c, m = (blocks[i].textContent.match(/equip only this: ([−+][\d.]+)/) || [])[1];
+        if (c.equipped === ch.n ? m : (!m || Math.abs(parse(m) - gainOf(s, c)) > 0.051)) bad.push(`${ch.n} ${s} alone ${m} vs ${c.equipped === ch.n ? 'worn' : gainOf(s, c)}`);
+      });
+    });
+    // Weakest slots: the offered card is the best build gain among same-slot, same-set cards
+    headroomRows(false).filter(row => row.card).slice(0, 40).forEach(row => {
+      const ch = row.ch, t = row.t, lo = charLoadout(ch.n), idl = idealLoadout(ch, t, HR_P4);
+      const worn = state.cards.filter(c => c.equipped === ch.n), others = worn.filter(c => c.slot !== row.slot);
+      const base = buildScoreOf(ch, worn, HR_P4, lo, idl, t).raw;
+      let best = 0;
+      state.cards.forEach(c => {
+        if (c.slot !== row.slot || c.set !== row.card.set || c === row.card || c.locked && c.equipped !== ch.n || c.equipped && c.equipped !== ch.n) return;
+        best = Math.max(best, buildScoreOf(ch, others.concat([c]), HR_P4, lo, idl, t).raw - base);
+      });
+      if (best >= 0.05 ? Math.abs(row.altGain - best) > 1e-9 : row.alt) bad.push(`${ch.n} ${row.slot} available ${row.altGain} vs best ${best}`);
+    });
+    return bad;
+  });
+  check('the card picker, Weakest slots and Optimise\'s per-card gain all choose a swap on the build score', swapUi.length === 0, swapUi.join('; '));
 
   const dropUi = await p.evaluate(() => new Promise(res => {
     const drop = files => { const dt = new DataTransfer(); files.forEach(f => dt.items.add(f));

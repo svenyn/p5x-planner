@@ -94,6 +94,8 @@ class FakeGame:
             self.index += 2
         elif key == "W" and i - 2 >= 0:
             self.index -= 2
+        if self.index == i:
+            return                          # a key that moved nothing scrolls nothing
         row = self.index // 2
         self.top = min(self.top, row)
         self.top = max(self.top, row - (self.ROWS_VISIBLE - 1))
@@ -107,6 +109,8 @@ class FakeGame:
         row = index // 2
         if self.squash_jump and self._jumped > 1 and index == self.index:
             row += self._jumped - 1
+        if not self.top <= index // 2 < self.top + self.ROWS_VISIBLE:
+            return None, None               # the selected card is scrolled out of view
         return index % 2, (row - self.top) / (self.ROWS_VISIBLE - 1)
 
     def grab(self):
@@ -449,3 +453,71 @@ def test_without_a_clicker_a_second_tab_is_refused_not_walked():
     walker.clicker = None
     why, report = walker.run_tabs(["Sun", "Moon"], 500, current="Sun", **quiet)
     assert why == "tab" and fake.clicks == []
+
+
+# ------------------------------ the run log ------------------------------
+
+def test_the_trace_accounts_for_every_card_and_every_revisit():
+    """The record the two stalled Space runs of Sep 2026 did not leave: what
+    each key did, so a walk that stops early can be replayed from its log."""
+    lines = []
+    fake = FakeGame({"Sun": 6}, index=3)
+    walker = build(fake, trace=lines.append)
+    assert walker.run(walk_keys("DSAS", 500), rewind=True, **quiet) == "end"
+    assert sum("new card #" in ln for ln in lines) == walker.cards == 6
+    assert sum("already read" in ln for ln in lines) == walker.revisits
+    assert any(ln.startswith("rewind W: nothing moved (2/2)") for ln in lines)
+    # every walk key that settled says what the grid showed and where the model went
+    moved = [ln for ln in lines if ln[:2] in ("D:", "S:", "A:") and "model" in ln]
+    assert moved and all("grid col" in ln and "->" in ln for ln in moved if "nothing moved" not in ln)
+
+
+def test_the_run_log_copies_the_screen_and_keeps_the_trace_to_the_file(tmp_path, capsys):
+    from autowalk import RunLog
+    log = RunLog(tmp_path / "cards-3.log").start()
+    try:
+        print("  Space: 49 card(s) — end")
+        log.trace("S: grid unreadable, model (17, 0) -> (18, 0)")
+    finally:
+        log.close()
+    shown = capsys.readouterr().out
+    assert "49 card(s)" in shown and "grid unreadable" not in shown
+    text = (tmp_path / "cards-3.log").read_text(encoding="utf-8")
+    assert "49 card(s)" in text and "grid unreadable" in text
+    # a second run into the same name appends rather than wiping the first
+    RunLog(tmp_path / "cards-3.log").start().close()
+    assert "49 card(s)" in (tmp_path / "cards-3.log").read_text(encoding="utf-8")
+
+
+def test_a_rewind_that_cannot_see_the_cursor_keeps_the_screen_it_saw():
+    """The Moon tab of Sep 27: switched to, two dead W presses, no selection
+    frame — and nothing kept to show what was on screen."""
+    fake = FakeGame({"Sun": 7}, index=0)
+    walker = build(fake)
+    walker.cursor_reader = lambda f: (None, None)
+    assert walker.run(walk_keys("DSAS", 500), rewind=True, **quiet) == "lost"
+    assert walker.lost_frame is not None
+    assert fake.which(walker.lost_frame) == ("Sun", 0)
+
+
+def test_a_tab_whose_first_card_is_scrolled_out_of_view_is_still_read_from_the_top():
+    """Sky, Sep 27: the tab put its selection back on the first card but kept
+    the list scrolled to its last rows. No frame in view and W moves nothing;
+    S then W brings the first card back into view without skipping it."""
+    fake = FakeGame({"Sky": 30}, tab="Sky")
+    fake.top = 9                                  # showing rows 9-14; the selection is row 0
+    walker = build(fake)
+    assert walker.run(walk_keys("DSAS", 500), rewind=True, **quiet) == "end"
+    assert sorted(read_cards(fake, walker)) == [("Sky", i) for i in range(30)]
+    assert fake.keys[:4] == ["W", "W", "S", "W"]
+
+
+def test_a_hidden_first_card_on_a_list_that_cannot_scroll_still_gives_up():
+    # a single row: S moves nothing (sent twice), so there is nothing to bring
+    # into view and the rewind stops with the screen it saw, as before
+    fake = FakeGame({"Sky": 2}, tab="Sky")
+    fake.top = 3
+    walker = build(fake)
+    assert walker.run(walk_keys("DSAS", 500), rewind=True, **quiet) == "lost"
+    assert fake.keys == ["W", "W", "S", "S"]
+    assert walker.lost_frame is not None

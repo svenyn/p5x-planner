@@ -13,6 +13,8 @@
   --ink:#f2f2f4; --dim:#9a9aa6; --dim2:#83838f;
   --red:#e6274a; --red-text:#ee4265; --red-dim:#7a1528; --gold:#e8b64c; --purple:#a86fd0; --blue:#4c8fe8;
   --ok:#3fbf7f;
+  /* dark native scrollbars and form controls; without it the scroll boxes' tracks were white */
+  color-scheme:dark;
 }
 *{box-sizing:border-box}
 body{margin:0;background:var(--bg);color:var(--ink);
@@ -108,6 +110,13 @@ main{padding:20px;max-width:1500px;margin:0 auto}
 .tiny{font-size:12px}
 .mono{font-family:ui-monospace,"Cascadia Code",Consolas,monospace}
 .scroll{max-height:62vh;overflow:auto;border:1px solid var(--line);border-radius:8px}
+/* A long table that scrolls with the page instead of inside a box of its own; its header pins
+   under the page header (--hdrH, set in logic.js). No overflow here, or the header stops sticking. */
+.flowTable{background:var(--panel);border:1px solid var(--line);border-radius:10px;margin-bottom:16px}
+.flowTable th{top:var(--hdrH,0px)}
+.flowTable thead th:first-child{border-top-left-radius:10px}
+.flowTable thead th:last-child{border-top-right-radius:10px}
+.flowTable tbody tr:last-child td{border-bottom:none}
 
 .tag{display:inline-block;padding:1px 7px;border-radius:20px;font-size:11px;font-weight:600;
   border:1px solid var(--line);background:#202029;color:var(--dim);white-space:nowrap}
@@ -406,6 +415,7 @@ details.sect>.inner{margin-top:10px}
      already do, and keep their sticky headers */
   .panel table,dialog table{display:block;overflow-x:auto}
   .scroll table{display:table;overflow:visible}
+  .flowTable{overflow-x:auto}
   .cards{grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
   .portrait .initials{font-size:36px}
   .cc .nm{font-size:13px}
@@ -749,7 +759,7 @@ details.sect>.inner{margin-top:10px}
         <div id="hrSummary" style="margin-top:12px"></div>
       </div>
       <div class="hide" id="hrPanel">
-        <div class="scroll"><table id="hrTable"></table></div>
+        <div class="flowTable"><table id="hrTable"></table></div>
       </div>
     </div><!-- /up-pane-headroom -->
   </section>
@@ -3647,11 +3657,14 @@ const rarityPenalty = rarity => rarity === 5 ? 1 : rarity === 4 ? 0.82 : rarity 
    first, which is what makes a card's own main stat change what its substats are worth
    to this character. See STAT_PRODUCTS below for why.
 
-   `real` (a realCoupleContext() result) swaps couplingFactors' generic "typical build"
-   guess for what this character's board actually holds; omitted, cardScore stays the
-   context-free price the optimiser's single inventory-wide scoring pass depends on. */
-function cardScore(card, t, real) {
-  const f = couplingFactors(t, card.slot, card.main, real);
+   It is context-free — it never looks at the other cards worn — because it is the build
+   score's card part, the one number every screen shows for a card and the one the
+   optimiser shortlists on. What a card does with the other four (stat targets, damage
+   balance) is the build score's other terms. A variant priced against the other worn cards
+   (realCoupleContext) existed until Sep 2026 and was removed: it was a second yardstick the
+   build score never used, so screens and the optimiser disagreed about which card was better. */
+function cardScore(card, t) {
+  const f = couplingFactors(t, card.slot, card.main);
   const w = stat => (t.w[stat] || 0) * cf(f, stat);
   let s = 0;
   for (const sub of card.subs || []) {
@@ -3667,7 +3680,7 @@ function cardScore(card, t, real) {
   let mainPart = 0;
   if (card.slot !== 'Sun' && card.slot !== 'Space') {
     const rank = mainList(t, card.slot).indexOf(card.main);
-    mainPart = mainWeightFor(card, t, real) * mainRolls(card.main, card.slot, card.level) +
+    mainPart = mainWeightFor(card, t) * mainRolls(card.main, card.slot, card.level) +
       (rank >= 0 ? MAIN_MATCH_BONUS * Math.pow(MAIN_ALT_DECAY, rank) : 0);
   }
   return (s + mainPart) * rarityPenalty(card.rarity);
@@ -3676,9 +3689,9 @@ function cardScore(card, t, real) {
 /* The coupled weight a card's main stat is priced at — HP Recovery has no substat
    weight to couple, so it takes its own rule. Shared by cardScore and the level-0
    potential estimate, which has to grow the main the same way it grows the substats. */
-function mainWeightFor(card, t, real) {
+function mainWeightFor(card, t) {
   if (card.main === 'HP Recovery') return hpRecoveryMainWeight(t, card.slot);
-  const f = couplingFactors(t, card.slot, card.main, real);
+  const f = couplingFactors(t, card.slot, card.main);
   return (t.w[card.main] || 0) * cf(f, card.main);
 }
 
@@ -3972,10 +3985,13 @@ function idealCard(slot, t, setName) {
 
    Anything beating the ideal clamps at 100, as `buildScore` does: `IDEAL_ROLLS` spreads
    the upgrades [3,2,2,2], so a card that funnelled all five into one top stat can edge it.
-   The denominator is the context-free `cardScore`, the same one `scoreLoadout` uses for the
-   build score's ideal side; the numerator is whatever score the caller actually ranked by
-   (usually the `real`-coupled one), so the shown order always matches the pick order. The
-   coupling is scale-neutral, so the two do not drift apart in magnitude — only in balance.
+   Numerator and denominator are both the context-free `cardScore`, the one `scoreLoadout`
+   prices the build score's card part with, on both its sides. Every screen shows that one
+   number for a card (Sep 2026): some used to show it priced against the other four worn
+   cards (`realCoupleContext`), so one card read two numbers and ranked differently on two
+   screens — Kotone Shiomi's worn ATK% Star 110.1 in the Loadout popup and 107.9 on Weakest
+   slots, the Crit Rate one beside it 101.5 and 110.6. What a card does with the other four
+   (stat targets, damage balance) is the build score's other terms, shown as a Build gain.
    This is a DISPLAY conversion: nothing ranks or optimises on it, and it says nothing about
    how good a card is for a different character. Memoised per target like `couplingFactors`. */
 const idealCardScoreCache = new WeakMap();
@@ -4050,9 +4066,8 @@ function cardPctHtml(score, slot, t) {
    actually carry. The crit factor counts the multiplier as its bonus above 100 (150%
    crit damage is +50), since that is the part crit rate multiplies. These numbers are only
    the fallback for a target that names no character (a hand-built one in a test): every
-   real character seeds from their own damageBase (seedBaseline) before any card is placed
-   and from their real board after, and an Elucidator is not coupled at all (see
-   computeCoupling).
+   real character seeds from their own damageBase (seedBaseline), and an Elucidator is not
+   coupled at all (see computeCoupling).
 
    Two stats are deliberately absent. Resistance Pierce is its own factor, but how much
    a point is worth depends on the enemy's resistance, which nothing here models.
@@ -4086,6 +4101,22 @@ function mainMagnitudeAt(stat, level) {
   const lv = Math.max(0, Math.min(cap, level == null ? cap : level));
   return m[0] + (m[1] - m[0]) * lv / cap;
 }
+/* Whether a card's scanned `mainValue` is what the game prints at the card's level. A 5★
+   main is a function of level alone (MAIN_MAGNITUDE, to within one display unit — the
+   OCR's check_main_value uses the same tolerance), so a value off that line is stale or
+   misread, and the level wins: cardScore already prices the main from the level, and the
+   totals must read the same card. The standing case (Sep 2026): cards scanned at Lv0, then
+   levelled in the game and set to Lv25 in the card editor, which kept the Lv0 value —
+   Kotone Shiomi wore four, every ATK% main counted at 4.6% instead of 31.4%, so her ATK
+   target read 75% and Weakest slots offered a card Optimise (pricing by level) did not.
+   Other rarities have no measured curve, so their scanned value is all there is. */
+function mainValueFitsLevel(card) {
+  if (card.mainValue == null || card.rarity !== 5) return true;
+  const m = MAIN_MAGNITUDE[card.main];
+  if (!m) return true;
+  const unit = Number.isInteger(m[0]) && Number.isInteger(m[1]) ? 1 : 0.1;
+  return Math.abs(card.mainValue - mainMagnitudeAt(card.main, card.level)) <= unit + 1e-6;
+}
 function mainRolls(stat, slot, level) {
   const m = mainMagnitudeAt(stat, level);
   if (m == null) return MAIN_ROLLS_FALLBACK;
@@ -4101,25 +4132,18 @@ const COUPLE_CLAMP = [0.4, 2.5];
 
 /* Supply of each stat in `product`, in max-roll equivalents, for the build this
    character is aiming at — with `slot` pinned to the main stat `main`, so a card is
-   priced against the rest of the build rather than against itself.
-
-   `real`, when given, replaces the generic "what would a typical build look like"
-   guess with what this character's board actually looks like right now — see
-   realCoupleContext. The slot being priced still only contributes its own
-   hypothetical `main`; the other slots come from `real` as known fact rather than
-   spread across their alternatives, and the idealised substat allocation is skipped
-   entirely since the real board already says what substats are actually there. */
-function productSupply(product, t, slot, main, real) {
+   priced against the rest of the build rather than against itself. */
+function productSupply(product, t, slot, main) {
   const R = {};
-  /* With no real board, the baseline is still THIS character's, not the roster-wide
+  /* The baseline is THIS character's, not the roster-wide
      guess: base crit, Awakening-7 crit and the weapon's unconditional ladder are all in
      CHAR_STATS, and they move the balance a lot — a DPS with a +30% ATK weapon and
      Awakening 7 starts at 159% ATK, so the Damage Multiplier Moon is the better
      complement to an ATK% Sky, exactly what lufel lists as the alternative. Elucidators
      never reach this: computeCoupling does not couple them at all. */
-  const seed = (!real && seedBaseline(t)) || null;
+  const seed = seedBaseline(t);
   Object.keys(product).forEach(st =>
-    R[st] = (real && real[st] != null ? real[st] : (seed && seed[st] != null ? seed[st] : genericSupply(product, st, t))) / maxRoll(st, 'Sun'));
+    R[st] = (seed && seed[st] != null ? seed[st] : genericSupply(product, st, t)) / maxRoll(st, 'Sun'));
   const add = (stat, rolls) => { if (R[stat] != null) R[stat] += rolls; };
   /* A kit whose damage partly always crits (CRIT_PROFILE) buys Crit Rate for only the
      rolled share; see lockedCritSupply for the algebra. Evaluated on the crit damage the
@@ -4137,10 +4161,6 @@ function productSupply(product, t, slot, main, real) {
     if (ex) add('Crit Rate', ex.share * Math.min(ex.cr, Math.max(0, 100 - R['Crit Rate'] * maxRoll('Crit Rate', 'Sun')))
       / maxRoll('Crit Rate', 'Sun'));
   }
-  if (real) {
-    if (main) add(main, mainRolls(main, slot));
-    return R;
-  }
   ['Moon', 'Star', 'Sky'].forEach(sl => {
     if (sl === slot) { if (main) add(main, mainRolls(main, slot)); return; }
     /* The other slots are not decided yet, so spread their main across the
@@ -4155,12 +4175,7 @@ function productSupply(product, t, slot, main, real) {
   return R;
 }
 
-/* Per-stat weight multipliers for a card in `slot` whose main stat is `main`, against
-   either the generic build guess or (with `real`) this character's actual other gear.
-   Memoised per target: cardScore runs over the whole inventory for every plan, and
-   there are only a handful of distinct slot/main pairs — plus, when real boards are in
-   play, a handful of distinct boards, so `real`'s own id joins the cache key rather
-   than letting one real board's result leak into a call for a different one. */
+/* The character's own supply of the coupled stats before any card (see productSupply). */
 function seedBaseline(t) {
   const ch = t && t.n ? charDef(t.n) : null;
   if (!ch || !CHAR_STATS[ch.n] || !spreadApplies(ch)) return null;
@@ -4169,7 +4184,9 @@ function seedBaseline(t) {
   out[scalePctStat(ch)] = 100 + B.atkPct + (scaleStat(ch) === 'ATK' ? cv['ATK%'] + (B.atk > 0 ? 100 * cv.ATK / B.atk : 0) : 0);
   return out;
 }
-function computeCoupling(t, slot, main, real) {
+/* Per-stat weight multipliers for a card in `slot` whose main stat is `main`, against the
+   character's own baseline and the build being aimed at. */
+function computeCoupling(t, slot, main) {
   const f = {};
   const ch = t && t.n ? charDef(t.n) : null;
   /* An Elucidator's stats are donated — every one of the eight passes each ally 20% of
@@ -4192,7 +4209,7 @@ function computeCoupling(t, slot, main, real) {
        the character's own damage either: its worth is the buff. */
     const live = Object.keys(product).filter(st => (t.w[st] || 0) > 0 && own.indexOf(st) < 0);
     if (live.length < 2) continue;
-    const R = productSupply(product, t, slot, main, real);
+    const R = productSupply(product, t, slot, main);
     /* The marginal-value ratio below is 1/supply, which is only defined while every
        factor of the product actually holds something. A supply of zero is reachable
        and real, not a bug to paper over: an Elucidator with a 0% crit base and no crit
@@ -4206,16 +4223,16 @@ function computeCoupling(t, slot, main, real) {
     live.forEach(st => f[st] = Math.max(COUPLE_CLAMP[0], Math.min(COUPLE_CLAMP[1], ref / R[st])));
     /* Crit Rate past 100% does nothing, so once what is actually HELD reaches 100 points a
        further roll is worth exactly nothing — a hard zero, not the clamp's floor. "Held"
-       is the character's own baseline plus this card's main when it is Crit Rate (real
-       board: the other cards too); the idealised substat allocation is not counted, since
-       it is a guess about cards not yet placed. Morgana with Golden Legacy at refine 7 on
-       a Crit Rate Star is the live case. */
-    if (f['Crit Rate'] != null && heldCritRate(t, main, real) >= 100) f['Crit Rate'] = 0;
+       is the character's own baseline (the team crit rate included) plus this card's main
+       when it is Crit Rate; the idealised substat allocation is not counted, since it is a
+       guess about cards not yet placed. Morgana with Golden Legacy at refine 7 on a Crit
+       Rate Star is the live case. */
+    if (f['Crit Rate'] != null && heldCritRate(t, main) >= 100) f['Crit Rate'] = 0;
   }
   return f;
 }
-function heldCritRate(t, main, real) {
-  const base = real ? real['Crit Rate'] : ((seedBaseline(t) || {})['Crit Rate']);
+function heldCritRate(t, main) {
+  const base = (seedBaseline(t) || {})['Crit Rate'];
   return (base != null ? base : genericSupply(STAT_PRODUCTS[1], 'Crit Rate', t)) + (main === 'Crit Rate' ? MAIN_MAGNITUDE['Crit Rate'][1] : 0);
 }
 /* STAT_PRODUCTS' fallback baseline for a target with no board of its own (no character, or
@@ -4227,21 +4244,13 @@ function genericSupply(product, st, t) {
 /* A coupling factor of 0 is a real answer (capped Crit Rate); only a missing one means "no coupling". */
 const cf = (f, stat) => (f[stat] != null ? f[stat] : 1);
 const couplingCache = new WeakMap();
-function couplingFactors(t, slot, main, real) {
-  /* A `real` board is a short-lived object — one per bestPlan()/openCardPicker() call,
-     thrown away when it returns — so its own cache dies with it. Caching real-board
-     results in the persistent per-target WeakMap instead would never be evicted: with
-     equip actions now re-running the optimiser on every card swap (see swapCard),
-     that cache would grow for as long as the tab stayed open. */
-  if (real) {
-    real.__cache = real.__cache || {};
-    const key = slot + '|' + main;
-    return real.__cache[key] || (real.__cache[key] = computeCoupling(t, slot, main, real));
-  }
-  // dropped when the character's Setup changes — see targetMemo
+/* Memoised per target: cardScore runs over the whole inventory for every plan, and there
+   are only a handful of distinct slot/main pairs. Dropped when the character's Setup
+   changes — see targetMemo. */
+function couplingFactors(t, slot, main) {
   const byKey = targetMemo(couplingCache, t);
   const key = slot + '|' + main;
-  return byKey[key] || (byKey[key] = computeCoupling(t, slot, main, real));
+  return byKey[key] || (byKey[key] = computeCoupling(t, slot, main));
 }
 
 /* ---- stat targets ("recommended stats" on lufel) ---------------------------------
@@ -4813,7 +4822,7 @@ function charBaseStatUncached(char, cs, L, stat) {
    5-star curve at the card's level, else whatever the inventory has taught us about
    that slot/stat (other rarities), else null — unknown, never zero. */
 function mainMagnitudeFor(card, model) {
-  if (card.mainValue != null) return card.mainValue;
+  if (card.mainValue != null && mainValueFitsLevel(card)) return card.mainValue;
   /* The damage model (`model`) prices every rarity on the 5-star curve — the same
      assumption cardScore's mainRolls() already makes — so it never has to consult the
      inventory; totalStat keeps the stricter rule, where an unscanned non-5-star main is
@@ -5349,7 +5358,14 @@ function modelledStats(char) {
 /* Points of each modelled stat a loadout supplies: substats and 2-piece bonuses exactly,
    plus each card's main at its real magnitude for its level — the fixed mains included (see
    the damage-model note above). A Space card's single 'ATK + DEF' value counts toward both
-   flat stats, the same way cardStatContribution counts it for the in-battle totals. */
+   flat stats, the same way cardStatContribution counts it for the in-battle totals.
+
+   A completed 4-piece's unconditional stat line (SET4_STATS — Strife's +15% ATK) counts too,
+   as it does in the in-battle totals. Until Sep 2026 it did not: Kotone Shiomi's ⓐ read 5316
+   beside her ATK tile's 5603, exactly Strife's 15% of her 1910 base, and the perfect build
+   lost the same 287. bonus4Value still prices the set as a whole; the 2-piece's stat has
+   always been in the product beside bonus2Value in the same way, so this is the rule the
+   2-piece already followed, not a second charge for the set. */
 function damagePoints(cards, char) {
   const out = supplyOf(cards, char, modelledStats(char));
   (cards || []).forEach(c => {
@@ -5361,6 +5377,8 @@ function damagePoints(cards, char) {
       if (out.DEF !== undefined) out.DEF += v;
     } else if (out[c.main] !== undefined) out[c.main] += mainMagnitudeFor(c, true) || 0;
   });
+  const four = set4StatLines(cards, char);
+  for (const s in four) if (out[s] !== undefined) out[s] += four[s];
   return out;
 }
 
@@ -5381,7 +5399,7 @@ function damagePoints(cards, char) {
 
    `state.teamCrit` is that extra, in points, one number for the whole roster. It is added
    wherever the damage model reads a crit rate — ⓓ (damageFactors), both coupling baselines
-   (seedBaseline, realCoupleContext, via damageBase) and the 100% cap (heldCritRate) — for
+   (seedBaseline, via damageBase) and the 100% cap (heldCritRate) — for
    every character who deals their own damage, and on the generic board the Vault's
    archetypes are priced on. Not for an Elucidator, whose stats are donated and who is not
    coupled. It never enters totalStat: on-screen totals and stat targets stay what the
@@ -5433,61 +5451,6 @@ function damageBase(char, lo) {
   };
   damageBaseCache[key] = v;
   return v;
-}
-
-/* Real supply of the four coupled stats (ATK%, Damage Multiplier, Crit Rate, Crit
-   Multiplier), for whoever is asking "given what this character actually has on
-   already, how much is one more roll of X worth" — as opposed to couplingFactors'
-   default guess at what a typical build would look like. `cards` should be the
-   character's real OTHER equipped cards (the slot being priced excluded by the
-   caller, so its own candidates aren't pricing themselves against their own
-   presence), `lo` their real weapon/ascension/Mindscape.
-
-   ATK% and Damage Multiplier carry the same +100 baseline couplingFactors' generic
-   guess uses (both damage factors read 100% with nothing equipped), so a real board
-   stays on the same scale as the hypothetical one it replaces; Crit Rate and Crit
-   Multiplier need no such offset since damageBase already returns their true total
-   (Crit Multiplier keeps the -100 that turns it into "bonus above 100", matching
-   what damageFactors' cmBonus prices). Each call returns a fresh object — couplingFactors
-   hangs its own cache off it (see there), so callers must not share one `real` across
-   two genuinely different boards, but are free to reuse it across many candidates for
-   the same slot on the same board, which is the whole point.
-
-   An Elucidator gets null — "no board", which every caller already treats as the generic
-   path — for the reason seedBaseline returns null for them: their stats are donated to
-   allies at 20%, so the board that decides what a roll is worth is an ally's, and their own
-   0% / 0% crit base says nothing about it. Before this, their pre-board coupling used the
-   generic baseline while their real board read a 0 crit damage supply and switched the
-   crit product off, so the optimiser picked each slot by one crit balance and the build
-   score (and bestPlan's own plan total) priced it by the other: on the real inventory five
-   Elucidators were handed a Crit Multiplier Sun that their own build score rated 9-12 points
-   below the Crit Rate one beside it. */
-function realCoupleContext(char, cards, lo) {
-  if (!spreadApplies(char)) return null;
-  const B = damageBase(char, lo);
-  const p = damagePoints(cards, char);
-  const pct = scalePctStat(char);
-  const cv = conversionBonus(char, cards, lo);
-  const out = {
-    'Damage Multiplier': 100 + B.dm + p['Damage Multiplier'] + cv['Damage Multiplier'],
-    'Crit Rate': B.cr + p['Crit Rate'],
-    /* Floored at 0 for the same reason damageFactors floors cmBonus and seedBaseline
-       floors this one: seven Buff-element supports carry a panel-confirmed 0% crit
-       damage base (all seven are Elucidators, which no longer reach this line — the floor
-       stays for any future kit that does), so their total sits well under 100 until the cards make it up, and
-       "a crit deals less than a normal hit" is not a thing the game can mean. Left
-       signed it was worse than merely wrong — a NEGATIVE supply makes computeCoupling's
-       geometric mean Math.log a negative number, and the NaN that comes back is not
-       loud: cardScore's `if (!ws) continue` silently drops a NaN-weighted substat, so
-       every crit roll on those characters' cards priced at zero, while a crit MAIN
-       (their Star) came back NaN outright and the optimiser's `sort` on it left the
-       slot's candidates in pool order. That is what made Hatsune Miku's recommendation
-       ignore what she already wore. */
-    'Crit Multiplier': Math.max(0, B.cm + p['Crit Multiplier'] - 100 + cv['Crit Multiplier'])
-  };
-  // a flat-ATK conversion is folded into the ATK% supply at this character's base ATK
-  out[pct] = 100 + B.atkPct + p[pct] + (pct === 'ATK%' ? cv['ATK%'] + (B.atk > 0 ? 100 * cv.ATK / B.atk : 0) : 0);
-  return out;
 }
 
 /* ⓐ, ⓑ and ⓓ for one loadout, and their product. Absolute-looking but only ever used as
@@ -5740,6 +5703,13 @@ const BUILD_BANDS = [
 ];
 const buildBand = n => BUILD_BANDS.filter(b => n >= b.min)[0];
 
+/* bestPlan's polish (see there): plans within this many build points of the allowed leader
+   try each slot's next POLISH_DEPTH same-set cards. Both measured, not tuned: 2 points already
+   gives the pick that polishing every plan gives, 8 deep catches the Sky card a 4-deep pass
+   missed on the synthetic account. */
+const POLISH_WINDOW = 2;
+const POLISH_DEPTH = 8;
+
 function bestPlan(char, pool, opts) {
   const t = target(char);
   const heavens = ['Sun', 'Moon', 'Star', 'Sky'];
@@ -5777,9 +5747,9 @@ function bestPlan(char, pool, opts) {
      `evalCards` takes raw cards rather than a plan's `picks`, so it prices a hypothetical
      plan and whatever is actually equipped by the same rule — Upgrades is the other caller.
      The set bonus comes from the cards, not from any plan's intent: a free slot can
-     complete a pair the plan never planned for. Deliberately generic (no real-gear context)
-     even though the per-slot ranking below has some — it is what compares one finished
-     plan against another, and both sides must be priced alike. The 4-piece value is the
+     complete a pair the plan never planned for. Generic (no real-gear context), like the
+     per-slot ranking below — it is what compares one finished plan against another, and
+     both sides must be priced alike. The 4-piece value is the
      optimiser's slider, so at its default of 55 this is the build score exactly. */
   const idl = idealLoadout(char, t, P4);
   const evalCards = worn => {
@@ -5788,22 +5758,24 @@ function bestPlan(char, pool, opts) {
     return { total: b.total, idealTotal: b.idealTotal, bonus: b.actual.sets, synergy: b.actual.synergy, bpBonus: b.bpGot, spreadBonus: b.spread.got };
   };
 
-  /* Price each slot's candidates against what the character REALLY has elsewhere
-     (weapon/ascension/Mindscape via damageBase, the other cards via damagePoints)
-     instead of couplingFactors' generic "typical build" guess — given `anchorCards`
-     as that "elsewhere". One context per slot, built once per call rather than per
-     candidate: this can run cardScore thousands of times over a large pool, and every
-     candidate for a given slot is priced against the same "everything else". */
-  const runOnce = anchorCards => {
-    const realBySlot = {};
-    heavens.forEach(sl => { realBySlot[sl] = realCoupleContext(char, anchorCards.filter(c => c.slot !== sl), lo); });
-    const realSpace = realCoupleContext(char, anchorCards.filter(c => c.slot !== 'Space'), lo);
+  /* Each slot's candidates are ranked on cardScore, the build score's own card part — the
+     same price every screen shows. Until Sep 2026 they were ranked against the other cards
+     of the plan (realCoupleContext, iterated up to five times until the anchor stopped
+     moving), a second yardstick the build score does not use: a card it rated best could
+     miss the shortlist, which is how Kotone Shiomi's Star and Sky contradicted the loadout
+     they sat under. Measured over the real inventory (37 characters, both pools, 'pref' and
+     'force4') and the scale.js account (68, three policies), together with the polish below:
+     never worse on the real inventory, up to +2.6, mean +0.01 to +0.22 per scenario; one
+     loss on the synthetic account (Runa, 'stats', −0.23); and 0.7-0.9 s a roster against
+     1.1-1.7 s, since the iteration went with it. The scale.js calibration moved 69.5 → 69.6,
+     median and bands unchanged. */
+  const runOnce = () => {
 
     // index: slot -> set -> cards sorted by score desc
     const idx = {}; heavens.forEach(sl => idx[sl] = {});
     const scored = pool
       .filter(c => c.slot !== 'Space')
-      .map(c => ({ c, s: cardScore(c, t, realBySlot[c.slot]) }));
+      .map(c => ({ c, s: cardScore(c, t) }));
     scored.forEach(o => (idx[o.c.slot][o.c.set] = idx[o.c.slot][o.c.set] || []).push(o));
     heavens.forEach(sl => Object.values(idx[sl]).forEach(a => a.sort((x, y) => y.s - x.s)));
     const bestAny = {};
@@ -5827,7 +5799,7 @@ function bestPlan(char, pool, opts) {
          neither. Falls back to any pairing set if no preferred card pairs.
        Memoised per active 4-piece: every plan without one shares a single answer. */
     const spaceScored = pool.filter(c => c.slot === 'Space')
-      .map(c => ({ c, s: cardScore(c, t, realSpace), pref: c.set === t.space, pairs: false }))
+      .map(c => ({ c, s: cardScore(c, t), pref: c.set === t.space, pairs: false }))
       .sort((a, b) => b.s - a.s);
     spaceScored.forEach(o => { o.total = o.s; });
     const spaceMemo = new Map();
@@ -5907,7 +5879,7 @@ function bestPlan(char, pool, opts) {
        generated — which is the one the stable sort used to keep when this ran after — so
        each distinct loadout is priced once. */
     const seen = new Set();
-    const complete = plans.filter(p => {
+    let complete = plans.filter(p => {
       if (!p.complete) return false;
       const key = heavens.map(sl => p.picks[sl].c.id).sort().join('|');
       if (seen.has(key)) return false;
@@ -5920,14 +5892,6 @@ function bestPlan(char, pool, opts) {
       Object.assign(p, evalCards(p.space ? cards.concat([p.space.c]) : cards));
     });
 
-    /* Each slot's card is still chosen on its own per-card score, which cannot see the
-       loadout the four of them add up to. That looks like it should need a second pass —
-       try each slot's runners-up, keep any swap the spread term likes better — and it was
-       built and measured: brute-forcing every combination of the top six candidates per
-       slot against the full build score found at most 1 point of headroom, on 2 of 65
-       characters, mean 0.03. The per-card coupling has already put the balance where it
-       belongs by the time a plan is assembled, so the pass was removed rather than kept as
-       3x the runtime for nothing. If cardScore's coupling is ever weakened, revisit this. */
     complete.sort((a, b) => b.total - a.total);
 
     /* Set policy. Left to pure stat maximisation the optimiser will nearly always
@@ -5947,6 +5911,52 @@ function bestPlan(char, pool, opts) {
       const p2 = complete.filter(p => p.kind === '4pc');
       allowed = p2.length ? p2 : complete;
     }
+
+    /* Polish. A plan takes each set's top card per slot, and a card's own score cannot see the
+       stat targets or whether ATK, damage bonus and crit stay balanced across the five cards —
+       the build score can, so the next card of the same set sometimes builds higher (Kotone
+       Shiomi's Sky, Sep 2026: 1.25 points). So every allowed plan within POLISH_WINDOW build
+       points of the leader tries each slot's next POLISH_DEPTH same-set cards, its Space card
+       included, keeping any swap that raises the build score; then the plans are re-ranked. A
+       same-set swap changes no set count, so a plan's set bonus and Space pairing stand.
+
+       Measured before it shipped (Sep 2026), against the real inventory and the scale.js
+       account: polishing every plan instead gives the same pick in every scenario at 15-20x
+       the cost; the winner alone (the pass this replaced, 4 deep, Heavens only) missed Space
+       cards — Starlight Ren's and Aran's losses — and plans that win only once polished, as
+       Tropical Motoha's Virtue 4-piece. The window is measured on the ALLOWED leader: taken on
+       the overall one, a 'force4' run whose 4-pieces all sat 2 points under a 2+2 polished none
+       of them. Brute-forcing every combination of each slot's top six (an older experiment)
+       found at most 1 point beyond a single same-set swap, so one pass is enough. */
+    const bar = allowed.length ? allowed[0].total - POLISH_WINDOW * allowed[0].idealTotal / 100 : Infinity;
+    allowed.filter(p => p.total >= bar).forEach(p => {
+      const wornWith = over => heavens.map(sl => (over[sl] || p.picks[sl]).c)
+        .concat((over.Space || p.space) ? [(over.Space || p.space).c] : []);
+      heavens.forEach(sl => {
+        ((idx[sl] || {})[p.picks[sl].c.set] || []).slice(0, POLISH_DEPTH).forEach(o => {
+          if (o.c === p.picks[sl].c) return;
+          const e = evalCards(wornWith({ [sl]: o }));
+          if (e.total > p.total + 1e-9) { p.picks = Object.assign({}, p.picks, { [sl]: o }); Object.assign(p, e); }
+        });
+      });
+      if (p.space) spaceScored.filter(o => o.c.set === p.space.c.set).slice(0, POLISH_DEPTH).forEach(o => {
+        if (o.c === p.space.c) return;
+        const e = evalCards(wornWith({ Space: o }));
+        // a copy: spaceChoice's entries are shared between plans
+        if (e.total > p.total + 1e-9) { p.space = Object.assign({}, p.space, { c: o.c, s: o.s }); Object.assign(p, e); }
+      });
+    });
+    // Re-rank, and collapse any two plans the polish turned into the same four cards.
+    const kept = new Set();
+    const firstOf = list => list.sort((a, b) => b.total - a.total).filter(p => {
+      const key = heavens.map(sl => p.picks[sl].c.id).sort().join('|');
+      if (kept.has(key)) return false;
+      kept.add(key); return true;
+    });
+    const unique = new Set(firstOf(complete.slice()));
+    complete = complete.filter(p => unique.has(p)).sort((a, b) => b.total - a.total);
+    allowed = allowed.filter(p => unique.has(p)).sort((a, b) => b.total - a.total);
+
     const best = allowed[0] || null;
     const statMax = complete[0] || null;
 
@@ -5958,36 +5968,16 @@ function bestPlan(char, pool, opts) {
       best, statMax,
       alternatives: complete.filter(p => p !== best).slice(0, 4),
       incomplete: plans.filter(p => !p.complete && t.sets.includes(p.sets[0])),
-      space, spaceAlts: spacePool.slice(1, 3), idx, scored
+      // the polish can pick a Space card from further down the list, so skip it by identity
+      space, spaceAlts: spacePool.filter(o => !space || o.c !== space.c).slice(0, 2), idx, scored
     };
   };
 
-  /* Every slot is priced against "everything else", so the moment a recommendation
-     changes several slots at once, equipping it moves the very anchor it was priced
-     against — which can flip the recommendation again, and the user chases a moving
-     target through Optimise forever (equip plan A, watch it start recommending B;
-     equip B, watch it recommend A). Iterate against the RECOMMENDATION's own cards
-     — never against `state.cards`, so this never touches what's actually equipped —
-     until the picks stop moving. Starting from whatever is really equipped means a
-     build that's already close to its own optimum typically settles in one extra
-     pass; a fresh or wildly different board costs a few more. Capped rather than run
-     to a guaranteed fixed point: a genuine two-way tie could oscillate forever, and
-     five rounds is cheap insurance against that, not a sign five are usually needed. */
-  const planKey = r => !r.best ? '' :
-    heavens.map(sl => r.best.picks[sl] && r.best.picks[sl].c.id).concat(r.space ? r.space.c.id : '').join('|');
-  let anchor = state.cards.filter(cd => cd.equipped === char.n);
-  let result = runOnce(anchor);
-  let key = planKey(result);
-  for (let i = 0; i < 5 && result.best; i++) {
-    anchor = heavens.map(sl => result.best.picks[sl] && result.best.picks[sl].c).filter(Boolean);
-    if (result.space) anchor.push(result.space.c);
-    const next = runOnce(anchor);
-    const nextKey = planKey(next);
-    if (nextKey === key) break;
-    result = next; key = nextKey;
-  }
-
-  return Object.assign({ t, loadoutTotal: evalCards }, result);
+  /* Nothing a plan is ranked on depends on the cards worn, so one run is the answer. The
+     per-slot ranking used to read the plan's other cards, and was iterated up to five times
+     against its own recommendation until it stopped moving (equip plan A, watch it recommend
+     B); with the ranking context-free there is nothing to iterate. */
+  return Object.assign({ t, loadoutTotal: evalCards }, runOnce());
 }
 
 /* ============================ ui ============================ */
@@ -6024,13 +6014,16 @@ function subVal(s) {
    `t`, each is coloured by what it is worth to them — the coupled weight cardScore prices it
    at, so the colour agrees with the score beside it: 6 and up reads good, 1 or less faded.
    `hi` names stats to highlight instead (the Level 0 table's best-case upgrade target). */
+/* Each substat is kept whole (nowrap) and the line may break after a separator (<wbr>); with
+   no break point at all the line was one unbreakable run, and a table holding two of them
+   (Weakest slots: Equipped and Available now) came out wider than the page. */
 function subsInlineHtml(card, t, hi) {
   const f = t ? couplingFactors(t, card.slot, card.main) : null;
   return `<span class="subs">${(card.subs || []).map(s => {
     const w = f ? (t.w[s.stat] || 0) * cf(f, s.stat) : null;
     const cls = hi && hi.includes(s.stat) ? 'hi' : w == null ? '' : w >= 6 ? 'good' : w <= 1 ? 'bad' : '';
     return `<span class="s${cls ? ' ' + cls : ''}">${esc(s.stat)} ${esc(subVal(s))}</span>`;
-  }).join('<span class="sep">·</span>')}</span>`;
+  }).join('<span class="sep">·</span><wbr>')}</span>`;
 }
 
 /* One card drawn as a block. The Optimise plan, its Space pick and the Loadout popup's five
@@ -6119,7 +6112,16 @@ function onTagHtml(card, charName, used, minR) {
   return `<span class="tag" title="Currently equipped on ${esc(by)} — swapping unequips it from them, which costs them ${esc(loss.toFixed(1))} build points even after they put back their best free card of this slot (same set first; a full Optimise run may find them better)">on ${esc(by)} · ${esc(gainStr(-loss))}</span>`;
 }
 
-function planCardHtml(slot, o, t, charName, trade) {
+/* "Equip only this: +1.3" on a recommended card not yet worn — the build score change of that one
+   Equip click, everything else worn left as it is, the same marginal as an Upgrades row. The
+   headline is the whole loadout, which is not the sum of these: a set switch is mostly the 4-piece
+   bonus, which lands only with the fourth card, so one card of it can read negative on its own. */
+function aloneGainHtml(gain) {
+  if (gain == null) return '';
+  return `<span title="Build score change from equipping only this card, the rest of what is worn as it is. The headline gain is the whole loadout and is not the sum of these: a 4-piece bonus lands only with its fourth card.">equip only this: <b class="${gain >= UPGRADE_MIN_GAIN ? 'gainpos' : ''}">${esc(gainStr(gain))}</b></span>`;
+}
+
+function planCardHtml(slot, o, t, charName, trade, alone) {
   if (!o) return `<div class="lo empty"><h4><span class="slot ${slot}">${slot.slice(0,3)}</span> ${slot}</h4>
     <div class="tiny muted">Nothing in inventory for this slot.</div></div>`;
   const c = o.c;
@@ -6137,10 +6139,10 @@ function planCardHtml(slot, o, t, charName, trade) {
     : rank === 0 ? '<span class="tag hit">on target</span>'
     : rank > 0 ? `<span class="tag hit">on target</span> <span class="tiny muted">alternative to ${esc(wanted[0])}</span>`
     : `<span class="tag miss">wants ${esc(wanted.join(' or ')) || '—'}</span>`;
-  const where = [c.equipped === charName ? 'already equipped here' : '',
+  const where = [c.equipped === charName ? 'already equipped here' : aloneGainHtml(alone),
     ownedBy ? (trade ? onTagHtml(c, charName, trade.used, trade.minR)
       : `<span class="tag" title="Currently equipped on ${esc(ownedBy)} — swapping unequips it from them">on ${esc(ownedBy)}</span>`) : ''].filter(Boolean).join(' · ');
-  return cardBlockHtml(c, t, { score: o.s, rolls: true, mainTag,
+  return cardBlockHtml(c, t, { score: cardScore(c, t), rolls: true, mainTag,
     body: where ? `<div class="tiny muted" style="margin-top:6px">${where}</div>` : '',
     foot: slotEquipHtml(charName, c.slot, c) });
 }
@@ -6164,11 +6166,11 @@ function level0Html(t, r, pool) {
     const reqSet = r.best && r.best.picks[sl] && r.best.sets.includes(r.best.picks[sl].c.set)
       ? r.best.picks[sl].c.set : null;
     const cands = pool.filter(c => c.slot === sl && c.level === 0 && (!reqSet || c.set === reqSet));
-    return rowsFor(sl, cands, r.best.picks[sl] ? r.best.picks[sl].s : 0);
+    return rowsFor(sl, cands, r.best.picks[sl] ? cardScore(r.best.picks[sl].c, t) : 0);
   });
   const spaceReq = r.space && r.space.pairs ? r.space.c.set : null;
   const spaceCands = pool.filter(c => c.slot === 'Space' && c.level === 0 && (!spaceReq || c.set === spaceReq));
-  const rows = heavenRows.concat(rowsFor('Space', spaceCands, r.space ? r.space.s : 0));
+  const rows = heavenRows.concat(rowsFor('Space', spaceCands, r.space ? cardScore(r.space.c, t) : 0));
   if (!rows.length) return '';
 
   const body = rows.map(o => {
@@ -6399,7 +6401,18 @@ function runOpt() {
       <div class="bar"><i style="width:${Math.min(100, pct)}%"></i></div></div>`;
   }).join('');
   const nowBand = now ? buildBand(now.score) : null;
-  const delta = now && rec ? rec.score - now.score : null;
+  /* Unrounded, as every other gain on the page: from the two rounded scores 76.1 → 77.6 read "+2". */
+  const delta = now && rec ? rec.raw - now.raw : null;
+  // Build points one recommended card adds on its own, worn in place of whatever is in its slot now.
+  const nowRaw = (buildScoreOf(char, worn, 55, lo, idealLo, t) || { raw: 0 }).raw;
+  const aloneGain = card => card.equipped === name ? null
+    : (buildScoreOf(char, worn.filter(x => x.slot !== card.slot).concat([card]), 55, lo, idealLo, t) || { raw: 0 }).raw - nowRaw;
+  // Build points a card would move the recommendation by in place of its slot's pick (the table below).
+  const recEval = r.loadoutTotal(recCards);
+  const vsPick = (sl, card) => {
+    const e = r.loadoutTotal(recCards.map(c => c.slot === sl ? card : c));
+    return e.idealTotal > 0 ? 100 * (e.total - recEval.total) / e.idealTotal : 0;
+  };
 
   /* Cards this loadout would take off someone else, and what that costs them (giverLoss, as
      on the Upgrades tab: after each puts back their best free card of the slot). The pool
@@ -6424,8 +6437,8 @@ function runOpt() {
       <button class="linky" id="optSetup">Set ${esc(char.n)}'s setup</button></p>` : '';
   const headline = !rec ? '' : now
     ? `Build score <span class="big">${now.score}</span><span class="arrow">→</span><span class="big">${rec.score}</span>
-       ${delta > 0 ? `<span class="${losing ? 'muted' : 'gainpos'}">(+${delta})</span>`
-         : delta < 0 ? `<span class="muted">(${delta})</span>` : '<span class="muted">(no change)</span>'}`
+       ${delta >= 0.05 ? `<span class="${losing ? 'muted' : 'gainpos'}">(${esc(gainStr(delta))})</span>`
+         : delta <= -0.05 ? `<span class="muted">(${esc(gainStr(delta))})</span>` : '<span class="muted">(no change)</span>'}`
     : `Would score <span class="big">${rec.score}</span><span class="muted">/100</span>
        <span class="tiny muted">— nothing is equipped on ${esc(char.n)} yet</span>`;
 
@@ -6459,9 +6472,9 @@ function runOpt() {
 
   const sp = r.space;
   const spOwnedBy = sp && sp.c.equipped && sp.c.equipped !== name ? sp.c.equipped : null;
-  const spWhere = sp ? [sp.c.equipped === name ? 'already equipped here' : '',
+  const spWhere = sp ? [sp.c.equipped === name ? 'already equipped here' : aloneGainHtml(aloneGain(sp.c)),
     spOwnedBy ? onTagHtml(sp.c, name, trade.used, trade.minR) : ''].filter(Boolean).join(' · ') : '';
-  const spHtml = sp ? cardBlockHtml(sp.c, t, { score: sp.s,
+  const spHtml = sp ? cardBlockHtml(sp.c, t, { score: cardScore(sp.c, t),
       mainTag: sp.pairs ? '<span class="tag hit">pairs with your 4-piece</span>' : '<span class="tag miss">no synergy with this 4-piece</span>',
       body: `<div class="tiny muted" style="margin-top:6px">${esc(spaceEffectText(sp.c.set, r.best))}</div>` +
         (spWhere ? `<div class="tiny muted" style="margin-top:4px">${spWhere}</div>` : ''),
@@ -6479,7 +6492,8 @@ function runOpt() {
     ${tradeHtml}
     ${setupNote}
     <div class="loadout">
-      ${['Sun','Moon','Star','Sky'].map(sl => planCardHtml(sl, r.best.picks[sl], t, name, trade)).join('')}
+      ${['Sun','Moon','Star','Sky'].map(sl => planCardHtml(sl, r.best.picks[sl], t, name, trade,
+        r.best.picks[sl] ? aloneGain(r.best.picks[sl].c) : null)).join('')}
       ${spHtml}
     </div>
     ${explainHtml(`The number on each card is out of <b>100</b> for a perfect card in that slot on this character;
@@ -6500,7 +6514,7 @@ function runOpt() {
   </div>
   ${bsHtml}
   <div class="panel"><h2>Best alternatives per slot</h2>
-    <table><thead><tr><th>Slot</th><th>Set</th><th>Main</th><th>Substats</th><th class="right">Score</th><th class="right" title="Raw points a perfect card for this slot would add over this one">Headroom</th><th></th></tr></thead>
+    <table><thead><tr><th>Slot</th><th>Set</th><th>Main</th><th>Substats</th><th class="right">Score</th><th class="right" title="Raw points a perfect card for this slot would add over this one">Headroom</th><th class="right" title="Build score change if this card replaced the recommended one, with the other four recommended cards as they are">vs pick</th><th></th></tr></thead>
     <tbody>${['Sun','Moon','Star','Sky','Space'].flatMap(sl => {
       /* A slot's alternatives must not break the set bonus the recommended plan is
          actually banking on: offering a raw-score card from another set here (with a
@@ -6510,9 +6524,20 @@ function runOpt() {
          score across every set. */
       const reqSet = r.best && r.best.picks[sl] && r.best.sets.includes(r.best.picks[sl].c.set)
         ? r.best.picks[sl].c.set : null;
-      const rows = sl === 'Space' ? [r.space, ...r.spaceAlts].filter(Boolean)
+      const pick = sl === 'Space' ? r.space : r.best.picks[sl];
+      let rows = sl === 'Space' ? [r.space, ...r.spaceAlts].filter(Boolean)
         : reqSet ? (r.idx[sl][reqSet] || []).slice(0, 3)
         : r.scored.filter(o => o.c.slot === sl).sort((a, b) => b.s - a.s).slice(0, 3);
+      if (pick && !rows.some(o => o.c === pick.c)) rows = [pick].concat(rows.slice(0, 2));
+      /* Ordered by what the recommendation was chosen on, not by the per-card Score: bestPlan's
+         last step swaps in a same-set card whenever the whole loadout builds higher with it
+         (stat targets and damage spread see the other four cards; a card's own score does not),
+         so a pick can sit beside a card of its slot that scores higher on its own. Sorted on the
+         Score, the table put the passed-over card first and read as a contradiction of the
+         loadout above it (Kotone Shiomi, 28 Sep 2026: Star 72 worn, 67 picked, +0.1 built).
+         "vs pick" is the build score with this card in place of the pick, the other four as
+         recommended — the same r.loadoutTotal the pick was made with. */
+      rows = rows.map(o => ({ o, d: vsPick(sl, o.c) })).sort((a, b) => b.d - a.d).map(x => Object.assign({ d: x.d }, x.o));
       return rows.map((o, i) => {
         const ownedBy = o.c.equipped && o.c.equipped !== name ? o.c.equipped : null;
         return `<tr class="slotrow-${sl}${i === 0 ? ' grp-start' : ''}">
@@ -6521,11 +6546,18 @@ function runOpt() {
           ${ownedBy ? ` ${onTagHtml(o.c, name, trade.used, trade.minR)}` : ''}</td>
         <td class="tiny">${esc(o.c.main)}</td>
         <td class="tiny muted">${subsInlineHtml(o.c, t)}</td>
-        <td class="right score">${cardPct(o.s, sl, t)}</td>
-        <td class="right tiny muted">${cardHeadroom(o.s, sl, t).toFixed(1)}</td>
+        <td class="right score">${cardPct(cardScore(o.c, t), sl, t)}</td>
+        <td class="right tiny muted">${cardHeadroom(cardScore(o.c, t), sl, t).toFixed(1)}</td>
+        <td class="right tiny">${pick && o.c === pick.c ? '<span class="tag hit">picked</span>' : `<span class="muted">${esc(gainStr(o.d))}</span>`}</td>
         <td>${slotEquipHtml(name, sl, o.c)}</td></tr>`;
       });
-    }).join('')}</tbody></table></div>
+    }).join('')}</tbody></table>
+    ${explainHtml(`<b>Score</b> is the card on its own; <b>vs pick</b> is the build score with it in place of the recommended card,
+      the other four as recommended. The pick is chosen on the second, so it can score lower on its own than a card below it.`,
+      `<p>A card's own Score weighs its main stat and substats. The build score also asks whether the whole loadout reaches the
+      character's recommended stats and keeps ATK, damage bonus and crit in balance — they multiply, so a card that fills the
+      weakest of them can be worth more than one with better rolls on a stat the other four cards already carry.
+      Differences of a few tenths are a near tie.</p>`)}</div>
   ${level0Html(t, r, pool)}
   ${(alt || missing) ? `<div class="panel"><h2>Other set plans considered</h2>
     <table><thead><tr><th>Plan</th><th class="right" title="The build score this plan would earn, on the same 0-100 scale as the one above">Build score</th><th class="right">vs best</th></tr></thead>
@@ -6902,6 +6934,9 @@ function editCard(id, onDone) {
       level: +$('#eLvl').value || 0, main: $('#eMain').value, subs };
     const errs = validateCard(candidate);
     if (errs.length) { $('#eErr').textContent = errs[0]; return; }
+    // The scanned main value belongs to the card as scanned; a new level, main or rarity
+    // makes it stale (see mainValueFitsLevel), so the level's curve takes over.
+    if (['slot', 'rarity', 'level', 'main'].some(k => candidate[k] !== c[k])) delete c.mainValue;
     Object.assign(c, candidate);
     // Nobody wears two cards in one slot, so claiming this slot frees whoever held it —
     // the same wholesale unequip the Optimise tab's button does, narrowed to one slot.
@@ -7580,7 +7615,7 @@ function upgradesFor(char, minR, sameSetOnly, ignoreEquipped) {
         const one = curHeavens.slice();
         one[i] = rec.c;
         const delta = totalOf(one, curSpace) - curTotal;
-        changed.push({ slot: sl, cur, curScore: cur ? cardScore(cur, t) : 0, rec: rec.c, recScore: rec.s, delta, pts: delta * perPt });
+        changed.push({ slot: sl, cur, curScore: cur ? cardScore(cur, t) : 0, rec: rec.c, recScore: cardScore(rec.c, t), delta, pts: delta * perPt });
       });
       /* With one row the marginal IS the group, so there is nothing extra to report.
          `groupSwitch` separates the two cases the footer has to describe differently:
@@ -7828,8 +7863,8 @@ function hrSetFor(slot, worn, t) {
    describes — it breaks a 4-piece for a stat gain that rarely covers it — and the other
    view already runs the full plan search that can weigh that trade properly.
 
-   The winner is picked on cardScore (cheap, and with the set held fixed that is the right
-   ordering) but REPORTED as a buildScore delta, so both gain columns carry the same unit. */
+   The winner is picked and reported on the buildScore delta, so both gain columns carry the
+   same unit and it agrees with Optimise and the card picker (see the loop below). */
 function headroomRows(takeEquipped) {
   const wornBy = equippedByChar();
   const bySlotSet = {};
@@ -7859,25 +7894,24 @@ function headroomRows(takeEquipped) {
       const others = mine.filter(c => c.slot !== x.slot);
       const perfectSet = x.card ? x.card.set : hrSetFor(x.slot, others, t);
       const perfect = buildScore(ch, others.concat([idealCard(x.slot, t, perfectSet)]), HR_P4, lo, idl, t);
-      let alt = null, altScore = 0;
+      /* Every same-set candidate is priced by the build score it would give, and the best of
+         those wins. It used to be picked on cardScore and only then priced, and only among
+         cards scoring higher than the worn one, so a card the build score rates higher but
+         whose own score is lower was never offered — the case the whole-loadout terms (stat
+         targets, damage spread) exist for, and the one Optimise's same-set swap pass picks:
+         Kotone Shiomi's Crit Rate Star, 28 Sep 2026, 67 against a worn 72 and 0.1 higher built.
+         A pick that still comes out flat or negative is dropped rather than printed as an
+         upgrade, which would misdescribe what the button does. */
+      let alt = null, altGain = 0;
       if (x.card) {
         (bySlotSet[x.slot + ' ' + x.card.set] || []).forEach(c => {
           if (c.id === x.card.id) return;
           if (c.locked && c.equipped !== ch.n) return;                  // locked to its current wearer
           if (!takeEquipped && c.equipped && c.equipped !== ch.n) return;
-          const sc = cardScore(c, t);
-          if (sc <= x.score) return;
-          if (!alt || sc > altScore) { alt = c; altScore = sc; }
+          const after = buildScoreOf(ch, others.concat([c]), HR_P4, lo, idl, t);
+          const g = (after ? after.raw : 0) - baseRaw;
+          if (g > altGain) { alt = c; altGain = g; }
         });
-      }
-      let altGain = 0;
-      if (alt) {
-        const after = buildScore(ch, others.concat([alt]), HR_P4, lo, idl, t);
-        altGain = (after ? after.raw : 0) - baseRaw;
-        /* A higher cardScore can still come out flat or negative once the whole-loadout
-           terms (stat targets, damage spread) have had their say — the same reason
-           Triage scores a card by its buildScore marginal rather than by cardScore.
-           Reporting that as an upgrade would misdescribe what the button does. */
         if (altGain < 0.05) { alt = null; altGain = 0; }
       }
       rows.push({ ch, t, slot: x.slot, card: x.card, score: x.score, pct: x.pct, room: x.room,
@@ -7978,7 +8012,7 @@ function renderHeadroomTable() {
       ${hrSortHeader('room', 'Headroom', 'Raw score a perfect card for this slot would add over the one worn. Comparable across this one character\'s five slots, not across characters.')}
       ${hrSortHeader('share', 'Share', 'This slot\'s share of all the headroom left on this character.')}
       ${hrSortHeader('gain', 'Build&nbsp;+', 'Build-score points a perfect card in this slot would add. Divided by the character\'s own perfect loadout, so this column does compare across characters.')}
-      ${hrSortHeader('avail', 'Available now', 'The best card of the same slot and the same set you already own, and what equipping it is worth on the build score.')}
+      ${hrSortHeader('avail', 'Available now', 'The card of the same slot and the same set you own that raises the build score most, and by how much. Chosen on the build score, not on the card\'s own score.')}
       <th></th>
     </tr></thead><tbody>` +
     list.slice(0, 600).map(r => {
@@ -8436,11 +8470,10 @@ function openLoadout(name, openKeys) {
         <button class="ghost tiny" data-unequip-slot="${esc(sl)}">Unequip</button>` : ''}</div>`;
     if (!cur) return `<div class="lo empty"><h4><span class="slot ${sl}">${sl.slice(0, 3)}</span> ${sl}</h4>
       <div class="tiny muted">Nothing equipped.</div><div style="margin-top:8px">${btns}</div></div>`;
-    /* Priced against what is really in the other four slots, as the card picker this opens
-       prices its candidates (realCoupleContext), so the equipped card reads the same number in
-       both; context-free it read 79 here and 78 in the picker for the same card. */
-    const real = realCoupleContext(c, worn.filter(x => x.slot !== sl), L);
-    return cardBlockHtml(cur, t, { score: cardScore(cur, t, real),
+    /* The card's own score, the build score's card part for it (see cardScore), as on every
+       other screen — so it reads one number here, in the card picker this opens, on Optimise
+       and on Weakest slots. */
+    return cardBlockHtml(cur, t, { score: cardScore(cur, t),
       tags: cur.locked ? ` <span class="tag hit" title="Locked to ${esc(name)} — excluded from every recommendation for anyone else">locked</span>` : '',
       foot: btns });
   };
@@ -8521,21 +8554,41 @@ function openCardPicker(charName, slot) {
   const setTable = slot === 'Space' ? SPACE_SETS : SETS;
   const preferredSet = slot === 'Space' ? t.space : (t.sets || [])[0];
   const f = { set: (cur ? cur.set : preferredSet) || '', main: '', rarity: '', q: '' };
-  // null key: best score first. The equipped card is pinned to the top whatever the order.
+  // null key: best build gain first. The equipped card is pinned to the top whatever the order.
   const sort = { key: null, dir: -1 };
 
-  /* Price every candidate against what's really equipped in the OTHER four slots plus
-     the real weapon/ascension/Mindscape, not couplingFactors' generic "typical build"
-     guess — see realCoupleContext. Computed once per picker-open, not per candidate:
-     it depends only on `slot` and the character's other real gear, never on which
-     candidate is being scored. */
   const lo = charLoadout(charName);
   const otherCards = state.cards.filter(cd => cd.equipped === charName && cd.slot !== slot);
-  const real = realCoupleContext(c, otherCards, lo);
-  const SORTS = { score: o => o.s, left: o => cardHeadroom(o.s, slot, t), level: o => o.cd.level, set: o => o.cd.set };
-  const FIRST_DIR = { score: -1, left: 1, level: -1, set: 1 };
+  /* What equipping each card would do to the build score, the other four slots as they are —
+     the number the pick should be made on. The Score column is the card on its own, and the
+     two can disagree: the build score also sees the stat targets and whether ATK, damage bonus
+     and crit stay in balance across the five cards (Kotone Shiomi's Star, 28 Sep 2026: the worn
+     ATK% card scored 72 to a Crit Rate card's 67, and the Crit Rate card built 0.1 higher).
+     Sorted on the Score, the picker put a worse build first. Memoised per card for the life of
+     the picker: it depends on nothing a filter or a sort changes. */
+  const idl = idealLoadout(c, t, 55);
+  const worn = state.cards.filter(cd => cd.equipped === charName);
+  const base = buildScoreOf(c, worn, 55, lo, idl, t);
+  const baseRaw = base ? base.raw : 0;
+  const gains = new Map();
+  const gainOf = cd => {
+    if (cd === cur) return 0;
+    if (!gains.has(cd.id)) { const b = buildScoreOf(c, otherCards.concat([cd]), 55, lo, idl, t); gains.set(cd.id, (b ? b.raw : 0) - baseRaw); }
+    return gains.get(cd.id);
+  };
+  /* A card worn by someone else says what taking it costs them (giverLoss, as on Optimise and
+     Upgrades), so a "+2.0" that is really a trade does not read as free. Memoised: it is a few
+     build-score evaluations for the giver, and the table redraws on every keystroke. */
+  const used = new Set(otherCards.map(x => x.id));
+  const tags = new Map();
+  const onTag = cd => {
+    if (!tags.has(cd.id)) tags.set(cd.id, onTagHtml(cd, charName, new Set([...used, cd.id]), 1));
+    return tags.get(cd.id);
+  };
+  const SORTS = { gain: o => o.g, score: o => o.s, left: o => cardHeadroom(o.s, slot, t), level: o => o.cd.level, set: o => o.cd.set };
+  const FIRST_DIR = { gain: -1, score: -1, left: 1, level: -1, set: 1 };
 
-  const rowHtml = (card, score) => {
+  const rowHtml = (card, score, gain) => {
     const isCur = card === cur;
     const by = card.equipped && card.equipped !== charName ? card.equipped : null;
     return `<tr class="${isCur ? 'cur' : ''}">
@@ -8543,10 +8596,12 @@ function openCardPicker(charName, slot) {
       <td class="right tiny muted">${card.level}</td>
       <td class="tiny">${esc(card.main)}</td>
       <td class="tiny">${subsInlineHtml(card, t)}</td>
-      <td class="right score" title="Out of 100 for a perfect ${esc(slot)} card for ${esc(c.n)}, priced against what is really in the other four slots">${cardPct(score, slot, t)}</td>
+      <td class="right score" title="Out of 100 for a perfect ${esc(slot)} card for ${esc(c.n)}: the card on its own">${cardPct(score, slot, t)}</td>
       <td class="right tiny muted">${cardHeadroom(score, slot, t).toFixed(1)}</td>
+      <td class="right tiny pickGain" title="Build score change if this card is equipped here, the other four slots as they are">${isCur ? '<span class="muted">—</span>'
+        : `<span class="${gain >= UPGRADE_MIN_GAIN ? 'gainpos' : 'muted'}">${esc(gainStr(gain))}</span>`}</td>
       <td class="tiny">${isCur ? '<span class="tag hit">equipped here</span>'
-        : by ? `<span class="tag" title="Currently equipped on ${esc(by)} — taking it unequips it from them">on ${esc(by)}</span>` : ''}</td>
+        : by ? onTag(card) : ''}</td>
       <td class="right">${isCur ? '' : `<button class="ghost tiny" data-equip-card="${esc(card.id)}">${by ? 'Take it' : 'Equip'}</button>`}</td>
     </tr>`;
   };
@@ -8562,14 +8617,14 @@ function openCardPicker(charName, slot) {
         if (!hay.includes(q)) return false;
       }
       return true;
-    }).map(cd => ({ cd, s: cardScore(cd, t, real) }));
-    const key = sort.key || 'score', get = SORTS[key], dir = sort.key ? sort.dir : -1;
+    }).map(cd => ({ cd, s: cardScore(cd, t), g: gainOf(cd) }));
+    const key = sort.key || 'gain', get = SORTS[key], dir = sort.key ? sort.dir : -1;
     rows.sort((a, b) => {
       const pin = (b.cd === cur) - (a.cd === cur);
       if (pin) return pin;
       const av = get(a), bv = get(b);
       const cmp = typeof av === 'number' ? av - bv : String(av).localeCompare(String(bv));
-      return cmp * dir || b.s - a.s;
+      return cmp * dir || b.g - a.g || b.s - a.s;
     });
     const CAP = 150;
 
@@ -8585,7 +8640,9 @@ function openCardPicker(charName, slot) {
       <h2 style="margin-bottom:4px">Equip ${esc(slot)} on ${esc(c.n)}</h2>
       <p class="tiny muted" style="margin:0 0 14px">
         ${rows.length} matching card${rows.length === 1 ? '' : 's'}${cur ? ` — currently ${esc(cur.set)} ${cur.rarity}★` : ' — nothing equipped yet'}.
-        Substats in green are ones ${esc(c.n)} wants most, faded ones barely count.</p>
+        Substats in green are ones ${esc(c.n)} wants most, faded ones barely count.
+        <b>Build</b> is what equipping the card does to ${esc(c.n)}'s build score with the other four slots as they are,
+        and the list is in that order; <b>Score</b> is the card on its own, so a lower Score can build higher.</p>
       <div class="row">
         <div class="field"><label>Set</label><select id="cpSet"><option value="">Any</option>${setOptionList(setTable, f.set)}</select></div>
         <div class="field"><label>Main stat</label><select id="cpMain"><option value="">Any</option>
@@ -8600,8 +8657,9 @@ function openCardPicker(charName, slot) {
             ${sortThHtml('set', 'Set', sort)}${sortThHtml('level', 'Lv', sort, '', '', 'right')}<th>Main</th><th>Substats</th>
             ${sortThHtml('score', 'Score', sort, 'Out of 100 for a perfect card in this slot', '', 'right')}
             ${sortThHtml('left', 'Left', sort, 'Headroom: raw points a perfect card for this slot would add over this one', '', 'right')}
+            ${sortThHtml('gain', 'Build', sort, 'Build score change if this card is equipped here, the other four slots as they are. The default order.', '', 'right')}
             <th></th><th></th></tr></thead>
-          <tbody>${rows.slice(0, CAP).map(o => rowHtml(o.cd, o.s)).join('')}</tbody></table>`
+          <tbody>${rows.slice(0, CAP).map(o => rowHtml(o.cd, o.s, o.g)).join('')}</tbody></table>`
           : '<p class="tiny muted" style="padding:10px">No cards match these filters.</p>'}
         ${rows.length > CAP ? `<p class="tiny muted" style="padding:0 10px">Showing the first ${CAP} — narrow the filters to see the rest.</p>` : ''}
       </div>
@@ -8784,6 +8842,18 @@ function updateSaveState() {
   $('#hdrLoad').classList.toggle('primary', !has && !dirty);
 }
 window.addEventListener('beforeunload', e => { if (isDirty()) { e.preventDefault(); e.returnValue = ''; } });
+
+/* A table that scrolls with the page (.flowTable) pins its header under the sticky page header,
+   whose height changes as it wraps; --hdrH carries that height to the CSS. */
+(function trackHeaderHeight() {
+  const h = document.querySelector('header');
+  if (!h) return;
+  const set = () => document.documentElement.style.setProperty('--hdrH',
+    getComputedStyle(h).position === 'sticky' ? h.offsetHeight + 'px' : '0px');
+  set();
+  if (window.ResizeObserver) new ResizeObserver(set).observe(h);
+  window.addEventListener('resize', set);
+})();
 
 /* Optimise's plan search takes about a tenth of a second; like the Upgrades pass
    (runUpgradeViews) it is only paid while its tab is on screen, and showTab runs it on the way
@@ -8973,6 +9043,10 @@ function load(file) {
         if (errs.length) bad.push(`card ${i + 1}: ${errs[0]}`); else good.push(c);
       });
       state.cards = good.map((c, i) => Object.assign({ id: 'c' + i }, c));
+      // A main value from an older scan than the card's level (see mainValueFitsLevel) is
+      // already ignored by the scoring; dropping it here keeps it out of the next save.
+      const staleMain = state.cards.filter(c => !mainValueFitsLevel(c));
+      staleMain.forEach(c => { delete c.mainValue; });
       state.nextId = d.nextId || state.cards.length + 1;
       CHARACTERS.forEach(c => { state.chars[c.n] = (d.characters && d.characters[c.n]) || { owned: false, benched: false, targets: null }; });
       // Saves from before edits were stored as a diff carry whole snapshots; see target().
@@ -8998,6 +9072,9 @@ function load(file) {
       if (!$('#tab-triage').classList.contains('hide')) autoRunTriage();
       $('#dataMsg').innerHTML = `Loaded <b>${state.cards.length}</b> cards.` +
         (bad.length ? ` <span style="color:#e87a5c">${bad.length} skipped</span> — ${esc(bad.slice(0, 3).join('; '))}${bad.length > 3 ? ' …' : ''}` : '') +
+        (staleMain.length ? `<br><span class="tiny">${staleMain.length} card${staleMain.length === 1 ? '' : 's'} carried a scanned main
+          value from a lower level than ${staleMain.length === 1 ? 'its' : 'their'} own (levelled up after the scan); ${staleMain.length === 1 ? 'it now reads' : 'they now read'}
+          the value for the level: ${esc(staleMain.slice(0, 6).map(c => `${c.set} ${c.slot} ${c.main} Lv${c.level}${c.equipped ? ' on ' + c.equipped : ''}`).join('; '))}${staleMain.length > 6 ? ' …' : ''}.</span>` : '') +
         (dropped.length ? `<br><span class="tiny">Saved targets now keep only what you changed, so later data fixes reach
           everything else. ${dropped.length} saved value${dropped.length === 1 ? '' : 's'} that no longer matched the
           data ${dropped.length === 1 ? 'was' : 'were'} handed back to it — re-enter any you meant under Targets:
@@ -9172,16 +9249,24 @@ function renderImportReview(result, invalid) {
       state.cards = state.cards.filter(c => !gone.has(c.id));
     }
     result.toAdd.forEach(c => { c.id = 'c' + (state.nextId++); if (c.equipped === undefined) c.equipped = null; state.cards.push(c); });
+    /* The new read replaces the old one. A field the new read lacks is not carried over when
+       it describes the card as it was: an old scan's mainValue on a levelled-up card is the
+       old level's value (see mainValueFitsLevel). */
+    const reread = (old, inc) => {
+      const next = Object.assign({}, old, inc, { id: old.id, equipped: old.equipped });
+      if (inc.mainValue == null) delete next.mainValue;
+      return next;
+    };
     result.toUpdate.forEach(({ existingId, card }) => {
       const idx = state.cards.findIndex(x => x.id === existingId);
-      if (idx >= 0) state.cards[idx] = Object.assign({}, state.cards[idx], card, { id: existingId, equipped: state.cards[idx].equipped });
+      if (idx >= 0) state.cards[idx] = reread(state.cards[idx], card);
     });
     $$('[data-amb]').forEach(sel => {
       const a = result.ambiguous[+sel.dataset.amb];
       if (sel.value === 'add') { a.incoming.id = 'c' + (state.nextId++); a.incoming.equipped = null; state.cards.push(a.incoming); }
       else if (sel.value === 'replace') {
         const idx = state.cards.findIndex(x => x.id === a.existing.id);
-        if (idx >= 0) state.cards[idx] = Object.assign({}, state.cards[idx], a.incoming, { id: a.existing.id, equipped: state.cards[idx].equipped });
+        if (idx >= 0) state.cards[idx] = reread(state.cards[idx], a.incoming);
       }
     });
     $('#dlg').close(); commit();

@@ -468,37 +468,66 @@ def detect_slot_from_tabs(image, box, min_fraction=0.15, min_ratio=1.8):
     return TAB_ORDER[best], min(1.0, ratio / 4.0)
 
 
-def detect_grid_cursor(image, box, min_pixels=300, min_share=0.75):
-    """Which column of the card grid holds the selected card, by colour.
+def _longest_red_run(mask):
+    """The longest horizontal run of True in each row of `mask`."""
+    padded = np.zeros((mask.shape[0], mask.shape[1] + 2), dtype=np.int8)
+    padded[:, 1:-1] = mask
+    d = np.diff(padded, axis=1)
+    out = np.zeros(mask.shape[0], dtype=int)
+    for y in np.where(mask.any(axis=1))[0]:
+        starts, ends = np.where(d[y] == 1)[0], np.where(d[y] == -1)[0]
+        out[y] = int((ends - starts).max())
+    return out
 
-    The selected tile wears a bright saturated red frame (RGB ~249/34/3) and
-    nothing else in the grid is that colour — the Sun and Space tabs' backdrop is
-    a dark red halftone that fails the R > 200 test. Two columns, so the answer
-    is which half of the calibrated `grid` box holds the red. Measured over 127
-    real frames across all five tabs: 780-3200 red pixels per frame, never none,
-    and the columns read back alternate exactly the way the cards were tapped.
+
+def detect_grid_cursor(image, box, edge_frac=0.25, min_edge_rows=3):
+    """Which column of the card grid holds the selected card, by the shape of
+    its frame.
+
+    The selected tile wears a bright saturated red frame (RGB ~249/34/3); the Sun
+    and Space tabs' backdrop is a dark red halftone that fails the R > 200 test.
+    But card art can be that red too, so colour alone is not enough: the Space
+    set Departure's thumbnail is a rider in a red cape, about 500 such pixels a
+    tile. Counting every red pixel (until Sep 2026) put a few Departure tiles'
+    worth of red in the other column and the walk was told "no cursor", or a
+    column and row pulled toward the art, which it trusted over the key it had
+    sent. Its position model then filed new cards as already read and it
+    stopped mid-list twice on the Space tab, 49 of 194 cards read. On the 14
+    frames of the Departure list the colour count found no cursor at all, and on
+    one frame whose selection had scrolled out of view it took the art alone for
+    the cursor.
+
+    So the frame is found by what art does not have: long straight edges. Its
+    top and bottom borders are horizontal red runs of 123-192 px at 1080p, over
+    half a column wide; no card art measured had a run longer than 18 px. A row
+    is an edge row when its longest red run in one half of the box is at least
+    `edge_frac` of that half's width. Two columns, so the answer is the half
+    holding the edge rows, and the row fraction is the midpoint of the span they
+    cover. Over 251 real frames across all five tabs it gives the column the
+    colour count gave wherever that one saw the frame, and a row fraction within
+    0.031 of it; the walk's ROW_JUMP is 0.08.
 
     Returns (column, row_fraction): column 0 or 1, and how far down the visible
     grid the frame sits (0 top, 1 bottom), or (None, None) when there is no clear
-    frame — the grid is not on screen, or the red is split across both halves
-    (a badge or popup), in which case guessing would misplace the whole walk.
-    autowalk.py uses this to know where the cursor really is; it is a read, not
-    an input, so it lives with the other colour checks here.
+    frame — the grid is not on screen, or edge rows turn up in both halves (a
+    popup), in which case guessing would misplace the whole walk. autowalk.py
+    uses this to know where the cursor really is; it is a read, not an input, so
+    it lives with the other colour checks here.
     """
     crop = crop_fraction(image, box)
     a = np.asarray(crop.convert("RGB")).astype(int)
     R, G, B = a[:, :, 0], a[:, :, 1], a[:, :, 2]
     red = (R > 200) & (G < 90) & (B < 90)
-    total = int(red.sum())
-    if total < min_pixels:
-        return None, None
     half = a.shape[1] // 2
-    left = int(red[:, :half].sum())
-    share = max(left, total - left) / total
-    if share < min_share:
+    min_run = max(1, int(round(edge_frac * half)))
+    edges = [np.where(_longest_red_run(red[:, :half]) >= min_run)[0],
+             np.where(_longest_red_run(red[:, half:]) >= min_run)[0]]
+    found = [len(e) >= min_edge_rows for e in edges]
+    if found[0] == found[1]:
         return None, None
-    rows = np.where(red.any(axis=1))[0]
-    return (0 if left > total - left else 1), float(np.median(rows)) / max(1, a.shape[0] - 1)
+    col = 0 if found[0] else 1
+    rows = edges[col]
+    return col, float(rows.min() + rows.max()) / 2 / max(1, a.shape[0] - 1)
 
 
 def parse_panel(image, regions, vocab, rarity=None, slot=None, levels=None):

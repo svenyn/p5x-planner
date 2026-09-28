@@ -114,8 +114,11 @@ Added in the Sep 2026 UI pass; each piece closes a defect found on the real inve
 The UI rules that go with it: answers before explanations (Optimise shows the recommended
 loadout first, the Loadout popup the five cards first, with Setup and stats in collapsible
 sections whose open state is remembered per character through the card picker and the card
-editor — `loSections` — and whose Setup the two Setup links open outright; the popup prices its
-cards against the other four slots, as the picker does, so a card reads one number in both);
+editor — `loSections` — and whose Setup the two Setup links open outright); **a card reads one
+Score on every screen** — context-free `cardScore`, the build score's own card part — and every
+screen that proposes a single swap (the card picker's Build column and default order, Weakest
+slots' "Available now", each Optimise card's "equip only this", Optimise's "vs pick" column)
+chooses and reports it as a build-score delta, never on the Score (see "One card price" below);
 how-to-read prose is folded with `explainHtml(gist, body)`, never deleted; a substat
 is printed with its unit through `subVal`/`subsInlineHtml` (coloured by the character's coupled
 weights when one is in view) and a card block through `cardBlockHtml`; sortable headers come
@@ -200,11 +203,13 @@ that using it as the denominator squashes every real build into the low thirties
 that beats the ideal clamps at 100.
 
 Calibration, printed by `npm run scale` (its `buildScore` block): an optimally-equipped
-4000-card synthetic account lands **around 70** (mean 69.5, median 71, range 40-84, across
+4000-card synthetic account lands **around 70** (mean 69.6, median 71, range 42-84, across
 the 68-character roster as of 25 Sep 2026; the pool is drawn over `Object.keys(SETS)`, so
 the lufel refresh that day, which added two sets and renamed four, redrew it — on the
 pool before it the same data reads 70.3, 70, 51-84, and `docs/SCORING.md` §9 says how to
-make that comparison. Before the refresh: starting Ailment Accuracy at its real 0% took
+make that comparison. Ranking the optimiser's shortlist on the build score's own card price
+and polishing near-winning plans (28 Sep 2026) put 0.1 on the mean and 2 on the bottom of the
+range; the bands did not move. Before the refresh: starting Ailment Accuracy at its real 0% took
 0.2 off the mean and the top of the range from 86, whose owner had been met-for-free,
 making plan totals the build score's own numerator put 0.5 back, since the optimiser now
 picks what the score rates best, and holding lufel's set order and opening lufel's "-" slots
@@ -218,7 +223,7 @@ legal (Sep 2026 — its substats used to duplicate its own main, see below) lift
 by 0.4 and moved the bands to 11/49/5; the median did not move, so the bands were left
 alone (7/53/8 on today's 68 and pool, 10/53/5 on the pool before). If a scoring change moves these, either the change is wrong or `BUILD_BANDS` needs
 re-cutting — check before shipping. The same block prints how many Moon/Star/Sky picks carry
-a main lufel does not recommend (33 of 204 on today's synthetic pool and 26 on the one before
+a main lufel does not recommend (31 of 204 on today's synthetic pool, 33 before the 28 Sep polish, and 26 on the one before
 it, down from 71 of 195 at three rolls a main; an open slot never counts, since any main is on
 target there): a rise there on an unchanged pool means the optimiser is trading the main away
 for substats again.
@@ -363,19 +368,30 @@ and sets, and these two price the loadout as a whole.
 
 Two things worth knowing before touching it:
 
-- **The optimiser does not need a second pass.** Picking each slot's card on its own score
-  and then penalising the total looks like it should need a refinement pass; one was built
-  and measured, and brute-forcing every combination of the top six candidates per slot
-  against the full build score found at most **1 point** of headroom, on 2 of 65 characters,
-  mean 0.03. The per-card coupling already lands on the balanced pick. If the coupling is
-  ever weakened, revisit that. Re-checked on the real inventory in Sep 2026, after plan
-  totals became the build score itself: no plan the optimiser considered builds higher than
-  its pick, and the best same-set single-card swap left is 0.7 (mean 0.04 over 36). That
-  held only once Elucidators stopped getting a real board (`realCoupleContext` returns null
-  for them, as `seedBaseline` does): their own 0% / 0% board switched the crit product off
-  in the per-slot pick while the build score priced crit on the generic baseline, and five of
-  them were handed a Crit Multiplier Sun their own score rated 9-12 points below the Crit Rate
-  one beside it.
+- **One card price, and a polish instead of a second yardstick (Sep 2026).** A plan takes
+  each set's top card per slot by `cardScore`, which cannot see the stat targets or the damage
+  balance across the five cards; the build score can. So `bestPlan` polishes: every plan the
+  policy allows within `POLISH_WINDOW` (2) build points of the allowed leader tries each slot's
+  next `POLISH_DEPTH` (8) same-set cards, **its Space card included**, keeping any swap that
+  raises the build score, and the plans are then re-ranked and de-duplicated. A test holds that
+  no single same-set swap in reach beats the pick. Until Sep 2026 the shortlist was ranked
+  against the plan's other cards instead (`realCoupleContext`, iterated up to five times until
+  its anchor stopped moving), with a smaller pass over the winner only (4 deep, Heavens only).
+  That was a second yardstick the build score never used, so the Loadout popup, the card picker
+  and Optimise showed a card one number while Weakest slots showed another, and the table under
+  Kotone Shiomi's recommendation put a card the pick had beaten first (her worn ATK% Star 72,
+  the picked Crit Rate one 67, 0.1 higher built). It was removed — `realCoupleContext` and the
+  `real` parameter of `cardScore`/`couplingFactors` are gone — after measuring both on the real
+  inventory (37 characters × `pref`/`force4` × both pools) and the scale.js account (68 × three
+  policies): never worse on the real inventory, 17 characters better by up to 2.6 points, mean
+  +0.005 to +0.22 per scenario; one loss on the synthetic account (Runa, `stats`, −0.23). The
+  window is measured on the *allowed* leader — taken on the overall one, a `force4` run whose
+  4-pieces all sat 2 points under a 2+2 polished none of them (Haru, Aran). Polishing every
+  plan gives the same pick in every scenario at 15-20× the cost; the winner-only pass missed
+  Space cards (Starlight Ren) and plans that win only once polished (Tropical Motoha's Virtue
+  4-piece). Faster, too: 0.7-1.1 s a roster against 1.1-1.7 s, the iteration having gone with
+  the anchor. An older experiment still stands: brute-forcing every combination of each slot's
+  top six found at most 1 point beyond single swaps, so one pass is enough.
 - **`damageBase()` is memoised per character and setup.** It is pure `CHAR_STATS` arithmetic
   and the optimiser evaluates thousands of loadouts per character; `supplyOf()` likewise
   exists so a loadout is walked once for several stats rather than once per stat. Skipping
@@ -567,6 +583,12 @@ all carry her Labor 4-piece's +8% ("when equipped by an Elucidator: all allies' 
 unreleased Cruelty carry one; everything else in a 4-piece needs a turn, a trigger or an enemy
 state. `bonus4Value` still prices the set as a whole — this is its stat in the in-battle totals.
 It moved one build score on the real inventory (Miku, +1.05) and nothing in the calibration.
+**The damage model reads the same line** (`damagePoints`, so ⓐⓑⓓ and the coupling), as a
+2-piece's stat has always been in the product beside `bonus2Value`. Until 28 Sep 2026 it did not,
+and Kotone Shiomi's ⓐ read 5316 beside her ATK tile's 5603 — Strife's 15% of her 1910 base, the
+perfect build short by the same 287; a test holds ⓐ and the tile equal. On the real inventory it
+changed no recommendation among the 37 active characters and moved no build score by more than
+0.33 (Kumi); the calibration did not move.
 
 **Miku's reference panel** (the user's, 26 Sep 2026, cards exactly as saved) is the one full
 check against the game there is, and a test reproduces it: character screen ATK 4627 / HP 9358 /
@@ -618,7 +640,13 @@ is deliberate, not a bug.
 
 Main-stat magnitudes are now real (`MAIN_MAGNITUDE`, from the user's scan), so a 5★ card's
 main is a true total even without a scanned `mainValue`; `mainValue` still wins when present,
-and is the only source for other rarities.
+and is the only source for other rarities — **except a 5★ value off its level's curve**
+(`mainValueFitsLevel`, one display unit of tolerance), where the level wins, as it does in
+`cardScore`. The card editor kept a scanned value when the level changed, so cards scanned at
+Lv0 and set to Lv25 by hand carried their Lv0 main: Kotone Shiomi's four worn cards counted
+4.6% ATK mains, her ATK target read 75% instead of met, and Weakest slots and Optimise
+disagreed about her Sky. The editor and the import's level-up now drop a stale value, and
+`load()` drops and reports any already saved.
 
 ### Awareness — a fourth progression axis, and a universal stat curve plus a per-kit one
 
@@ -824,8 +852,7 @@ over the factors of the same product. Three consequences worth knowing:
   Multiplier roll — Fuuka's Crit Multiplier Star, the stat her Spirit Wave turns into party
   crit damage, lost to a Crit Rate one by 11%. At a geared ally's board the two rolls are
   worth about the same, so their cards are priced on their weights alone (`seedBaseline`
-  and `realCoupleContext` both return null for them, so the optimiser's per-slot pick and
-  the build score agree). Seven Buff-element support units genuinely carry
+  returns null for them). Seven Buff-element support units genuinely carry
   0%/0% — confirmed via lufel's raw data and Miku's own in-game panel — and the generator
   used to read that with `l1.crit_rate || 5`, treating a legitimate 0 as missing data.
 - **Reading that 0 correctly is not enough on its own — the crit factor needs a floor.**
@@ -965,8 +992,10 @@ more than the obvious reason: `couplingFactors` memoises on the identity of the 
 object, and `target()` hands back a fresh object every call for characters running on
 generated archetype defaults, so skipping this would silently defeat that cache on every
 single call. `npm run triage-perf` benchmarks the worst case (4000 cards, all 68 characters)
-in a real browser — check it after touching any of this. It reads about 2.8 s since the
-Upgrades guard (1.6 s before it); the real inventory takes about 1.4 s (0.9 s).
+in a real browser — check it after touching any of this. It read about 2.8 s after the
+Upgrades guard (1.6 s before it); on 28 Sep 2026 the same code measured 9.0 s on this machine,
+and 6.4 s after the optimiser's shortlist stopped iterating (see "One card price" above), so
+compare against a run of the old code on the same day rather than against these figures.
 
 ### Upgrades is two views of two different questions
 
@@ -1249,8 +1278,8 @@ and the exposure is the whole account) and they chose it anyway. So:
   has several. The bottom-right `ID:` on the panel was checked as a way out and is **the
   player's UID**, identical on all 60 frames sampled, not a card serial.
 - **It rewinds first** (`Walker.rewind`): W until two presses move nothing, then it reads
-  which column the grid's red selection frame is in (`detect_grid_cursor`, a colour check
-  over the calibrated `grid` box) and presses A only from the right-hand column, re-reading
+  which column the grid's red selection frame is in (`detect_grid_cursor`, over the
+  calibrated `grid` box) and presses A only from the right-hand column, re-reading
   the grid to confirm. So the position model's (0,0) is true wherever the cursor started.
   **The first version pressed A blindly and lost the first card**: on the real client a
   horizontal key at the edge of a row *wraps* to the row's other card rather than staying
@@ -1280,6 +1309,42 @@ and the exposure is the whole account) and they chose it anyway. So:
   to finish (`"lost"`) rather than guess; `--no-rewind` skips it. The card on screen is
   absorbed *before* the first W, or a fresh watcher would credit that W with a settle it did
   not cause.
+- **A tab can open with its selected card scrolled out of view.** On the Sep 27 full scan
+  the Moon tab, and in the second part the Sky tab, came up with the selection back on the
+  list's first card (the panel showed it) but the list still scrolled to its last rows,
+  where the previous day's walk had left it: no frame in the grid, and W moved nothing
+  because the selection was already at the top. The rewind gave up (`"lost"`), and it now
+  keeps that screen (`<out>-lost-<slot>.png`), which is how this was seen. When the W presses
+  moved nothing and no frame is visible, it sends S then W — off the first card and back — so
+  the list scrolls to follow the selection into view, then reads the column as usual. The
+  Star tab of the same run opened on the card it was left on, so which state a tab opens in
+  is not predictable; the rewind handles both.
+- **The grid is read by the frame's shape, not its colour.** Until Sep 2026
+  `detect_grid_cursor` counted bright-red pixels, and card art can be that red: the Space
+  set Departure's thumbnail is a rider in a red cape, ~500 such pixels a tile. With a few in
+  view the count found "no cursor", or a column and row pulled toward the art, which the walk
+  trusts over its keys; the model then filed new cards as already read, and two full Space
+  runs stopped mid-list (49 of 194 cards — one right after the Departure Lv25 cards came into
+  view, the other reading only the Departure-heavy end of the list). It now looks for the
+  frame's top and bottom edges: horizontal red runs of 123-192 px at 1080p, where no card art
+  measured ran past 18 px (`edge_frac` of a column's width). Over 251 real frames it agrees
+  with the old read wherever that one saw the frame, row fraction within 0.031; on the 14
+  frames of the Departure list the old read found nothing and the new one finds all 14. The
+  same code had read all 191 Space cards on Sep 5; new Lv25 cards had since moved where the
+  Departure tiles sit.
+- **Every run writes `<out>.log`** (`RunLog`): everything printed, plus one trace line per
+  key that only the file gets: what the grid showed, and the model position before and after.
+  The two stalled Space runs left only their card files, and the key-by-key path of the
+  second one (card 0, then straight to the end of the list) could not be reconstructed. The
+  output name is fixed before anything is sent, so the log, the frames and a failed tab's
+  screenshot share the numbered stem — the screenshot used `--out`'s own stem until Sep 2026,
+  so each run of a session overwrote the last one's.
+- **The game shows a "VIP Pack" popup that stops a run.** It covered the list at 22:00:22 in
+  the Sep 26 session, the walk counted a cycle of dead keys and moved on, and its tab click
+  closed the popup instead of switching (`"tab"`). It is a once-a-day popup — the user says
+  it comes at 10 o'clock (they said 10 am; the one captured was 22:00:22 by the PC's clock,
+  so the time zone or am/pm is unconfirmed). A full walk takes about an hour (0.87 s a card),
+  so keep that hour clear of it rather than splitting the run.
 - **`--tabs all` clicks through the five tabs.** A mouse click on the strip is the same
   category of input as the keys and goes through the same guard. `tab_click_points` finds
   each tab's centre from the strip's bright band per column rather than the box's middle,

@@ -73,7 +73,7 @@ Level and Ascension are forced, not user-editable.
 `t.main[slot]` is a **list, best first**, never a bare stat. Read it through `mainList(t, slot)`
 or `mainTop(t, slot)` — both accept a bare string so older saved targets still work.
 
-## 3. Pricing one card — `cardScore(card, t, real)`
+## 3. Pricing one card — `cardScore(card, t)`
 
 ```
 score = ( Σ substats  (value / maxRoll) × coupledWeight(stat)
@@ -116,17 +116,17 @@ score = ( Σ substats  (value / maxRoll) × coupledWeight(stat)
   wrong both ways — it could not see a fourth substat better than the card's own, and it let
   the first upgrade land where it cannot — on an inventory whose level-0 cards are 60%
   three-substat.
-- `real` (from `realCoupleContext()`) swaps the generic coupling baseline for what the
-  character's board actually holds. Omitted, `cardScore` stays context-free, which is what
-  the optimiser's single inventory-wide pass depends on. For an Elucidator it is always
-  null, for the reason `seedBaseline` is: their stats are donated, so their own 0% / 0% board
-  says nothing about what a roll is worth. With a real board they were priced by one crit
-  balance in the optimiser's per-slot pick and another in the build score, and five of them
-  were handed a Crit Multiplier Sun their own score rated 9-12 points below the Crit Rate one.
-  (Since Sep 2026 an Elucidator is not coupled at all — see below — so both are the same
-  uncoupled price.)
+- It is **context-free**: it never looks at the other cards worn. It is the build score's
+  card part, the one number every screen shows for a card, and what the optimiser shortlists
+  on. Until 28 Sep 2026 a `real` argument (`realCoupleContext()`) priced it against the other
+  cards worn instead; the Loadout popup, the card picker and the optimiser's shortlist used
+  it, the build score and Weakest slots did not, so one card read two numbers and ranked
+  differently on two screens (Kotone Shiomi's worn ATK% Star 110.1 against 107.9, the Crit
+  Rate Star beside it 101.5 against 110.6). It was removed; what a card does with the other
+  four — stat targets, damage balance — is the build score's other terms, and every screen
+  that proposes a swap reports it as a build-score delta (§6).
 
-### Coupling — `couplingFactors(t, slot, main, real)`
+### Coupling — `couplingFactors(t, slot, main)`
 
 Weights are never read straight off the target. Damage is a **product** of separate
 factors (`STAT_PRODUCTS`), so stats in different factors of one product are complements:
@@ -135,8 +135,7 @@ worth. Supply is counted in max-roll equivalents; marginal value is `1 / supply`
 result is normalised on the geometric mean over the factors, so the factors multiply to 1
 and the coupling shifts the *balance* inside a card score without inflating it.
 
-**The pre-board baseline is the character's own.** With no real board, `productSupply`
-seeds each factor from `seedBaseline(t)`: `damageBase` for the character `t.n` names (base
+**The baseline is the character's own.** `productSupply` seeds each factor from `seedBaseline(t)`: `damageBase` for the character `t.n` names (base
 crit, Awakening-7 crit, the weapon's unconditional ladder, Awakening ATK%), then the ideal
 substat allocation on top. `STAT_PRODUCTS`' 5% / 150% pair is only the fallback for a target
 with no `n`. This is what decides between lufel's alternative mains: a DPS at 159% ATK from
@@ -331,6 +330,13 @@ which a flat term in a ratio does not (and a Lv0 card does not match a Lv25 one)
 DEF/HP kits the gap was 5-7% of a perfect ⓐ. On the real inventory folding them in moved no
 active character's build score by more than 0.1.
 
+It also includes a completed 4-piece's unconditional stat line (`SET4_STATS` via
+`set4StatLines`: Strife's +15% ATK, Reconciliation's +15% HP/ATK/DEF, Labor's +8% for an
+Elucidator), the same line the in-battle totals count, so ⓐ and the ATK tile show one number.
+Until 28 Sep 2026 it did not (Kotone Shiomi: ⓐ 5316 against a 5603 tile). On the real
+inventory it changed no recommendation and moved no build score by more than 0.33; the
+`npm run scale` calibration was unchanged.
+
 `damageShare(t, char)` is the fraction of the character's weight budget sitting in
 `modelledStats(char)` (the scaling stat's % and flat forms, `Damage Multiplier`, `Crit
 Rate`, `Crit Multiplier`) — about 0.73 for a DPS, 0.03 for a shield Guardian, 0.4 for an
@@ -356,7 +362,7 @@ entries, 16 characters): Runa's ATK is +60% of her Ailment Accuracy, Yaoling's +
 Speed up to 90%, Tempest Riko's crit damage +84% at 450% SP Recovery, Kumi's +24 flat ATK
 per Speed above 100. `conversionBonus(char, cards, lo)` reads the in-battle source total
 (base, weapon, kit buffs, cards) and adds the converted amount to ⓐ, ⓑ or ⓓ in
-`damageFactors`, to the matching supply in `realCoupleContext` / `seedBaseline` so the
+`damageFactors`, to the matching supply in `seedBaseline` so the
 coupling prices ATK% against the source stat correctly, and the source stat joins
 `modelledStats` for `damageShare`. Lufel's own target notes do the same arithmetic (Tempest
 Riko's "패시브(활기): 84%"). Party-buff conversions that scale an ally's stat and
@@ -378,7 +384,7 @@ his Theurgy). `nocrit` is the opposite case: Kumi's Highlight cannot crit until 
 grants it, and it is close to half her damage, so `nocrit: 0.45, nocritUntilAw: 6` deals that
 share at exactly 1× whatever the crit stats. Everyone's rolled crit rate is capped at 100%,
 and `computeCoupling` prices a Crit Rate roll at **zero** once what the board actually holds
-(baseline plus a Crit Rate main, plus the other cards on a real board) reaches 100 points —
+(baseline, team crit rate included, plus a Crit Rate main) reaches 100 points —
 `heldCritRate`, a hard zero rather than the clamp's floor, which `cf()` preserves.
 
 **`damageBase` reads `flat + pct`** for the three percentage-unit stats. `charBaseStat` files
@@ -529,13 +535,19 @@ shows X's loss and the footer or row shows the net. Nothing is hidden, since the
 one character over another and build points cannot know that — but the box is now ticked by
 default, which is what the user had chosen, and with it no trade is ever proposed. The Optimise tab, whose Card pool defaults to "All cards", prices its trades the same way: each "on X" tag carries X's loss (`onTagHtml`), and the build-score panel says what the loadout takes, from whom, and the net for the account.
 
-**The optimiser does not need a second refinement pass.** One was built and measured:
-brute-forcing every combination of the top six candidates per slot against the full build
-score found at most **1 point** of headroom, on 2 of 65 characters, mean 0.03. The
-per-card coupling already lands on the balanced pick. If the coupling is ever weakened,
-revisit that. Re-checked on the real inventory in Sep 2026 once plan totals were the build
-score: the best same-set single-card swap left is 0.7, mean 0.04 over 36 characters — after
-Elucidators stopped getting a real board in the per-slot pick (§3).
+**The shortlist, and the polish.** Each slot's candidates are ranked on context-free
+`cardScore` (§3), and a plan takes each set's top card per slot. The build score can prefer
+a card further down — it sees the stat targets and the damage balance across the five cards —
+so every plan the policy allows within `POLISH_WINDOW` (2) build points of the allowed leader
+tries each slot's next `POLISH_DEPTH` (8) same-set cards, Space included, keeping any swap
+that raises the build score; plans are then re-ranked and de-duplicated. A test holds that no
+single same-set swap in that reach beats the pick. Measured when it replaced the old scheme
+(28 Sep 2026: a shortlist priced against the plan's other cards, iterated until stable, and a
+4-deep Heavens-only pass over the winner): on the real inventory never worse, 17 characters
+better by up to 2.6; on the scale.js account one loss (Runa, `stats`, −0.23); 0.7-1.1 s a roster
+against 1.1-1.7 s; calibration 69.5 → 69.6, bands unchanged. Polishing every plan gives the same
+picks at 15-20× the cost. Brute-forcing every combination of each slot's top six (an older
+experiment) found at most 1 point beyond single swaps, so one pass is enough.
 
 ### `runTriage()` — keep / hold / feed
 
@@ -704,6 +716,8 @@ the calibration in §9 before shipping.
 | `rarityPenalty` | `1 / .82 / .6 / .4` | Whole-card multiplier for 5★ / 4★ / 3★ / 2★ |
 | `IDEAL_ROLLS` | `[3, 2, 2, 2]` | How the ideal card spreads nine rolls over four stats |
 | `SPACE_PAIR_VALUE` | `9` | Space card pairing with the active 4-piece |
+| `POLISH_WINDOW` | `2` build points | Plans this close to the allowed leader get `bestPlan`'s same-set polish (§6) |
+| `POLISH_DEPTH` | `8` | Same-set cards per slot, Space included, the polish tries |
 | `UPGRADE_MIN_GAIN` | `0.1` build points | Smallest swap the Upgrades tab lists (was one raw point, a different amount per character) |
 | `BREAKPOINT_VALUE` | `80` | Whole stat-target block, regardless of target count |
 | `SPREAD_VALUE` | `80` | Damage-spread budget, scaled by `damageShare(t)` |

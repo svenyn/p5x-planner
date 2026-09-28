@@ -100,6 +100,57 @@ if hasattr(sys.stdout, "reconfigure"):
     sys.stdout.reconfigure(encoding="utf-8", errors="replace")
 
 
+class RunLog:
+    """Copies everything the run prints into `<out>.log`, and takes a per-key
+    trace that goes to the file only.
+
+    The two Space-tab runs of Sep 2026 that stopped mid-list left nothing to
+    read but their card files: what the grid showed after each key, and where
+    the walk thought it was, had scrolled away in a terminal. The trace is that
+    record, one line per key; it is too long to print, and the screen output is
+    unchanged. Worker threads print too, so writes are serialised.
+    """
+
+    def __init__(self, path):
+        import threading
+        self.path = Path(path)
+        self.file = open(self.path, "a", encoding="utf-8")
+        self.lock = threading.Lock()
+        self.stdout, self.stderr = sys.stdout, sys.stderr
+        self.file.write(f"\n==== {time.strftime('%Y-%m-%d %H:%M:%S')}  {' '.join(sys.argv)}\n")
+
+    def _stream(self, inner):
+        log = self
+
+        class _Tee:
+            def write(self, s):
+                with log.lock:
+                    inner.write(s)
+                    log.file.write(s)
+                return len(s)
+
+            def flush(self):
+                with log.lock:
+                    inner.flush()
+                    log.file.flush()
+
+            def __getattr__(self, name):
+                return getattr(inner, name)
+        return _Tee()
+
+    def start(self):
+        sys.stdout, sys.stderr = self._stream(self.stdout), self._stream(self.stderr)
+        return self
+
+    def trace(self, msg):
+        with self.lock:
+            self.file.write(f"    · {time.strftime('%H:%M:%S')} {msg}\n")
+
+    def close(self):
+        sys.stdout, sys.stderr = self.stdout, self.stderr
+        self.file.close()
+
+
 # ------------------------------ win32 input ------------------------------
 #
 # SendInput with KEYEVENTF_SCANCODE rather than a virtual-key code: games read
@@ -338,6 +389,13 @@ MOVES = {"D": (0, 1), "A": (0, -1), "S": (1, 0), "W": (-1, 0)}
 ROW_JUMP = 0.08
 
 
+def _grid_read(col, yf):
+    """A grid cursor read as the run log prints it."""
+    if col is None:
+        return "unreadable"
+    return f"col {col}" + ("" if yf is None else f" row {yf:.3f}")
+
+
 class Walker:
     """Drives the sequence, with the sender, the frame source, the focus guard
     and the tab clicker injected so a test can run the whole loop — several
@@ -350,8 +408,12 @@ class Walker:
     def __init__(self, watcher, sender, grabber, guard=None, interval=0.4,
                  settle_timeout=3.0, stuck_limit=4, fps=8.0,
                  on_capture=None, should_stop=None,
-                 clicker=None, slot_reader=None, tab_timeout=6.0, cursor_reader=None):
+                 clicker=None, slot_reader=None, tab_timeout=6.0, cursor_reader=None,
+                 trace=None):
         self.watcher = watcher
+        # One line per key for the run log (RunLog.trace): what was sent, what
+        # the grid showed and where the model put the cursor. Never printed.
+        self.trace = trace or (lambda msg: None)
         self.sender = sender
         self.grabber = grabber
         self.guard = guard or (lambda: True)
@@ -386,6 +448,10 @@ class Walker:
         self.slot_reader = slot_reader
         self.tab_timeout = tab_timeout
         self.last_tab_frame = None
+        # The screen when a rewind gave up. The Moon tab of Sep 27 came up with
+        # no selection frame and keys that moved nothing, and nothing was kept
+        # to show what was on it; main() saves this next to the output.
+        self.lost_frame = None
         self.interval = interval
         self.settle_timeout = settle_timeout
         self.stuck_limit = stuck_limit
@@ -522,6 +588,9 @@ class Walker:
     def column(self, frame):
         return self.cursor(frame)[0]
 
+    def _grid_text(self, frame):
+        return _grid_read(*self.cursor(frame))
+
     def rewind(self, max_keys=3000, clock=time.monotonic, sleep=time.sleep, log=print):
         """Walks the cursor to the top-left card and reads it.
 
@@ -564,10 +633,12 @@ class Walker:
             frame = self._settle(clock=clock, sleep=sleep)
             if frame is None:
                 dead += 1
+                self.trace(f"rewind W: nothing moved ({dead}/2)")
                 if dead >= 2:
                     break
             else:
                 dead, moved, last = 0, moved + 1, frame
+                self.trace(f"rewind W: moved, grid {self._grid_text(frame)}")
             self._pace(started, clock, sleep)
 
         if self.cursor_reader is None:
@@ -575,12 +646,48 @@ class Walker:
                 "rewind cannot finish. Recalibrate (calibrate.py --only grid), or select the "
                 "first card yourself and use --no-rewind.")
             return "lost", moved
-        col = self.column(self.grabber())
+        shot = self.grabber()
+        col = self.column(shot)
+        self.trace(f"rewind: grid column {col}")
+        if col is None and moved == 0:
+            # Moon and Sky, Sep 27: a tab can open with its selection back on
+            # the first card but the list still scrolled to where it was left.
+            # The panel shows the first card, the grid shows the list's last
+            # rows with no frame in view, and W moves nothing because the
+            # selection is already at the top. S then W steps off the first card
+            # and back, and the list scrolls to follow the selection into view.
+            # Each key is sent once more if it moved nothing, as in the walk; if
+            # S still moves nothing, or W never comes back, the column read
+            # below gives up as before rather than start from the wrong card.
+            log("  the selected card is scrolled out of view — S then W to bring it back")
+            for key in ("S", "W"):
+                frame = None
+                for _ in range(2):
+                    if not self.guard():
+                        return "unfocused", moved
+                    self.sender(key)
+                    self.sent += 1
+                    frame = self._settle(clock=clock, sleep=sleep)
+                    self.trace(f"rewind {key}: {'moved, grid ' + self._grid_text(frame) if frame is not None else 'nothing moved'}")
+                    if frame is not None:
+                        break
+                if frame is None:
+                    # S never moved: nothing changed, so the read below still
+                    # sees no frame. W never came back: the cursor is a row down,
+                    # so it must not be taken for the first card.
+                    col, shot = None, self.grabber()
+                    break
+                last = frame
+            else:
+                shot = self.grabber()
+                col = self.column(shot)
+                self.trace(f"rewind: grid column {col}")
         for attempt in range(3):
             if col == 0:
                 break
             if col is None:
                 log("  ! no selection frame visible in the card grid — is the list on screen?")
+                self.lost_frame = shot
                 return "lost", moved
             if not self.guard():
                 return "unfocused", moved
@@ -589,18 +696,24 @@ class Walker:
             frame = self._settle(clock=clock, sleep=sleep)
             if frame is not None:
                 last = frame
-            col = self.column(frame if frame is not None else self.grabber())
+            shot = frame if frame is not None else self.grabber()
+            col = self.column(shot)
+            self.trace(f"rewind A: {'moved' if frame is not None else 'nothing moved'}, grid column {col}")
             if col != 0:
                 log(f"  A did not bring the cursor to the left column (try {attempt + 1}/3)")
         if col != 0:
             log("  ! could not reach the left column — stopping rather than walking out of step.")
+            self.lost_frame = shot
             return "lost", moved
 
         self.pos, self.visited = (0, 0), set()
         self._sigs, self._row_steps, self._uncertain = [], [], 0
         if last is not None:
             self._accept(last)
-        elif not self.prime(clock=clock, sleep=sleep):
+            self.trace(f"   new card #{self.cards} at {self.pos}, the top of the list")
+        elif self.prime(clock=clock, sleep=sleep):
+            self.trace(f"   new card #{self.cards} at {self.pos}, the top of the list")
+        else:
             log("  ! could not read the card on screen after rewinding")
         return "ok", moved
 
@@ -693,6 +806,7 @@ class Walker:
                 # list is not listening (a popup, a different screen) and
                 # continuing would be typing into whatever is there instead.
                 self.stuck += 1
+                self.trace(f"{key}: nothing moved, model {self.pos}")
                 log(f"  {key}: nothing moved ({self.stuck}/{self.stuck_limit})")
             else:
                 # The grid says where the cursor really is. Trust it over the
@@ -712,6 +826,8 @@ class Walker:
                 # rows above, a card the walk has already read. When the panel
                 # confirms that (it reads the same as a card read on this tab),
                 # the list has run out, whatever the row estimate said.
+                self.trace(f"{key}: grid {_grid_read(col, yf)}, "
+                           f"model {before} -> {self.pos}" + (f" ({note})" if note else ""))
                 if key.upper() in ("D", "A") and self.pos[0] < before[0] and self._seen_before(frame):
                     self.revisits += 1
                     log(f"  {key}: jumped back up onto a card already read — the list has run out.")
@@ -734,11 +850,13 @@ class Walker:
                     # — it would be the same card twice — and not progress.
                     self.revisits += 1
                     self.stuck += 1
+                    self.trace(f"   {self.pos} already read, not handed over")
                     log(f"  {key}: back on a card already read ({self.stuck}/{self.stuck_limit})")
                 else:
                     self.settled += 1
                     self.stuck = 0
                     self._accept(frame)
+                    self.trace(f"   new card #{self.cards} at {self.pos}")
             if self.stuck >= self.stuck_limit:
                 log("  nothing new for a whole cycle — the list has run out.")
                 return "end"
@@ -857,6 +975,19 @@ def main(argv=None):
         print("no input was sent. Drop --dry-run to do it for real.")
         return
 
+    # The output's final name (numbered past any earlier batch) is fixed here,
+    # before anything is sent, so the log, the frames and a failed tab's
+    # screenshot all carry the same one.
+    out_path = unique_out_path(Path(args.out))
+    run_log = RunLog(out_path.with_suffix(".log")).start()
+    try:
+        _run(args, keys, out_path, run_log)
+    finally:
+        run_log.close()
+        print(f"run log: {run_log.path}")
+
+
+def _run(args, keys, out_path, run_log):
     print(f"switch to the game with the card list open — starting in {args.start_delay:g}s")
     for remaining in range(int(args.start_delay), 0, -1):
         print(f"  {remaining}…", end="\r", flush=True)
@@ -898,9 +1029,8 @@ def main(argv=None):
         print(f"tabs: {' → '.join(tabs)} (starting on {current})")
     print(f"sending at most {len(keys)} key(s) per tab. Alt-tab away to stop.\n")
 
-    session = out_path = frames_dir = known = None
+    session = frames_dir = known = None
     if not args.no_read:
-        out_path = unique_out_path(Path(args.out))
         frames_dir = out_path.parent / "_frames"
         ensure_tesseract()
         known = load_known(args.known) if args.known else None
@@ -925,7 +1055,8 @@ def main(argv=None):
                     fps=args.fps, tab_timeout=args.tab_timeout,
                     on_capture=session.submit if session else None,
                     should_stop=session.done.is_set if session else None,
-                    clicker=clicker, slot_reader=reader, cursor_reader=cursor)
+                    clicker=clicker, slot_reader=reader, cursor_reader=cursor,
+                    trace=run_log.trace)
 
     report = []
     try:
@@ -942,14 +1073,22 @@ def main(argv=None):
     if why == "tab":
         print("A tab did not switch. Click it yourself and run again for the remaining tabs.")
         if walker.last_tab_frame is not None:
-            where = (frames_dir or Path(args.out).parent)
+            where = (frames_dir or out_path.parent)
             where.mkdir(parents=True, exist_ok=True)
-            path = where / f"{Path(args.out).stem}-tab-{report[-1][0]}.png"
+            # The numbered name, like the card files: every run of a session
+            # shares one --out, so its stem let each run overwrite the last one's.
+            path = where / f"{out_path.stem}-tab-{report[-1][0]}.png"
             walker.last_tab_frame.save(path)
             print(f"  the screen as last seen after the click: {path}")
     if why == "lost":
         print("The rewind could not put the cursor on the first card. Select it yourself and "
               "run again with --no-rewind.")
+        if walker.lost_frame is not None:
+            where = (frames_dir or out_path.parent)
+            where.mkdir(parents=True, exist_ok=True)
+            path = where / f"{out_path.stem}-lost-{report[-1][0] if report else 'tab'}.png"
+            walker.lost_frame.save(path)
+            print(f"  the screen when it gave up: {path}")
 
     if session:
         finish(session, watcher, out_path, frames_dir, known=known)
