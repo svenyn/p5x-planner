@@ -1046,6 +1046,22 @@ screen, sets `upViewsStale`, and `showTab('upgrades')` runs them on the way in: 
 pass was nearly all of every Equip click on any tab (about 0.47 s on the real inventory,
 now 37 ms). A test pins the deferral.
 
+### Custom card: the Cycle of Fate event
+
+Upgrades' third sub-tab (`#up-pane-craft`, `ccRow`/`ccBest`/`ccSecond`, details in
+`docs/SCORING.md` §6). It ranks characters by the build points one event-made card adds and
+names the card: set, slot, main and four substats. Card type switches between a Heavens card
+(Cycle of Fate) and a Space card (other events), whose rolls use the Space tables and whose
+alternatives are the other Space sets — scored alike whenever they pair, so the preferred comes first. **The gain is over the best the inventory can already give them**, never over what
+is worn, or the worst-dressed character wins for free swaps the Upgrades tab already lists.
+The substat values are not the player's to pick, so the card is valued at level 25 on the
+Rolls setting (typical: average tier, upgrades spread evenly). Because the card arrives at level
+0, a Likely column simulates random levellings (`ccOutcomes`, seeded, so a range never wobbles
+between redraws), and the check panel gives the chance a rolled card ends up better than a fresh
+roll of the recommended one. Like Triage it runs on its
+first visit, in 50 ms slices, and is then only marked stale (`ccSig` in `markStaleRuns`).
+"Check a card" takes the rolled level-0 values and can add the card to the inventory (undoable).
+
 ### The Vault is the counterweight to that gate
 
 The Vault is the Triage tab's second view, "Lock for later" (`#tr-pane-vault`, `showTrPane`); it

@@ -1374,6 +1374,71 @@ function weightOverrideDrift() {
         near(x.gain, buildScoreOf(kumi, [idealCard(x.slot, tk, hrSetFor(x.slot, [], tk))], HR_P4, lk, ik, tk).raw - empty, 1e-9));
     })());
 
+    // ---- Custom card (the Cycle of Fate event) ----
+    {
+      const o = { free: true, policy: 'pref', mode: 'typical', scope: 'owned' };
+      const chars = own.slice(0, 4).map(charDef);
+      const rows = chars.map(ch => ccRow(ch, o));
+      const bad = [];
+      rows.forEach(r => {
+        const b = r.best, n = r.ch.n;
+        if (!b) { bad.push(n + ': no card'); return; }
+        const c = b.card, S = SETS[c.set];
+        if (HEAVENS.indexOf(c.slot) < 0) bad.push(n + ': not a Heavens slot (the event cannot make Space)');
+        if (!S || S.unreleased || (S.elem && S.elem !== r.ch.e)) bad.push(n + ': set ' + c.set + ' is unreleased or off-element');
+        if (c.rarity !== 5 || c.level !== RARITY[5].maxLevel) bad.push(n + ': not a level-25 5★');
+        if (SLOT_INFO[c.slot].mains.indexOf(c.main) < 0) bad.push(n + ': main ' + c.main + ' is not legal on ' + c.slot);
+        const st = c.subs.map(x => x.stat);
+        if (st.length !== 4 || new Set(st).size !== 4 || st.indexOf(c.main) >= 0) bad.push(n + ': substats ' + st.join(','));
+        if (validateCard(c).length) bad.push(n + ': ' + validateCard(c)[0]);
+        if (b.cards.indexOf(c) < 0 || new Set(b.cards.map(x => x.slot)).size !== b.cards.length) bad.push(n + ': its loadout does not hold it once per slot');
+        if (!(r.gain >= 0 && isFinite(r.gain)) || !near(r.after, Math.min(100, r.inv + r.gain), 1e-6) || r.after > 100) bad.push(n + ': gain/after inconsistent');
+        if (r.ctx.base.total + 1e-9 < r.ctx.ev(r.ctx.worn).total) bad.push(n + ': baseline is below what is worn');
+        if (!near(r.ctx.ev(b.cards).total, b.total, 1e-6)) bad.push(n + ': total is not the build score numerator');
+      });
+      fail('Custom card: a legal level-25 5★ Heavens card in a released, on-element set, priced as the build score of a legal loadout over the best already wearable', !bad.length);
+      if (bad.length) out.customCardBad = bad;
+      const per = mode => chars.map(ch => ccRow(ch, Object.assign({}, o, { mode })).gain);
+      const lo = per('low'), pf = per('perfect');
+      fail('Custom card: poor rolls never beat typical ones, and typical never beats perfect',
+        rows.every((r, i) => lo[i] <= r.gain + 0.05 && r.gain <= pf[i] + 0.05));
+      rows.sort((a, b) => b.gain - a.gain);
+      const sec = ccSecond(rows, o);
+      fail('Custom card: the second card is another character\'s best, or a second one for the first priced after the first',
+        !!sec && isFinite(sec.gain) && sec.gain >= 0 && (sec.same ? sec.ch === rows[0].ch : sec.ch !== rows[0].ch && near(sec.gain, rows.filter(r => r !== rows[0])[0].gain, 1e-9)));
+      fail('Custom card: the likely range is ordered, holds the typical gain near its average, and reads the same every run',
+        rows.every(r => {
+          const g = r.range;
+          return g && g.min <= g.lo && g.lo <= g.mean + 1e-9 && g.mean <= g.hi + 1e-9 && g.hi <= g.max && Math.abs(g.mean - r.gain) < 0.6 &&
+            JSON.stringify(ccRange(ccOptionOutcomes(r.ctx, r.best))) === JSON.stringify(g);
+        }));
+      {
+        const r = rows[0], b = r.best, rest = b.cards.filter(c => c !== b.card);
+        const fresh = ccOptionOutcomes(r.ctx, b, 600);
+        const tierAt = k => b.card.subs.map(s => ccTiers(s.stat, b.slot)[k]);
+        const low = ccOutcomes(r.ctx, b.card, rest, tierAt(0), 600), high = ccOutcomes(r.ctx, b.card, rest, tierAt(4), 600);
+        const pLow = ccChanceBetter(low, fresh), pHigh = ccChanceBetter(high, fresh), pSelf = ccChanceBetter(fresh, fresh);
+        fail('Custom card: a card that started on its lowest rolls is less likely than a fresh roll to end up better, one on its highest more likely, and a card against itself is even',
+          pLow < 0.5 && pHigh > 0.5 && near(pSelf, 0.5, 1e-9) && near(ccChanceBetter([1, 2], [1.5]), 0.5, 1e-9));
+      }
+      const spaceBad = [];
+      chars.forEach(ch => {
+        const r = ccRow(ch, Object.assign({}, o, { kind: 'space' })), c = r.best && r.best.card;
+        if (!c) { spaceBad.push(ch.n + ': no card'); return; }
+        if (c.slot !== 'Space' || c.main !== 'ATK + DEF' || !SPACE_SETS[c.set] || SPACE_SETS[c.set].unreleased) spaceBad.push(ch.n + ': ' + c.slot + ' ' + c.set + ' ' + c.main);
+        if (validateCard(c).length) spaceBad.push(ch.n + ': ' + validateCard(c)[0]);
+        if (c.subs.some(x => x.value > maxRoll(x.stat, 'Space') * 3 + 0.05)) spaceBad.push(ch.n + ': rolled past the Space table');
+        if (r.slots.some(x => x.slot !== 'Space') || !(r.gain >= 0) || r.after > 100) spaceBad.push(ch.n + ': options or gain');
+      });
+      fail('Custom card, Space: a legal level-25 Space card in a released Space set, rolled on the Space table, with the other Space sets as its alternatives', !spaceBad.length);
+      if (spaceBad.length) out.customCardSpaceBad = spaceBad;
+      fail('Custom card: the pool cut gives the optimiser the same answer as the whole inventory', chars.every(ch => {
+        const t = target(ch), full = bestPlan(ch, poolFor('free', 2, ch.n), { policy: 'pref', p4value: CC_P4 });
+        const cut = bestPlan(ch, ccContext(ch, o).pool, { policy: 'pref', p4value: CC_P4 });
+        return (!full.best && !cut.best) || (full.best && cut.best && near(full.best.total, cut.best.total, 1e-6));
+      }));
+    }
+
     // ---- equip plumbing ----
     $('#optChar').value = 'Ren Amamiya';
     fail('swapCard moves a card onto the slot, unequips whoever wore either end, and clears a lock on the way out', (() => {
@@ -1573,6 +1638,49 @@ function weightOverrideDrift() {
   await p.click('#upSubtabs button[data-uptab="headroom"]'); await p.waitForTimeout(400);
   const hrState = await p.evaluate(() => ({ rows: document.querySelectorAll('#hrTable tbody tr').length, cache: hrRowsCache.length, owned: ownedChars().length, nan: document.getElementById('hrTable').innerHTML.indexOf('NaN') >= 0 }));
   check('the Weakest slots sub-tab runs its pass on the way in (five rows per owned character)', hrState.cache === hrState.owned * 5 && hrState.rows > 0 && !hrState.nan, JSON.stringify(hrState));
+  await p.click('#upSubtabs button[data-uptab="craft"]');
+  await p.waitForFunction(() => ccCache, null, { timeout: 60000 });
+  const ccState = await p.evaluate(() => ({ rows: document.querySelectorAll('#ccTable tbody tr').length, owned: ownedChars().length,
+    first: /First card/.test(document.getElementById('ccSummary').innerHTML) && /likely \+\d/.test(document.getElementById('ccSummary').innerHTML),
+    likely: document.querySelectorAll('#ccTable tbody tr').length === document.querySelectorAll('#ccTable td span[title^="8 in 10"]').length,
+    chance: /^Chance this card ends up better than .*: \d{1,3}%/.test((document.querySelector('#ccCheckOut .ccChance') || {}).textContent.trim().replace(/\s+/g, ' ') || ''),
+    checkRows: document.querySelectorAll('#ccCheckOut tbody tr').length,
+    nan: /NaN|undefined/.test(document.getElementById('ccTable').innerHTML + document.getElementById('ccCheckOut').innerHTML + document.getElementById('ccSummary').innerHTML),
+    sorted: ccCache.rows.every((r, i, a) => !i || a[i - 1].gain >= r.gain) }));
+  check('the Custom card sub-tab ranks every owned character on the way in, largest gain first, names two cards and prices the check panel',
+    ccState.rows === ccState.owned && ccState.first && ccState.likely && ccState.chance && ccState.checkRows === 3 && !ccState.nan && ccState.sorted, JSON.stringify(ccState));
+  const ccFlow = await p.evaluate(() => {
+    const r = { n: state.cards.length };
+    document.querySelector('#ccTable .ccTry').click();
+    r.filled = document.getElementById('ccChar').value === ccCache.rows[0].ch.n && document.getElementById('ccSlot').value === ccCache.rows[0].best.slot;
+    document.getElementById('ccAdd').click();
+    const added = state.cards[state.cards.length - 1];
+    r.added = state.cards.length === r.n + 1 && added.level === 0 && added.rarity === 5 && !added.equipped && validateCard(added).length === 0;
+    r.stale = !!document.querySelector('#ccSummary .stale-run');
+    undo();
+    r.undone = state.cards.length === r.n;
+    r.fresh = !document.querySelector('#ccSummary .stale-run');
+    document.getElementById('ccElement').value = ccCache.rows[0].ch.e; renderCustomCard();
+    r.filtered = Array.from(document.querySelectorAll('#ccTable tbody tr')).length === ccCache.rows.filter(x => x.ch.e === ccCache.rows[0].ch.e).length;
+    document.getElementById('ccElement').value = ''; renderCustomCard();
+    return r;
+  });
+  const ccSpace = await p.evaluate(async () => {
+    const k = document.getElementById('ccKind');
+    k.value = 'space'; k.dispatchEvent(new Event('change'));
+    while (!ccCache || ccCache.o.kind !== 'space') await new Promise(res => setTimeout(res, 50));
+    const r = { allSpace: ccCache.rows.every(x => !x.best || x.best.slot === 'Space'), header: /Other Space sets/.test(document.getElementById('ccTable').innerHTML),
+      checkSlot: document.getElementById('ccSlot').value, checkSet: !!SPACE_SETS[document.getElementById('ccSet').value],
+      checkRows: document.querySelectorAll('#ccCheckOut tbody tr').length, nan: /NaN|undefined/.test(document.getElementById('ccTable').innerHTML + document.getElementById('ccCheckOut').innerHTML) };
+    k.value = 'heavens'; k.dispatchEvent(new Event('change'));
+    while (!ccCache || ccCache.o.kind !== 'heavens') await new Promise(res => setTimeout(res, 50));
+    r.back = document.getElementById('ccSlot').value !== 'Space';
+    return r;
+  });
+  check('Custom card: the card type switches the ranking and the check panel to Space cards and back',
+    ccSpace.allSpace && ccSpace.header && ccSpace.checkSlot === 'Space' && ccSpace.checkSet && ccSpace.checkRows === 3 && !ccSpace.nan && ccSpace.back, JSON.stringify(ccSpace));
+  check('Custom card: "Check a roll" fills the check panel, "Add to inventory" adds a level-0 card and marks the ranking stale, undo takes both back, and the element filter narrows the table',
+    ccFlow.filled && ccFlow.added && ccFlow.stale && ccFlow.undone && ccFlow.fresh && ccFlow.filtered, JSON.stringify(ccFlow));
 
   // Targets dialog: open, save, reset. The Setup is edited in one place, the Loadout popup; the
   // Targets dialog used to carry a second copy that saved on its own button.

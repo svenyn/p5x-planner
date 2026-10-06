@@ -3543,7 +3543,7 @@ function fillSelects() {
   $('#flMain').innerHTML = '<option value="">Any</option>' + allMains.map(s => `<option>${s}</option>`).join('');
   renderFlSub();
   const rsElements = [...new Set(CHARACTERS.map(c => c.e))].sort();
-  ['#rsElement', '#hrElement'].forEach(id => {
+  ['#rsElement', '#hrElement', '#ccElement'].forEach(id => {
     $(id).innerHTML = '<option value="">Any</option>' + rsElements.map(e => `<option>${e}</option>`).join('');
   });
   // Upgrades' "Weakest slots" filters equipped slots, not the card list, so it takes a
@@ -3559,6 +3559,7 @@ function fillSelects() {
     $('#' + p + 'Main').innerHTML = '<option value="">Any</option>' + allMains.map(s => `<option>${s}</option>`).join('');
   });
   renderTrFlSub(); renderVaFlSub();
+  ccFillCheckSelects();
 }
 // Set options depend on the selected slot (Space vs Heavens), same as syncFlSetOptions,
 // generalised over the id prefix so Triage ("trFl") and Vault ("vaFl") can share it.
@@ -4363,7 +4364,7 @@ function vaultSig() { return cardsSig(false) + ':' + charsSig(null) + ':' + team
    on the one screen whose "feed" cannot be undone. The check is a comparison of fingerprints
    (see dataSignature), so an undo, or a value set back, reads as current again. */
 function markStaleRuns() {
-  [['#trSummary', trCache, triageSig, '#trRun'], ['#vaSummary', vaCache, vaultSig, '#vaRun']].forEach(([id, cache, sig, btn]) => {
+  [['#trSummary', trCache, triageSig, '#trRun'], ['#vaSummary', vaCache, vaultSig, '#vaRun'], ['#ccSummary', ccCache, ccSig, '#ccRun']].forEach(([id, cache, sig, btn]) => {
     const box = $(id);
     if (!box || !cache) return;
     const old = box.querySelector('.stale-run');
@@ -4977,6 +4978,592 @@ function renderHeadroomTable() {
     renderHeadroomTable();
     refocus(`#hrTable th.sortH[data-sort="${key}"] .thBtn`);
   });
+}
+
+/* ======================== custom card (the Cycle of Fate event) ========================
+   The game's Cycle of Fate event makes a 5★ Heavens card — Sun, Moon, Star or Sky, never Space
+   — whose set, slot, main stat and four substats the player picks; other events make a Space card
+   the same way, so the view has a card-type switch (`o.kind`, 'heavens' or 'space'). The substats' VALUES are not
+   picked: each is a random roll (it can be re-rolled for more ink), and the card's five upgrades
+   land at random like any other card's. This view answers who gains most from one such card and
+   which card to make for them.
+
+   A character's gain is measured against the best they can ALREADY wear, not against what they
+   wear now: equipping a better card already in the inventory costs nothing, so crediting that to
+   the crafted card would rank whoever is worst dressed first. "Already" is the better of what is
+   worn and the optimiser's own pick from the pool, and "with the card" is the best loadout that
+   holds it — the optimiser re-run with the card added (a crafted card can complete a 4-piece the
+   inventory is one card short of), or the card dropped into either of those two loadouts. Every
+   one of them is priced by bestPlan's own evaluator, the build score's numerator, so the gain is
+   in build points, the one scale that compares characters.
+
+   The substat values are an assumption the user picks (CC_ROLLS): typical is each substat at its
+   average roll tier and the five upgrades spread evenly (1.25 each, which is what random landing
+   averages to), perfect is the build score's own perfect card (every roll at maximum, IDEAL_ROLLS
+   3/2/2/2), poor is every roll at its lowest tier. The card is priced at level 25, since the main
+   stat's growth to it is certain. */
+const CC_P4 = 55;
+const CC_SUB_POOL = 6;                // a design's substats are chosen among this many best stats, plus any with a target
+const CC_MAIN_POOL = 3;               // and its main among this many of the slot's recommended (or, when open, legal) mains
+const CC_KEEP = POLISH_DEPTH + 1;     // per slot and set: every card bestPlan can reach (its pick, then POLISH_DEPTH more)
+const CC_UPS = RARITY[5].upgrades;
+// A Space card rolls on its own, larger table (ROLL_TIERS' `space` layout, SUBSTATS' maxRollSpace).
+const ccTiers = (stat, slot) => ROLL_TIERS[stat][slot === 'Space' ? 'space' : 'heavens'];
+const ccTierMean = (stat, slot) => { const a = ccTiers(stat, slot); return a.reduce((s, x) => s + x, 0) / a.length; };
+// Shown at the panel's precision: flat ATK/DEF/HP in whole points, everything else to one decimal.
+const ccRound = (stat, v) => /^(ATK|DEF|HP)$/.test(stat) ? Math.round(v) : Math.round(v * 10) / 10;
+const CC_ROLLS = {
+  typical: { label: 'typical rolls', v: (stat, i, slot) => ccTierMean(stat, slot) * (1 + CC_UPS / 4) },
+  perfect: { label: 'perfect rolls', v: (stat, i, slot) => maxRoll(stat, slot) * IDEAL_ROLLS[i] },
+  low:     { label: 'poor rolls', v: (stat, i, slot) => ccTiers(stat, slot)[0] * (1 + CC_UPS / 4) }
+};
+
+/* A crafted card at level 25. `stats` is best first, which only matters for perfect rolls: the
+   first substat carries IDEAL_ROLLS' three. */
+function ccCard(slot, set, main, stats, mode, id) {
+  const R = CC_ROLLS[mode] || CC_ROLLS.typical;
+  return { id: id || 'craft', crafted: true, slot, set, rarity: 5, level: RARITY[5].maxLevel, main,
+    subs: stats.map((stat, i) => ({ stat, value: ccRound(stat, R.v(stat, i, slot)) })) };
+}
+
+/* Everything one character's search reads. The pool is cut to the cards bestPlan can actually
+   reach — each slot and set's top CC_KEEP by card score, the same for Space — which gives bestPlan
+   the identical answer at a fraction of the cost, since it takes each set's best card per slot and
+   polishes from the next POLISH_DEPTH. `extra` adds cards (an earlier crafted card, for the second
+   of the event's two); `wear` stands in for what is worn (the loadout after that first card). */
+function ccContext(ch, o, extra, wear) {
+  const t = target(ch);
+  const full = poolFor(o.free ? 'free' : 'all', 2, ch.n).concat(extra || []);
+  const buckets = {};
+  full.forEach(c => { const k = c.slot + '|' + c.set; (buckets[k] = buckets[k] || []).push({ c, s: cardScore(c, t) }); });
+  const pool = [];
+  Object.keys(buckets).forEach(k => buckets[k].sort((a, b) => b.s - a.s).slice(0, CC_KEEP).forEach(x => pool.push(x.c)));
+  const worn = wear || state.cards.filter(c => c.equipped === ch.n);
+  const r0 = bestPlan(ch, pool, { policy: o.policy, p4value: CC_P4 });
+  const ev = cards => r0.loadoutTotal(cards);
+  const planCards = r0.best ? HEAVENS.map(sl => r0.best.picks[sl].c).concat(r0.best.space ? [r0.best.space.c] : []) : [];
+  const wornTotal = ev(worn).total, planTotal = planCards.length ? ev(planCards).total : -Infinity;
+  const base = planTotal > wornTotal + 1e-9 ? { cards: planCards, total: planTotal, from: 'plan' } : { cards: worn, total: wornTotal, from: 'worn' };
+  const ctx = { ch, t, o, pool, worn, ev, base, idealTotal: ev([]).idealTotal };
+  /* The pool the re-runs with a crafted card in it read (ccPlace): the sets that card can be made
+     in, every Space card, and each slot's best cards of any set, for the free picks. A set outside
+     those can only enter a winning plan as the other half of a new 2+2, and the re-run is a dozen
+     per character, so leaving them out is most of this view's speed. */
+  const sets = ccSets(ctx), byScore = {};
+  pool.forEach(c => { if (c.slot !== 'Space') (byScore[c.slot] = byScore[c.slot] || []).push({ c, s: cardScore(c, t) }); });
+  const free = new Set();
+  Object.keys(byScore).forEach(sl => byScore[sl].sort((a, b) => b.s - a.s).slice(0, CC_KEEP).forEach(x => free.add(x.c)));
+  ctx.placePool = pool.filter(c => c.slot === 'Space' || sets.indexOf(c.set) >= 0 || free.has(c));
+  return ctx;
+}
+
+/* The sets a crafted card is tried in: the character's own list (lufel's preferred set first,
+   then its alternatives) and any set already in the loadouts it could join. Unreleased sets and
+   off-element sets are out — an off-element set's bonuses are worth nothing to this character. */
+function ccSets(ctx) {
+  const ok = s => SETS[s] && !SETS[s].unreleased && !(SETS[s].elem && SETS[s].elem !== ctx.ch.e);
+  const out = (ctx.t.sets || []).filter(ok);
+  ctx.base.cards.concat(ctx.worn).forEach(c => { if (c.slot !== 'Space' && ok(c.set) && out.indexOf(c.set) < 0) out.push(c.set); });
+  return out;
+}
+
+/* The Space sets a crafted Space card is tried in: the character's own Space card, any Space card
+   in the loadouts it could join, and every released one that pairs with a Heavens set ccSets offers
+   — a Space card does nothing unless the 4-piece it pairs with is worn. */
+function ccSpaceSets(ctx) {
+  const ok = s => SPACE_SETS[s] && !SPACE_SETS[s].unreleased;
+  const out = [ctx.t.space].filter(ok);
+  ctx.base.cards.concat(ctx.worn).forEach(c => { if (c.slot === 'Space' && ok(c.set) && out.indexOf(c.set) < 0) out.push(c.set); });
+  const heav = ccSets(ctx);
+  Object.keys(SPACE_SETS).forEach(s => { if (ok(s) && out.indexOf(s) < 0 && SPACE_SETS[s].pairs.some(x => heav.indexOf(x) >= 0)) out.push(s); });
+  return out;
+}
+
+/* The best main and four substats for `slot` in `set`, worn with `around` (the other slots), at
+   the assumed rolls. Mains are the slot's recommended ones (every legal main where lufel leaves
+   it open), best CC_MAIN_POOL by what a perfect card of each scores; substats every four of the
+   best CC_SUB_POOL stats by coupled weight for that main, plus any stat with a target, since the
+   stat-target term can want a stat its weight undersells. Each is priced as the whole loadout. */
+function ccDesign(ctx, slot, set, around, mode) {
+  const t = ctx.t;
+  let mains = SLOT_INFO[slot].fixed ? SLOT_INFO[slot].mains : (mainList(t, slot).length ? mainList(t, slot) : SLOT_INFO[slot].mains);
+  mains = mains.map(m => ({ m, s: cardScore(idealCardFor(slot, t, set, m), t) }))
+    .sort((a, b) => b.s - a.s).slice(0, CC_MAIN_POOL).map(x => x.m);
+  const targeted = (t.targets || []).map(x => x.sub).filter(s => SUBSTATS[s]);
+  let best = null;
+  mains.forEach(main => {
+    const f = couplingFactors(t, slot, main);
+    const ranked = Object.keys(SUBSTATS).filter(s => s !== main)
+      .map(s => ({ s, w: (t.w[s] || 0) * cf(f, s) })).sort((a, b) => b.w - a.w);
+    const cand = ranked.filter((x, i) => (i < CC_SUB_POOL && x.w > 0) || targeted.indexOf(x.s) >= 0);
+    ranked.forEach(x => { if (cand.length < 4 && cand.indexOf(x) < 0) cand.push(x); });
+    cand.sort((a, b) => b.w - a.w);
+    const n = cand.length;
+    for (let i = 0; i < n; i++) for (let j = i + 1; j < n; j++) for (let k = j + 1; k < n; k++) for (let l = k + 1; l < n; l++) {
+      const stats = [cand[i].s, cand[j].s, cand[k].s, cand[l].s];
+      const card = ccCard(slot, set, main, stats, mode);
+      const total = ctx.ev(around.concat([card])).total;
+      if (!best || total > best.total + 1e-9) best = { main, stats, card, total };
+    }
+  });
+  return best;
+}
+
+/* The best loadout holding `card`: the optimiser re-run with it in the pool, or the card dropped
+   into the loadout the character already has or the optimiser's pick without it. */
+function ccPlace(ctx, card) {
+  let best = { total: -Infinity, cards: null };
+  const tryCards = cards => { const total = ctx.ev(cards).total; if (total > best.total + 1e-9) best = { total, cards }; };
+  const swapIn = list => list.filter(c => c.slot !== card.slot).concat([card]);
+  tryCards(swapIn(ctx.base.cards));
+  if (ctx.worn !== ctx.base.cards) tryCards(swapIn(ctx.worn));
+  const r = bestPlan(ctx.ch, ctx.placePool.concat([card]), { policy: ctx.o.policy, p4value: CC_P4 });
+  if (r.best) {
+    const cards = HEAVENS.map(sl => r.best.picks[sl].c).concat(r.best.space ? [r.best.space.c] : []);
+    if (cards.indexOf(card) >= 0) tryCards(cards);
+  }
+  return best;
+}
+
+/* One character's answer: every Heavens slot (or the Space slot), in every set ccSets (ccSpaceSets)
+   offers, designed first against the loadout they already have, then placed (ccPlace), and the
+   winner of each slot designed again against the loadout it actually ends up in. `slots` is the
+   best option per slot, best first — for a Space card, one slot, so it is the best option per Space
+   set instead, which is the choice left to make. */
+function ccBest(ctx, mode) {
+  const space = ctx.o.kind === 'space';
+  const sets = space ? ccSpaceSets(ctx) : ccSets(ctx);
+  if (!sets.length) return { slots: [], best: null };
+  const slots = [];
+  (space ? ['Space'] : HEAVENS).forEach(slot => {
+    const around = ctx.base.cards.filter(c => c.slot !== slot);
+    const cur = ctx.base.cards.filter(c => c.slot === slot)[0];
+    const d = ccDesign(ctx, slot, cur && sets.indexOf(cur.set) >= 0 ? cur.set : sets[0], around, mode);
+    const opts = [];
+    sets.forEach(set => {
+      const card = ccCard(slot, set, d.main, d.stats, mode);
+      const p = ccPlace(ctx, card);
+      if (p.cards) opts.push({ slot, set, card, total: p.total, cards: p.cards });
+    });
+    if (!opts.length) return;
+    opts.sort((a, b) => b.total - a.total);
+    const top = opts[0];
+    const rest = top.cards.filter(c => c.slot !== slot);
+    const d2 = ccDesign(ctx, slot, top.set, rest, mode);
+    if (d2.total > top.total + 1e-9) Object.assign(top, { card: d2.card, total: d2.total, cards: rest.concat([d2.card]) });
+    (space ? opts : [top]).forEach(x => { x.gain = Math.max(0, 100 * (x.total - ctx.base.total) / ctx.idealTotal); slots.push(x); });
+  });
+  slots.sort((a, b) => b.total - a.total);
+  return { slots, best: slots[0] || null };
+}
+
+/* ---- what luck does to it ----
+   The card arrives at level 0: each substat's starting value is a random roll tier, and each of
+   the five upgrades lands on a random substat at a random tier. The Rolls setting prices one
+   outcome; this simulates the rest — `n` levellings of the card, every tier and every substat
+   equally likely, priced in the loadout the card goes into with everything else held as it is.
+   `start` fixes the starting values (a card already rolled, in the check panel); without it they
+   are random too. The generator is seeded from the character and the card, so the same card
+   always reads the same range. Gains are floored at 0: a card that comes out worse than what
+   they already have would simply not be worn.
+
+   Measured on the real inventory (6 Oct 2026, 4000 outcomes each, top twelve): the typical-rolls
+   gain sat within 0.15 of the simulated average for all twelve and the order did not change, but
+   the middle 80% spanned 1.2-2.5 build points, enough for neighbours to overlap — a lucky third
+   pick can beat an average first. */
+const CC_SAMPLES = 400;          // per character in the ranking: about 12 ms each
+const CC_CHECK_SAMPLES = 2000;   // for the one card in the check panel
+function ccRng(seed) {
+  let x = (seed >>> 0) || 1;
+  return () => { x = (Math.imul(x, 1103515245) + 12345) >>> 0; return x / 4294967296; };
+}
+function ccOutcomes(ctx, card, rest, start, n) {
+  const stats = card.subs.map(s => s.stat), tiers = stats.map(st => ccTiers(st, card.slot));
+  const rnd = ccRng(hashStr(2166136261, [ctx.ch.n, card.slot, card.set, card.main, stats.join(), (start || []).join()].join('|')));
+  const pick = a => a[Math.min(a.length - 1, Math.floor(rnd() * a.length))];
+  const out = [];
+  for (let k = 0; k < n; k++) {
+    const v = stats.map((st, i) => start ? start[i] : pick(tiers[i]));
+    for (let u = 0; u < CC_UPS; u++) { const i = Math.min(stats.length - 1, Math.floor(rnd() * stats.length)); v[i] += pick(tiers[i]); }
+    const c = Object.assign({}, card, { level: RARITY[5].maxLevel, subs: stats.map((st, i) => ({ stat: st, value: ccRound(st, v[i]) })) });
+    out.push(Math.max(0, 100 * (ctx.ev(rest.concat([c])).total - ctx.base.total) / ctx.idealTotal));
+  }
+  return out.sort((a, b) => a - b);
+}
+// The middle 80% of outcomes (8 in 10 land inside), the extremes seen and the average.
+function ccRange(g) {
+  const q = f => g[Math.round(f * (g.length - 1))];
+  return { lo: q(0.1), hi: q(0.9), min: g[0], max: g[g.length - 1], mean: g.reduce((a, x) => a + x, 0) / g.length };
+}
+// A ranked option's outcomes: its card levelled at random in the loadout it was placed in.
+function ccOptionOutcomes(ctx, opt, n) {
+  return ccOutcomes(ctx, opt.card, opt.cards.filter(c => c !== opt.card), null, n || CC_SAMPLES);
+}
+// Chance one random outcome of `a` beats one of `b` (both sorted ascending), ties counted half.
+function ccChanceBetter(a, b) {
+  let j = 0, k = 0, wins = 0;
+  for (let i = 0; i < a.length; i++) {
+    while (j < b.length && b[j] < a[i] - 1e-9) j++;
+    while (k < b.length && b[k] <= a[i] + 1e-9) k++;
+    wins += j + (k - j) / 2;
+  }
+  return wins / (a.length * b.length);
+}
+
+/* A row of the ranking. `inv` is the build score of the best they can already wear, `after` with
+   the card; both on the 0-100 scale, unrounded. `range` is what luck does to the gain. */
+function ccRow(ch, o) {
+  const ctx = ccContext(ch, o);
+  const r = ccBest(ctx, o.mode);
+  const pct = total => Math.max(0, Math.min(100, 100 * total / ctx.idealTotal));
+  const now = buildScore(ch, ctx.worn, CC_P4, null, null, ctx.t);
+  return { ch, t: ctx.t, ctx, now: now ? now.raw : null, inv: pct(ctx.base.total), baseFrom: ctx.base.from,
+    after: pct(Math.max(r.best ? r.best.total : -Infinity, ctx.base.total)), gain: r.best ? r.best.gain : 0, best: r.best, slots: r.slots,
+    range: r.best ? ccRange(ccOptionOutcomes(ctx, r.best)) : null };
+}
+
+/* The event makes two cards. The first is the ranking's top row; the second is the better of the
+   next character's card and a second card for the same character, priced as if the first were
+   already made and worn (its pool holds it, and its loadout is the one the first card goes into). */
+function ccSecond(rows, o) {
+  const first = rows[0];
+  if (!first || !first.best) return null;
+  const card1 = Object.assign({}, first.best.card, { id: 'craft1' });
+  const cards1 = first.best.cards.map(c => c === first.best.card ? card1 : c);
+  const ctx2 = ccContext(first.ch, o, [card1], cards1);
+  const again = ccBest(ctx2, o.mode).best;
+  const other = rows.filter(r => r !== first && r.best)[0] || null;
+  if (again && again.gain > (other ? other.gain : 0))
+    return { ch: first.ch, t: first.t, best: again, gain: again.gain, same: true, range: ccRange(ccOptionOutcomes(ctx2, again)) };
+  return other ? { ch: other.ch, t: other.t, best: other.best, gain: other.gain, same: false, range: other.range } : null;
+}
+
+/* ---- the Custom card view: run, draw, check ----
+   Run and draw are split like Triage's: the run prices every character in scope (about 50 ms
+   each on the real inventory) in slices of 50 ms so the page keeps drawing its progress, and the
+   element and search filters only redraw. A later run, or a load, abandons an unfinished one. Like
+   Triage it runs on its first visit and is then only marked stale (markStaleRuns). */
+function ccOpts() {
+  return { scope: $('#ccScope').value, kind: $('#ccKind').value, mode: $('#ccRolls').value, policy: $('#ccPolicy').value, free: $('#ccFree').checked };
+}
+const ccScopeChars = o => o.scope === 'all' ? CHARACTERS.slice() : ownedChars();
+/* What a run read: every card with its wearer and lock (the pool, and what is worn), who is owned,
+   the targets and setups of the characters it rated, the team crit rate, the Den and its own
+   controls. The element and search filters only narrow the drawn table. */
+function ccSig() {
+  const o = ccOpts();
+  return cardsSig(true) + ':' + charsSig(new Set(ccScopeChars(o).map(c => c.n))) + ':' + teamCritRate() + ':' + denSig() +
+    '|' + [o.scope, o.kind, o.mode, o.policy, o.free].join(',');
+}
+let ccCache = null, ccJob = 0;
+function runCustomCard() {
+  const job = ++ccJob, o = ccOpts(), chars = ccScopeChars(o), sig = ccSig();
+  if (!chars.length) {
+    ccCache = null;
+    $('#ccSummary').innerHTML = '<p class="muted">Mark some characters as owned on the Roster tab first, or choose "All characters".</p>';
+    $('#ccPanel').classList.add('hide');
+    ccFillCheckChars();
+    return Promise.resolve(false);
+  }
+  const rows = [];
+  let i = 0;
+  const progress = () => {
+    $('#ccSummary').innerHTML = `<div class="notice info">Pricing a custom card for each character… <b>${i}</b> of ${chars.length}</div>`;
+  };
+  progress();
+  return new Promise(resolve => {
+    const step = () => {
+      if (job !== ccJob) return resolve(false);
+      const t0 = performance.now();
+      while (i < chars.length && performance.now() - t0 < 50) rows.push(ccRow(chars[i++], o));
+      if (i < chars.length) { progress(); setTimeout(step, 0); return; }
+      rows.sort((a, b) => b.gain - a.gain || a.ch.n.localeCompare(b.ch.n));
+      rows.forEach((r, k) => { r.rank = k + 1; });
+      ccCache = { sig, o, rows, second: ccSecond(rows, o), tc: teamCritRate() };
+      renderCustomCard();
+      ccFillCheckChars();
+      if (!ccCheckFilled && rows[0] && rows[0].best) ccFillRecommended(rows[0].ch.n); else ccCheck();
+      markStaleRuns();
+      resolve(true);
+    };
+    setTimeout(step, 0);
+  });
+}
+
+const ccSort = { key: null, dir: 1 };
+const CC_SORT_COLS = { rank: r => r.rank, char: r => r.ch.n, gain: r => r.gain, range: r => r.range ? r.range.lo : -1, now: r => r.now == null ? -1 : r.now, inv: r => r.inv, after: r => r.after };
+function ccSortHeader(key, label, title) { return sortThHtml(key, label, ccSort, title); }
+function sortCcRows(rows) {
+  if (!ccSort.key) return rows.slice();   // the run's own order: largest gain first
+  const get = CC_SORT_COLS[ccSort.key];
+  return rows.slice().sort((a, b) => {
+    const av = get(a), bv = get(b);
+    const cmp = typeof av === 'number' ? av - bv : String(av).localeCompare(String(bv));
+    return (cmp || a.rank - b.rank) * ccSort.dir;
+  });
+}
+/* A card in one line: slot, set, main, then its substats coloured by what they are worth to `t`. */
+function ccCardLineHtml(card, t) {
+  return `<span class="slot ${card.slot}">${card.slot.slice(0, 3)}</span> <b>${esc(card.set)}</b> · ${esc(card.main)}
+    <div class="tiny muted">${subsInlineHtml(card, t)}</div>`;
+}
+/* The other cards of the loadout a custom card goes into that the character does not wear now. */
+function ccAlsoEquip(row, best) {
+  return best.cards.filter(c => c !== best.card && c.equipped !== row.ch.n)
+    .sort((a, b) => SLOTS.indexOf(a.slot) - SLOTS.indexOf(b.slot));
+}
+function ccAlsoHtml(row, best) {
+  const also = ccAlsoEquip(row, best);
+  if (!also.length) return '';
+  return `<div class="tiny muted" style="margin-top:4px">with ${also.map(c =>
+    `<span title="${esc(`${c.rarity}★ ${c.slot} ${c.set}, ${c.main} Lv${c.level}: ${(c.subs || []).map(subVal).map((v, i) => c.subs[i].stat + ' ' + v).join(', ')}${c.equipped ? ' — on ' + c.equipped : ''}`)}">` +
+    `<span class="slot ${c.slot}">${c.slot.slice(0, 3)}</span> ${esc(c.set)}${c.equipped ? ` <span class="tag">on ${esc(c.equipped)}</span>` : ''}</span>`).join(' ')}</div>`;
+}
+
+/* "+7.7 to +9.1": the middle 80% of random levellings, with the average and extremes on hover. */
+function ccRangeHtml(rg, long) {
+  if (!rg) return '<span class="muted">—</span>';
+  const tip = `8 in 10 random levellings land between +${rg.lo.toFixed(1)} and +${rg.hi.toFixed(1)} (average +${rg.mean.toFixed(1)}; ` +
+    `worst seen +${rg.min.toFixed(1)}, best +${rg.max.toFixed(1)}). Luck decides the starting values, which substats the five upgrades land on, and how big each one is.`;
+  return `<span title="${esc(tip)}" style="white-space:nowrap">${long ? 'likely ' : ''}+${rg.lo.toFixed(1)} to +${rg.hi.toFixed(1)}</span>`;
+}
+function renderCustomCard() {
+  if (!ccCache) return;
+  const { rows, o, second } = ccCache;
+  const el = $('#ccElement').value, q = $('#ccQ').value.trim().toLowerCase();
+  const list = sortCcRows(rows.filter(r => {
+    if (el && r.ch.e !== el) return false;
+    if (q) {
+      const b = r.best;
+      const hay = [r.ch.n, r.ch.a || '', b ? b.set : '', b ? b.slot : '', b ? b.card.main : '',
+        b ? b.card.subs.map(s => s.stat).join(' ') : ''].join(' ').toLowerCase();
+      if (hay.indexOf(q) < 0) return false;
+    }
+    return true;
+  }));
+  const first = rows[0] && rows[0].best ? rows[0] : null;
+  const rollLabel = (CC_ROLLS[o.mode] || CC_ROLLS.typical).label;
+  const pick = (n, who, best, gain, note, rg) => `<div>
+      <div class="tiny muted" style="margin-bottom:4px">${n}</div>
+      <div style="margin-bottom:6px"><b>${esc(who.n)}</b> <span class="gainpos score">+${gain.toFixed(1)}</span>
+        <span class="tiny muted">build points · ${ccRangeHtml(rg, true)}${note ? ' · ' + note : ''}</span></div>
+      ${cardBlockHtml(best.card, target(who), { tags: ' <span class="tag">custom</span>' })}
+    </div>`;
+  $('#ccSummary').innerHTML = !first
+    ? '<div class="notice info">No character in scope gains anything from a custom card over what your inventory already gives them.</div>'
+    : `<div class="notice info">Ranked <b>${rows.length}</b> character${rows.length === 1 ? '' : 's'} by what one custom card adds to
+        their build score, valued at level 25 with <b>${esc(rollLabel)}</b>, over the best your inventory already gives them.
+        ${o.kind === 'space' ? 'If the event makes two, these are the two worth most.' : 'The Cycle of Fate event makes two cards; these are the two worth most.'}</div>
+      <div class="loadout" style="margin-top:12px;max-width:760px">
+        ${pick('First card', first.ch, first.best, first.best.gain, '', first.range)}
+        ${second ? pick('Second card', second.ch, second.best, second.gain, second.same ? 'after the first card, still worth more than any other character\'s' : '', second.range) : ''}
+      </div>`;
+  $('#ccPanel').classList.toggle('hide', !list.length);
+  if (!list.length) return;
+  const maxGain = Math.max.apply(null, rows.map(r => r.gain).concat([0.1]));
+  const num = v => v == null ? '<span class="muted">—</span>' : Math.round(v);
+  $('#ccTable').innerHTML = `<thead><tr>
+      ${ccSortHeader('rank', '#', 'Rank by gain')}
+      ${ccSortHeader('char', 'Character')}
+      <th>Card to make</th>
+      ${ccSortHeader('gain', 'Gain', 'Build-score points the card adds over the best loadout your inventory already gives this character. Compares across characters.')}
+      ${ccSortHeader('range', 'Likely', 'Where the gain lands in 8 of 10 random levellings: the card arrives at level 0, and its starting values, which substats the upgrades hit and how big each is are all luck. Sorts on the low end.')}
+      ${ccSortHeader('now', 'Now', 'Build score of what is worn now')}
+      ${ccSortHeader('inv', 'Without', 'Build score of the best loadout your inventory can already give them, without the new card')}
+      ${ccSortHeader('after', 'With', 'Build score of the best loadout with the new card')}
+      ${o.kind === 'space' ? '<th title="The same card in another Space set, and what it would add instead">Other Space sets</th>'
+        : '<th title="The best card for each other slot, and what it would add instead">Other slots</th>'}
+      <th></th>
+    </tr></thead><tbody>` +
+    list.map(r => {
+      const b = r.best, after = Math.round(r.after);
+      return `<tr>
+        <td class="tiny muted right">${r.rank}</td>
+        <td class="tiny"><b>${esc(r.ch.n)}</b>
+          <div class="tiny muted">${esc(r.ch.e)}${!state.chars[r.ch.n].owned ? ' · not owned' : state.chars[r.ch.n].benched ? ' · benched' : ''}</div></td>
+        <td class="tiny">${b ? ccCardLineHtml(b.card, r.t) + ccAlsoHtml(r, b) : '<span class="muted">no set to make it in</span>'}</td>
+        <td class="right"><span class="score${r.gain >= UPGRADE_MIN_GAIN ? ' gainpos' : ''}">+${r.gain.toFixed(1)}</span>
+          <div class="bar" style="width:64px;margin-left:auto"><i style="width:${(100 * r.gain / maxGain).toFixed(1)}%"></i></div></td>
+        <td class="right tiny">${ccRangeHtml(r.range)}</td>
+        <td class="right">${num(r.now)}</td>
+        <td class="right${r.baseFrom === 'plan' ? '' : ' muted'}" title="${r.baseFrom === 'plan' ? 'A better loadout than the one worn is already in your inventory — the Upgrades tab lists it' : 'Already the best your inventory gives them'}">${num(r.inv)}</td>
+        <td class="right"><span class="tag bs ${buildBand(after).cls}"><b>${after}</b></span></td>
+        <td class="tiny">${r.slots.slice(1, 4).map(s => `<div><span class="slot ${s.slot}">${s.slot.slice(0, 3)}</span> ${esc(s.set)}${s.slot === 'Space' ? '' : ' · ' + esc(s.card.main)} <b>+${s.gain.toFixed(1)}</b></div>`).join('') || '<span class="muted">—</span>'}</td>
+        <td style="white-space:nowrap">${b ? `<button class="ghost tiny ccTry" data-char="${esc(r.ch.n)}">Check a roll</button>` : ''}
+          <button class="ghost tiny ccOpt" data-char="${esc(r.ch.n)}">Optimise</button></td>
+      </tr>`;
+    }).join('') + '</tbody>';
+  $$('#ccTable .ccTry').forEach(btn => btn.onclick = () => {
+    ccFillRecommended(btn.dataset.char);
+    $('#ccCheckPanel').scrollIntoView({ block: 'start' });
+  });
+  $$('#ccTable .ccOpt').forEach(btn => btn.onclick = () => openCharacterDetail(btn.dataset.char));
+  $$('#ccTable .sortH').forEach(th => th.onclick = () => {
+    const key = th.dataset.sort;
+    ccSort.dir = ccSort.key === key ? -ccSort.dir : 1;
+    ccSort.key = key;
+    renderCustomCard();
+    refocus(`#ccTable th.sortH[data-sort="${key}"] .thBtn`);
+  });
+}
+
+/* "Check a card": the card as the event shows it — set, slot, main and four substats at their
+   level-0 roll — priced once levelled, three ways (every upgrade at the lowest roll, at the average,
+   or all five at the top roll on its most valuable substat), against the recommended card at
+   average rolls, and for everyone else the last run rated. */
+let ccCheckFilled = false;   // the user (or a Check a roll button) has filled it in; a run no longer overwrites it
+function ccFillCheckSelects() {
+  ccFillCheckChars();
+  ccSyncMain();
+  ccRenderSubs();
+}
+function ccFillCheckChars() {
+  const cur = $('#ccChar').value;
+  let list = ccScopeChars(ccOpts());
+  if (!list.length) list = CHARACTERS.slice();
+  $('#ccChar').innerHTML = list.map(c => `<option value="${esc(c.n)}">${esc(c.n)}</option>`).join('');
+  if (cur && list.some(c => c.n === cur)) $('#ccChar').value = cur;
+}
+// The set and main lists follow the slot: a Space card takes a Space set and its fixed ATK + DEF main.
+function ccSyncMain() {
+  const slot = $('#ccSlot').value, table = slot === 'Space' ? SPACE_SETS : SETS;
+  const curSet = $('#ccSet').value, sets = Object.keys(table).filter(x => !table[x].unreleased).sort();
+  $('#ccSet').innerHTML = sets.map(x => `<option>${esc(x)}</option>`).join('');
+  if (sets.indexOf(curSet) >= 0) $('#ccSet').value = curSet;
+  const cur = $('#ccMain').value, mains = SLOT_INFO[slot].mains;
+  $('#ccMain').innerHTML = mains.map(m => `<option>${esc(m)}</option>`).join('');
+  if (mains.indexOf(cur) >= 0) $('#ccMain').value = cur;
+}
+function ccReadSubs() {
+  return [0, 1, 2, 3].map(i => {
+    const st = $(`#ccSubs .ccSubStat[data-i="${i}"]`), v = $(`#ccSubs .ccSubVal[data-i="${i}"]`);
+    return { stat: st ? st.value : '', value: v ? parseFloat(v.value) : NaN };
+  });
+}
+function ccRenderSubs(preset) {
+  const cur = preset || ccReadSubs(), main = $('#ccMain').value;
+  const stats = Object.keys(SUBSTATS).filter(x => x !== main);
+  $('#ccSubs').innerHTML = [0, 1, 2, 3].map(i => {
+    const s = cur[i] && cur[i].stat !== main ? cur[i] : { stat: '' };
+    const tiers = s.stat && ROLL_TIERS[s.stat] ? ccTiers(s.stat, $('#ccSlot').value) : [];
+    const val = tiers.indexOf(s.value) >= 0 ? s.value : tiers[2];
+    return `<div class="field"><label for="ccSub${i}">Substat ${i + 1}</label><div style="display:flex;gap:4px">
+      <select id="ccSub${i}" class="ccSubStat" data-i="${i}"><option value="">—</option>${stats.map(x =>
+        `<option${x === s.stat ? ' selected' : ''}>${esc(x)}</option>`).join('')}</select>
+      <select class="ccSubVal" data-i="${i}" aria-label="Substat ${i + 1} roll at level 0"${tiers.length ? '' : ' disabled'}>${tiers.map(v =>
+        `<option value="${v}"${v === val ? ' selected' : ''}>${esc(subVal({ stat: s.stat, value: v }))}</option>`).join('')}</select>
+    </div></div>`;
+  }).join('');
+  $$('#ccSubs .ccSubStat').forEach(sel => sel.onchange = () => { ccCheckFilled = true; ccRenderSubs(); ccCheck(); });
+  $$('#ccSubs .ccSubVal').forEach(sel => sel.onchange = () => { ccCheckFilled = true; ccCheck(); });
+}
+function ccReadCard() {
+  return { slot: $('#ccSlot').value, set: $('#ccSet').value, rarity: 5, level: 0, main: $('#ccMain').value,
+    subs: ccReadSubs().filter(s => s.stat && !isNaN(s.value)) };
+}
+function ccCardErrors(card) {
+  const errs = card.subs.length < 4 ? ['Pick all four substats.'] : [];
+  if (new Set(card.subs.map(s => s.stat)).size < card.subs.length) errs.push('Each substat can only appear once.');
+  return errs.concat(validateCard(card));
+}
+function ccFillRecommended(name) {
+  const row = ccCache && ccCache.rows.filter(r => r.ch.n === name)[0];
+  if (!row || !row.best) return;
+  ccCheckFilled = true;
+  $('#ccChar').value = name;
+  const c = row.best.card;
+  $('#ccSlot').value = c.slot; ccSyncMain(); $('#ccSet').value = c.set; $('#ccMain').value = c.main;
+  ccRenderSubs(c.subs.map(s => ({ stat: s.stat, value: ccTiers(s.stat, c.slot)[2] })));
+  ccCheck();
+}
+// The context a check is priced in: the last run's for a character it rated, else built now.
+function ccContextFor(ch) {
+  const row = ccCache && ccCache.rows.filter(r => r.ch === ch)[0];
+  return row ? { ctx: row.ctx, row } : { ctx: ccContext(ch, ccCache ? ccCache.o : ccOpts()), row: null };
+}
+function ccCheck() {
+  const out = $('#ccCheckOut');
+  const ch = charDef($('#ccChar').value);
+  if (!out || !ch) { if (out) out.innerHTML = ''; return; }
+  const card = ccReadCard(), errs = ccCardErrors(card);
+  if (errs.length) { out.innerHTML = `<p class="tiny muted">${esc(errs[0])}</p>`; return; }
+  const { ctx, row } = ccContextFor(ch), t = ctx.t;
+  const f = couplingFactors(t, card.slot, card.main), wOf = s => (t.w[s] || 0) * cf(f, s);
+  const top = card.subs.slice().sort((a, b) => wOf(b.stat) - wOf(a.stat))[0];
+  const levelled = add => Object.assign({}, card, { id: 'craft', crafted: true, level: RARITY[5].maxLevel,
+    subs: card.subs.map(s => ({ stat: s.stat, value: ccRound(s.stat, s.value + add(s)) })) });
+  const gainOf = (c, cx) => {
+    const p = ccPlace(cx, c);
+    return { gain: Math.max(0, 100 * (p.total - cx.base.total) / cx.idealTotal), after: 100 * p.total / cx.idealTotal, p };
+  };
+  const cases = [
+    { label: 'Poor upgrades', note: 'every upgrade at the lowest roll, spread evenly', card: levelled(s => CC_UPS / 4 * ccTiers(s.stat, card.slot)[0]) },
+    { label: 'Typical upgrades', note: 'every upgrade at the average roll, spread evenly', card: levelled(s => CC_UPS / 4 * ccTierMean(s.stat, card.slot)) },
+    { label: 'Best case', note: `all five upgrades at the top roll on ${top.stat}`, card: levelled(s => s === top ? CC_UPS * maxRoll(s.stat, card.slot) : 0) }
+  ];
+  cases.forEach(c => Object.assign(c, gainOf(c.card, ctx)));
+  const typical = cases[1];
+
+  /* Luck from here: the starting values are known (they are on screen), the five upgrades are not.
+     Simulated in the loadout the typical case lands in, everything else held as it is. */
+  const restOf = (p, c) => p.cards ? p.cards.filter(x => x !== c) : ctx.base.cards.filter(x => x.slot !== c.slot);
+  const mine = ccOutcomes(ctx, typical.card, restOf(typical.p, typical.card), card.subs.map(s => s.value), CC_CHECK_SAMPLES);
+  const myRange = ccRange(mine);
+  const rangeLine = `<p class="tiny" style="margin:10px 0 0">With random upgrades, 8 in 10 outcomes land between
+    <b>+${myRange.lo.toFixed(1)}</b> and <b>+${myRange.hi.toFixed(1)}</b> (average +${myRange.mean.toFixed(1)},
+    worst +${myRange.min.toFixed(1)}, best +${myRange.max.toFixed(1)}).</p>`;
+
+  /* Against the recommended card made fresh — its starting values are luck too, which is the choice
+     a re-roll offers: keep this card, or roll the recommended one's values again. */
+  const rec = row && row.best ? row.best : ccBest(ctx, 'typical').best;
+  let recLine = '';
+  if (rec) {
+    const recCard = ccCard(rec.slot, rec.set, rec.card.main, rec.card.subs.map(s => s.stat), 'typical');
+    const recPlaced = gainOf(recCard, ctx), recGain = recPlaced.gain;
+    const theirs = ccOutcomes(ctx, recCard, restOf(recPlaced.p, recCard), null, CC_CHECK_SAMPLES);
+    const chance = Math.round(100 * ccChanceBetter(mine, theirs));
+    const same = rec.slot === card.slot && rec.set === card.set && rec.card.main === card.main &&
+      rec.card.subs.map(s => s.stat).sort().join() === card.subs.map(s => s.stat).sort().join();
+    const share = recGain > 0 ? Math.round(100 * typical.gain / recGain) : null;
+    recLine = `<p class="tiny" style="margin:6px 0 0">${same
+      ? `This is the card recommended for ${esc(ch.n)}; at average rolls it adds <b>+${recGain.toFixed(1)}</b>.`
+      : `The card recommended for ${esc(ch.n)} — ${esc(rec.slot)} ${esc(rec.set)}, ${esc(rec.card.main)} with
+         ${esc(rec.card.subs.map(s => s.stat).join(', '))} — adds <b>+${recGain.toFixed(1)}</b> at average rolls.`}
+      ${share != null ? ` Levelled with typical upgrades, this one is worth <b>${share}%</b> of that.` : ''}</p>
+      <p class="ccChance" style="margin:6px 0 0">Chance this card ends up better than ${same ? 're-rolling its values' : 'a fresh roll of the recommended card'}:
+        <b class="${chance >= 50 ? 'gainpos' : ''}">${chance}%</b>
+        <span class="tiny muted">— both levelled with random upgrades; above 50% means keeping it is the better bet.</span></p>`;
+  }
+
+  // Everyone else the last run rated, for this card with typical upgrades.
+  let others = '';
+  if (ccCache) {
+    const rated = ccCache.rows.filter(r => r.ch !== ch).map(r => ({ r, g: gainOf(typical.card, r.ctx).gain }))
+      .filter(x => x.g >= UPGRADE_MIN_GAIN).sort((a, b) => b.g - a.g).slice(0, 6);
+    others = `<p class="tiny" style="margin:6px 0 0">Who else gains from this card with typical upgrades: ${rated.length
+      ? rated.map(x => `<b>${esc(x.r.ch.n)}</b> <span class="gainpos">+${x.g.toFixed(1)}</span>`).join(' · ')
+      : '<span class="muted">nobody else in the ranking</span>'}.</p>`;
+  }
+  out.innerHTML = `<div class="flowTable" style="margin-bottom:0"><table>
+      <thead><tr><th>Once levelled to 25</th><th>Substats</th><th class="right">Gain</th><th class="right">Build with it</th></tr></thead>
+      <tbody>${cases.map(c => `<tr>
+        <td class="tiny"><b>${esc(c.label)}</b><div class="tiny muted">${esc(c.note)}</div></td>
+        <td class="tiny">${subsInlineHtml(c.card, t)}</td>
+        <td class="right"><span class="score${c.gain >= UPGRADE_MIN_GAIN ? ' gainpos' : ''}">+${c.gain.toFixed(1)}</span></td>
+        <td class="right"><span class="tag bs ${buildBand(Math.round(c.after)).cls}"><b>${Math.round(Math.min(100, c.after))}</b></span></td>
+      </tr>`).join('')}</tbody></table></div>
+    ${ccAlsoHtml({ ch }, { card: typical.card, cards: typical.p.cards || [] })}
+    ${rangeLine}${recLine}${others}`;
+}
+function ccAddCard() {
+  const card = ccReadCard(), errs = ccCardErrors(card);
+  if (errs.length) { notify(errs[0]); return; }
+  const snap = snapshotState();
+  card.id = 'c' + (state.nextId++);
+  card.equipped = null;
+  state.cards.push(card);
+  commit();
+  offerUndo(`Added a 5★ ${card.slot} ${card.set} card (${card.main}) at level 0 to the inventory.`, snap);
 }
 
 /* Both Upgrades views read what is equipped, so every equip/unequip path refreshes both.
@@ -5885,15 +6472,15 @@ function syncTeamCritField() {
 // not just what it holds.
 const PREF_SELECTS = ['rsFilter', 'rsElement', 'rsSort', 'flSlot', 'flSet', 'flRar', 'flMain',
   'flSubMode', 'trScope', 'trShow', 'trRar', 'vaRar', 'vaShow', 'upRar',
-  'hrShow', 'hrElement', 'hrSlot', 'hrRar',
+  'hrShow', 'hrElement', 'hrSlot', 'hrRar', 'ccScope', 'ccKind', 'ccRolls', 'ccPolicy', 'ccElement',
   'trFlSlot', 'trFlSet', 'trFlRar', 'trFlMain', 'trFlSubMode',
   'vaFlSlot', 'vaFlSet', 'vaFlRar', 'vaFlMain', 'vaFlSubMode'];
-const PREF_CHECKS = ['rsHideBenched', 'upSameSet', 'upIgnoreEquipped', 'hrTakeEquipped'];
-const PREF_TEXT = ['rsQ', 'flQ', 'trFlQ', 'vaFlQ', 'hrMin', 'hrQ'];
+const PREF_CHECKS = ['rsHideBenched', 'upSameSet', 'upIgnoreEquipped', 'hrTakeEquipped', 'ccFree'];
+const PREF_TEXT = ['rsQ', 'flQ', 'trFlQ', 'vaFlQ', 'hrMin', 'hrQ', 'ccQ'];
 function collectPrefs() {
   const p = { invSort: { key: invSort.key, dir: invSort.dir },
     trSort: { key: trSort.key, dir: trSort.dir }, vaSort: { key: vaSort.key, dir: vaSort.dir },
-    hrSort: { key: hrSort.key, dir: hrSort.dir } };
+    hrSort: { key: hrSort.key, dir: hrSort.dir }, ccSort: { key: ccSort.key, dir: ccSort.dir } };
   PREF_SELECTS.forEach(id => { p[id] = $('#' + id).value; });
   PREF_CHECKS.forEach(id => { p[id] = $('#' + id).checked; });
   PREF_TEXT.forEach(id => { p[id] = $('#' + id).value; });
@@ -5939,6 +6526,7 @@ function applyPrefs(p) {
   if (p.trSort) { trSort.key = p.trSort.key || null; trSort.dir = p.trSort.dir || 1; }
   if (p.vaSort) { vaSort.key = p.vaSort.key || null; vaSort.dir = p.vaSort.dir || 1; }
   if (p.hrSort) { hrSort.key = p.hrSort.key || null; hrSort.dir = p.hrSort.dir || 1; }
+  if (p.ccSort) { ccSort.key = p.ccSort.key || null; ccSort.dir = p.ccSort.dir || 1; }
 }
 // What save() writes — split out so the round trip in the tests reads the real shape.
 function savePayload() {
@@ -5989,11 +6577,13 @@ function load(file) {
          reach whichever new card now has that id. The same goes for a forced Optimise pick. */
       if ($('#dlg').open) $('#dlg').close();
       optForced = null;
-      trCache = null; vaCache = null;
-      ['#trSummary', '#vaSummary'].forEach(id => { $(id).innerHTML = ''; });
-      ['#trPanel', '#vaPanel'].forEach(id => $(id).classList.add('hide'));
+      trCache = null; vaCache = null; ccCache = null; ccJob++; ccCheckFilled = false;
+      ['#trSummary', '#vaSummary', '#ccSummary', '#ccCheckOut'].forEach(id => { $(id).innerHTML = ''; });
+      ['#trPanel', '#vaPanel', '#ccPanel'].forEach(id => $(id).classList.add('hide'));
+      ccFillCheckChars();
       commit(); markSaved();
       if (!$('#tab-triage').classList.contains('hide')) autoRunTriage();
+      if (!$('#tab-upgrades').classList.contains('hide') && !$('#up-pane-craft').classList.contains('hide')) runCustomCard();
       $('#dataMsg').innerHTML = `Loaded <b>${state.cards.length}</b> cards.` +
         (bad.length ? ` <span style="color:#e87a5c">${bad.length} skipped</span> — ${esc(bad.slice(0, 3).join('; '))}${bad.length > 3 ? ' …' : ''}` : '') +
         (staleMain.length ? `<br><span class="tiny">${staleMain.length} card${staleMain.length === 1 ? '' : 's'} carried a scanned main
@@ -6227,6 +6817,7 @@ function showTab(tab) {
   window.scrollTo(0, 0);
   if (tab === 'opt' && optStale) { optStale = false; runOpt(); }   // deferred while hidden — see runOptIfShown
   if (tab === 'upgrades' && upViewsStale) runUpgradeViews();       // deferred while hidden — see runUpgradeViews
+  if (tab === 'upgrades' && !$('#up-pane-craft').classList.contains('hide')) { if (!ccCache) runCustomCard(); else markStaleRuns(); }
   if (tab === 'triage') { autoRunTriage(); markStaleRuns(); }
 }
 $$('nav button').forEach(b => b.onclick = () => showTab(b.dataset.tab));
@@ -6323,8 +6914,32 @@ $$('#upSubtabs button').forEach(b => b.onclick = () => {
   $$('#upSubtabs button').forEach(x => x.classList.toggle('on', x === b));
   $('#up-pane-better').classList.toggle('hide', b.dataset.uptab !== 'better');
   $('#up-pane-headroom').classList.toggle('hide', b.dataset.uptab !== 'headroom');
+  $('#up-pane-craft').classList.toggle('hide', b.dataset.uptab !== 'craft');
   if (b.dataset.uptab === 'headroom') runHeadroom();
+  if (b.dataset.uptab === 'craft') { if (!ccCache) runCustomCard(); else markStaleRuns(); }
 });
+// Custom card: the settings re-run the ranking (a couple of seconds, with its progress shown);
+// element and search only redraw it. The check panel re-prices on every change.
+['#ccScope', '#ccRolls', '#ccPolicy', '#ccFree'].forEach(id => $(id).addEventListener('change', () => runCustomCard()));
+// Switching between Heavens and Space cards also moves the check panel to a slot of that kind.
+$('#ccKind').addEventListener('change', () => {
+  const space = $('#ccKind').value === 'space';
+  if (space !== ($('#ccSlot').value === 'Space')) { $('#ccSlot').value = space ? 'Space' : 'Sun'; ccSyncMain(); ccRenderSubs(); ccCheckFilled = false; }
+  runCustomCard();
+});
+$('#ccRun').onclick = () => runCustomCard();
+$('#ccElement').onchange = renderCustomCard;
+$('#ccQ').oninput = renderCustomCard;
+$('#ccChar').onchange = () => { ccCheckFilled = true; ccCheck(); };
+$('#ccSlot').onchange = () => { ccCheckFilled = true; ccSyncMain(); ccRenderSubs(); ccCheck(); };
+$('#ccSet').onchange = () => { ccCheckFilled = true; ccCheck(); };
+$('#ccMain').onchange = () => { ccCheckFilled = true; ccRenderSubs(); ccCheck(); };
+$('#ccFillRec').onclick = () => {
+  const name = $('#ccChar').value;
+  if (ccCache && ccCache.rows.some(r => r.ch.n === name && r.best)) ccFillRecommended(name);
+  else notify(`${name} is not in the last ranking — rank characters with them in scope first.`);
+};
+$('#ccAdd').onclick = ccAddCard;
 // Only the "take a card off someone else" toggle changes which cards are in scope, so it
 // is the one control that has to re-run the scoring pass rather than redraw the cache.
 $('#hrTakeEquipped').onchange = runHeadroom;

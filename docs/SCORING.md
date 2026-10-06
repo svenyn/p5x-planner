@@ -446,6 +446,7 @@ Four different questions, four different functions. Picking the wrong one is a b
 | Optimise | `bestPlan` | Best loadout for this character from the whole inventory? |
 | Upgrades &rarr; Better cards available | `upgradesFor` | Which swaps improve what they already wear? |
 | Upgrades &rarr; Weakest slots | `headroomRows` | Which equipped card is furthest from the best one that could exist there? |
+| Upgrades &rarr; Custom card | `ccRow` / `ccBest` | Who gains most from a card designed in the Cycle of Fate event, and which card? |
 | Triage &rarr; Keep or feed | `runTriage` | For each card I own — keep, hold, or feed? |
 | Triage &rarr; Lock for later (the Vault) | `runVault` | Which cards deserve a lock in the game client? |
 
@@ -695,6 +696,54 @@ Nothing here scores, ranks or optimises anything the rest of the tool reads — 
 reading of the current board, and the scoring pass is cached so filters and column sorts
 redraw without re-running it (measured: 301 ms for 65 owned characters over 4000 cards,
 53 ms to redraw).
+
+### `ccRow(ch, o)` — the custom card (Cycle of Fate event)
+
+The Cycle of Fate event makes a 5★ Sun, Moon, Star or Sky card whose set, slot, main and four
+substats the player picks (other events do the same for a Space card — the view's Card type
+switch, `o.kind`; a Space card is tried in every released Space set that pairs with a set
+`ccSets` offers, rolled on the Space tables, and its alternatives are the other Space sets); the substat *values* are random rolls, and its five upgrades land
+at random. For each character in scope:
+
+- **Baseline** (`ccContext`) — the better of what is worn and `bestPlan`'s pick from the pool,
+  both priced by that `bestPlan` call's `loadoutTotal`. The gain is measured from there, not
+  from what is worn: a better card already owned is free, and crediting it to the crafted card
+  would rank the worst-dressed character first.
+- **Design** (`ccDesign`) — per slot, the main among the slot's recommended ones (every legal
+  main where lufel's slot is open), best `CC_MAIN_POOL` by their perfect card's `cardScore`; the
+  substats every four of the best `CC_SUB_POOL` by coupled weight plus any stat with a target;
+  each priced as the whole loadout around it.
+- **Placement** (`ccPlace`) — the best of: `bestPlan` re-run with the card added (it can
+  complete a 4-piece the inventory is one short of), or the card dropped into the baseline or
+  the worn loadout. Tried in every set `ccSets` offers (the character's own list plus any set
+  in those loadouts; never unreleased or off-element), and the slot's winner designed again in
+  the loadout it ends up in.
+- **Rolls** (`CC_ROLLS`) — typical: each substat at its average `ROLL_TIERS` value with the
+  five upgrades spread evenly (1.25 each, the average of random landing); perfect: the build
+  score's own `IDEAL_ROLLS` at maximum; poor: every roll at its lowest tier. Priced at level
+  25 — the main's growth is certain.
+
+Gain is `100 × (with − baseline) ÷ idealTotal`, build points, comparable across characters.
+
+**Luck** (`ccOutcomes`): the card arrives at level 0, so its starting tiers, which substat each
+of the five upgrades hits and each upgrade's tier are random (all equally likely). The Likely
+column is the middle 80% of `CC_SAMPLES` (400) seeded simulations of the recommended card in the
+loadout it was placed in, everything else held fixed; floored at 0, since a worse card would not
+be worn. Measured on the real inventory (6 Oct 2026): the typical-rolls gain sits within 0.15 of
+the simulated average for the top twelve, and the middle 80% spans 1.2-2.5 build points. The
+check panel simulates the entered card from its known starting values and a fresh roll of the
+recommended card (`CC_CHECK_SAMPLES`, 2000 each), and `ccChanceBetter` is the chance the first
+ends up above the second — the keep-or-re-roll question.
+`ccSecond` picks the event's second card: the next character's, or a second card for the
+first character priced with the first already in the pool and worn — whichever adds more.
+
+Speed: the pool is cut to each slot and set's top `CC_KEEP` cards (all `bestPlan` can reach —
+a test holds the answer identical), and the dozen re-runs per character read a narrower
+`placePool` (the card's candidate sets, every Space card, each slot's best of any set). About
+50 ms a character on the real inventory (4316 cards): 2 s for 37 owned, 3 s for all 68,
+run in 50 ms slices so the progress line draws. The "Check a card" panel prices a card the
+user rolled (level-0 values) three ways once levelled, against the recommended card at
+average rolls, and against every character the last run rated.
 
 ## 7. Constants, in one place
 

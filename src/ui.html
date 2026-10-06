@@ -683,6 +683,7 @@ details.sect>.inner{margin-top:10px}
     <div class="subtabs" id="upSubtabs">
       <button data-uptab="better" class="on">Better cards available</button>
       <button data-uptab="headroom">Weakest slots</button>
+      <button data-uptab="craft">Custom card</button>
     </div>
 
     <div id="up-pane-better">
@@ -756,6 +757,79 @@ details.sect>.inner{margin-top:10px}
         <div class="flowTable"><table id="hrTable"></table></div>
       </div>
     </div><!-- /up-pane-headroom -->
+
+    <div id="up-pane-craft" class="hide">
+      <div class="panel">
+        <h2>Custom card</h2>
+        <details class="explain" style="margin:0 0 12px"><summary>Which characters gain most from a card you design in an
+          event, and which card to make for each.</summary>
+          <div class="body">
+            <p>The Cycle of Fate event lets you choose a card's set, slot (Sun, Moon, Star or Sky), main stat and four
+              substats; other events make a Space card the same way, so <b>Card type</b> switches between the two. For a
+              Space card the set matters most: it only works with a 4-piece it pairs with, and the other Space sets that
+              would also work are listed beside it. The score counts every Space set that pairs as equal (it does not
+              weigh their different pairing effects), so the character's own recommended Space set comes first. You cannot choose the substats' values: each is a random roll, and the card's five upgrades land
+              on random substats like any other card's. So every card here is valued at level 25 with the rolls you pick
+              below. <b>Typical</b> is each substat at its average roll with the upgrades spread evenly, <b>Perfect</b>
+              every roll at its maximum, <b>Poor</b> every roll at its lowest.</p>
+            <p><b>Gain</b> is the build-score points the card adds over the best loadout your inventory can already give
+              that character. Better cards you already own are counted as worn, so the gain is the new card's alone, and
+              it compares across characters. <b>Now</b> is the build score of what they wear, <b>Without</b> the best they
+              could wear today, <b>With</b> the best with the new card.</p>
+            <p>The card arrives at level 0, so how it turns out is luck: its starting values, which substats the five
+              upgrades land on, and how big each one is. <b>Likely</b> is where the gain lands in 8 of 10 random
+              levellings of the recommended card (hover for the average, worst and best seen). Gain uses the Rolls
+              setting; with Typical it sits close to the middle of that range.</p>
+            <p>A new card can make other changes worth it, most often by completing a 4-piece you are one card short of.
+              When it does, the row lists the other cards to equip with it. Substats are listed most valuable first; with
+              perfect rolls the first one carries the extra upgrade.</p>
+          </div></details>
+        <div class="row">
+          <div class="field"><label>Characters</label><select id="ccScope">
+            <option value="owned">Characters I own</option>
+            <option value="all">All characters</option></select></div>
+          <div class="field"><label>Card type</label><select id="ccKind">
+            <option value="heavens">Sun, Moon, Star or Sky</option>
+            <option value="space">Space</option></select></div>
+          <div class="field"><label>Rolls</label><select id="ccRolls">
+            <option value="typical">Typical</option>
+            <option value="perfect">Perfect</option>
+            <option value="low">Poor</option></select></div>
+          <div class="field"><label>Set policy</label><select id="ccPolicy">
+            <option value="pref">Honour preferred sets</option>
+            <option value="force4">Force preferred 4-piece</option>
+            <option value="any4">Best complete 4-piece</option>
+            <option value="stats">Pure stat maximum</option></select></div>
+          <label class="check"><input type="checkbox" id="ccFree" checked> Ignore cards equipped on someone else</label>
+          <div class="field"><label>Element</label><select id="ccElement"><option value="">Any</option></select></div>
+          <div class="field"><label>Search</label><input id="ccQ" placeholder="character, set or stat"></div>
+          <button class="primary" id="ccRun">Rank characters</button>
+        </div>
+        <div id="ccSummary" style="margin-top:12px"></div>
+      </div>
+      <div class="hide" id="ccPanel">
+        <div class="flowTable"><table id="ccTable"></table></div>
+      </div>
+      <div class="panel" id="ccCheckPanel">
+        <h2>Check a card</h2>
+        <p class="tiny muted" style="margin:0 0 10px">Enter the card as the event shows it — the substats' values are
+          the level-0 rolls — to see what it is worth once levelled, the chance it ends up better than a fresh roll of the
+          recommended card, and who else could use it. Useful for deciding whether to re-roll.</p>
+        <div class="row">
+          <div class="field"><label for="ccChar">Character</label><select id="ccChar"></select></div>
+          <div class="field"><label for="ccSlot">Slot</label><select id="ccSlot">
+            <option>Sun</option><option>Moon</option><option>Star</option><option>Sky</option><option>Space</option></select></div>
+          <div class="field"><label for="ccSet">Set</label><select id="ccSet"></select></div>
+          <div class="field"><label for="ccMain">Main stat</label><select id="ccMain"></select></div>
+        </div>
+        <div class="row" id="ccSubs" style="margin-top:10px"></div>
+        <div class="row" style="margin-top:10px">
+          <button class="ghost" id="ccFillRec">Fill in the recommended card</button>
+          <button class="ghost" id="ccAdd" title="Adds this card at level 0 to your inventory, unequipped">Add to inventory</button>
+        </div>
+        <div id="ccCheckOut" style="margin-top:12px"></div>
+      </div>
+    </div><!-- /up-pane-craft -->
   </section>
 
   <!-- ===================== ROSTER ===================== -->
