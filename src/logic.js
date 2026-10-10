@@ -3339,16 +3339,16 @@ function runOpt() {
   };
 
   /* Cards this loadout would take off someone else, and what that costs them (giverLoss, as
-     on the Upgrades tab: after each puts back their best free card of the slot). The pool
-     defaults to "All cards", so a recommendation can be a trade, and "(+5)" alone reads as
-     free. Priced per giver, jointly over everything taken from them. */
+     on the Upgrades tab: after each puts back their best free card of the slot). On "All
+     cards" a recommendation can be a trade, and "(+5)" alone reads as free. Priced per giver,
+     jointly over everything taken from them. */
   const trade = { used: new Set(recCards.map(c => c.id)), minR: +$('#optRarity').value };
   const takenFrom = {};
   recCards.forEach(c => { if (c.equipped && c.equipped !== name) (takenFrom[c.equipped] = takenFrom[c.equipped] || []).push(c); });
   const givers = Object.keys(takenFrom);
   const tradeLoss = givers.reduce((s, g) => s + giverLoss(charDef(g), takenFrom[g], trade.used, trade.minR), 0);
-  /* The pool stays on "All cards" by default (the user's choice), so the trade is said up front,
-     beside the headline, rather than in small print under a green "+3": on the real inventory
+  /* The pool defaults to "Only unequipped cards" (the user's choice, Oct 2026; it was "All
+     cards" before), but on "All cards" the trade is said up front, beside the headline, rather than in small print under a green "+3": on the real inventory
      Kumi's recommendation read +3 while taking three cards off two characters, net -25.1. */
   const net = now && rec && givers.length ? rec.raw - now.raw - tradeLoss : null;
   const losing = net != null && net < 0;
@@ -4435,9 +4435,9 @@ function renderVaultTable() {
    equipped right now — reusing bestPlan rather than re-deriving its picks, so a change to
    set policy or the spread/breakpoint terms cannot make this tab disagree with Optimise.
 
-   The pool is every card in the inventory, whoever is currently wearing it — the same
-   "All cards" mode Optimise defaults to — so a suggestion can point at a card equipped on
-   someone else. That has to stay visible rather than silently resolved: reassigning it
+   With "Ignore cards equipped on someone else" unticked, the pool is every card in the
+   inventory, whoever is currently wearing it — Optimise's "All cards" mode — so a suggestion
+   can point at a card equipped on someone else. That has to stay visible rather than silently resolved: reassigning it
    is a real trade against another character's build, not a free upgrade, so the owner's
    name is shown next to it and the swap is one click, not automatic. */
 /* The smallest suggestion worth listing, in build points — the Gain column's own precision.
@@ -5738,6 +5738,46 @@ function ikPickHtml(x, t) {
   return `<span class="slot ${opt.slot}">${opt.slot.slice(0, 3)}</span> <b>${esc(opt.set)}</b> · ${esc(opt.card.main)}
     <div class="tiny muted">${picked.length ? `pick <span class="subs">${names}</span>${rnd ? `; ${rnd} more at random` : ''}` : 'all four substats at random'}</div>`;
 }
+/* The character the table over the ranking is about: the one whose row was last clicked, else the
+   top of the ranking. Kept by name, so it survives a re-run that still rates them. */
+let ikFocus = null;
+function ikFocusRow() {
+  if (!ikCache) return null;
+  const rows = ikCache.rows.filter(r => r.best);
+  return rows.filter(r => r.ch.n === ikFocus)[0] || rows[0] || null;
+}
+function ikSetFocus(name) {
+  ikFocus = name;
+  renderIkFocus();
+  $$('#ikTable tr.ikRow').forEach(tr => {
+    const on = tr.dataset.char === name;
+    tr.classList.toggle('on', on);
+    tr.setAttribute('aria-current', String(on));
+  });
+  const box = $('#ikFocusBox');
+  if (box) box.scrollIntoView({ block: 'nearest' });
+}
+// How much each extra pick is worth for the focused character: the decision the Elysian Ink buys.
+function renderIkFocus() {
+  const box = $('#ikFocusBox'), r = ikFocusRow();
+  if (!box || !r) return;
+  const o = ikCache.o;
+  const ladder = `<div class="flowTable" style="margin:8px 0 0"><table>
+      <thead><tr><th>Substats you pick</th><th>Ink it takes</th><th>Card to make</th><th class="right">Gain</th></tr></thead>
+      <tbody>${r.byK.map((x, k) => x ? `<tr${k === o.pick ? ' class="on"' : ''}>
+        <td class="tiny"><b>${k}</b></td>
+        <td class="tiny">${esc(ikInkLabel(k))}</td>
+        <td class="tiny">${ikPickHtml(x, r.t)}</td>
+        <td class="right"><span class="score${x.gain >= UPGRADE_MIN_GAIN ? ' gainpos' : ''}">+${x.gain.toFixed(1)}</span></td>
+      </tr>` : '').join('')}</tbody></table></div>`;
+  box.innerHTML = `<span class="tiny muted">#${r.rank}</span> <b>${esc(r.ch.n)}</b> <span class="gainpos score">+${r.gain.toFixed(1)}</span>
+      <span class="tiny muted">build points · ${ccRangeHtml(r.range, true)}</span>
+      <div style="margin-top:4px">${ikPickHtml(r.best, r.t)}</div>
+      ${ccAlsoHtml(r, { card: r.best.opt.card, cards: r.best.opt.cards })}
+      <div class="tiny muted" style="margin-top:8px">What picking more or fewer substats would add for ${esc(r.ch.n)}
+        <span class="ikFocusHint">· click a row in the ranking below to see another character</span>:</div>
+      ${ladder}`;
+}
 function renderInkCard() {
   if (!ikCache) return;
   const { rows, o } = ikCache;
@@ -5752,26 +5792,13 @@ function renderInkCard() {
     return true;
   }));
   const first = rows[0] && rows[0].best ? rows[0] : null;
-  // How much each extra pick is worth, for the top character: the decision the Elysian Ink buys.
-  const ladder = r => `<div class="flowTable" style="margin:8px 0 0"><table>
-      <thead><tr><th>Substats you pick</th><th>Ink it takes</th><th>Card to make</th><th class="right">Gain</th></tr></thead>
-      <tbody>${r.byK.map((x, k) => x ? `<tr${k === o.pick ? ' class="on"' : ''}>
-        <td class="tiny"><b>${k}</b></td>
-        <td class="tiny">${esc(ikInkLabel(k))}</td>
-        <td class="tiny">${ikPickHtml(x, r.t)}</td>
-        <td class="right"><span class="score${x.gain >= UPGRADE_MIN_GAIN ? ' gainpos' : ''}">+${x.gain.toFixed(1)}</span></td>
-      </tr>` : '').join('')}</tbody></table></div>`;
   $('#ikSummary').innerHTML = !first
     ? '<div class="notice info">No character in scope gains anything from an ink card over what your inventory already gives them.</div>'
     : `<div class="notice info">Ranked <b>${rows.length}</b> character${rows.length === 1 ? '' : 's'} by what one ink card with
         <b>${esc(ikPickLabel(o.pick))}</b> picked adds to their build score, averaged over what luck fills in, over the best your
         inventory already gives them.</div>
-      <div style="margin-top:12px"><b>${esc(first.ch.n)}</b> <span class="gainpos score">+${first.gain.toFixed(1)}</span>
-        <span class="tiny muted">build points · ${ccRangeHtml(first.range, true)}</span>
-        <div style="margin-top:4px">${ikPickHtml(first.best, first.t)}</div>
-        ${ccAlsoHtml(first, { card: first.best.opt.card, cards: first.best.opt.cards })}
-        <div class="tiny muted" style="margin-top:8px">What picking more or fewer substats would add for ${esc(first.ch.n)}:</div>
-        ${ladder(first)}</div>`;
+      <div id="ikFocusBox" style="margin-top:12px"></div>`;
+  if (first) renderIkFocus();
   $('#ikPanel').classList.toggle('hide', !list.length);
   if (!list.length) return;
   const maxGain = Math.max.apply(null, rows.map(r => r.gain).concat([0.1]));
@@ -5790,8 +5817,8 @@ function renderInkCard() {
       <th></th>
     </tr></thead><tbody>` +
     list.map(r => {
-      const b = r.best, after = Math.round(r.after);
-      return `<tr>
+      const b = r.best, after = Math.round(r.after), on = b && r === ikFocusRow();
+      return `<tr${b ? ` class="ikRow${on ? ' on' : ''}" data-char="${esc(r.ch.n)}" tabindex="0" aria-current="${on}" title="Show what picking more or fewer substats adds for ${esc(r.ch.n)}"` : ''}>
         <td class="tiny muted right">${r.rank}</td>
         <td class="tiny"><b>${esc(r.ch.n)}</b>
           <div class="tiny muted">${esc(r.ch.e)}${!state.chars[r.ch.n].owned ? ' · not owned' : state.chars[r.ch.n].benched ? ' · benched' : ''}</div></td>
@@ -5815,6 +5842,11 @@ function renderInkCard() {
     $('#ikCheckPanel').scrollIntoView({ block: 'start' });
   });
   $$('#ikTable .ikOpt').forEach(btn => btn.onclick = () => openCharacterDetail(btn.dataset.char));
+  // A row (anywhere but its buttons) puts that character in the table above.
+  $$('#ikTable tr.ikRow').forEach(tr => {
+    tr.onclick = e => { if (!e.target.closest('button, a, input, select')) ikSetFocus(tr.dataset.char); };
+    tr.onkeydown = e => { if ((e.key === 'Enter' || e.key === ' ') && e.target === tr) { e.preventDefault(); ikSetFocus(tr.dataset.char); } };
+  });
   $$('#ikTable .sortH').forEach(th => th.onclick = () => {
     const key = th.dataset.sort;
     ikSort.dir = ikSort.key === key ? -ikSort.dir : 1;
@@ -7666,7 +7698,7 @@ function load(file) {
          reach whichever new card now has that id. The same goes for a forced Optimise pick. */
       if ($('#dlg').open) $('#dlg').close();
       optForced = null;
-      trCache = null; vaCache = null; ccCache = null; ccJob++; ccCheckFilled = false; ikCache = null; ikJob++; ikCheckFilled = false; frCache = null; frJob++; rgCache = null; rgJob++;
+      trCache = null; vaCache = null; ccCache = null; ccJob++; ccCheckFilled = false; ikCache = null; ikJob++; ikCheckFilled = false; ikFocus = null; frCache = null; frJob++; rgCache = null; rgJob++;
       ['#trSummary', '#vaSummary', '#ccSummary', '#ccCheckOut', '#ikSummary', '#ikCheckOut', '#frSummary', '#rgSummary'].forEach(id => { $(id).innerHTML = ''; });
       ['#trPanel', '#vaPanel', '#ccPanel', '#ikPanel', '#frPanel', '#rgPanel'].forEach(id => $(id).classList.add('hide'));
       ccFillCheckChars(); ikFillCheckChars();

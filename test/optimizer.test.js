@@ -1353,6 +1353,10 @@ function weightOverrideDrift() {
       $('#optPool').value = was.pool; $('#optRarity').value = was.rar; renderOpt(); $('#optChar').value = was.ch;
       return /It takes \d+ cards? off /.test(html) && /net <b>[−+]\d/.test(html) && /on [^<]+ · [−+]\d/.test(html);
     })());
+    // The user's choice (Oct 2026). The select is not in the prefs, so its markup default is
+    // what every session opens on.
+    fail('Optimise\'s Card pool opens on "Only unequipped cards"',
+      [...$('#optPool').options].filter(o => o.defaultSelected).map(o => o.value).join() === 'free');
 
     // ---- Headroom ----
     const hr = headroomRows(false);
@@ -1824,6 +1828,25 @@ function weightOverrideDrift() {
       ladder: document.querySelectorAll('#ikSummary tbody tr').length, sorted: ikCache.rows.every((x, i, a) => !i || a[i - 1].gain >= x.gain),
       likely: document.querySelectorAll('#ikTable tbody tr').length === document.querySelectorAll('#ikTable td span[title^="8 in 10"]').length,
       needsAll: /Enter all four substats/.test(document.getElementById('ikCheckOut').textContent), nan: /NaN|undefined/.test(html()) };
+    // A click on another row puts that character in the table above; its buttons do not, and Enter does.
+    const focusName = () => (document.querySelector('#ikFocusBox b') || {}).textContent;
+    const rowsEl = [...document.querySelectorAll('#ikTable tr.ikRow')];
+    r.focusTop = focusName() === ikCache.rows[0].ch.n && rowsEl[0].classList.contains('on');
+    if (rowsEl.length > 2) {
+      rowsEl[1].querySelector('td').click();
+      const second = rowsEl[1].dataset.char;
+      r.focusClick = focusName() === second && rowsEl[1].classList.contains('on') && !rowsEl[0].classList.contains('on') &&
+        document.querySelectorAll('#ikFocusBox tbody tr').length === 5 &&
+        document.querySelector('#ikFocusBox').innerHTML.indexOf('+' + ikCache.rows.find(x => x.ch.n === second).byK[4].gain.toFixed(1)) >= 0;
+      rowsEl[2].querySelector('.ikOpt').onclick = () => {};   // keep the popup shut; the row must still ignore the click
+      rowsEl[2].querySelector('.ikOpt').click();
+      r.focusButton = focusName() === second;
+      rowsEl[2].dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
+      r.focusKey = focusName() === rowsEl[2].dataset.char;
+      renderInkCard();
+      r.focusKept = focusName() === rowsEl[2].dataset.char && document.querySelector('#ikTable tr.ikRow.on').dataset.char === rowsEl[2].dataset.char;
+      rowsEl[0].click();
+    } else Object.assign(r, { focusClick: true, focusButton: true, focusKey: true, focusKept: true });
     // Fill the two random substats in, then put the first picked one on its lowest roll and the other on its highest.
     const first = ikCache.rows[0], picked = first.best.picked, slot = first.best.opt.slot;
     const free = ikLeft(slot, first.best.opt.card.main, picked);
@@ -1848,6 +1871,8 @@ function weightOverrideDrift() {
   check('Ink card: the sub-tab ranks every owned character on the way in, shows what each extra pick adds, and the check panel re-rolls a picked substat on its lowest roll and keeps one on its highest; adding the card marks the ranking stale and undo takes it back',
     ikState.rows === ikState.owned && ikState.ladder === 5 && ikState.sorted && ikState.likely && ikState.needsAll && ikState.lowRerolled && ikState.checkRows &&
     ikState.keepTop && ikState.added && ikState.stale && ikState.undone && !ikState.nan, JSON.stringify(ikState));
+  check('Ink card: the table of what more or fewer picks add follows the clicked row (or Enter on it), not its buttons, and survives a redraw',
+    ikState.focusTop && ikState.focusClick && ikState.focusButton && ikState.focusKey && ikState.focusKept, JSON.stringify(ikState));
   await p.click('#upSubtabs button[data-uptab="fortune"]');
   await p.waitForFunction(() => frCache, null, { timeout: 60000 });
   const frState = await p.evaluate(async () => {

@@ -537,7 +537,7 @@ they have anyway, and crediting it to the trade once made a loss negative and a 
 the gain). `upPts` is net of `lossPts`, so characters are ordered by the net; the "on X" tag
 shows X's loss and the footer or row shows the net. Nothing is hidden, since the user may value
 one character over another and build points cannot know that — but the box is now ticked by
-default, which is what the user had chosen, and with it no trade is ever proposed. The Optimise tab, whose Card pool defaults to "All cards", prices its trades the same way: each "on X" tag carries X's loss (`onTagHtml`), and the build-score panel says what the loadout takes, from whom, and the net for the account.
+default, which is what the user had chosen, and with it no trade is ever proposed. The Optimise tab's Card pool defaults to "Only unequipped cards" (Oct 2026); on "All cards" it prices its trades the same way: each "on X" tag carries X's loss (`onTagHtml`), and the build-score panel says what the loadout takes, from whom, and the net for the account.
 
 **The shortlist, and the polish.** Each slot's candidates are ranked on context-free
 `cardScore` (§3), and a plan takes each set's top card per slot. The build score can prefer

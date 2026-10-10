@@ -388,6 +388,9 @@ details.sect>.inner{margin-top:10px}
 .gainpos{color:var(--ok)}
 /* Ink card: the row of the ladder you chose, and the re-roll it recommends. */
 #up-pane-ink tr.on td{background:rgba(127,127,127,.12)}
+#ikTable tr.ikRow{cursor:pointer}
+#ikTable tr.ikRow:hover td{background:rgba(127,127,127,.07)}
+#ikTable tr.ikRow.on td{background:rgba(127,127,127,.16)}
 
 /* ---- card picker: one compact row per candidate ---- */
 .pick td{padding:6px 8px}
@@ -501,7 +504,7 @@ details.sect>.inner{margin-top:10px}
           <label>Card pool</label>
           <select id="optPool">
             <option value="all">All cards</option>
-            <option value="free">Only unequipped cards</option>
+            <option value="free" selected>Only unequipped cards</option>
           </select>
         </div>
         <div class="field">
