@@ -1062,6 +1062,25 @@ roll of the recommended one. Like Triage it runs on its
 first visit, in 50 ms slices, and is then only marked stale (`ccSig` in `markStaleRuns`).
 "Check a card" takes the rolled level-0 values and can add the card to the inventory (undoable).
 
+### Fortune Revelation: which set to redeem
+
+Upgrades' fourth sub-tab (`#up-pane-fortune`, `frCharData`/`frRateSet`/`runFortune`). A Fortune
+Revelation becomes a 5★ Heavens card of a set the player chooses (an Orange one, a Space card);
+slot, main, starting substats, values and upgrades are random. No source publishes those odds, so
+`frDraws` takes them from the user's own inventory (Oct 2026, 4316 5★ cards): mains about even
+within a slot, 40% of level-0 cards with four substats (`FR_FOUR_SUBS`), substats about equally
+common, never HP on a Sun card nor flat ATK/DEF on a Space card (`frNoSub`). Every set is rated on
+the **same** 400 draws, so sets differ only by their name, and `frClose` marks a set "about as good"
+when its paired difference from the best is within two standard errors. A draw is worth its gain to
+whichever counted character gains most (one card, one wearer), over the Custom card view's baseline
+(the best the inventory already gives them), in build points; a set's value is the mean over draws,
+zeros included. Each draw is priced in a few fixed loadouts per character (the best loadout with
+the slot emptied, what is worn, and for their own sets the optimiser's pick with a good card of that
+set) instead of re-running the optimiser per draw; `can[set][slot][main]` skips kinds of draw a
+13-roll card could not improve, and a test holds that skipping changes no value. Counted characters
+default to owned and not benched; `frChosen` stores only departures from that, saved in prefs.
+About 1.3 s (Heavens) and 2.3 s (Space) for 37 characters on the real inventory.
+
 ### The Vault is the counterweight to that gate
 
 The Vault is the Triage tab's second view, "Lock for later" (`#tr-pane-vault`, `showTrPane`); it

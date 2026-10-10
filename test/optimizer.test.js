@@ -1439,6 +1439,66 @@ function weightOverrideDrift() {
       }));
     }
 
+    // ---- Fortune Revelation (choose the set, the rest is random) ----
+    {
+      const drawBad = [];
+      ['heavens', 'space'].forEach(kind => {
+        const dr = frDraws(kind, 300), again = frDraws(kind, 300);
+        if (JSON.stringify(dr) !== JSON.stringify(again)) drawBad.push(kind + ': draws differ between runs');
+        dr.forEach((x, k) => {
+          const card = { slot: x.slot, set: frSets(kind)[0], rarity: 5, level: RARITY[5].maxLevel, main: x.main, subs: x.subs };
+          const st = x.subs.map(s => s.stat);
+          if (frSlots(kind).indexOf(x.slot) < 0) drawBad.push(kind + ' #' + k + ': slot ' + x.slot);
+          if (st.length !== 4 || new Set(st).size !== 4 || st.some(s => frNoSub(x.slot, x.main).indexOf(s) >= 0)) drawBad.push(kind + ' #' + k + ': substats ' + st.join(','));
+          if (validateCard(card).length) drawBad.push(kind + ' #' + k + ': ' + validateCard(card)[0]);
+        });
+        if (frSets(kind).some(s => frSetTable(kind)[s].unreleased)) drawBad.push(kind + ': an unreleased set is offered');
+      });
+      const heav = frDraws('heavens', 2000);
+      HEAVENS.forEach(sl => { const n = heav.filter(x => x.slot === sl).length; if (n < 400 || n > 600) drawBad.push(sl + ' drawn ' + n + ' of 2000'); });
+      fail('Fortune Revelation: every draw is a legal level-25 5★ card of the item\'s slots, with four substats the slot can carry, the same every run, slots evenly spread', !drawBad.length);
+      if (drawBad.length) out.fortuneDrawBad = drawBad.slice(0, 8);
+
+      const o = { kind: 'heavens', policy: 'pref', free: true };
+      const chars = own.slice(0, 5).map(charDef), draws = frDraws('heavens', 160);
+      const datas = chars.map(ch => frCharData(ch, o));
+      const rated = frSets('heavens').map(s => frRateSet(s, draws, datas)).sort((a, b) => b.value - a.value);
+      const rateBad = [];
+      rated.forEach(r => {
+        const mean = r.vals.reduce((a, x) => a + x, 0) / r.vals.length;
+        if (!near(mean, r.value, 1e-9) || r.vals.some(v => !(v >= 0) || !isFinite(v))) rateBad.push(r.set + ': value is not the mean of its draws');
+        if (!near(r.who.reduce((a, w) => a + w.gets, 0), r.useful, 1e-9)) rateBad.push(r.set + ': who it goes to does not add up to how often it is useful');
+        if (r.who.some(w => w.gets > w.helps + 1e-9 || !(w.avg >= UPGRADE_MIN_GAIN))) rateBad.push(r.set + ': goes to someone it does not help');
+      });
+      // A draw's gain to a character is the best of its loadouts, never below wearing it in the best they have now.
+      const d0 = datas[0], probe = draws.map(x => ({ id: 'fortune', slot: x.slot, set: rated[0].set, rarity: 5, level: RARITY[5].maxLevel, main: x.main, subs: x.subs }));
+      if (probe.some(c => d0.can[c.set][c.slot][c.main] && frGain(d0, c) + 1e-9 <
+        Math.max(0, 100 * (d0.ctx.ev(d0.ctx.base.cards.filter(x => x.slot !== c.slot).concat([c])).total - d0.ctx.base.total) / d0.ctx.idealTotal))) rateBad.push('a gain is below a plain swap into the best loadout');
+      fail('Fortune Revelation: a set\'s value is the average over its draws of the best gain, and who it goes to adds up to how often it is useful', !rateBad.length);
+      if (rateBad.length) out.fortuneRateBad = rateBad.slice(0, 8);
+      // Skipping draws no card of their kind could improve changes nothing.
+      const always = new Proxy({}, { get: () => new Proxy({}, { get: () => new Proxy({}, { get: () => true }) }) });
+      const loose = datas.map(d => Object.assign({}, d, { can: always }));
+      fail('Fortune Revelation: skipping hopeless draws gives the same values as pricing every one',
+        rated.slice(0, 6).every(r => near(frRateSet(r.set, draws, loose).value, r.value, 1e-9)));
+      fail('Fortune Revelation: a set is as good as itself, and the best is not called close to a set worth nothing',
+        frClose(rated[0], rated[0]) && (rated[0].value <= 0 || !frClose(rated[0], Object.assign({}, rated[0], { vals: rated[0].vals.map(() => 0) }))));
+
+      const saved = Object.assign({}, frChosen);
+      frChosen = {};
+      const def = frChars().map(c => c.n).join('|') === ownedChars().map(c => c.n).join('|');
+      const someone = ownedChars()[0], stranger = CHARACTERS.filter(c => !state.chars[c.n].owned)[0];
+      frSetIncluded(someone.n, false); if (stranger) frSetIncluded(stranger.n, true);
+      const changed = !frIncluded(someone) && (!stranger || frIncluded(stranger)) && Object.keys(frChosen).length === (stranger ? 2 : 1);
+      const p = collectPrefs(); frChosen = {}; applyPrefs(p);
+      const roundTrip = !frIncluded(someone) && (!stranger || frIncluded(stranger));
+      frSetIncluded(someone.n, true);
+      const backToDefault = !Object.prototype.hasOwnProperty.call(frChosen, someone.n);
+      frChosen = saved;
+      fail('Fortune Revelation: everyone owned and not benched counts by default, a tick or untick is kept only where it departs from that, and it survives a save',
+        def && changed && backToDefault && roundTrip);
+    }
+
     // ---- equip plumbing ----
     $('#optChar').value = 'Ren Amamiya';
     fail('swapCard moves a card onto the slot, unequips whoever wore either end, and clears a lock on the way out', (() => {
@@ -1681,6 +1741,31 @@ function weightOverrideDrift() {
     ccSpace.allSpace && ccSpace.header && ccSpace.checkSlot === 'Space' && ccSpace.checkSet && ccSpace.checkRows === 3 && !ccSpace.nan && ccSpace.back, JSON.stringify(ccSpace));
   check('Custom card: "Check a roll" fills the check panel, "Add to inventory" adds a level-0 card and marks the ranking stale, undo takes both back, and the element filter narrows the table',
     ccFlow.filled && ccFlow.added && ccFlow.stale && ccFlow.undone && ccFlow.fresh && ccFlow.filtered, JSON.stringify(ccFlow));
+  await p.click('#upSubtabs button[data-uptab="fortune"]');
+  await p.waitForFunction(() => frCache, null, { timeout: 60000 });
+  const frState = await p.evaluate(async () => {
+    const html = () => document.getElementById('frSummary').innerHTML + document.getElementById('frTable').innerHTML;
+    const r = { rows: document.querySelectorAll('#frTable > tbody > tr').length, sets: frSets('heavens').length,
+      counted: frCache.chars.length === ownedChars().length, boxes: document.querySelectorAll('#frCharList input[data-fr]').length === CHARACTERS.length,
+      ticked: document.querySelectorAll('#frCharList input[data-fr]:checked').length === ownedChars().length,
+      pick: /Pick this set/.test(document.getElementById('frSummary').innerHTML) || /No set/.test(document.getElementById('frSummary').innerHTML),
+      sorted: frCache.rated.every((x, i, a) => !i || a[i - 1].value >= x.value), nan: /NaN|undefined/.test(html()) };
+    const box = document.querySelector('#frCharList input[data-fr]:checked');
+    box.checked = false; box.dispatchEvent(new Event('change'));
+    r.stale = !!document.querySelector('#frSummary .stale-run');
+    box.checked = true; box.dispatchEvent(new Event('change'));
+    r.fresh = !document.querySelector('#frSummary .stale-run');
+    const k = document.getElementById('frKind');
+    k.value = 'space'; k.dispatchEvent(new Event('change'));
+    while (!frCache || frCache.o.kind !== 'space') await new Promise(res => setTimeout(res, 50));
+    r.space = document.querySelectorAll('#frTable > tbody > tr').length === frSets('space').length && !/By slot/.test(document.getElementById('frTable').innerHTML) && !/NaN|undefined/.test(html());
+    k.value = 'heavens'; k.dispatchEvent(new Event('change'));
+    while (!frCache || frCache.o.kind !== 'heavens') await new Promise(res => setTimeout(res, 50));
+    return r;
+  });
+  check('Fortune Revelation: the sub-tab ranks every released set on the way in for everyone owned and not benched, best first; unticking a character marks it stale, and Orange switches to Space sets',
+    frState.rows === frState.sets && frState.counted && frState.boxes && frState.ticked && frState.pick && frState.sorted && !frState.nan &&
+    frState.stale && frState.fresh && frState.space, JSON.stringify(frState));
 
   // Targets dialog: open, save, reset. The Setup is edited in one place, the Loadout popup; the
   // Targets dialog used to carry a second copy that saved on its own button.

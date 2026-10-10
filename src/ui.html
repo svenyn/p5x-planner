@@ -331,6 +331,19 @@ details.explain>summary::after{content:' More';color:var(--red-text);font-weight
 details.explain[open]>summary::after{content:' Less'}
 details.explain>.body{margin-top:6px}
 details.explain>.body p{margin:0 0 6px}
+/* Fortune Revelation: the character picker, the recommended set, and each row's "who it helps". */
+details.frChars{margin:6px 0 0;font-size:13px}
+details.frChars>summary{cursor:pointer}
+.frGrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:0 14px;max-height:340px;overflow-y:auto;
+  border:1px solid var(--line);border-radius:8px;padding:8px 10px}
+.frGrid .check{padding-bottom:4px}
+.frPick{margin-top:12px;max-width:900px;background:var(--panel2);border:1px solid var(--line);border-radius:10px;padding:12px 14px;font-size:13px}
+.frPick p{margin:6px 0 0}
+.frPickSet{font-size:20px;font-weight:700;margin:2px 0 4px}
+details.frWhy>summary{cursor:pointer}
+details.frWhy[open]>summary{margin-bottom:4px}
+table.frWho td,table.frWho th{padding:4px 8px}
+.nowrap{white-space:nowrap}
 /* Collapsible sections of a dialog (the Loadout popup's Setup and stats). */
 details.sect{border-top:1px solid var(--line);margin-top:14px;padding-top:10px}
 details.sect>summary{cursor:pointer;list-style:none;font-size:13px;font-weight:700;display:flex;align-items:baseline;gap:8px;flex-wrap:wrap}
@@ -684,6 +697,7 @@ details.sect>.inner{margin-top:10px}
       <button data-uptab="better" class="on">Better cards available</button>
       <button data-uptab="headroom">Weakest slots</button>
       <button data-uptab="craft">Custom card</button>
+      <button data-uptab="fortune">Fortune Revelation</button>
     </div>
 
     <div id="up-pane-better">
@@ -830,6 +844,59 @@ details.sect>.inner{margin-top:10px}
         <div id="ccCheckOut" style="margin-top:12px"></div>
       </div>
     </div><!-- /up-pane-craft -->
+
+    <div id="up-pane-fortune" class="hide">
+      <div class="panel">
+        <h2>Fortune Revelation</h2>
+        <details class="explain" style="margin:0 0 12px"><summary>Which set to choose when you redeem a Fortune Revelation
+          (or an Orange one, for a Space card), and who each set would help.</summary>
+          <div class="body">
+            <p>You choose the set; the game rolls everything else: the slot (Sun, Moon, Star or Sky — always Space for an
+              Orange Fortune Revelation), the main stat, which three or four substats the card starts with, their values,
+              and where its five upgrades land. So no set guarantees a good card. This view draws the same
+              400 random cards in every set, levels each to 25, and checks what each one would add to every character you
+              count, over the best loadout your inventory already gives them.</p>
+            <p>A card can only be worn by one character, so each draw is worth what it adds to whoever gains most from
+              it. <b>Avg value</b> is that, averaged over all the draws, in build points (the same 0-100 scale as the build
+              score); a draw that helps nobody counts as zero, which is why the numbers are small. A set that is often a
+              modest upgrade for one character can beat one that is occasionally a big one for several. <b>Useful</b> is
+              how often a draw is an upgrade for anyone at all.</p>
+            <p>Open a row to see who the set helps: how often the card would go to them, how often it is an upgrade for
+              them at all, what it adds when it is, and which slot and main stat rolls do it. A card can also complete a
+              4-piece someone is one card short of; that is counted. Sets marked <b>about as good</b> are too close to
+              the best to separate on luck alone.</p>
+            <p>No source publishes the drop odds, so they are taken from your own inventory: main stats about evenly
+              spread within a slot, 4 in 10 new cards with four substats, every substat equally likely. Unreleased sets
+              are left out.</p>
+          </div></details>
+        <div class="row">
+          <div class="field"><label>Item</label><select id="frKind">
+            <option value="heavens">Fortune Revelation (Sun, Moon, Star or Sky)</option>
+            <option value="space">Orange Fortune Revelation (Space)</option></select></div>
+          <div class="field"><label>Set policy</label><select id="frPolicy">
+            <option value="pref">Honour preferred sets</option>
+            <option value="force4">Force preferred 4-piece</option>
+            <option value="any4">Best complete 4-piece</option>
+            <option value="stats">Pure stat maximum</option></select></div>
+          <label class="check"><input type="checkbox" id="frFree" checked> Ignore cards equipped on someone else</label>
+          <button class="primary" id="frRun">Rank sets</button>
+        </div>
+        <details class="frChars" id="frCharsBox">
+          <summary id="frCharsSum">Characters counted</summary>
+          <div class="row" style="margin:8px 0">
+            <button class="ghost tiny" id="frDefault" type="button">Owned, not benched (default)</button>
+            <button class="ghost tiny" id="frAllOwned" type="button">All owned, benched too</button>
+            <button class="ghost tiny" id="frNone" type="button">None</button>
+            <span class="tiny muted">Changes mark the ranking out of date; press Rank sets or Re-run to update it.</span>
+          </div>
+          <div class="frGrid" id="frCharList"></div>
+        </details>
+        <div id="frSummary" style="margin-top:12px"></div>
+      </div>
+      <div class="hide" id="frPanel">
+        <div class="flowTable"><table id="frTable"></table></div>
+      </div>
+    </div><!-- /up-pane-fortune -->
   </section>
 
   <!-- ===================== ROSTER ===================== -->

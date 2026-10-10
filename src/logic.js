@@ -4364,7 +4364,7 @@ function vaultSig() { return cardsSig(false) + ':' + charsSig(null) + ':' + team
    on the one screen whose "feed" cannot be undone. The check is a comparison of fingerprints
    (see dataSignature), so an undo, or a value set back, reads as current again. */
 function markStaleRuns() {
-  [['#trSummary', trCache, triageSig, '#trRun'], ['#vaSummary', vaCache, vaultSig, '#vaRun'], ['#ccSummary', ccCache, ccSig, '#ccRun']].forEach(([id, cache, sig, btn]) => {
+  [['#trSummary', trCache, triageSig, '#trRun'], ['#vaSummary', vaCache, vaultSig, '#vaRun'], ['#ccSummary', ccCache, ccSig, '#ccRun'], ['#frSummary', frCache, frSig, '#frRun']].forEach(([id, cache, sig, btn]) => {
     const box = $(id);
     if (!box || !cache) return;
     const old = box.querySelector('.stale-run');
@@ -5566,6 +5566,341 @@ function ccAddCard() {
   offerUndo(`Added a 5★ ${card.slot} ${card.set} card (${card.main}) at level 0 to the inventory.`, snap);
 }
 
+/* ======================== Fortune Revelations: which set to redeem ========================
+   A Fortune Revelation turns into a 5★ Heavens card of the set the player chooses; an Orange
+   Fortune Revelation into a 5★ Space card the same way. Everything else about the card is luck:
+   the slot, the main stat, which three or four substats it starts with, their values, and where
+   its five upgrades land. So the question is not "which card" but "which set gives the best odds",
+   and this answers it by drawing many random cards of each set and pricing every one against
+   the characters the user chose to count.
+
+   A card is worth what it adds to whichever counted character gains most from it — one card, one
+   wearer — measured, like the Custom card view's gain, over the best loadout the inventory already
+   gives that character (ccContext), in build points. A set's value is the average of that over its
+   draws; most draws of most sets help nobody, and that zero is part of the average, which is what
+   makes a set that helps one character often beat one that helps five rarely.
+
+   The draws are the same for every set (the same slot, main and rolls, only the set name differs),
+   so two sets are compared on identical luck; the gap between them is the set's doing, and the
+   "about as good" mark beside a set uses the spread of those paired differences.
+
+   What a draw looks like is measured, not published: no source documents the odds. The user's own
+   inventory (4316 5★ cards, Oct 2026) has main stats close to evenly spread within each slot, 39%
+   of level-0 Heavens cards and 44% of level-0 Space cards with four substats, every substat about
+   equally common, never an HP substat on a Sun card and never a flat ATK or DEF substat on a Space
+   card. Those are the odds used. The card is priced at level 25 with its upgrades rolled: a
+   three-substat card gains its fourth on the first upgrade, the rest are rolls. */
+const FR_SAMPLES = 400;        // draws per set; with the draws shared, enough to order the sets
+const FR_FOUR_SUBS = 0.4;      // share of level-0 cards minted with four substats
+const FR_P4 = CC_P4;
+// The substats a card of this slot can never carry: its own main, and the flat stat a fixed main holds.
+const frNoSub = (slot, main) => slot === 'Sun' ? ['HP'] : slot === 'Space' ? ['ATK', 'DEF'] : [main];
+const frSetTable = kind => kind === 'space' ? SPACE_SETS : SETS;
+const frSets = kind => Object.keys(frSetTable(kind)).filter(s => !frSetTable(kind)[s].unreleased).sort();
+const frSlots = kind => kind === 'space' ? ['Space'] : HEAVENS;
+
+/* The random cards, levelled to 25. Seeded by the card type alone, so a run is repeatable and every
+   set gets the same draws. */
+function frDraws(kind, n) {
+  const rnd = ccRng(hashStr(2166136261, 'fortune|' + kind));
+  const pick = a => a[Math.min(a.length - 1, Math.floor(rnd() * a.length))];
+  const out = [];
+  for (let k = 0; k < n; k++) {
+    const slot = pick(frSlots(kind)), main = pick(SLOT_INFO[slot].mains), no = frNoSub(slot, main);
+    const left = Object.keys(SUBSTATS).filter(s => no.indexOf(s) < 0);
+    const take = () => left.splice(Math.min(left.length - 1, Math.floor(rnd() * left.length)), 1)[0];
+    const four = rnd() < FR_FOUR_SUBS;
+    const stats = [take(), take(), take()];
+    if (four) stats.push(take());
+    const v = stats.map(st => pick(ccTiers(st, slot)));
+    let ups = RARITY[5].upgrades;
+    if (!four) { const st = take(); stats.push(st); v.push(pick(ccTiers(st, slot))); ups--; }
+    for (let u = 0; u < ups; u++) { const i = Math.min(3, Math.floor(rnd() * 4)); v[i] += pick(ccTiers(stats[i], slot)); }
+    out.push({ slot, main, subs: stats.map((st, i) => ({ stat: st, value: ccRound(st, v[i]) })) });
+  }
+  return out;
+}
+
+/* Which characters count. By default everyone owned and not benched; `frChosen` holds only the
+   user's departures from that (name → true or false), so a character pulled later is counted
+   without anyone remembering to tick them, and one benched later drops out. Saved in the prefs. */
+let frChosen = {};
+const frDefault = ch => !!(state.chars[ch.n].owned && !state.chars[ch.n].benched);
+const frIncluded = ch => Object.prototype.hasOwnProperty.call(frChosen, ch.n) ? !!frChosen[ch.n] : frDefault(ch);
+const frChars = () => CHARACTERS.filter(frIncluded);
+function frSetIncluded(name, on) {
+  const ch = charDef(name);
+  if (!ch) return;
+  if (!!on === frDefault(ch)) delete frChosen[name]; else frChosen[name] = !!on;
+}
+
+/* One character, read once per run. The loadouts a drawn card may go into are the best one they
+   can already wear with that slot emptied (and what they wear, if different), plus — for the sets
+   they would build around (ccSets / ccSpaceSets: their own list and what they wear) — the loadout
+   the optimiser picks when a good card of that set is in the pool, which is how a card that
+   completes a 4-piece they are one short of gets its due. A draw is priced in each and keeps the
+   best, the same as the Custom card view's ccPlace but without re-running the optimiser per draw.
+
+   `can[set][slot][main]` says whether a generous card of that kind (more rolls than any card can
+   hold, on their best stats) would add anything at all; when it would not, no draw of that kind
+   can, and it is skipped. That is most of them — off-set cards that break a 4-piece, mains nobody
+   wants — and it is most of this view's speed. */
+const FR_BOUND_ROLLS = [4, 3, 3, 3];   // 13 maximum rolls; a real card holds 9
+function frCharData(ch, o) {
+  const ctx = ccContext(ch, o), t = ctx.t, kind = o.kind, slots = frSlots(kind);
+  const key = cards => cards.map(c => c.id).sort().join(',');
+  const around = {}, can = {};
+  const common = {};
+  slots.forEach(sl => {
+    common[sl] = [ctx.base.cards.filter(c => c.slot !== sl)];
+    if (ctx.worn !== ctx.base.cards) common[sl].push(ctx.worn.filter(c => c.slot !== sl));
+  });
+  const plan = kind === 'space' ? ccSpaceSets(ctx) : ccSets(ctx);
+  frSets(kind).forEach(set => {
+    can[set] = {};
+    slots.forEach(sl => {
+      const list = common[sl].slice();
+      if (plan.indexOf(set) >= 0) {
+        const ideal = idealCard(sl, t, set);
+        const card = ccCard(sl, set, ideal.main, idealSubs(t, ideal.main), 'typical', 'fortune-probe');
+        const p = ccPlace(ctx, card);
+        if (p.cards && p.cards.indexOf(card) >= 0) {
+          const rest = p.cards.filter(c => c !== card);
+          if (!list.some(a => key(a) === key(rest))) list.push(rest);
+        }
+      }
+      around[set + '|' + sl] = list;
+      can[set][sl] = {};
+      SLOT_INFO[sl].mains.forEach(m => {
+        const subs = idealSubs(t, m).filter(s => frNoSub(sl, m).indexOf(s) < 0);
+        const big = { id: 'fortune-bound', slot: sl, set, rarity: 5, level: RARITY[5].maxLevel, main: m,
+          subs: subs.map((s, i) => ({ stat: s, value: maxRoll(s, sl) * FR_BOUND_ROLLS[i] })) };
+        can[set][sl][m] = list.some(a => ctx.ev(a.concat([big])).total > ctx.base.total + 1e-9);
+      });
+    });
+  });
+  return { ch, t, ctx, around, can, pieces: set => ctx.base.cards.filter(c => c.set === set).length };
+}
+
+/* A drawn card's gain for one character, in build points, floored at 0 (a card that would make
+   them worse is simply not worn). */
+function frGain(d, card) {
+  if (!d.can[card.set][card.slot][card.main]) return 0;
+  let best = -Infinity;
+  d.around[card.set + '|' + card.slot].forEach(a => { const v = d.ctx.ev(a.concat([card])).total; if (v > best) best = v; });
+  return Math.max(0, 100 * (best - d.ctx.base.total) / d.ctx.idealTotal);
+}
+
+/* One set over every draw: per draw, the gain to whoever gains most (`vals`, kept for the paired
+   comparison); per character, how often it helps them, how often they are the one it goes to, and
+   which slots and mains do it. */
+function frRateSet(set, draws, datas) {
+  const per = datas.map(d => ({ d, hits: 0, sum: 0, top: 0, topSum: 0, combo: {} }));
+  const slotN = {}, slotHit = {}, comboN = {};
+  const vals = new Array(draws.length);
+  draws.forEach((dr, k) => {
+    const card = { id: 'fortune', slot: dr.slot, set, rarity: 5, level: RARITY[5].maxLevel, main: dr.main, subs: dr.subs };
+    const ck = dr.slot + '|' + dr.main;
+    slotN[dr.slot] = (slotN[dr.slot] || 0) + 1;
+    comboN[ck] = (comboN[ck] || 0) + 1;
+    let bi = -1, bg = 0;
+    per.forEach((p, i) => {
+      const g = frGain(p.d, card);
+      if (g < UPGRADE_MIN_GAIN) return;
+      p.hits++; p.sum += g; p.combo[ck] = (p.combo[ck] || 0) + 1;
+      if (g > bg + 1e-12) { bg = g; bi = i; }
+    });
+    vals[k] = bg;
+    if (bi >= 0) { per[bi].top++; per[bi].topSum += bg; slotHit[dr.slot] = (slotHit[dr.slot] || 0) + 1; }
+  });
+  const n = draws.length;
+  const who = per.filter(p => p.hits).map(p => ({
+    ch: p.d.ch, t: p.d.t, d: p.d,
+    helps: p.hits / n, avg: p.sum / p.hits, gets: p.top / n, share: p.topSum / n,
+    rolls: Object.keys(p.combo).map(k => ({ slot: k.split('|')[0], main: k.split('|')[1], rate: p.combo[k] / comboN[k] }))
+      .filter(x => x.rate >= 0.25).sort((a, b) => SLOTS.indexOf(a.slot) - SLOTS.indexOf(b.slot) || b.rate - a.rate)
+  })).sort((a, b) => b.share - a.share || b.helps - a.helps);
+  return { set, vals, value: vals.reduce((a, x) => a + x, 0) / n, useful: vals.filter(x => x > 0).length / n,
+    bySlot: Object.keys(slotN).map(sl => ({ slot: sl, rate: (slotHit[sl] || 0) / slotN[sl] })).sort((a, b) => SLOTS.indexOf(a.slot) - SLOTS.indexOf(b.slot)),
+    who };
+}
+
+/* Is set `b` as good as `a`, given that both were rated on the same draws? Within two standard
+   errors of the paired difference. */
+function frClose(a, b) {
+  const n = a.vals.length, diffs = a.vals.map((v, i) => v - b.vals[i]);
+  const m = diffs.reduce((s, x) => s + x, 0) / n;
+  const sd = Math.sqrt(diffs.reduce((s, x) => s + (x - m) * (x - m), 0) / Math.max(1, n - 1));
+  return m <= 2 * sd / Math.sqrt(n) + 1e-9;
+}
+
+function frOpts() { return { kind: $('#frKind').value, policy: $('#frPolicy').value, free: $('#frFree').checked }; }
+// What a run read: as the Custom card view's, for the characters counted, plus which ones they are.
+function frSig() {
+  const o = frOpts(), names = frChars().map(c => c.n);
+  return cardsSig(true) + ':' + charsSig(new Set(names)) + ':' + teamCritRate() + ':' + denSig() +
+    '|' + [o.kind, o.policy, o.free].join(',') + '|' + (hashStr(2166136261, names.join('|')) >>> 0).toString(36);
+}
+let frCache = null, frJob = 0;
+/* In 50 ms slices, like the Custom card view: first each counted character is read (about as long
+   as a Custom card row), then each set's draws are priced. A later run, or a load, abandons it. */
+function runFortune() {
+  const job = ++frJob, o = frOpts(), chars = frChars(), sig = frSig();
+  renderFrChars();
+  if (!chars.length) {
+    frCache = null;
+    $('#frSummary').innerHTML = '<p class="muted">No characters are counted. Tick some under "Characters counted" above, or mark the ones you own on the Roster tab.</p>';
+    $('#frPanel').classList.add('hide');
+    return Promise.resolve(false);
+  }
+  const sets = frSets(o.kind), draws = frDraws(o.kind, FR_SAMPLES), datas = [], rated = [];
+  let i = 0, j = 0;
+  const progress = () => {
+    $('#frSummary').innerHTML = `<div class="notice info">${i < chars.length
+      ? `Reading each character's best loadout… <b>${i}</b> of ${chars.length}`
+      : `Drawing ${FR_SAMPLES} random cards from each set… <b>${j}</b> of ${sets.length} sets`}</div>`;
+    $('#frPanel').classList.add('hide');
+  };
+  progress();
+  return new Promise(resolve => {
+    const step = () => {
+      if (job !== frJob) return resolve(false);
+      const t0 = performance.now();
+      while (i < chars.length && performance.now() - t0 < 50) datas.push(frCharData(chars[i++], o));
+      while (i >= chars.length && j < sets.length && performance.now() - t0 < 50) rated.push(frRateSet(sets[j++], draws, datas));
+      if (j < sets.length) { progress(); setTimeout(step, 0); return; }
+      rated.sort((a, b) => b.value - a.value || b.useful - a.useful || a.set.localeCompare(b.set));
+      rated.forEach((r, k) => { r.rank = k + 1; r.close = k > 0 && frClose(rated[0], r); });
+      frCache = { sig, o, rated, chars, tc: teamCritRate() };
+      renderFortune();
+      markStaleRuns();
+      resolve(true);
+    };
+    setTimeout(step, 0);
+  });
+}
+
+/* How a character stands with a set, in words: the reason it helps them. */
+function frRelation(w, set, kind) {
+  const t = w.t, out = [];
+  if (kind === 'space') {
+    if (t.space === set) out.push('their Space card');
+    const worn = w.d.ctx.base.cards.filter(c => c.slot === 'Space')[0];
+    if (worn && worn.set === set) out.push('worn now');
+  } else {
+    const k = (t.sets || []).indexOf(set);
+    if (k === 0) out.push('their preferred set');
+    else if (k > 0) out.push('on their set list');
+    const n = w.d.pieces(set);
+    if (n) out.push(`${n} piece${n === 1 ? '' : 's'} in their best loadout`);
+    if (SETS[set].elem && SETS[set].elem !== w.ch.e) out.push('off-element: stats only');
+  }
+  return out.join(' · ') || 'stats only';
+}
+/* A slot where every main works reads "any main" with the lowest rate, rather than five entries. */
+function frRollsHtml(w) {
+  if (!w.rolls.length) return '<span class="muted">only lucky rolls</span>';
+  const items = [];
+  SLOTS.forEach(sl => {
+    const xs = w.rolls.filter(x => x.slot === sl);
+    if (!xs.length) return;
+    if (!SLOT_INFO[sl].fixed && xs.length === SLOT_INFO[sl].mains.length)
+      items.push({ slot: sl, main: 'any main', rate: Math.min.apply(null, xs.map(x => x.rate)), any: true });
+    else xs.forEach(x => items.push(x));
+  });
+  return items.slice(0, 6).map(x => `<span class="nowrap"><span class="slot ${x.slot}">${x.slot.slice(0, 3)}</span>${SLOT_INFO[x.slot].fixed ? '' : ' ' + esc(x.main)}` +
+    ` <span class="muted">${x.any ? 'at least ' : ''}${Math.round(100 * x.rate)}%</span></span>`).join(' · ') + (items.length > 6 ? ` <span class="muted">+${items.length - 6} more</span>` : '');
+}
+const frPct = x => x > 0 && x < 0.005 ? '<1%' : Math.round(100 * x) + '%';
+function frWhoTableHtml(r, kind) {
+  if (!r.who.length) return '<p class="tiny muted">No counted character gains from any draw of this set.</p>';
+  return `<div class="flowTable" style="margin:6px 0 0"><table class="frWho">
+    <thead><tr><th>Character</th><th>Why this set</th>
+      <th class="right" title="How often a card from this set ends up with this character: they gain more from it than anyone else counted">Goes to them</th>
+      <th class="right" title="How often a card from this set is an upgrade for this character at all, whether or not someone else gains more">Upgrade for them</th>
+      <th class="right" title="Build points it adds to them, on average, when it is an upgrade">Avg gain</th>
+      <th title="The slot and main stat combinations that are an upgrade for them at least a quarter of the time, and how often">Rolls that work for them</th></tr></thead>
+    <tbody>${r.who.map(w => `<tr>
+      <td class="tiny"><b>${esc(w.ch.n)}</b>${frDefault(w.ch) ? '' : ` <span class="tag">${state.chars[w.ch.n].owned ? 'benched' : 'not owned'}</span>`}</td>
+      <td class="tiny muted">${esc(frRelation(w, r.set, kind))}</td>
+      <td class="right">${frPct(w.gets)}</td>
+      <td class="right">${frPct(w.helps)}</td>
+      <td class="right"><span class="gainpos">+${w.avg.toFixed(1)}</span></td>
+      <td class="tiny">${frRollsHtml(w)}</td></tr>`).join('')}</tbody></table></div>`;
+}
+function frNamesHtml(r, n) {
+  const top = r.who.filter(w => w.gets > 0).slice(0, n);
+  if (!top.length) return '<span class="muted">nobody counted</span>';
+  const more = r.who.length - top.length;
+  return top.map(w => `<b>${esc(w.ch.n)}</b> <span class="muted">${frPct(w.gets)}</span>`).join(', ') +
+    (more > 0 ? ` <span class="muted">+${more} more</span>` : '');
+}
+function renderFortune() {
+  if (!frCache) return;
+  const { rated, o, chars } = frCache, kind = o.kind;
+  const item = kind === 'space' ? 'Orange Fortune Revelation' : 'Fortune Revelation';
+  const best = rated[0];
+  const maxV = Math.max.apply(null, rated.map(r => r.value).concat([0.01]));
+  const close = rated.filter(r => r.close);
+  const elemTag = set => kind !== 'space' && SETS[set].elem ? ` <span class="tag">${esc(SETS[set].elem)} only</span>` : '';
+  if (!best || best.value <= 0) {
+    $('#frSummary').innerHTML = `<div class="notice info">No set's random card is an upgrade for any of the ${chars.length} counted characters over what your inventory already gives them.</div>`;
+  } else {
+    const top3 = best.who.filter(w => w.gets > 0).slice(0, 3);
+    $('#frSummary').innerHTML = `<div class="notice info">Drew ${FR_SAMPLES} random cards from each of ${rated.length} sets and priced every one
+        for the <b>${chars.length}</b> counted character${chars.length === 1 ? '' : 's'}, against the best loadout your inventory already gives them.</div>
+      <div class="frPick">
+        <div class="tiny muted">Pick this set</div>
+        <div class="frPickSet">${esc(best.set)}${elemTag(best.set)}</div>
+        <p>A random ${esc(kind === 'space' ? 'Space card' : 'card')} from it adds <b class="gainpos">+${best.value.toFixed(2)}</b> build points on average,
+          counting the draws that help nobody as zero. <b>${frPct(best.useful)}</b> of draws are an upgrade for at least one counted character.</p>
+        <p>Where it would most likely go: ${top3.map(w => `<b>${esc(w.ch.n)}</b> (${frPct(w.gets)} of draws, +${w.avg.toFixed(1)} when it helps them; ${esc(frRelation(w, best.set, kind))})`).join('; ')}.</p>
+        ${kind === 'space' ? '' : `<p class="tiny muted">Which slot it rolls matters: ${best.bySlot.map(s => `${esc(s.slot)} helps someone ${frPct(s.rate)} of the time`).join(', ')}.</p>`}
+        ${close.length ? `<p class="tiny">Within the margin of luck: ${close.map(r => `<b>${esc(r.set)}</b> (+${r.value.toFixed(2)})`).join(', ')}
+          — on these odds the difference is too small to call, so pick by who you would rather improve.</p>` : rated[1] ? `<p class="tiny muted">Next best: ${esc(rated[1].set)} (+${rated[1].value.toFixed(2)}), a clear step down.</p>` : ''}
+        <details class="frWhy"><summary>Everyone it could help</summary>${frWhoTableHtml(best, kind)}</details>
+      </div>`;
+  }
+  $('#frPanel').classList.remove('hide');
+  $('#frTable').innerHTML = `<thead><tr>
+      <th class="right">#</th><th>Set</th>
+      <th class="right" title="Build points a random card from this set adds, on average, to whichever counted character gains most from it. Draws that help nobody count as zero.">Avg value</th>
+      <th class="right" title="How often a random card from this set is an upgrade for at least one counted character">Useful</th>
+      ${kind === 'space' ? '' : '<th title="How often a card of each slot from this set helps someone">By slot</th>'}
+      <th title="Who a card from this set most often goes to, and how often. Open the row for everyone it could help and why.">Most often goes to</th>
+    </tr></thead><tbody>` + rated.map(r => `<tr class="frRow" data-set="${esc(r.set)}">
+      <td class="tiny muted right">${r.rank}</td>
+      <td><b>${esc(r.set)}</b>${elemTag(r.set)}${r === best ? ' <span class="tag hit">best</span>' : r.close ? ' <span class="tag" title="Within the margin of luck of the best set">about as good</span>' : ''}</td>
+      <td class="right"><span class="score${r.value >= 0.005 ? ' gainpos' : ''}">+${r.value.toFixed(2)}</span>
+        <div class="bar" style="width:64px;margin-left:auto"><i style="width:${(100 * r.value / maxV).toFixed(1)}%"></i></div></td>
+      <td class="right">${frPct(r.useful)}</td>
+      ${kind === 'space' ? '' : `<td class="tiny nowrap">${r.bySlot.map(s => `<span class="slot ${s.slot}">${s.slot.slice(0, 3)}</span> ${frPct(s.rate)}`).join(' ')}</td>`}
+      <td class="tiny">${r.who.length ? `<details class="frWhy"><summary>${frNamesHtml(r, 3)}</summary>${frWhoTableHtml(r, kind)}</details>` : '<span class="muted">nobody counted</span>'}</td>
+    </tr>`).join('') + '</tbody>';
+}
+
+/* The character picker: every character, the counted ones ticked, owned first. */
+function renderFrChars() {
+  const box = $('#frCharList');
+  if (!box) return;
+  const all = CHARACTERS.slice().sort((a, b) => (frDefault(b) - frDefault(a)) || (state.chars[b.n].owned - state.chars[a.n].owned));
+  box.innerHTML = all.map(c => {
+    const cs = state.chars[c.n];
+    const note = !cs.owned ? 'not owned' : cs.benched ? 'benched' : '';
+    return `<label class="check"><input type="checkbox" data-fr="${esc(c.n)}"${frIncluded(c) ? ' checked' : ''}>
+      ${esc(c.n)}${note ? ` <span class="tiny muted">${note}</span>` : ''}</label>`;
+  }).join('');
+  $$('#frCharList input[data-fr]').forEach(i => i.onchange = () => { frSetIncluded(i.dataset.fr, i.checked); frCharsSummary(); markStaleRuns(); });
+  frCharsSummary();
+}
+function frCharsSummary() {
+  const n = frChars().length, def = CHARACTERS.filter(frDefault).length;
+  const added = CHARACTERS.filter(c => frIncluded(c) && !frDefault(c)).length, dropped = CHARACTERS.filter(c => !frIncluded(c) && frDefault(c)).length;
+  $('#frCharsSum').innerHTML = `Characters counted: <b>${n}</b> ${added || dropped
+    ? `<span class="muted">(your ${def} owned, not benched${added ? `, ${added} added` : ''}${dropped ? `, ${dropped} left out` : ''})</span>`
+    : '<span class="muted">— everyone you own and are not benching</span>'}`;
+}
+
 /* Both Upgrades views read what is equipped, so every equip/unequip path refreshes both.
    The headroom pass is skipped while its sub-tab is closed — the sub-tab's own handler
    runs it on the way in, so it cannot be shown stale, and a user who never opens it does
@@ -6472,10 +6807,10 @@ function syncTeamCritField() {
 // not just what it holds.
 const PREF_SELECTS = ['rsFilter', 'rsElement', 'rsSort', 'flSlot', 'flSet', 'flRar', 'flMain',
   'flSubMode', 'trScope', 'trShow', 'trRar', 'vaRar', 'vaShow', 'upRar',
-  'hrShow', 'hrElement', 'hrSlot', 'hrRar', 'ccScope', 'ccKind', 'ccRolls', 'ccPolicy', 'ccElement',
+  'hrShow', 'hrElement', 'hrSlot', 'hrRar', 'ccScope', 'ccKind', 'ccRolls', 'ccPolicy', 'ccElement', 'frKind', 'frPolicy',
   'trFlSlot', 'trFlSet', 'trFlRar', 'trFlMain', 'trFlSubMode',
   'vaFlSlot', 'vaFlSet', 'vaFlRar', 'vaFlMain', 'vaFlSubMode'];
-const PREF_CHECKS = ['rsHideBenched', 'upSameSet', 'upIgnoreEquipped', 'hrTakeEquipped', 'ccFree'];
+const PREF_CHECKS = ['rsHideBenched', 'upSameSet', 'upIgnoreEquipped', 'hrTakeEquipped', 'ccFree', 'frFree'];
 const PREF_TEXT = ['rsQ', 'flQ', 'trFlQ', 'vaFlQ', 'hrMin', 'hrQ', 'ccQ'];
 function collectPrefs() {
   const p = { invSort: { key: invSort.key, dir: invSort.dir },
@@ -6489,6 +6824,7 @@ function collectPrefs() {
   p.vaFlSub = vaFlSubSelected.slice();
   p.trVerdict = trVerdictSel.slice();
   p.rsView = rosterView;
+  p.frChosen = Object.assign({}, frChosen);
   return p;
 }
 // Every field is applied defensively: a select id absent from an older save, or holding a
@@ -6509,6 +6845,8 @@ function applyPrefs(p) {
   // it still opens on owned characters only.
   if (p.rsHideUnowned && $('#rsFilter').value === 'all') $('#rsFilter').value = 'owned';
   if (p.rsView === 'cards' || p.rsView === 'list') rosterView = p.rsView;
+  frChosen = {};
+  if (p.frChosen && typeof p.frChosen === 'object') Object.keys(p.frChosen).forEach(n => { if (charDef(n)) frSetIncluded(n, !!p.frChosen[n]); });
   if (Array.isArray(p.trVerdict)) trVerdictSel = p.trVerdict.filter(k => TR_TIERS.some(x => x.t === k));
   if (Array.isArray(p.flSub) && $('#flSub')) {
     flSubSelected = p.flSub.slice();
@@ -6577,13 +6915,15 @@ function load(file) {
          reach whichever new card now has that id. The same goes for a forced Optimise pick. */
       if ($('#dlg').open) $('#dlg').close();
       optForced = null;
-      trCache = null; vaCache = null; ccCache = null; ccJob++; ccCheckFilled = false;
-      ['#trSummary', '#vaSummary', '#ccSummary', '#ccCheckOut'].forEach(id => { $(id).innerHTML = ''; });
-      ['#trPanel', '#vaPanel', '#ccPanel'].forEach(id => $(id).classList.add('hide'));
+      trCache = null; vaCache = null; ccCache = null; ccJob++; ccCheckFilled = false; frCache = null; frJob++;
+      ['#trSummary', '#vaSummary', '#ccSummary', '#ccCheckOut', '#frSummary'].forEach(id => { $(id).innerHTML = ''; });
+      ['#trPanel', '#vaPanel', '#ccPanel', '#frPanel'].forEach(id => $(id).classList.add('hide'));
       ccFillCheckChars();
       commit(); markSaved();
       if (!$('#tab-triage').classList.contains('hide')) autoRunTriage();
       if (!$('#tab-upgrades').classList.contains('hide') && !$('#up-pane-craft').classList.contains('hide')) runCustomCard();
+      renderFrChars();
+      if (!$('#tab-upgrades').classList.contains('hide') && !$('#up-pane-fortune').classList.contains('hide')) runFortune();
       $('#dataMsg').innerHTML = `Loaded <b>${state.cards.length}</b> cards.` +
         (bad.length ? ` <span style="color:#e87a5c">${bad.length} skipped</span> — ${esc(bad.slice(0, 3).join('; '))}${bad.length > 3 ? ' …' : ''}` : '') +
         (staleMain.length ? `<br><span class="tiny">${staleMain.length} card${staleMain.length === 1 ? '' : 's'} carried a scanned main
@@ -6818,6 +7158,7 @@ function showTab(tab) {
   if (tab === 'opt' && optStale) { optStale = false; runOpt(); }   // deferred while hidden — see runOptIfShown
   if (tab === 'upgrades' && upViewsStale) runUpgradeViews();       // deferred while hidden — see runUpgradeViews
   if (tab === 'upgrades' && !$('#up-pane-craft').classList.contains('hide')) { if (!ccCache) runCustomCard(); else markStaleRuns(); }
+  if (tab === 'upgrades' && !$('#up-pane-fortune').classList.contains('hide')) { if (!frCache) runFortune(); else { renderFrChars(); markStaleRuns(); } }
   if (tab === 'triage') { autoRunTriage(); markStaleRuns(); }
 }
 $$('nav button').forEach(b => b.onclick = () => showTab(b.dataset.tab));
@@ -6915,9 +7256,18 @@ $$('#upSubtabs button').forEach(b => b.onclick = () => {
   $('#up-pane-better').classList.toggle('hide', b.dataset.uptab !== 'better');
   $('#up-pane-headroom').classList.toggle('hide', b.dataset.uptab !== 'headroom');
   $('#up-pane-craft').classList.toggle('hide', b.dataset.uptab !== 'craft');
+  $('#up-pane-fortune').classList.toggle('hide', b.dataset.uptab !== 'fortune');
   if (b.dataset.uptab === 'headroom') runHeadroom();
   if (b.dataset.uptab === 'craft') { if (!ccCache) runCustomCard(); else markStaleRuns(); }
+  if (b.dataset.uptab === 'fortune') { if (!frCache) runFortune(); else { renderFrChars(); markStaleRuns(); } }
 });
+/* Fortune Revelation: the item and the two settings re-run the ranking; the character picker only
+   marks it stale, since ticking a dozen boxes should not start a dozen runs. */
+['#frKind', '#frPolicy', '#frFree'].forEach(id => $(id).addEventListener('change', () => runFortune()));
+$('#frRun').onclick = () => runFortune();
+$('#frAllOwned').onclick = () => { CHARACTERS.forEach(c => frSetIncluded(c.n, !!state.chars[c.n].owned)); renderFrChars(); markStaleRuns(); };
+$('#frNone').onclick = () => { CHARACTERS.forEach(c => frSetIncluded(c.n, false)); renderFrChars(); markStaleRuns(); };
+$('#frDefault').onclick = () => { frChosen = {}; renderFrChars(); markStaleRuns(); };
 // Custom card: the settings re-run the ranking (a couple of seconds, with its progress shown);
 // element and search only redraw it. The check panel re-prices on every change.
 ['#ccScope', '#ccRolls', '#ccPolicy', '#ccFree'].forEach(id => $(id).addEventListener('change', () => runCustomCard()));
