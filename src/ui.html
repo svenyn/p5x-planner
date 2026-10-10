@@ -701,6 +701,7 @@ details.sect>.inner{margin-top:10px}
       <button data-uptab="craft">Custom card</button>
       <button data-uptab="ink">Ink card</button>
       <button data-uptab="fortune">Fortune Revelation</button>
+      <button data-uptab="retro">Retrograde Card</button>
     </div>
 
     <div id="up-pane-better">
@@ -965,6 +966,57 @@ details.sect>.inner{margin-top:10px}
         <div class="flowTable"><table id="frTable"></table></div>
       </div>
     </div><!-- /up-pane-fortune -->
+    <div id="up-pane-retro" class="hide">
+      <div class="panel">
+        <h2>Retrograde Card</h2>
+        <details class="explain" style="margin:0 0 12px"><summary>Which levelled card gains most from a reset: good substats
+          for its character, upgrades that went elsewhere.</summary>
+          <div class="body">
+            <p>A Retrograde Card sets a card back to level 0. The substats it dropped with keep their starting values;
+              the upgrades are undone, and levelling it to 25 again lands five new ones on random substats. Each card here
+              is reset and levelled again 300 times at random, and every outcome is priced for the character beside it.</p>
+            <p>Nothing records where a card's upgrades went, so they are read from its values: a substat holding three
+              rolls can only show a value between three of its lowest and three of its highest rolls. <b>×3</b> beside a
+              substat means its starting roll plus two upgrades (<b>×~3</b> when the values leave it unclear). A card is
+              worth resetting when the substats holding many rolls are the faded ones, the stats its character does not
+              want.</p>
+            <p>A card that dropped with three substats got its fourth at its first upgrade, so a reset takes that one off
+              too. The values also tell which cards those are (<b>Dropped with</b>). Whether the fourth comes back the same
+              is not known: Prydwen's guide says a Retrograde Card can change it, so by default it comes back as a random
+              stat. Switch <b>Fourth substat</b> if you find out otherwise.</p>
+            <p><b>For</b> is the wearer, or for a spare card the character in scope it would help most. <b>Gain</b> is the
+              build-score points a reset adds on average against keeping the card, compared across characters. A spare card
+              is never counted below what that character would wear without it, so a reset that still loses to their own
+              card adds nothing; a worn card that comes out worse costs what it costs, since the old card is gone.
+              <b>Likely</b> is where 8 of 10 resets land, and <b>Better / worse</b> the share of resets that beat, or fall
+              short of, keeping it. Only 5★ cards are rated: the roll values are measured for 5★ only.</p>
+          </div></details>
+        <div class="row">
+          <div class="field"><label>Characters</label><select id="rgScope">
+            <option value="owned">Characters I own</option>
+            <option value="all">All characters</option></select></div>
+          <div class="field"><label>Fourth substat</label><select id="rgFourth" title="A card that dropped with three substats gets its fourth at the first upgrade. After a reset:">
+            <option value="random">Comes back as a random stat</option>
+            <option value="same">Comes back the same</option></select></div>
+          <div class="field"><label>Show</label><select id="rgShow">
+            <option value="gain">Cards expected to improve</option>
+            <option value="all">All levelled cards</option></select></div>
+          <div class="field"><label>Slot</label><select id="rgSlot">
+            <option value="">Any</option><option>Sun</option><option>Moon</option><option>Star</option><option>Sky</option><option>Space</option></select></div>
+          <div class="field"><label>Cards</label><select id="rgWho">
+            <option value="any">Worn and spare</option>
+            <option value="worn">Worn only</option>
+            <option value="spare">Spare only</option></select></div>
+          <div class="field"><label>Search</label><input id="rgQ" placeholder="character, set or stat"></div>
+          <button class="primary" id="rgRun">Rate cards</button>
+          <span class="tiny muted" id="rgCount"></span>
+        </div>
+        <div id="rgSummary" style="margin-top:12px"></div>
+      </div>
+      <div class="hide" id="rgPanel">
+        <div class="flowTable"><table id="rgTable"></table></div>
+      </div>
+    </div><!-- /up-pane-retro -->
   </section>
 
   <!-- ===================== ROSTER ===================== -->

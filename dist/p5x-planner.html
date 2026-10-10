@@ -707,6 +707,7 @@ details.sect>.inner{margin-top:10px}
       <button data-uptab="craft">Custom card</button>
       <button data-uptab="ink">Ink card</button>
       <button data-uptab="fortune">Fortune Revelation</button>
+      <button data-uptab="retro">Retrograde Card</button>
     </div>
 
     <div id="up-pane-better">
@@ -971,6 +972,57 @@ details.sect>.inner{margin-top:10px}
         <div class="flowTable"><table id="frTable"></table></div>
       </div>
     </div><!-- /up-pane-fortune -->
+    <div id="up-pane-retro" class="hide">
+      <div class="panel">
+        <h2>Retrograde Card</h2>
+        <details class="explain" style="margin:0 0 12px"><summary>Which levelled card gains most from a reset: good substats
+          for its character, upgrades that went elsewhere.</summary>
+          <div class="body">
+            <p>A Retrograde Card sets a card back to level 0. The substats it dropped with keep their starting values;
+              the upgrades are undone, and levelling it to 25 again lands five new ones on random substats. Each card here
+              is reset and levelled again 300 times at random, and every outcome is priced for the character beside it.</p>
+            <p>Nothing records where a card's upgrades went, so they are read from its values: a substat holding three
+              rolls can only show a value between three of its lowest and three of its highest rolls. <b>×3</b> beside a
+              substat means its starting roll plus two upgrades (<b>×~3</b> when the values leave it unclear). A card is
+              worth resetting when the substats holding many rolls are the faded ones, the stats its character does not
+              want.</p>
+            <p>A card that dropped with three substats got its fourth at its first upgrade, so a reset takes that one off
+              too. The values also tell which cards those are (<b>Dropped with</b>). Whether the fourth comes back the same
+              is not known: Prydwen's guide says a Retrograde Card can change it, so by default it comes back as a random
+              stat. Switch <b>Fourth substat</b> if you find out otherwise.</p>
+            <p><b>For</b> is the wearer, or for a spare card the character in scope it would help most. <b>Gain</b> is the
+              build-score points a reset adds on average against keeping the card, compared across characters. A spare card
+              is never counted below what that character would wear without it, so a reset that still loses to their own
+              card adds nothing; a worn card that comes out worse costs what it costs, since the old card is gone.
+              <b>Likely</b> is where 8 of 10 resets land, and <b>Better / worse</b> the share of resets that beat, or fall
+              short of, keeping it. Only 5★ cards are rated: the roll values are measured for 5★ only.</p>
+          </div></details>
+        <div class="row">
+          <div class="field"><label>Characters</label><select id="rgScope">
+            <option value="owned">Characters I own</option>
+            <option value="all">All characters</option></select></div>
+          <div class="field"><label>Fourth substat</label><select id="rgFourth" title="A card that dropped with three substats gets its fourth at the first upgrade. After a reset:">
+            <option value="random">Comes back as a random stat</option>
+            <option value="same">Comes back the same</option></select></div>
+          <div class="field"><label>Show</label><select id="rgShow">
+            <option value="gain">Cards expected to improve</option>
+            <option value="all">All levelled cards</option></select></div>
+          <div class="field"><label>Slot</label><select id="rgSlot">
+            <option value="">Any</option><option>Sun</option><option>Moon</option><option>Star</option><option>Sky</option><option>Space</option></select></div>
+          <div class="field"><label>Cards</label><select id="rgWho">
+            <option value="any">Worn and spare</option>
+            <option value="worn">Worn only</option>
+            <option value="spare">Spare only</option></select></div>
+          <div class="field"><label>Search</label><input id="rgQ" placeholder="character, set or stat"></div>
+          <button class="primary" id="rgRun">Rate cards</button>
+          <span class="tiny muted" id="rgCount"></span>
+        </div>
+        <div id="rgSummary" style="margin-top:12px"></div>
+      </div>
+      <div class="hide" id="rgPanel">
+        <div class="flowTable"><table id="rgTable"></table></div>
+      </div>
+    </div><!-- /up-pane-retro -->
   </section>
 
   <!-- ===================== ROSTER ===================== -->
@@ -7650,7 +7702,7 @@ function vaultSig() { return cardsSig(false) + ':' + charsSig(null) + ':' + team
    on the one screen whose "feed" cannot be undone. The check is a comparison of fingerprints
    (see dataSignature), so an undo, or a value set back, reads as current again. */
 function markStaleRuns() {
-  [['#trSummary', trCache, triageSig, '#trRun'], ['#vaSummary', vaCache, vaultSig, '#vaRun'], ['#ccSummary', ccCache, ccSig, '#ccRun'], ['#ikSummary', ikCache, ikSig, '#ikRun'], ['#frSummary', frCache, frSig, '#frRun']].forEach(([id, cache, sig, btn]) => {
+  [['#trSummary', trCache, triageSig, '#trRun'], ['#vaSummary', vaCache, vaultSig, '#vaRun'], ['#ccSummary', ccCache, ccSig, '#ccRun'], ['#ikSummary', ikCache, ikSig, '#ikRun'], ['#frSummary', frCache, frSig, '#frRun'], ['#rgSummary', rgCache, rgSig, '#rgRun']].forEach(([id, cache, sig, btn]) => {
     const box = $(id);
     if (!box || !cache) return;
     const old = box.querySelector('.stale-run');
@@ -9231,6 +9283,374 @@ function ikAddCard() {
   commit();
   offerUndo(`Added a 5★ ${card.slot} ${card.set} card (${card.main}) at level 0 to the inventory.`, snap);
 }
+
+/* ======================== Retrograde Card: which levelled card to reset ========================
+   A Retrograde Card resets a revelation card to level 0: the upgrades it has had are undone, the
+   substats it dropped with keep their starting values, and levelling it again lands five new
+   upgrades at random (the user, 10 Oct 2026; Game8: "only resets the substats gained through
+   upgrading"). A card that dropped with three substats gained its fourth at its first upgrade, so
+   a reset takes that one off too. Whether it comes back the same is not known: Prydwen says the
+   hidden fourth "can be changed" by a Retrograde Card, so by default it is minted again as a random
+   stat, and the Fourth substat control switches to "comes back the same".
+
+   So the cards worth a reset are the ones with substats the character wants and upgrades that went
+   elsewhere. Nothing records where a card's upgrades went, but its values do: k rolls of a stat can
+   only print within k × its lowest to k × its highest tier, the rolls must add up to the drop plus
+   the upgrades, and the game lands upgrades on random substats (rgInfer). On the real inventory
+   that pins every levelled card's roll counts, and whether it dropped with three or four (their
+   totals differ by one), with no card left unexplained.
+
+   Each card is then reset and re-levelled RG_SAMPLES times at random (rgResets) and every outcome
+   priced as a whole loadout through the build score's own numerator (buildScoreOf), against keeping
+   the card as it is (levelled on at random, when not yet at 25). A worn card is priced for its
+   wearer, a spare one for the character in scope it helps most. Neither side is counted below what
+   the character would wear in that slot without the card — what they wear there, or their best few
+   spare cards by card score at full level (rgFallback) — so a spare card's reset that still does
+   not beat their own card is worth nothing, while a worn card's reset that comes out worse costs
+   what it costs, since the old card is gone. Gains are build points, which compare across
+   characters. */
+const RG_P4 = 55;
+const RG_SAMPLES = 300;   // random re-levellings per card
+const RG_ALT = 6;         // a character's fallback cards per slot
+const RG_CANDS = 3;       // characters a spare card is simulated for, after a cheap screen
+
+const rgUnit = stat => /^(ATK|DEF|HP)$/.test(stat) ? 1 : 0.1;
+const rgTol = (stat, k) => rgUnit(stat) * (k + 1) / 2 + 1e-6;
+
+// Every sum k rolls of a stat can make, with how many of the 5^k equally likely tier tuples make it.
+const rgSumMemo = {};
+function rgSums(stat, slot, k) {
+  const key = stat + '|' + (slot === 'Space' ? 's' : 'h') + '|' + k;
+  if (rgSumMemo[key]) return rgSumMemo[key];
+  const tiers = ccTiers(stat, slot);
+  let dist = new Map([[0, 1]]);
+  for (let i = 0; i < k; i++) {
+    const nx = new Map();
+    dist.forEach((n, s) => tiers.forEach(t => { const v = Math.round((s + t) * 100) / 100; nx.set(v, (nx.get(v) || 0) + n); }));
+    dist = nx;
+  }
+  return (rgSumMemo[key] = Array.from(dist, ([s, n]) => ({ s, n })));
+}
+// Chance k rolls of `stat` print as `v`.
+function rgLike(stat, slot, k, v, tolMul) {
+  const tol = rgTol(stat, k) * (tolMul || 1);
+  let n = 0;
+  rgSums(stat, slot, k).forEach(x => { if (Math.abs(x.s - v) <= tol) n += x.n; });
+  return n / Math.pow(5, k);
+}
+// Weights over the stat's five tiers for its first (drop) roll, given k rolls printing as `v`.
+function rgMintWeights(stat, slot, k, v, tolMul) {
+  const tol = rgTol(stat, k) * (tolMul || 1), tiers = ccTiers(stat, slot);
+  if (k === 1) return tiers.map(t => Math.abs(t - v) <= tol ? 1 : 0);
+  const rest = rgSums(stat, slot, k - 1);
+  return tiers.map(t => { let n = 0; rest.forEach(x => { if (Math.abs(t + x.s - v) <= tol) n += x.n; }); return n; });
+}
+function rgCompositions(total, parts) {
+  const out = [];
+  const go = (i, left, acc) => {
+    if (i === parts - 1) { out.push(acc.concat([left])); return; }
+    for (let x = 0; x <= left; x++) go(i + 1, left - x, acc.concat([x]));
+  };
+  go(0, total, []);
+  return out;
+}
+const rgFact = n => n <= 1 ? 1 : n * rgFact(n - 1);
+const rgMultinomial = c => rgFact(c.reduce((a, x) => a + x, 0)) / c.reduce((a, x) => a * rgFact(x), 1);
+
+/* The explanations of a levelled card: how many rolls each substat holds, and whether the card
+   dropped with all its substats or gained the last one at its first upgrade (`late`, the index of
+   that substat, -1 for none). Each weighted by how likely the game is to make it — upgrades land
+   on a random substat, 40% of drops carry four substats (FR_FOUR_SUBS) — times the chance its
+   rolls print as the values on the card. */
+function rgInfer(card) {
+  const R = RARITY[card.rarity], subs = card.subs || [], n = subs.length;
+  const u = upgradesUsed(card.rarity, card.level);
+  const run = tolMul => {
+    const states = [];
+    const add = (k, late, prior) => {
+      let p = prior;
+      for (let i = 0; i < n && p > 0; i++) p *= rgLike(subs[i].stat, card.slot, k[i], subs[i].value, tolMul);
+      if (p > 0) states.push({ k, late, p });
+    };
+    if (n >= R.subMin && (n === R.subMax || u === 0))
+      rgCompositions(u, n).forEach(c => add(c.map(x => x + 1), -1, FR_FOUR_SUBS * rgMultinomial(c) / Math.pow(n, u)));
+    if (n === R.subMax && R.subMin < R.subMax && u >= 1)
+      for (let j = 0; j < n; j++)
+        rgCompositions(u - 1, n).forEach(c => add(c.map(x => x + 1), j, (1 - FR_FOUR_SUBS) / n * rgMultinomial(c) / Math.pow(n, u - 1)));
+    return states;
+  };
+  let tolMul = 1, states = run(1);
+  if (!states.length) { tolMul = 2; states = run(2); }
+  const tot = states.reduce((a, s) => a + s.p, 0);
+  states.forEach(s => { s.p /= tot; });
+  states.sort((a, b) => b.p - a.p);
+  return { states, tolMul, u, pLate: states.filter(s => s.late >= 0).reduce((a, s) => a + s.p, 0) };
+}
+
+/* `n` outcomes of resetting the card and levelling it to the cap again: a drop state picked by its
+   chance, each kept substat back to a drop roll consistent with its value, the late substat (if any)
+   gone and minted again at the first upgrade — as another random stat when `fourth` is 'random',
+   the same one when 'same' — and the upgrades landing on random substats at random tiers. */
+function rgResets(card, inf, n, fourth) {
+  const rnd = ccRng(hashStr(2166136261, ['retro', card.id, card.slot, card.set, card.main, JSON.stringify(card.subs), fourth].join('|')));
+  const pickW = (items, w) => { const tot = w.reduce((a, x) => a + x, 0); let r = rnd() * tot; for (let i = 0; i < items.length; i++) { r -= w[i]; if (r < 0) return items[i]; } return items[items.length - 1]; };
+  const pick = a => a[Math.min(a.length - 1, Math.floor(rnd() * a.length))];
+  const R = RARITY[card.rarity], cap = R.maxLevel, subs = card.subs;
+  const no = frNoSub(card.slot, card.main);
+  const out = [];
+  for (let m = 0; m < n; m++) {
+    const st = pickW(inf.states, inf.states.map(s => s.p));
+    const stats = [], vals = [];
+    subs.forEach((s, i) => {
+      if (i === st.late) return;
+      stats.push(s.stat);
+      vals.push(pickW(ccTiers(s.stat, card.slot), rgMintWeights(s.stat, card.slot, st.k[i], s.value, inf.tolMul)));
+    });
+    let ups = R.upgrades;
+    if (stats.length < R.subMax) {
+      let add;
+      if (fourth === 'same' && st.late >= 0) add = subs[st.late].stat;
+      else { const left = Object.keys(SUBSTATS).filter(x => no.indexOf(x) < 0 && stats.indexOf(x) < 0); add = pick(left); }
+      stats.push(add); vals.push(pick(ccTiers(add, card.slot))); ups--;
+    }
+    for (let k = 0; k < ups; k++) { const i = Math.min(stats.length - 1, Math.floor(rnd() * stats.length)); vals[i] += pick(ccTiers(stats[i], card.slot)); }
+    out.push(Object.assign({}, card, { level: cap, subs: stats.map((s, i) => ({ stat: s, value: ccRound(s, vals[i]) })) }));
+  }
+  return out;
+}
+// The card as it is, levelled to the cap without a reset: its remaining upgrades land at random.
+function rgKeeps(card, n) {
+  const R = RARITY[card.rarity], left = remainingUpgrades(card);
+  if (!left) return [card];
+  const rnd = ccRng(hashStr(2166136261, ['keep', card.id, JSON.stringify(card.subs)].join('|')));
+  const pick = a => a[Math.min(a.length - 1, Math.floor(rnd() * a.length))];
+  const out = [];
+  for (let m = 0; m < n; m++) {
+    const vals = card.subs.map(s => s.value);
+    for (let k = 0; k < left; k++) { const i = Math.min(vals.length - 1, Math.floor(rnd() * vals.length)); vals[i] += pick(ccTiers(card.subs[i].stat, card.slot)); }
+    out.push(Object.assign({}, card, { level: R.maxLevel, subs: card.subs.map((s, i) => ({ stat: s.stat, value: ccRound(s.stat, vals[i]) })) }));
+  }
+  return out;
+}
+
+// Everything pricing a card for one character reads, built once per run.
+function rgCharCtx(ch, free) {
+  const t = target(ch), lo = charLoadout(ch.n), idl = idealLoadout(ch, t, RG_P4);
+  const worn = state.cards.filter(c => c.equipped === ch.n);
+  const ev = cards => { const b = buildScoreOf(ch, cards, RG_P4, lo, idl, t); return b ? b.raw : 0; };
+  const alts = {};
+  SLOTS.forEach(sl => {
+    alts[sl] = free.filter(c => c.slot === sl).map(c => ({ c, s: cardScore(atMaxLevel(c), t) }))
+      .sort((a, b) => b.s - a.s).slice(0, RG_ALT + 1).map(x => x.c);
+  });
+  return { ch, t, worn, ev, alts, fall: {} };
+}
+// What the character would wear in that slot without this card: what they wear, or a spare card.
+function rgFallback(cx, card) {
+  const others = cx.worn.filter(c => c.slot !== card.slot);
+  let best = cx.ev(others);
+  const wear = cx.worn.filter(c => c.slot === card.slot)[0];
+  if (wear && wear !== card) best = Math.max(best, cx.ev(others.concat([atMaxLevel(wear)])));
+  cx.alts[card.slot].forEach(a => { if (a !== card) best = Math.max(best, cx.ev(others.concat([atMaxLevel(a)]))); });
+  return { others, fall: best };
+}
+/* One card for one character: the build points with the card kept (levelled on as it is) against
+   with it reset, never below what they would wear without it — each outcome priced as the whole
+   loadout. `gains` is sorted, so ccRange reads it directly. */
+function rgPrice(cx, card, keeps, resets) {
+  const { others, fall } = rgFallback(cx, card);
+  const val = c => Math.max(fall, cx.ev(others.concat([c])));
+  const before = keeps.reduce((a, c) => a + val(c), 0) / keeps.length;
+  const gains = resets.map(c => val(c) - before).sort((a, b) => a - b);
+  return { cx, before, fall, gains, mean: gains.reduce((a, x) => a + x, 0) / gains.length,
+    better: gains.filter(g => g > 0.05).length / gains.length, worse: gains.filter(g => g < -0.05).length / gains.length };
+}
+
+/* ---- the Retrograde view: run, draw ----
+   Split like the Custom card view's: the run prices every levelled card in 50 ms slices (about 2 s
+   for the real inventory's 345), the filters only redraw, and it runs on its first visit and is
+   then only marked stale. */
+function rgOpts() { return { scope: $('#rgScope').value, fourth: $('#rgFourth').value }; }
+const rgScopeChars = o => o.scope === 'all' ? CHARACTERS.slice() : ownedChars();
+// The cards a reset can change: levelled 5★ cards (the roll tables are measured for 5★ only).
+const rgCandidates = () => state.cards.filter(c => c.rarity === 5 && upgradesUsed(c.rarity, c.level) > 0);
+/* What a run read: every card with its wearer and lock (the candidates, the fallbacks, what is
+   worn), who is owned, the targets and setups of the characters in scope, the team crit rate, the
+   Den and its own controls. Show, slot, wearer and search only narrow the drawn table. */
+function rgSig() {
+  const o = rgOpts();
+  return cardsSig(true) + ':' + charsSig(new Set(rgScopeChars(o).map(c => c.n))) + ':' + teamCritRate() + ':' + denSig() +
+    '|' + [o.scope, o.fourth].join(',');
+}
+/* One card's row: worn, it is priced for the wearer (if in scope); spare, for every character in
+   scope its set does not lock out, screened on the first 40 outcomes and the best RG_CANDS priced
+   on all of them, the one gaining most on average kept. */
+function rgRow(card, o, ctxs) {
+  const inf = rgInfer(card);
+  if (!inf.states.length) return null;
+  const resets = rgResets(card, inf, RG_SAMPLES, o.fourth), keeps = rgKeeps(card, RG_SAMPLES);
+  let cands;
+  if (card.equipped) cands = ctxs.has(card.equipped) ? [ctxs.get(card.equipped)] : [];
+  else {
+    const S = card.slot === 'Space' ? SPACE_SETS[card.set] : SETS[card.set];
+    cands = Array.from(ctxs.values()).filter(cx => !(S && S.elem && S.elem !== cx.ch.e))
+      .map(cx => ({ cx, m: rgPrice(cx, card, keeps.slice(0, 40), resets.slice(0, 40)).mean }))
+      .sort((a, b) => b.m - a.m).slice(0, RG_CANDS).map(x => x.cx);
+  }
+  let best = null;
+  cands.forEach(cx => { const p = rgPrice(cx, card, keeps, resets); if (!best || p.mean > best.mean + 1e-9) best = p; });
+  if (!best) return null;
+  // Rolls per substat, averaged over the explanations; `sure` when one roll count holds 80% or more.
+  const rolls = card.subs.map((s, i) => {
+    const by = {};
+    inf.states.forEach(st => { by[st.k[i]] = (by[st.k[i]] || 0) + st.p; });
+    const top = Object.keys(by).sort((a, b) => by[b] - by[a])[0];
+    return { k: +top, sure: by[top] >= 0.8 };
+  });
+  return { card, inf, p: best, ch: best.cx.ch, rolls, worn: !!card.equipped, range: ccRange(best.gains) };
+}
+let rgCache = null, rgJob = 0;
+function runRetrograde() {
+  const job = ++rgJob, o = rgOpts(), chars = rgScopeChars(o), sig = rgSig();
+  if (!chars.length) {
+    rgCache = null;
+    $('#rgSummary').innerHTML = '<p class="muted">Mark some characters as owned on the Roster tab first, or choose "All characters".</p>';
+    $('#rgPanel').classList.add('hide');
+    return Promise.resolve(false);
+  }
+  const cards = rgCandidates();
+  const free = poolFor('free', 5, null);
+  const ctxs = new Map();
+  const rows = [];
+  let i = 0, c = 0;
+  const progress = () => {
+    $('#rgSummary').innerHTML = `<div class="notice info">Re-levelling each levelled card at random… <b>${i}</b> of ${cards.length}</div>`;
+  };
+  progress();
+  return new Promise(resolve => {
+    const step = () => {
+      if (job !== rgJob) return resolve(false);
+      const t0 = performance.now();
+      while (c < chars.length && performance.now() - t0 < 50) { ctxs.set(chars[c].n, rgCharCtx(chars[c], free)); c++; }
+      while (c >= chars.length && i < cards.length && performance.now() - t0 < 50) { const r = rgRow(cards[i++], o, ctxs); if (r) rows.push(r); }
+      if (i < cards.length || c < chars.length) { progress(); setTimeout(step, 0); return; }
+      rows.sort((a, b) => b.p.mean - a.p.mean || a.ch.n.localeCompare(b.ch.n));
+      rows.forEach((r, k) => { r.rank = k + 1; });
+      rgCache = { sig, o, rows, n: cards.length, tc: teamCritRate() };
+      renderRetrograde();
+      markStaleRuns();
+      resolve(true);
+    };
+    setTimeout(step, 0);
+  });
+}
+
+const rgSort = { key: null, dir: 1 };
+const RG_SORT_COLS = { rank: r => r.rank, char: r => r.ch.n, gain: r => r.p.mean, range: r => r.range.lo, better: r => r.p.better,
+  slot: r => SLOTS.indexOf(r.card.slot) };
+function sortRgRows(rows) {
+  if (!rgSort.key) return rows.slice();   // the run's own order: largest average gain first
+  const get = RG_SORT_COLS[rgSort.key];
+  return rows.slice().sort((a, b) => {
+    const av = get(a), bv = get(b);
+    const cmp = typeof av === 'number' ? av - bv : String(av).localeCompare(String(bv));
+    return (cmp || a.rank - b.rank) * rgSort.dir;
+  });
+}
+const rgSigned = v => (v >= 0 ? '+' : '−') + Math.abs(v).toFixed(1);
+// "−0.4 to +1.8": the middle 80% of resets, with the average and extremes on hover.
+function rgRangeHtml(rg) {
+  const tip = `8 in 10 resets land between ${rgSigned(rg.lo)} and ${rgSigned(rg.hi)} build points (average ${rgSigned(rg.mean)}; ` +
+    `worst seen ${rgSigned(rg.min)}, best ${rgSigned(rg.max)}).`;
+  return `<span title="${esc(tip)}" style="white-space:nowrap">${rgSigned(rg.lo)} to ${rgSigned(rg.hi)}</span>`;
+}
+// How sure it is the card dropped with three substats, whose fourth a reset may change.
+function rgDropHtml(r) {
+  const p = r.inf.pLate;
+  if (p >= 0.8) return `<span class="tag" title="${esc(`About ${Math.round(p * 100)}% sure, from how many rolls its values hold. A reset takes the fourth substat off again; with the setting above it comes back ${r.fourthSame ? 'the same' : 'as a random stat at the first upgrade'}.`)}">dropped with 3</span>`;
+  if (p <= 0.2) return `<span class="tag" title="${esc(`About ${Math.round((1 - p) * 100)}% sure, from how many rolls its values hold. A reset keeps all four substats.`)}">dropped with 4</span>`;
+  return `<span class="tag" title="${esc(`${Math.round(p * 100)}% likely it dropped with three substats, from how many rolls its values hold.`)}">dropped with 3 or 4</span>`;
+}
+/* The card with each substat's roll count: its starting roll plus the upgrades that landed on it,
+   read from the values. Coloured, like every card, by what each substat is worth to the character
+   it is priced for — a reset is worth most when the many-roll substats are the faded ones. */
+function rgCardHtml(r) {
+  const c = r.card, t = r.p.cx.t, f = couplingFactors(t, c.slot, c.main);
+  const subs = c.subs.map((s, i) => {
+    const w = (t.w[s.stat] || 0) * cf(f, s.stat), cls = w >= 6 ? ' good' : w <= 1 ? ' bad' : '';
+    const k = r.rolls[i];
+    return `<span class="s${cls}" title="${esc(`${k.sure ? '' : 'Probably '}${k.k} roll${k.k === 1 ? '' : 's'}: its starting roll${k.k > 1 ? ` plus ${k.k - 1} upgrade${k.k === 2 ? '' : 's'}` : ' and no upgrade'}`)}">${esc(s.stat)} ${esc(subVal(s))}` +
+      ` <span class="muted">×${k.sure ? '' : '~'}${k.k}</span></span>`;
+  }).join('<span class="sep">·</span><wbr>');
+  return `<span class="slot ${c.slot}">${c.slot.slice(0, 3)}</span> <b>${esc(c.set)}</b> · ${esc(c.main)} <span class="muted">Lv${c.level}</span>
+    <div class="tiny"><span class="subs">${subs}</span></div>`;
+}
+function renderRetrograde() {
+  if (!rgCache) return;
+  const { rows, o } = rgCache;
+  const show = $('#rgShow').value, sl = $('#rgSlot').value, wh = $('#rgWho').value, q = $('#rgQ').value.trim().toLowerCase();
+  rows.forEach(r => { r.fourthSame = o.fourth === 'same'; });
+  const list = sortRgRows(rows.filter(r => {
+    if (show === 'gain' && !(r.p.mean >= UPGRADE_MIN_GAIN)) return false;
+    if (sl && r.card.slot !== sl) return false;
+    if (wh === 'worn' && !r.worn) return false;
+    if (wh === 'spare' && r.worn) return false;
+    if (q) {
+      const hay = [r.ch.n, r.ch.a || '', r.card.set, r.card.slot, r.card.main, r.card.subs.map(s => s.stat).join(' ')].join(' ').toLowerCase();
+      if (hay.indexOf(q) < 0) return false;
+    }
+    return true;
+  }));
+  const good = rows.filter(r => r.p.mean >= UPGRADE_MIN_GAIN), top = good[0];
+  $('#rgSummary').innerHTML = !rows.length
+    ? '<div class="notice info">No levelled 5★ card to reset: a reset only changes a card that has had at least one upgrade.</div>'
+    : !top
+      ? `<div class="notice info">Re-levelled each of your <b>${rows.length}</b> levelled cards ${RG_SAMPLES} times at random. None is expected to come out
+          better on average: their upgrades already landed on substats that matter.</div>`
+      : `<div class="notice info">Re-levelled each of your <b>${rows.length}</b> levelled cards ${RG_SAMPLES} times at random. <b>${good.length}</b>
+          ${good.length === 1 ? 'is' : 'are'} expected to come out better on average.</div>
+        <div style="margin-top:12px">Best use of a Retrograde Card: <b>${esc(top.card.set)} ${esc(top.card.slot)}</b> (${esc(top.card.main)})
+          ${top.worn ? `worn by <b>${esc(top.ch.n)}</b>` : `for <b>${esc(top.ch.n)}</b>, who gains most from it`}:
+          <span class="gainpos score">${rgSigned(top.p.mean)}</span> <span class="tiny muted">build points on average ·
+          ${Math.round(top.p.better * 100)}% of resets come out better, ${Math.round(top.p.worse * 100)}% worse</span>
+          <div style="margin-top:4px">${rgCardHtml(top)}</div></div>`;
+  $('#rgPanel').classList.toggle('hide', !list.length);
+  $('#rgCount').textContent = `${list.length} shown of ${rows.length}`;
+  if (!list.length) return;
+  const maxGain = Math.max.apply(null, rows.map(r => r.p.mean).concat([0.1]));
+  const th = (key, label, title) => sortThHtml(key, label, rgSort, title);
+  $('#rgTable').innerHTML = `<thead><tr>
+      ${th('rank', '#', 'Rank by average gain')}
+      ${th('slot', 'Card', 'The card, each substat with its roll count (×3: its starting roll plus two upgrades), coloured by what it is worth to the character beside it')}
+      ${th('char', 'For', 'Who wears it, or for a spare card the character it would help most')}
+      ${th('gain', 'Gain', 'Build-score points a reset and re-levelling to 25 adds on average, against keeping the card as it is. Never counted below what the character would wear without the card. Compares across characters.')}
+      ${th('range', 'Likely', 'Where the gain lands in 8 of 10 resets. Sorts on the low end.')}
+      ${th('better', 'Better / worse', 'Share of resets that come out better, and worse, than keeping the card')}
+      <th>Dropped with</th>
+      <th></th>
+    </tr></thead><tbody>` +
+    list.map(r => `<tr>
+        <td class="tiny muted right">${r.rank}</td>
+        <td class="tiny">${rgCardHtml(r)}</td>
+        <td class="tiny"><b>${esc(r.ch.n)}</b>
+          <div class="tiny muted">${r.worn ? 'wears it' : 'spare card'}${!state.chars[r.ch.n].owned ? ' · not owned' : ''}</div></td>
+        <td class="right"><span class="score${r.p.mean >= UPGRADE_MIN_GAIN ? ' gainpos' : ''}">${rgSigned(r.p.mean)}</span>
+          <div class="bar" style="width:64px;margin-left:auto"><i style="width:${Math.max(0, 100 * r.p.mean / maxGain).toFixed(1)}%"></i></div></td>
+        <td class="right tiny">${rgRangeHtml(r.range)}</td>
+        <td class="tiny" style="white-space:nowrap">${Math.round(r.p.better * 100)}% · <span class="muted">${Math.round(r.p.worse * 100)}%</span></td>
+        <td class="tiny">${rgDropHtml(r)}</td>
+        <td><button class="ghost tiny rgOpt" data-char="${esc(r.ch.n)}">Optimise</button></td>
+      </tr>`).join('') + '</tbody>';
+  $$('#rgTable .rgOpt').forEach(btn => btn.onclick = () => openCharacterDetail(btn.dataset.char));
+  $$('#rgTable .sortH').forEach(th => th.onclick = () => {
+    const key = th.dataset.sort;
+    rgSort.dir = rgSort.key === key ? -rgSort.dir : 1;
+    rgSort.key = key;
+    renderRetrograde();
+    refocus(`#rgTable th.sortH[data-sort="${key}"] .thBtn`);
+  });
+}
+
 /* ======================== Fortune Revelations: which set to redeem ========================
    A Fortune Revelation turns into a 5★ Heavens card of the set the player chooses; an Orange
    Fortune Revelation into a 5★ Space card the same way. Everything else about the card is luck:
@@ -10472,15 +10892,16 @@ function syncTeamCritField() {
 // not just what it holds.
 const PREF_SELECTS = ['rsFilter', 'rsElement', 'rsSort', 'flSlot', 'flSet', 'flRar', 'flMain',
   'flSubMode', 'trScope', 'trShow', 'trRar', 'vaRar', 'vaShow', 'upRar',
-  'hrShow', 'hrElement', 'hrSlot', 'hrRar', 'ccScope', 'ccKind', 'ccRolls', 'ccPolicy', 'ccElement', 'ikScope', 'ikPick', 'ikPolicy', 'ikElement', 'frKind', 'frPolicy',
+  'hrShow', 'hrElement', 'hrSlot', 'hrRar', 'ccScope', 'ccKind', 'ccRolls', 'ccPolicy', 'ccElement', 'ikScope', 'ikPick', 'ikPolicy', 'ikElement', 'frKind', 'frPolicy', 'rgScope', 'rgFourth', 'rgShow', 'rgSlot', 'rgWho',
   'trFlSlot', 'trFlSet', 'trFlRar', 'trFlMain', 'trFlSubMode',
   'vaFlSlot', 'vaFlSet', 'vaFlRar', 'vaFlMain', 'vaFlSubMode'];
 const PREF_CHECKS = ['rsHideBenched', 'upSameSet', 'upIgnoreEquipped', 'hrTakeEquipped', 'ccFree', 'ikFree', 'frFree'];
-const PREF_TEXT = ['rsQ', 'flQ', 'trFlQ', 'vaFlQ', 'hrMin', 'hrQ', 'ccQ', 'ikQ'];
+const PREF_TEXT = ['rsQ', 'flQ', 'trFlQ', 'vaFlQ', 'hrMin', 'hrQ', 'ccQ', 'ikQ', 'rgQ'];
 function collectPrefs() {
   const p = { invSort: { key: invSort.key, dir: invSort.dir },
     trSort: { key: trSort.key, dir: trSort.dir }, vaSort: { key: vaSort.key, dir: vaSort.dir },
-    hrSort: { key: hrSort.key, dir: hrSort.dir }, ccSort: { key: ccSort.key, dir: ccSort.dir }, ikSort: { key: ikSort.key, dir: ikSort.dir } };
+    hrSort: { key: hrSort.key, dir: hrSort.dir }, ccSort: { key: ccSort.key, dir: ccSort.dir }, ikSort: { key: ikSort.key, dir: ikSort.dir },
+    rgSort: { key: rgSort.key, dir: rgSort.dir } };
   PREF_SELECTS.forEach(id => { p[id] = $('#' + id).value; });
   PREF_CHECKS.forEach(id => { p[id] = $('#' + id).checked; });
   PREF_TEXT.forEach(id => { p[id] = $('#' + id).value; });
@@ -10531,6 +10952,7 @@ function applyPrefs(p) {
   if (p.hrSort) { hrSort.key = p.hrSort.key || null; hrSort.dir = p.hrSort.dir || 1; }
   if (p.ccSort) { ccSort.key = p.ccSort.key || null; ccSort.dir = p.ccSort.dir || 1; }
   if (p.ikSort) { ikSort.key = p.ikSort.key || null; ikSort.dir = p.ikSort.dir || 1; }
+  if (p.rgSort) { rgSort.key = p.rgSort.key || null; rgSort.dir = p.rgSort.dir || 1; }
 }
 // What save() writes — split out so the round trip in the tests reads the real shape.
 function savePayload() {
@@ -10581,9 +11003,9 @@ function load(file) {
          reach whichever new card now has that id. The same goes for a forced Optimise pick. */
       if ($('#dlg').open) $('#dlg').close();
       optForced = null;
-      trCache = null; vaCache = null; ccCache = null; ccJob++; ccCheckFilled = false; ikCache = null; ikJob++; ikCheckFilled = false; frCache = null; frJob++;
-      ['#trSummary', '#vaSummary', '#ccSummary', '#ccCheckOut', '#ikSummary', '#ikCheckOut', '#frSummary'].forEach(id => { $(id).innerHTML = ''; });
-      ['#trPanel', '#vaPanel', '#ccPanel', '#ikPanel', '#frPanel'].forEach(id => $(id).classList.add('hide'));
+      trCache = null; vaCache = null; ccCache = null; ccJob++; ccCheckFilled = false; ikCache = null; ikJob++; ikCheckFilled = false; frCache = null; frJob++; rgCache = null; rgJob++;
+      ['#trSummary', '#vaSummary', '#ccSummary', '#ccCheckOut', '#ikSummary', '#ikCheckOut', '#frSummary', '#rgSummary'].forEach(id => { $(id).innerHTML = ''; });
+      ['#trPanel', '#vaPanel', '#ccPanel', '#ikPanel', '#frPanel', '#rgPanel'].forEach(id => $(id).classList.add('hide'));
       ccFillCheckChars(); ikFillCheckChars();
       commit(); markSaved();
       if (!$('#tab-triage').classList.contains('hide')) autoRunTriage();
@@ -10591,6 +11013,7 @@ function load(file) {
       if (!$('#tab-upgrades').classList.contains('hide') && !$('#up-pane-ink').classList.contains('hide')) runInkCard();
       renderFrChars();
       if (!$('#tab-upgrades').classList.contains('hide') && !$('#up-pane-fortune').classList.contains('hide')) runFortune();
+      if (!$('#tab-upgrades').classList.contains('hide') && !$('#up-pane-retro').classList.contains('hide')) runRetrograde();
       $('#dataMsg').innerHTML = `Loaded <b>${state.cards.length}</b> cards.` +
         (bad.length ? ` <span style="color:#e87a5c">${bad.length} skipped</span> — ${esc(bad.slice(0, 3).join('; '))}${bad.length > 3 ? ' …' : ''}` : '') +
         (staleMain.length ? `<br><span class="tiny">${staleMain.length} card${staleMain.length === 1 ? '' : 's'} carried a scanned main
@@ -10826,6 +11249,7 @@ function showTab(tab) {
   if (tab === 'upgrades' && upViewsStale) runUpgradeViews();       // deferred while hidden — see runUpgradeViews
   if (tab === 'upgrades' && !$('#up-pane-craft').classList.contains('hide')) { if (!ccCache) runCustomCard(); else markStaleRuns(); }
   if (tab === 'upgrades' && !$('#up-pane-ink').classList.contains('hide')) { if (!ikCache) runInkCard(); else markStaleRuns(); }
+  if (tab === 'upgrades' && !$('#up-pane-retro').classList.contains('hide')) { if (!rgCache) runRetrograde(); else markStaleRuns(); }
   if (tab === 'upgrades' && !$('#up-pane-fortune').classList.contains('hide')) { if (!frCache) runFortune(); else { renderFrChars(); markStaleRuns(); } }
   if (tab === 'triage') { autoRunTriage(); markStaleRuns(); }
 }
@@ -10926,10 +11350,12 @@ $$('#upSubtabs button').forEach(b => b.onclick = () => {
   $('#up-pane-craft').classList.toggle('hide', b.dataset.uptab !== 'craft');
   $('#up-pane-ink').classList.toggle('hide', b.dataset.uptab !== 'ink');
   $('#up-pane-fortune').classList.toggle('hide', b.dataset.uptab !== 'fortune');
+  $('#up-pane-retro').classList.toggle('hide', b.dataset.uptab !== 'retro');
   if (b.dataset.uptab === 'headroom') runHeadroom();
   if (b.dataset.uptab === 'craft') { if (!ccCache) runCustomCard(); else markStaleRuns(); }
   if (b.dataset.uptab === 'ink') { if (!ikCache) runInkCard(); else markStaleRuns(); }
   if (b.dataset.uptab === 'fortune') { if (!frCache) runFortune(); else { renderFrChars(); markStaleRuns(); } }
+  if (b.dataset.uptab === 'retro') { if (!rgCache) runRetrograde(); else markStaleRuns(); }
 });
 /* Fortune Revelation: the item and the two settings re-run the ranking; the character picker only
    marks it stale, since ticking a dozen boxes should not start a dozen runs. */
@@ -10965,6 +11391,11 @@ $('#ccAdd').onclick = ccAddCard;
 $('#ikRun').onclick = () => runInkCard();
 $('#ikElement').onchange = renderInkCard;
 $('#ikQ').oninput = renderInkCard;
+// Retrograde: who is counted and the fourth-substat rule re-run it; the rest only redraw.
+['#rgScope', '#rgFourth'].forEach(id => $(id).addEventListener('change', () => runRetrograde()));
+$('#rgRun').onclick = () => runRetrograde();
+['#rgShow', '#rgSlot', '#rgWho'].forEach(id => { $(id).onchange = renderRetrograde; });
+$('#rgQ').oninput = renderRetrograde;
 $('#ikChar').onchange = () => { ikCheckFilled = true; ikCheck(); };
 $('#ikSlot').onchange = () => { ikCheckFilled = true; ikSyncMain(); ikRenderSubs(); ikCheck(); };
 $('#ikSet').onchange = () => { ikCheckFilled = true; ikCheck(); };

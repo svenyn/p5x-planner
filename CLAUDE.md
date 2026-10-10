@@ -1098,6 +1098,34 @@ set) instead of re-running the optimiser per draw; `can[set][slot][main]` skips 
 default to owned and not benched; `frChosen` stores only departures from that, saved in prefs.
 About 1.3 s (Heavens) and 2.3 s (Space) for 37 characters on the real inventory.
 
+### Retrograde Card: which levelled card to reset
+
+Upgrades' sixth sub-tab (`#up-pane-retro`, `rgInfer`/`rgResets`/`rgPrice`/`runRetrograde`). A
+Retrograde Card sets a card back to level 0: its drop substats keep their starting values, its
+upgrades are undone, and levelling it again lands five new ones at random (the user, 10 Oct 2026;
+Game8 agrees). A card that dropped with three substats loses the fourth its first upgrade minted;
+whether it comes back the same is **not known** — Prydwen says the hidden fourth "can be changed"
+— so the Fourth substat control (`rgFourth`) defaults to a random stat and offers "the same".
+
+Nothing records where a card's upgrades went, so `rgInfer` reads it from the values: k rolls of a
+stat print within k × its lowest to k × its highest `ROLL_TIERS` value (tolerance one display unit
+per two rolls, the game keeping more precision than it prints), the rolls add to the drop plus the
+upgrades, upgrades land on a uniformly random substat, and 40% of drops carry four (`FR_FOUR_SUBS`).
+Totals of eight and nine rolls separate three- and four-substat drops, so on the real inventory
+(345 levelled cards, Oct 2026) every card was explained, about 145 almost surely dropped with three
+and 140 with four. Which substat was the late one is not readable (each of the four equally).
+
+Each card is reset and re-levelled `RG_SAMPLES` (300) times, seeded per card, and priced through
+`buildScoreOf` against keeping it (levelled on at random if under 25). A worn card is priced for its
+wearer; a spare one for every in-scope character its set allows, screened on 40 outcomes, the best
+three priced on all. Both sides are floored at what the character would wear in that slot without
+the card (`rgFallback`: what they wear there, or their top `RG_ALT` spare cards by card score at full
+level) — a spare card's reset that still loses to their own card is worth nothing, a worn card's
+reset that comes out worse costs what it costs. Gains are build points. Only 5★ cards: the roll
+tables are measured for 5★ only. About 2.5 s on the real inventory; runs on first visit and is then
+only marked stale (`rgSig`). With "the same", three-substat drops gain more and the order changes
+(the real top card moves from a spare Labor Moon to Minami's worn Love Moon).
+
 ### The Vault is the counterweight to that gate
 
 The Vault is the Triage tab's second view, "Lock for later" (`#tr-pane-vault`, `showTrPane`); it

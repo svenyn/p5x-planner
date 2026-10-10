@@ -449,6 +449,7 @@ Four different questions, four different functions. Picking the wrong one is a b
 | Upgrades &rarr; Custom card | `ccRow` / `ccBest` | Who gains most from a card designed in the Cycle of Fate event, and which card? |
 | Upgrades &rarr; Ink card | `ikRow` / `ikExpect` | Which card to make with Vicissitude Ink, how many substats to pick with Elysian Ink, and which to re-roll with Prophetic Ink? |
 | Upgrades &rarr; Fortune Revelation | `frRateSet` | Which set to choose when redeeming a Fortune Revelation? |
+| Upgrades &rarr; Retrograde Card | `rgInfer` / `rgPrice` | Which levelled card gains most from a reset to level 0 and five new random upgrades? |
 | Triage &rarr; Keep or feed | `runTriage` | For each card I own — keep, hold, or feed? |
 | Triage &rarr; Lock for later (the Vault) | `runVault` | Which cards deserve a lock in the game client? |
 

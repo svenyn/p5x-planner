@@ -1470,6 +1470,50 @@ function weightOverrideDrift() {
       fail('Ink card: each pick count gets a legal card whose picks are the Custom card design\'s, picking more is never worth less, all four picked is the Custom card view\'s gain, and the likely range sits around the gain and reads the same every run', !bad.length);
       if (bad.length) out.inkCardBad = bad.slice(0, 8);
     }
+
+    // ---- Retrograde Card (reset a levelled card to level 0, keep its starting values, level it again) ----
+    {
+      const bad = [];
+      // Every roll count is forced: one roll is the most each of the first three can hold, and the
+      // ATK% total only fits six rolls (21.0: nine in all, dropped with four) or five (10.5: eight, dropped with three).
+      const four = mk('Moon', 'Power', 'Damage Multiplier', [['Crit Rate', 2.0], ['Crit Multiplier', 4.1], ['Speed', 2.2], ['ATK%', 21.0]], { id: 'rg4' });
+      const three = mk('Moon', 'Power', 'Damage Multiplier', [['Crit Rate', 2.0], ['Crit Multiplier', 4.1], ['Speed', 2.2], ['ATK%', 10.5]], { id: 'rg3' });
+      const i4 = rgInfer(four), i3 = rgInfer(three);
+      fail('Retrograde: a card\'s roll counts and whether it dropped with three or four substats are read from its values',
+        i4.states.length && J(i4.states[0].k) === J([1, 1, 1, 6]) && i4.pLate < 1e-9 &&
+        i3.states.length && i3.states.every(s => J(s.k) === J([1, 1, 1, 5])) && i3.pLate > 1 - 1e-9 && near(i4.states.reduce((a, s) => a + s.p, 0), 1, 1e-9),
+        J({ i4: i4.states.slice(0, 2), i3: i3.states.slice(0, 2) }));
+      const r4 = rgResets(four, i4, 200, 'random'), r3 = rgResets(three, i3, 200, 'random'), r3s = rgResets(three, i3, 200, 'same');
+      [r4, r3, r3s].forEach(list => list.forEach(c => { const e = validateCard(c); if (e.length) bad.push(c.id + ': ' + e[0]); if (c.level !== 25) bad.push(c.id + ': level ' + c.level); }));
+      // A card that dropped with four keeps all four, each starting from the one drop roll its value allows.
+      if (!r4.every(c => J(c.subs.map(s => s.stat)) === J(four.subs.map(s => s.stat)) && c.subs.every((s, i) => s.value >= four.subs[i].value - 1e-9 || i === 3)))
+        bad.push('dropped with four: a substat changed or fell below its drop roll');
+      // 21.0 is six top rolls give or take the display rounding, so its drop roll is one of the top two tiers
+      if (!r4.every(c => c.subs[3].value >= 3.2 - 1e-9)) bad.push('dropped with four: ATK% fell below a 3.2 drop roll');
+      const names = list => new Set(list.map(c => c.subs.map(s => s.stat).sort().join(','))).size;
+      if (!(names(r3) > 1)) bad.push('dropped with three: the fourth substat never changed with "random"');
+      if (names(r3s) !== 1) bad.push('dropped with three: the substats changed with "same"');
+      if (J(rgResets(four, i4, 200, 'random')) !== J(r4)) bad.push('resets differ between runs');
+      if (rgKeeps(four, 50).length !== 1 || rgKeeps(Object.assign({}, four, { level: 15 }), 50).some(c => c.level !== 25)) bad.push('keeping a card levels it on to 25');
+      if (rgCandidates().some(c => c.rarity !== 5 || upgradesUsed(5, c.level) < 1)) bad.push('a level-0 or non-5★ card is a candidate');
+      // Upgrades piled on a stat the character ignores: a reset should pay off. All five on their best
+      // stat at maximum: it should not.
+      const ch = charDef(own[0]), t = target(ch), cx = Object.assign(rgCharCtx(ch, []), { worn: [] });   // nothing worn, nothing spare to fall back on
+      const main = mainTop(t, 'Moon') || 'ATK%', f = couplingFactors(t, 'Moon', main);
+      const ranked = Object.keys(SUBSTATS).filter(s => s !== main).sort((a, b) => (t.w[b] || 0) * cf(f, b) - (t.w[a] || 0) * cf(f, a));
+      const top = ranked.slice(0, 3), dead = ranked[ranked.length - 1];
+      const tier = (s, i) => ROLL_TIERS[s].heavens[i];
+      const wasted = mk('Moon', t.sets[0], main, top.map(s => [s, tier(s, 4)]).concat([[dead, +(6 * tier(dead, 4)).toFixed(1)]]), { id: 'rgW' });
+      const lucky = mk('Moon', t.sets[0], main, [[top[0], +(6 * tier(top[0], 4)).toFixed(1)]].concat(top.slice(1).concat([dead]).map(s => [s, tier(s, 0)])), { id: 'rgL' });
+      const price = card => { const inf = rgInfer(card); return rgPrice(cx, card, rgKeeps(card, RG_SAMPLES), rgResets(card, inf, RG_SAMPLES, 'random')); };
+      const pw = price(wasted), pl = price(lucky);
+      if (!(pw.mean > 0 && pw.better > 0.5)) bad.push(`upgrades on ${dead}: average ${pw.mean.toFixed(2)}, better ${pw.better}`);
+      if (!(pl.mean < 0 && pl.worse > 0.5)) bad.push(`upgrades on ${top[0]}: average ${pl.mean.toFixed(2)}, worse ${pl.worse}`);
+      if (!pw.gains.every((g, i, a) => !i || a[i - 1] <= g) || !near(pw.mean, pw.gains.reduce((a, x) => a + x, 0) / pw.gains.length, 1e-9)) bad.push('gains not sorted or mean off');
+      fail('Retrograde: resets are legal level-25 cards that keep the drop substats (re-rolling the fourth only on a three-substat drop, and only when asked), read the same every run, and pay off for wasted upgrades but not for lucky ones', !bad.length, J(bad.slice(0, 8)));
+      if (bad.length) out.retroBad = bad.slice(0, 8);
+    }
+
     // ---- Fortune Revelation (choose the set, the rest is random) ----
     {
       const drawBad = [];
@@ -1829,6 +1873,43 @@ function weightOverrideDrift() {
   check('Fortune Revelation: the sub-tab ranks every released set on the way in for everyone owned and not benched, best first; unticking a character marks it stale, and Orange switches to Space sets',
     frState.rows === frState.sets && frState.counted && frState.boxes && frState.ticked && frState.pick && frState.sorted && !frState.nan &&
     frState.stale && frState.fresh && frState.space, JSON.stringify(frState));
+  // Retrograde Card: a levelled spare card whose five upgrades all went to flat HP is added first,
+  // since the synthetic inventory's values are not drawn from the roll tables.
+  await p.evaluate(() => {
+    state.cards.push({ id: 'rgTest', slot: 'Moon', set: Object.keys(SETS).filter(s => !SETS[s].elem)[0], rarity: 5, level: 25, main: 'ATK%', equipped: null,
+      subs: [{ stat: 'Crit Rate', value: 2.0 }, { stat: 'Crit Multiplier', value: 4.1 }, { stat: 'Speed', value: 2.2 }, { stat: 'HP', value: 840 }] });
+    commit();
+  });
+  await p.click('#upSubtabs button[data-uptab="retro"]');
+  await p.waitForFunction(() => rgCache, null, { timeout: 60000 });
+  const rgState = await p.evaluate(async () => {
+    const html = () => document.getElementById('rgSummary').innerHTML + document.getElementById('rgTable').innerHTML;
+    const drawn = () => document.querySelectorAll('#rgTable > tbody > tr').length;
+    const set = (id, v) => { const el = document.getElementById(id); el.value = v; el.dispatchEvent(new Event('change')); };
+    const r = { rated: rgCache.rows.length, test: rgCache.rows.some(x => x.card.id === 'rgTest'),
+      sorted: rgCache.rows.every((x, i, a) => !i || a[i - 1].p.mean >= x.p.mean),
+      gainRows: drawn() === rgCache.rows.filter(x => x.p.mean >= UPGRADE_MIN_GAIN).length, nan: /NaN|undefined/.test(html()) };
+    set('rgShow', 'all');
+    r.allRows = drawn() === rgCache.rows.length;
+    set('rgSlot', 'Moon');
+    r.slot = drawn() === rgCache.rows.filter(x => x.card.slot === 'Moon').length && drawn() > 0;
+    set('rgSlot', ''); set('rgShow', 'gain');
+    const card = state.cards.find(c => c.id === 'rgTest');
+    card.level = 20; commit();
+    r.stale = !!document.querySelector('#rgSummary .stale-run');
+    card.level = 25; commit();
+    r.fresh = !document.querySelector('#rgSummary .stale-run');
+    set('rgFourth', 'same');
+    while (!rgCache || rgCache.o.fourth !== 'same') await new Promise(res => setTimeout(res, 50));
+    r.same = rgCache.rows.some(x => x.card.id === 'rgTest') && !/NaN|undefined/.test(html());
+    set('rgFourth', 'random');
+    while (!rgCache || rgCache.o.fourth !== 'random') await new Promise(res => setTimeout(res, 50));
+    state.cards = state.cards.filter(c => c.id !== 'rgTest'); commit();
+    return r;
+  });
+  check('Retrograde Card: the sub-tab rates every levelled 5★ card on the way in, largest average gain first; Show, Slot and the staleness banner work, and the fourth-substat rule re-runs it',
+    rgState.rated > 0 && rgState.test && rgState.sorted && rgState.gainRows && !rgState.nan && rgState.allRows && rgState.slot &&
+    rgState.stale && rgState.fresh && rgState.same, JSON.stringify(rgState));
 
   // Targets dialog: open, save, reset. The Setup is edited in one place, the Loadout popup; the
   // Targets dialog used to carry a second copy that saved on its own button.
