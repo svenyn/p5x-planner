@@ -1062,6 +1062,23 @@ roll of the recommended one. Like Triage it runs on its
 first visit, in 50 ms slices, and is then only marked stale (`ccSig` in `markStaleRuns`).
 "Check a card" takes the rolled level-0 values and can add the card to the inventory (undoable).
 
+### Ink card: Vicissitude, Elysian and Prophetic Ink
+
+Upgrades' sub-tab after Custom card (`#up-pane-ink`, `ikRow`/`ikExpect`/`ikCheck`). The game's
+permanent Customize screen makes a new 5★ level-0 card: one Vicissitude Ink buys a Sun, Moon, Star
+or Sky card (never Space) in a chosen set and main; Elysian Ink picks substats, 1/2/4/8 in all for
+one to four of them, and the game fills the rest of the four at random; Prophetic Ink rolls each
+picked value from the ordinary five tiers, one apiece, and one more re-rolls a picked substat with
+the new value **replacing** the old. The user confirmed all of it in-game (10 Oct 2026); the guide
+sites had Sun excluded and a 5-ink cost for two picks, both wrong. The design is the Custom card
+view's (`ccBest` at typical rolls), so four picks reproduce its gain exactly (a test holds it);
+fewer picks are priced as the average over **every** fill of the unpicked substats (at most 495,
+not sampled, so a run never wobbles), each worn in the better of the design's loadout and the
+one already worn and floored at no gain. The "By substats picked" column and the summary's ladder
+are what the Elysian Ink buys. "Check a roll" says which picked substat to re-roll: the one whose
+re-roll gains most on average over the five tiers, or keep the card when none gains. About 2 s
+for 37 characters on the real inventory.
+
 ### Fortune Revelation: which set to redeem
 
 Upgrades' fourth sub-tab (`#up-pane-fortune`, `frCharData`/`frRateSet`/`runFortune`). A Fortune

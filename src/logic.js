@@ -3543,7 +3543,7 @@ function fillSelects() {
   $('#flMain').innerHTML = '<option value="">Any</option>' + allMains.map(s => `<option>${s}</option>`).join('');
   renderFlSub();
   const rsElements = [...new Set(CHARACTERS.map(c => c.e))].sort();
-  ['#rsElement', '#hrElement', '#ccElement'].forEach(id => {
+  ['#rsElement', '#hrElement', '#ccElement', '#ikElement'].forEach(id => {
     $(id).innerHTML = '<option value="">Any</option>' + rsElements.map(e => `<option>${e}</option>`).join('');
   });
   // Upgrades' "Weakest slots" filters equipped slots, not the card list, so it takes a
@@ -3560,6 +3560,7 @@ function fillSelects() {
   });
   renderTrFlSub(); renderVaFlSub();
   ccFillCheckSelects();
+  ikFillCheckChars(); ikSyncMain(); ikRenderSubs();
 }
 // Set options depend on the selected slot (Space vs Heavens), same as syncFlSetOptions,
 // generalised over the id prefix so Triage ("trFl") and Vault ("vaFl") can share it.
@@ -4364,7 +4365,7 @@ function vaultSig() { return cardsSig(false) + ':' + charsSig(null) + ':' + team
    on the one screen whose "feed" cannot be undone. The check is a comparison of fingerprints
    (see dataSignature), so an undo, or a value set back, reads as current again. */
 function markStaleRuns() {
-  [['#trSummary', trCache, triageSig, '#trRun'], ['#vaSummary', vaCache, vaultSig, '#vaRun'], ['#ccSummary', ccCache, ccSig, '#ccRun'], ['#frSummary', frCache, frSig, '#frRun']].forEach(([id, cache, sig, btn]) => {
+  [['#trSummary', trCache, triageSig, '#trRun'], ['#vaSummary', vaCache, vaultSig, '#vaRun'], ['#ccSummary', ccCache, ccSig, '#ccRun'], ['#ikSummary', ikCache, ikSig, '#ikRun'], ['#frSummary', frCache, frSig, '#frRun']].forEach(([id, cache, sig, btn]) => {
     const box = $(id);
     if (!box || !cache) return;
     const old = box.querySelector('.stale-run');
@@ -5566,6 +5567,385 @@ function ccAddCard() {
   offerUndo(`Added a 5★ ${card.slot} ${card.set} card (${card.main}) at level 0 to the inventory.`, snap);
 }
 
+/* ======================== Ink card (Vicissitude, Elysian and Prophetic Ink) ========================
+   The game's permanent Customize screen (top right of the revelation select screen) makes a new 5★
+   level-0 card. One Vicissitude Ink buys a Sun, Moon, Star or Sky card in a set and with a main stat
+   the player picks. Elysian Ink picks substats, 1, 2, 4 or 8 of it in all for one to four of them,
+   and the game fills the rest of the card's four at random. Prophetic Ink rolls each picked
+   substat's value, one apiece, from the same five tiers as any card's; one more re-rolls one picked
+   substat, and the new value replaces the old even when it is lower. The five upgrades land at
+   random like any other card's. All of it confirmed by the user in-game, 10 Oct 2026.
+
+   So the questions are the Custom card view's (who gains most, and which card), plus how many
+   substats are worth the Elysian Ink, and, in the check panel, which picked substat to re-roll.
+
+   A card is designed as the Custom card view designs one: ccBest at typical rolls gives each slot's
+   best set, main and four substats, placed in the best loadout that holds it. Picking k of them
+   leaves the rest to luck, so every k of the design's four is tried and priced as the average over
+   every possible fill of the other 4 − k (all equally likely, never a stat the slot cannot carry:
+   frNoSub), each fill at typical values and worn in the better of the design's loadout and the one
+   the character already has. A fill worse than what they have counts as no gain, since they would
+   not wear it. Every fill is priced, not a sample (at most 495), so a run always reads the same. */
+const IK_ELYSIAN = [0, 1, 2, 4, 8];   // Elysian Ink spent on 0-4 picked substats, in all
+const IK_SAMPLES = 400;               // random levellings behind a row's Likely range
+
+function ikCombos(list, k) {
+  const out = [];
+  const go = (from, acc) => {
+    if (acc.length === k) { out.push(acc.slice()); return; }
+    for (let i = from; i < list.length; i++) { acc.push(list[i]); go(i + 1, acc); acc.pop(); }
+  };
+  go(0, []);
+  return out;
+}
+// The substats the game can fill in: every one the slot and main allow, less the picked ones.
+const ikLeft = (slot, main, picked) => { const no = frNoSub(slot, main); return Object.keys(SUBSTATS).filter(s => no.indexOf(s) < 0 && picked.indexOf(s) < 0); };
+// The other slots the card can be worn with: the design's loadout, and the one they already have.
+function ikRests(ctx, opt) {
+  const a = opt.cards.filter(c => c !== opt.card), b = ctx.base.cards.filter(c => c.slot !== opt.slot);
+  return a.length === b.length && a.every(c => b.indexOf(c) >= 0) ? [a] : [a, b];
+}
+// The best total wearing `card` with any of `rests`, never below what they already have.
+function ikTotal(ctx, card, rests) {
+  let best = ctx.base.total;
+  rests.forEach(r => { const t = ctx.ev(r.concat([card])).total; if (t > best) best = t; });
+  return best;
+}
+// The average of that over every fill of the substats not picked.
+function ikExpect(ctx, opt, picked, rests) {
+  const fills = ikCombos(ikLeft(opt.slot, opt.card.main, picked), 4 - picked.length);
+  let sum = 0;
+  fills.forEach(f => { sum += ikTotal(ctx, ccCard(opt.slot, opt.set, opt.card.main, picked.concat(f), 'typical'), rests); });
+  return sum / fills.length;
+}
+
+/* One character: for each number of picked substats (0-4), the best slot and pick. `byK[k]` holds the
+   design it came from (`opt`), the picked substats best first, and the gain in build points. */
+function ikRow(ch, o) {
+  const ctx = ccContext(ch, Object.assign({}, o, { kind: 'heavens' }));
+  const r = ccBest(ctx, 'typical');
+  const byK = [null, null, null, null, null];
+  r.slots.forEach(opt => {
+    const rests = ikRests(ctx, opt), stats = opt.card.subs.map(s => s.stat);
+    for (let k = 0; k <= 4; k++) ikCombos(stats, k).forEach(picked => {
+      const total = ikExpect(ctx, opt, picked, rests);
+      if (!byK[k] || total > byK[k].total + 1e-9) byK[k] = { k, opt, picked, total, rests };
+    });
+  });
+  byK.forEach(x => { if (x) x.gain = Math.max(0, 100 * (x.total - ctx.base.total) / ctx.idealTotal); });
+  const pct = total => Math.max(0, Math.min(100, 100 * total / ctx.idealTotal));
+  const now = buildScore(ch, ctx.worn, CC_P4, null, null, ctx.t);
+  const best = byK[o.pick] || null;
+  return { ch, t: ctx.t, ctx, byK, best, now: now ? now.raw : null, inv: pct(ctx.base.total), baseFrom: ctx.base.from,
+    gain: best ? best.gain : 0, after: pct(best ? Math.max(best.total, ctx.base.total) : ctx.base.total),
+    range: best ? ccRange(ikOutcomes(ctx, best, null, IK_SAMPLES)) : null };
+}
+
+/* What luck does to a pick: `n` cards made and levelled at random. The substats not picked, every
+   starting value and the five upgrades are random; `start` fixes the four substats and their
+   starting values instead (a card already made, in the check panel). Seeded from the character
+   and the pick, so a row's range never wobbles between redraws. Gains are floored at 0. */
+function ikOutcomes(ctx, x, start, n) {
+  const { opt, picked } = x, slot = opt.slot, main = opt.card.main;
+  const rnd = ccRng(hashStr(2166136261, ['ink', ctx.ch.n, slot, opt.set, main, picked.join(), JSON.stringify(start || [])].join('|')));
+  const pick = a => a[Math.min(a.length - 1, Math.floor(rnd() * a.length))];
+  const out = [];
+  for (let k = 0; k < n; k++) {
+    let stats, v;
+    if (start) { stats = start.map(s => s.stat); v = start.map(s => s.value); }
+    else {
+      const left = ikLeft(slot, main, picked);
+      stats = picked.slice();
+      while (stats.length < 4) stats.push(left.splice(Math.min(left.length - 1, Math.floor(rnd() * left.length)), 1)[0]);
+      v = stats.map(st => pick(ccTiers(st, slot)));
+    }
+    for (let u = 0; u < CC_UPS; u++) { const i = Math.min(3, Math.floor(rnd() * 4)); v[i] += pick(ccTiers(stats[i], slot)); }
+    const c = { id: 'craft', crafted: true, slot, set: opt.set, rarity: 5, level: RARITY[5].maxLevel, main,
+      subs: stats.map((st, i) => ({ stat: st, value: ccRound(st, v[i]) })) };
+    out.push(Math.max(0, 100 * (ikTotal(ctx, c, x.rests) - ctx.base.total) / ctx.idealTotal));
+  }
+  return out.sort((a, b) => a - b);
+}
+
+/* ---- the Ink card view: run, draw, check ----
+   Split like the Custom card view's: the run prices every character in scope in 50 ms slices,
+   element and search only redraw, and it runs on its first visit and is then only marked stale. */
+function ikOpts() {
+  return { scope: $('#ikScope').value, pick: +$('#ikPick').value, policy: $('#ikPolicy').value, free: $('#ikFree').checked };
+}
+// What a run read: the same as the Custom card view's, with its own controls.
+function ikSig() {
+  const o = ikOpts();
+  return cardsSig(true) + ':' + charsSig(new Set(ccScopeChars(o).map(c => c.n))) + ':' + teamCritRate() + ':' + denSig() +
+    '|' + [o.scope, o.pick, o.policy, o.free].join(',');
+}
+let ikCache = null, ikJob = 0;
+function runInkCard() {
+  const job = ++ikJob, o = ikOpts(), chars = ccScopeChars(o), sig = ikSig();
+  if (!chars.length) {
+    ikCache = null;
+    $('#ikSummary').innerHTML = '<p class="muted">Mark some characters as owned on the Roster tab first, or choose "All characters".</p>';
+    $('#ikPanel').classList.add('hide');
+    ikFillCheckChars();
+    return Promise.resolve(false);
+  }
+  const rows = [];
+  let i = 0;
+  const progress = () => {
+    $('#ikSummary').innerHTML = `<div class="notice info">Pricing an ink card for each character… <b>${i}</b> of ${chars.length}</div>`;
+  };
+  progress();
+  return new Promise(resolve => {
+    const step = () => {
+      if (job !== ikJob) return resolve(false);
+      const t0 = performance.now();
+      while (i < chars.length && performance.now() - t0 < 50) rows.push(ikRow(chars[i++], o));
+      if (i < chars.length) { progress(); setTimeout(step, 0); return; }
+      rows.sort((a, b) => b.gain - a.gain || a.ch.n.localeCompare(b.ch.n));
+      rows.forEach((r, k) => { r.rank = k + 1; });
+      ikCache = { sig, o, rows, tc: teamCritRate() };
+      renderInkCard();
+      ikFillCheckChars();
+      if (!ikCheckFilled && rows[0] && rows[0].best) ikFillRecommended(rows[0].ch.n); else ikCheck();
+      markStaleRuns();
+      resolve(true);
+    };
+    setTimeout(step, 0);
+  });
+}
+
+const ikSort = { key: null, dir: 1 };
+const IK_SORT_COLS = { rank: r => r.rank, char: r => r.ch.n, gain: r => r.gain, range: r => r.range ? r.range.lo : -1, now: r => r.now == null ? -1 : r.now, inv: r => r.inv, after: r => r.after };
+function sortIkRows(rows) {
+  if (!ikSort.key) return rows.slice();   // the run's own order: largest gain first
+  const get = IK_SORT_COLS[ikSort.key];
+  return rows.slice().sort((a, b) => {
+    const av = get(a), bv = get(b);
+    const cmp = typeof av === 'number' ? av - bv : String(av).localeCompare(String(bv));
+    return (cmp || a.rank - b.rank) * ikSort.dir;
+  });
+}
+const ikPickLabel = k => k === 0 ? 'no substats' : k === 1 ? '1 substat' : k + ' substats';
+const ikInkLabel = k => `${IK_ELYSIAN[k]} Elysian Ink, ${k} Prophetic Ink`;
+// The card to make: slot, set and main, then the substats to pick, best first, coloured by worth.
+function ikPickHtml(x, t) {
+  const { opt, picked } = x, f = couplingFactors(t, opt.slot, opt.card.main);
+  const names = picked.map(s => {
+    const w = (t.w[s] || 0) * cf(f, s);
+    return `<span class="s${w >= 6 ? ' good' : w <= 1 ? ' bad' : ''}">${esc(s)}</span>`;
+  }).join('<span class="sep">·</span><wbr>');
+  const rnd = 4 - picked.length;
+  return `<span class="slot ${opt.slot}">${opt.slot.slice(0, 3)}</span> <b>${esc(opt.set)}</b> · ${esc(opt.card.main)}
+    <div class="tiny muted">${picked.length ? `pick <span class="subs">${names}</span>${rnd ? `; ${rnd} more at random` : ''}` : 'all four substats at random'}</div>`;
+}
+function renderInkCard() {
+  if (!ikCache) return;
+  const { rows, o } = ikCache;
+  const el = $('#ikElement').value, q = $('#ikQ').value.trim().toLowerCase();
+  const list = sortIkRows(rows.filter(r => {
+    if (el && r.ch.e !== el) return false;
+    if (q) {
+      const b = r.best;
+      const hay = [r.ch.n, r.ch.a || '', b ? b.opt.set : '', b ? b.opt.slot : '', b ? b.opt.card.main : '', b ? b.picked.join(' ') : ''].join(' ').toLowerCase();
+      if (hay.indexOf(q) < 0) return false;
+    }
+    return true;
+  }));
+  const first = rows[0] && rows[0].best ? rows[0] : null;
+  // How much each extra pick is worth, for the top character: the decision the Elysian Ink buys.
+  const ladder = r => `<div class="flowTable" style="margin:8px 0 0"><table>
+      <thead><tr><th>Substats you pick</th><th>Ink it takes</th><th>Card to make</th><th class="right">Gain</th></tr></thead>
+      <tbody>${r.byK.map((x, k) => x ? `<tr${k === o.pick ? ' class="on"' : ''}>
+        <td class="tiny"><b>${k}</b></td>
+        <td class="tiny">${esc(ikInkLabel(k))}</td>
+        <td class="tiny">${ikPickHtml(x, r.t)}</td>
+        <td class="right"><span class="score${x.gain >= UPGRADE_MIN_GAIN ? ' gainpos' : ''}">+${x.gain.toFixed(1)}</span></td>
+      </tr>` : '').join('')}</tbody></table></div>`;
+  $('#ikSummary').innerHTML = !first
+    ? '<div class="notice info">No character in scope gains anything from an ink card over what your inventory already gives them.</div>'
+    : `<div class="notice info">Ranked <b>${rows.length}</b> character${rows.length === 1 ? '' : 's'} by what one ink card with
+        <b>${esc(ikPickLabel(o.pick))}</b> picked adds to their build score, averaged over what luck fills in, over the best your
+        inventory already gives them.</div>
+      <div style="margin-top:12px"><b>${esc(first.ch.n)}</b> <span class="gainpos score">+${first.gain.toFixed(1)}</span>
+        <span class="tiny muted">build points · ${ccRangeHtml(first.range, true)}</span>
+        <div style="margin-top:4px">${ikPickHtml(first.best, first.t)}</div>
+        ${ccAlsoHtml(first, { card: first.best.opt.card, cards: first.best.opt.cards })}
+        <div class="tiny muted" style="margin-top:8px">What picking more or fewer substats would add for ${esc(first.ch.n)}:</div>
+        ${ladder(first)}</div>`;
+  $('#ikPanel').classList.toggle('hide', !list.length);
+  if (!list.length) return;
+  const maxGain = Math.max.apply(null, rows.map(r => r.gain).concat([0.1]));
+  const num = v => v == null ? '<span class="muted">—</span>' : Math.round(v);
+  const th = (key, label, title) => sortThHtml(key, label, ikSort, title);
+  $('#ikTable').innerHTML = `<thead><tr>
+      ${th('rank', '#', 'Rank by gain')}
+      ${th('char', 'Character')}
+      <th>Card to make</th>
+      ${th('gain', 'Gain', 'Build-score points the card adds over the best loadout your inventory already gives this character, averaged over the substats and values luck decides. Compares across characters.')}
+      ${th('range', 'Likely', 'Where the gain lands in 8 of 10 cards made and levelled at random. Sorts on the low end.')}
+      <th title="The gain with 0, 1, 2, 3 or 4 substats picked (0, 1, 2, 4 or 8 Elysian Ink); the one you chose is in bold">By substats picked</th>
+      ${th('now', 'Now', 'Build score of what is worn now')}
+      ${th('inv', 'Without', 'Build score of the best loadout your inventory can already give them, without the new card')}
+      ${th('after', 'With', 'Build score with the new card, on average')}
+      <th></th>
+    </tr></thead><tbody>` +
+    list.map(r => {
+      const b = r.best, after = Math.round(r.after);
+      return `<tr>
+        <td class="tiny muted right">${r.rank}</td>
+        <td class="tiny"><b>${esc(r.ch.n)}</b>
+          <div class="tiny muted">${esc(r.ch.e)}${!state.chars[r.ch.n].owned ? ' · not owned' : state.chars[r.ch.n].benched ? ' · benched' : ''}</div></td>
+        <td class="tiny">${b ? ikPickHtml(b, r.t) + ccAlsoHtml(r, { card: b.opt.card, cards: b.opt.cards }) : '<span class="muted">no set to make it in</span>'}</td>
+        <td class="right"><span class="score${r.gain >= UPGRADE_MIN_GAIN ? ' gainpos' : ''}">+${r.gain.toFixed(1)}</span>
+          <div class="bar" style="width:64px;margin-left:auto"><i style="width:${(100 * r.gain / maxGain).toFixed(1)}%"></i></div></td>
+        <td class="right tiny">${ccRangeHtml(r.range)}</td>
+        <td class="tiny" style="white-space:nowrap">${r.byK.map((x, k) => {
+          const g = x ? x.gain.toFixed(1) : '—';
+          return k === o.pick ? `<b>${g}</b>` : `<span class="muted">${g}</span>`;
+        }).join(' / ')}</td>
+        <td class="right">${num(r.now)}</td>
+        <td class="right${r.baseFrom === 'plan' ? '' : ' muted'}" title="${r.baseFrom === 'plan' ? 'A better loadout than the one worn is already in your inventory — the Upgrades tab lists it' : 'Already the best your inventory gives them'}">${num(r.inv)}</td>
+        <td class="right"><span class="tag bs ${buildBand(after).cls}"><b>${after}</b></span></td>
+        <td style="white-space:nowrap">${b ? `<button class="ghost tiny ikTry" data-char="${esc(r.ch.n)}">Check a roll</button>` : ''}
+          <button class="ghost tiny ikOpt" data-char="${esc(r.ch.n)}">Optimise</button></td>
+      </tr>`;
+    }).join('') + '</tbody>';
+  $$('#ikTable .ikTry').forEach(btn => btn.onclick = () => {
+    ikFillRecommended(btn.dataset.char);
+    $('#ikCheckPanel').scrollIntoView({ block: 'start' });
+  });
+  $$('#ikTable .ikOpt').forEach(btn => btn.onclick = () => openCharacterDetail(btn.dataset.char));
+  $$('#ikTable .sortH').forEach(th => th.onclick = () => {
+    const key = th.dataset.sort;
+    ikSort.dir = ikSort.key === key ? -ikSort.dir : 1;
+    ikSort.key = key;
+    renderInkCard();
+    refocus(`#ikTable th.sortH[data-sort="${key}"] .thBtn`);
+  });
+}
+
+/* "Check a roll": the card as the Customize screen shows it — its four substats with their level-0
+   values, the picked ones ticked — priced once levelled with typical upgrades, and for each picked
+   substat what one re-roll is worth on average. The re-roll replaces the value, so it is a gamble
+   on the five tiers; the advice is the substat whose re-roll gains most on average, or to keep the
+   card when none gains anything. Each value is priced in the loadout the card itself lands in. */
+let ikCheckFilled = false;
+function ikFillCheckChars() {
+  const cur = $('#ikChar').value;
+  let list = ccScopeChars(ikOpts());
+  if (!list.length) list = CHARACTERS.slice();
+  $('#ikChar').innerHTML = list.map(c => `<option value="${esc(c.n)}">${esc(c.n)}</option>`).join('');
+  if (cur && list.some(c => c.n === cur)) $('#ikChar').value = cur;
+}
+function ikSyncMain() {
+  const curSet = $('#ikSet').value, sets = Object.keys(SETS).filter(x => !SETS[x].unreleased).sort();
+  $('#ikSet').innerHTML = sets.map(x => `<option>${esc(x)}</option>`).join('');
+  if (sets.indexOf(curSet) >= 0) $('#ikSet').value = curSet;
+  const cur = $('#ikMain').value, mains = SLOT_INFO[$('#ikSlot').value].mains;
+  $('#ikMain').innerHTML = mains.map(m => `<option>${esc(m)}</option>`).join('');
+  if (mains.indexOf(cur) >= 0) $('#ikMain').value = cur;
+}
+function ikReadSubs() {
+  return [0, 1, 2, 3].map(i => {
+    const st = $(`#ikSubs .ikSubStat[data-i="${i}"]`), v = $(`#ikSubs .ikSubVal[data-i="${i}"]`), p = $(`#ikSubs .ikSubPick[data-i="${i}"]`);
+    return { stat: st ? st.value : '', value: v ? parseFloat(v.value) : NaN, picked: !!(p && p.checked) };
+  });
+}
+function ikRenderSubs(preset) {
+  const cur = preset || ikReadSubs(), slot = $('#ikSlot').value, main = $('#ikMain').value;
+  const no = frNoSub(slot, main), stats = Object.keys(SUBSTATS).filter(x => no.indexOf(x) < 0);
+  $('#ikSubs').innerHTML = [0, 1, 2, 3].map(i => {
+    const s = cur[i] && stats.indexOf(cur[i].stat) >= 0 ? cur[i] : { stat: '', picked: cur[i] && cur[i].picked };
+    const tiers = s.stat ? ccTiers(s.stat, slot) : [];
+    const val = tiers.indexOf(s.value) >= 0 ? s.value : tiers[2];
+    return `<div class="field"><label for="ikSub${i}">Substat ${i + 1}</label><div style="display:flex;gap:4px;align-items:center">
+      <select id="ikSub${i}" class="ikSubStat" data-i="${i}"><option value="">—</option>${stats.map(x =>
+        `<option${x === s.stat ? ' selected' : ''}>${esc(x)}</option>`).join('')}</select>
+      <select class="ikSubVal" data-i="${i}" aria-label="Substat ${i + 1} value at level 0"${tiers.length ? '' : ' disabled'}>${tiers.map(v =>
+        `<option value="${v}"${v === val ? ' selected' : ''}>${esc(subVal({ stat: s.stat, value: v }))}</option>`).join('')}</select>
+      <label class="check tiny" title="Picked with Elysian Ink, so Prophetic Ink can re-roll it"><input type="checkbox" class="ikSubPick" data-i="${i}"${s.picked ? ' checked' : ''}> picked</label>
+    </div></div>`;
+  }).join('');
+  $$('#ikSubs .ikSubStat').forEach(sel => sel.onchange = () => { ikCheckFilled = true; ikRenderSubs(); ikCheck(); });
+  $$('#ikSubs .ikSubVal, #ikSubs .ikSubPick').forEach(sel => sel.onchange = () => { ikCheckFilled = true; ikCheck(); });
+}
+function ikReadCard() {
+  return { slot: $('#ikSlot').value, set: $('#ikSet').value, rarity: 5, level: 0, main: $('#ikMain').value,
+    subs: ikReadSubs().filter(s => s.stat && !isNaN(s.value)).map(s => ({ stat: s.stat, value: s.value })) };
+}
+function ikCardErrors(card) {
+  const errs = card.subs.length < 4 ? ['Enter all four substats: the game fills in the ones you did not pick.'] : [];
+  if (new Set(card.subs.map(s => s.stat)).size < card.subs.length) errs.push('Each substat can only appear once.');
+  return errs.concat(validateCard(card));
+}
+// The recommended card: its picked substats at a middling value, the random ones left for the user.
+function ikFillRecommended(name) {
+  const row = ikCache && ikCache.rows.filter(r => r.ch.n === name)[0];
+  if (!row || !row.best) return;
+  ikCheckFilled = true;
+  $('#ikChar').value = name;
+  const { opt, picked } = row.best;
+  $('#ikSlot').value = opt.slot; ikSyncMain(); $('#ikSet').value = opt.set; $('#ikMain').value = opt.card.main;
+  ikRenderSubs([0, 1, 2, 3].map(i => picked[i] ? { stat: picked[i], value: ccTiers(picked[i], opt.slot)[2], picked: true } : { stat: '', picked: false }));
+  ikCheck();
+}
+function ikCheck() {
+  const out = $('#ikCheckOut');
+  const ch = charDef($('#ikChar').value);
+  if (!out || !ch) { if (out) out.innerHTML = ''; return; }
+  const card = ikReadCard(), errs = ikCardErrors(card);
+  if (errs.length) { out.innerHTML = `<p class="tiny muted">${esc(errs[0])}</p>`; return; }
+  const row = ikCache && ikCache.rows.filter(r => r.ch === ch)[0];
+  const ctx = row ? row.ctx : ccContext(ch, Object.assign({}, ikCache ? ikCache.o : ikOpts(), { kind: 'heavens' })), t = ctx.t;
+  const picks = ikReadSubs().filter(s => s.stat && !isNaN(s.value)).map(s => s.picked);
+  // Levelled with typical upgrades: each substat gains a quarter of the five average rolls.
+  const levelled = vals => Object.assign({}, card, { id: 'craft', crafted: true, level: RARITY[5].maxLevel,
+    subs: card.subs.map((s, i) => ({ stat: s.stat, value: ccRound(s.stat, vals[i] + CC_UPS / 4 * ccTierMean(s.stat, card.slot)) })) });
+  const start = card.subs.map(s => s.value);
+  const now = levelled(start), placed = ccPlace(ctx, now);
+  const rests = [placed.cards ? placed.cards.filter(c => c !== now) : ctx.base.cards.filter(c => c.slot !== card.slot)];
+  const gainOf = vals => Math.max(0, 100 * (ikTotal(ctx, levelled(vals), rests) - ctx.base.total) / ctx.idealTotal);
+  const g0 = Math.max(0, 100 * (Math.max(placed.total, ctx.base.total) - ctx.base.total) / ctx.idealTotal);
+  const mine = ccRange(ikOutcomes(ctx, { opt: { slot: card.slot, set: card.set, card: { main: card.main } }, picked: [], rests }, card.subs, CC_CHECK_SAMPLES));
+  const rerolls = card.subs.map((s, i) => {
+    if (!picks[i]) return null;
+    const tiers = ccTiers(s.stat, card.slot);
+    const gains = tiers.map(v => gainOf(start.map((x, j) => j === i ? v : x)));
+    const g = gainOf(start);
+    const avg = gains.reduce((a, x) => a + x, 0) / gains.length;
+    return { i, s, delta: avg - g, up: tiers.filter(v => v > s.value + 1e-9).length, down: tiers.filter(v => v < s.value - 1e-9).length, n: tiers.length };
+  }).filter(Boolean);
+  const best = rerolls.slice().sort((a, b) => b.delta - a.delta)[0];
+  const advice = !rerolls.length
+    ? '<p class="tiny muted" style="margin:6px 0 0">Tick the substats you picked with Elysian Ink to see which one is worth a re-roll.</p>'
+    : best.delta > 0.005
+      ? `<p class="ikAdvice" style="margin:8px 0 0">Re-roll <b>${esc(best.s.stat)}</b>: on average it adds <b class="gainpos">+${best.delta.toFixed(2)}</b> build points.
+          ${best.up} of the ${best.n} possible values are higher than now, ${best.down} lower; the new value replaces the old one either way.
+          <span class="tiny muted">After each re-roll, enter the new value and check again.</span></p>`
+      : `<p class="ikAdvice" style="margin:8px 0 0"><b>Keep it.</b> No re-roll of a picked substat is expected to add anything: each is already at or above its average value.</p>`;
+  out.innerHTML = `<p style="margin:0">Levelled to 25 with typical upgrades, this card adds <b class="${g0 >= UPGRADE_MIN_GAIN ? 'gainpos' : ''}">+${g0.toFixed(1)}</b>
+      build points for ${esc(ch.n)}. <span class="tiny muted">With random upgrades, 8 in 10 outcomes land between +${mine.lo.toFixed(1)} and +${mine.hi.toFixed(1)}.</span></p>
+    ${ccAlsoHtml({ ch }, { card: now, cards: placed.cards || [] })}
+    ${rerolls.length ? `<div class="flowTable" style="margin:10px 0 0"><table>
+      <thead><tr><th>Picked substat</th><th class="right">Now</th><th class="right" title="Build points one re-roll adds on average; negative means it is expected to cost">One re-roll, on average</th><th>Higher / lower</th></tr></thead>
+      <tbody>${rerolls.map(x => `<tr${x === best && best.delta > 0.005 ? ' class="on"' : ''}>
+        <td class="tiny"><b>${esc(x.s.stat)}</b></td>
+        <td class="right tiny">${esc(subVal(x.s))}</td>
+        <td class="right"><span class="score${x.delta > 0.005 ? ' gainpos' : ''}">${x.delta >= 0 ? '+' : '−'}${Math.abs(x.delta).toFixed(2)}</span></td>
+        <td class="tiny">${x.up} higher · ${x.down} lower</td>
+      </tr>`).join('')}</tbody></table></div>` : ''}
+    ${advice}`;
+}
+function ikAddCard() {
+  const card = ikReadCard(), errs = ikCardErrors(card);
+  if (errs.length) { notify(errs[0]); return; }
+  const snap = snapshotState();
+  card.id = 'c' + (state.nextId++);
+  card.equipped = null;
+  state.cards.push(card);
+  commit();
+  offerUndo(`Added a 5★ ${card.slot} ${card.set} card (${card.main}) at level 0 to the inventory.`, snap);
+}
 /* ======================== Fortune Revelations: which set to redeem ========================
    A Fortune Revelation turns into a 5★ Heavens card of the set the player chooses; an Orange
    Fortune Revelation into a 5★ Space card the same way. Everything else about the card is luck:
@@ -6807,15 +7187,15 @@ function syncTeamCritField() {
 // not just what it holds.
 const PREF_SELECTS = ['rsFilter', 'rsElement', 'rsSort', 'flSlot', 'flSet', 'flRar', 'flMain',
   'flSubMode', 'trScope', 'trShow', 'trRar', 'vaRar', 'vaShow', 'upRar',
-  'hrShow', 'hrElement', 'hrSlot', 'hrRar', 'ccScope', 'ccKind', 'ccRolls', 'ccPolicy', 'ccElement', 'frKind', 'frPolicy',
+  'hrShow', 'hrElement', 'hrSlot', 'hrRar', 'ccScope', 'ccKind', 'ccRolls', 'ccPolicy', 'ccElement', 'ikScope', 'ikPick', 'ikPolicy', 'ikElement', 'frKind', 'frPolicy',
   'trFlSlot', 'trFlSet', 'trFlRar', 'trFlMain', 'trFlSubMode',
   'vaFlSlot', 'vaFlSet', 'vaFlRar', 'vaFlMain', 'vaFlSubMode'];
-const PREF_CHECKS = ['rsHideBenched', 'upSameSet', 'upIgnoreEquipped', 'hrTakeEquipped', 'ccFree', 'frFree'];
-const PREF_TEXT = ['rsQ', 'flQ', 'trFlQ', 'vaFlQ', 'hrMin', 'hrQ', 'ccQ'];
+const PREF_CHECKS = ['rsHideBenched', 'upSameSet', 'upIgnoreEquipped', 'hrTakeEquipped', 'ccFree', 'ikFree', 'frFree'];
+const PREF_TEXT = ['rsQ', 'flQ', 'trFlQ', 'vaFlQ', 'hrMin', 'hrQ', 'ccQ', 'ikQ'];
 function collectPrefs() {
   const p = { invSort: { key: invSort.key, dir: invSort.dir },
     trSort: { key: trSort.key, dir: trSort.dir }, vaSort: { key: vaSort.key, dir: vaSort.dir },
-    hrSort: { key: hrSort.key, dir: hrSort.dir }, ccSort: { key: ccSort.key, dir: ccSort.dir } };
+    hrSort: { key: hrSort.key, dir: hrSort.dir }, ccSort: { key: ccSort.key, dir: ccSort.dir }, ikSort: { key: ikSort.key, dir: ikSort.dir } };
   PREF_SELECTS.forEach(id => { p[id] = $('#' + id).value; });
   PREF_CHECKS.forEach(id => { p[id] = $('#' + id).checked; });
   PREF_TEXT.forEach(id => { p[id] = $('#' + id).value; });
@@ -6865,6 +7245,7 @@ function applyPrefs(p) {
   if (p.vaSort) { vaSort.key = p.vaSort.key || null; vaSort.dir = p.vaSort.dir || 1; }
   if (p.hrSort) { hrSort.key = p.hrSort.key || null; hrSort.dir = p.hrSort.dir || 1; }
   if (p.ccSort) { ccSort.key = p.ccSort.key || null; ccSort.dir = p.ccSort.dir || 1; }
+  if (p.ikSort) { ikSort.key = p.ikSort.key || null; ikSort.dir = p.ikSort.dir || 1; }
 }
 // What save() writes — split out so the round trip in the tests reads the real shape.
 function savePayload() {
@@ -6915,13 +7296,14 @@ function load(file) {
          reach whichever new card now has that id. The same goes for a forced Optimise pick. */
       if ($('#dlg').open) $('#dlg').close();
       optForced = null;
-      trCache = null; vaCache = null; ccCache = null; ccJob++; ccCheckFilled = false; frCache = null; frJob++;
-      ['#trSummary', '#vaSummary', '#ccSummary', '#ccCheckOut', '#frSummary'].forEach(id => { $(id).innerHTML = ''; });
-      ['#trPanel', '#vaPanel', '#ccPanel', '#frPanel'].forEach(id => $(id).classList.add('hide'));
-      ccFillCheckChars();
+      trCache = null; vaCache = null; ccCache = null; ccJob++; ccCheckFilled = false; ikCache = null; ikJob++; ikCheckFilled = false; frCache = null; frJob++;
+      ['#trSummary', '#vaSummary', '#ccSummary', '#ccCheckOut', '#ikSummary', '#ikCheckOut', '#frSummary'].forEach(id => { $(id).innerHTML = ''; });
+      ['#trPanel', '#vaPanel', '#ccPanel', '#ikPanel', '#frPanel'].forEach(id => $(id).classList.add('hide'));
+      ccFillCheckChars(); ikFillCheckChars();
       commit(); markSaved();
       if (!$('#tab-triage').classList.contains('hide')) autoRunTriage();
       if (!$('#tab-upgrades').classList.contains('hide') && !$('#up-pane-craft').classList.contains('hide')) runCustomCard();
+      if (!$('#tab-upgrades').classList.contains('hide') && !$('#up-pane-ink').classList.contains('hide')) runInkCard();
       renderFrChars();
       if (!$('#tab-upgrades').classList.contains('hide') && !$('#up-pane-fortune').classList.contains('hide')) runFortune();
       $('#dataMsg').innerHTML = `Loaded <b>${state.cards.length}</b> cards.` +
@@ -7158,6 +7540,7 @@ function showTab(tab) {
   if (tab === 'opt' && optStale) { optStale = false; runOpt(); }   // deferred while hidden — see runOptIfShown
   if (tab === 'upgrades' && upViewsStale) runUpgradeViews();       // deferred while hidden — see runUpgradeViews
   if (tab === 'upgrades' && !$('#up-pane-craft').classList.contains('hide')) { if (!ccCache) runCustomCard(); else markStaleRuns(); }
+  if (tab === 'upgrades' && !$('#up-pane-ink').classList.contains('hide')) { if (!ikCache) runInkCard(); else markStaleRuns(); }
   if (tab === 'upgrades' && !$('#up-pane-fortune').classList.contains('hide')) { if (!frCache) runFortune(); else { renderFrChars(); markStaleRuns(); } }
   if (tab === 'triage') { autoRunTriage(); markStaleRuns(); }
 }
@@ -7256,9 +7639,11 @@ $$('#upSubtabs button').forEach(b => b.onclick = () => {
   $('#up-pane-better').classList.toggle('hide', b.dataset.uptab !== 'better');
   $('#up-pane-headroom').classList.toggle('hide', b.dataset.uptab !== 'headroom');
   $('#up-pane-craft').classList.toggle('hide', b.dataset.uptab !== 'craft');
+  $('#up-pane-ink').classList.toggle('hide', b.dataset.uptab !== 'ink');
   $('#up-pane-fortune').classList.toggle('hide', b.dataset.uptab !== 'fortune');
   if (b.dataset.uptab === 'headroom') runHeadroom();
   if (b.dataset.uptab === 'craft') { if (!ccCache) runCustomCard(); else markStaleRuns(); }
+  if (b.dataset.uptab === 'ink') { if (!ikCache) runInkCard(); else markStaleRuns(); }
   if (b.dataset.uptab === 'fortune') { if (!frCache) runFortune(); else { renderFrChars(); markStaleRuns(); } }
 });
 /* Fortune Revelation: the item and the two settings re-run the ranking; the character picker only
@@ -7290,6 +7675,21 @@ $('#ccFillRec').onclick = () => {
   else notify(`${name} is not in the last ranking — rank characters with them in scope first.`);
 };
 $('#ccAdd').onclick = ccAddCard;
+// Ink card: wired like the Custom card view.
+['#ikScope', '#ikPick', '#ikPolicy', '#ikFree'].forEach(id => $(id).addEventListener('change', () => runInkCard()));
+$('#ikRun').onclick = () => runInkCard();
+$('#ikElement').onchange = renderInkCard;
+$('#ikQ').oninput = renderInkCard;
+$('#ikChar').onchange = () => { ikCheckFilled = true; ikCheck(); };
+$('#ikSlot').onchange = () => { ikCheckFilled = true; ikSyncMain(); ikRenderSubs(); ikCheck(); };
+$('#ikSet').onchange = () => { ikCheckFilled = true; ikCheck(); };
+$('#ikMain').onchange = () => { ikCheckFilled = true; ikRenderSubs(); ikCheck(); };
+$('#ikFillRec').onclick = () => {
+  const name = $('#ikChar').value;
+  if (ikCache && ikCache.rows.some(r => r.ch.n === name && r.best)) ikFillRecommended(name);
+  else notify(`${name} is not in the last ranking — rank characters with them in scope first.`);
+};
+$('#ikAdd').onclick = ikAddCard;
 // Only the "take a card off someone else" toggle changes which cards are in scope, so it
 // is the one control that has to re-run the scoring pass rather than redraw the cache.
 $('#hrTakeEquipped').onchange = runHeadroom;

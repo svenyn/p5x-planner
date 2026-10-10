@@ -1439,6 +1439,37 @@ function weightOverrideDrift() {
       }));
     }
 
+    // ---- Ink card (Vicissitude / Elysian / Prophetic Ink: pick some substats, the rest is random) ----
+    {
+      const o = { free: true, policy: 'pref', scope: 'owned', pick: 2 };
+      const chars = own.slice(0, 4).map(charDef);
+      const rows = chars.map(ch => ikRow(ch, o));
+      const bad = [];
+      fail('Ink card: every fill is counted once — 495 for none picked, 165 for one, 45 for two, 9 for three, 1 for four — and a Sun card is never filled with HP',
+        [495, 165, 45, 9, 1].every((n, k) => ikCombos(ikLeft('Moon', 'ATK%', ['Crit Rate', 'Crit Multiplier', 'Speed', 'HP%'].slice(0, k)), 4 - k).length === n) &&
+        ikLeft('Sun', 'HP', []).indexOf('HP') < 0 && ikLeft('Sun', 'HP', []).length === Object.keys(SUBSTATS).length - 1);
+      rows.forEach(r => {
+        const n = r.ch.n, cc = ccRow(r.ch, Object.assign({}, o, { mode: 'typical', kind: 'heavens' }));
+        if (r.byK.some(x => !x)) { bad.push(n + ': a pick count has no card'); return; }
+        r.byK.forEach((x, k) => {
+          const stats = x.opt.card.subs.map(s => s.stat);
+          if (x.picked.length !== k || x.picked.some(s => stats.indexOf(s) < 0)) bad.push(n + ' k=' + k + ': picks ' + x.picked.join(',') + ' are not the design\'s');
+          if (HEAVENS.indexOf(x.opt.slot) < 0) bad.push(n + ' k=' + k + ': slot ' + x.opt.slot);
+          const fill = ikLeft(x.opt.slot, x.opt.card.main, x.picked).slice(0, 4 - k);
+          const c = ccCard(x.opt.slot, x.opt.set, x.opt.card.main, x.picked.concat(fill), 'typical');
+          if (validateCard(c).length) bad.push(n + ' k=' + k + ': ' + validateCard(c)[0]);
+          if (!(x.gain >= 0 && isFinite(x.gain))) bad.push(n + ' k=' + k + ': gain ' + x.gain);
+          if (k && x.gain + 0.02 < r.byK[k - 1].gain) bad.push(n + ': picking ' + k + ' is worth less than ' + (k - 1));
+        });
+        if (!near(r.byK[4].gain, cc.gain, 1e-6)) bad.push(n + ': four picked ' + r.byK[4].gain + ' is not the Custom card view\'s ' + cc.gain);
+        if (r.best !== r.byK[o.pick] || !near(r.after, Math.min(100, r.inv + r.gain), 1e-6)) bad.push(n + ': row gain/after');
+        const g = r.range;
+        if (!g || !(g.min <= g.lo && g.lo <= g.hi && g.hi <= g.max) || Math.abs(g.mean - r.gain) > 0.6 ||
+          JSON.stringify(ccRange(ikOutcomes(r.ctx, r.best, null, IK_SAMPLES))) !== JSON.stringify(g)) bad.push(n + ': likely range');
+      });
+      fail('Ink card: each pick count gets a legal card whose picks are the Custom card design\'s, picking more is never worth less, all four picked is the Custom card view\'s gain, and the likely range sits around the gain and reads the same every run', !bad.length);
+      if (bad.length) out.inkCardBad = bad.slice(0, 8);
+    }
     // ---- Fortune Revelation (choose the set, the rest is random) ----
     {
       const drawBad = [];
@@ -1741,6 +1772,38 @@ function weightOverrideDrift() {
     ccSpace.allSpace && ccSpace.header && ccSpace.checkSlot === 'Space' && ccSpace.checkSet && ccSpace.checkRows === 3 && !ccSpace.nan && ccSpace.back, JSON.stringify(ccSpace));
   check('Custom card: "Check a roll" fills the check panel, "Add to inventory" adds a level-0 card and marks the ranking stale, undo takes both back, and the element filter narrows the table',
     ccFlow.filled && ccFlow.added && ccFlow.stale && ccFlow.undone && ccFlow.fresh && ccFlow.filtered, JSON.stringify(ccFlow));
+  await p.click('#upSubtabs button[data-uptab="ink"]');
+  await p.waitForFunction(() => ikCache, null, { timeout: 60000 });
+  const ikState = await p.evaluate(() => {
+    const html = () => document.getElementById('ikSummary').innerHTML + document.getElementById('ikTable').innerHTML + document.getElementById('ikCheckOut').innerHTML;
+    const r = { rows: document.querySelectorAll('#ikTable tbody tr').length, owned: ownedChars().length,
+      ladder: document.querySelectorAll('#ikSummary tbody tr').length, sorted: ikCache.rows.every((x, i, a) => !i || a[i - 1].gain >= x.gain),
+      likely: document.querySelectorAll('#ikTable tbody tr').length === document.querySelectorAll('#ikTable td span[title^="8 in 10"]').length,
+      needsAll: /Enter all four substats/.test(document.getElementById('ikCheckOut').textContent), nan: /NaN|undefined/.test(html()) };
+    // Fill the two random substats in, then put the first picked one on its lowest roll and the other on its highest.
+    const first = ikCache.rows[0], picked = first.best.picked, slot = first.best.opt.slot;
+    const free = ikLeft(slot, first.best.opt.card.main, picked);
+    const subs = [0, 1, 2, 3].map(i => i < picked.length
+      ? { stat: picked[i], value: ccTiers(picked[i], slot)[i === 0 ? 0 : 4], picked: true }
+      : { stat: free[i - picked.length], value: ccTiers(free[i - picked.length], slot)[2], picked: false });
+    ikRenderSubs(subs); ikCheck();
+    const advice = (document.querySelector('#ikCheckOut .ikAdvice') || {}).textContent || '';
+    r.lowRerolled = picked.length > 0 && new RegExp('Re-roll ' + picked[0].replace(/[%]/g, '.')).test(advice);
+    r.checkRows = document.querySelectorAll('#ikCheckOut tbody tr').length === picked.length;
+    ikRenderSubs(subs.map(s => s.picked ? Object.assign({}, s, { value: ccTiers(s.stat, slot)[4] }) : s)); ikCheck();
+    r.keepTop = /Keep it/.test((document.querySelector('#ikCheckOut .ikAdvice') || {}).textContent || '');
+    const n = state.cards.length;
+    document.getElementById('ikAdd').click();
+    r.added = state.cards.length === n + 1 && state.cards[n].level === 0 && validateCard(state.cards[n]).length === 0;
+    r.stale = !!document.querySelector('#ikSummary .stale-run');
+    undo();
+    r.undone = state.cards.length === n && !document.querySelector('#ikSummary .stale-run');
+    r.nan = r.nan || /NaN|undefined/.test(html());
+    return r;
+  });
+  check('Ink card: the sub-tab ranks every owned character on the way in, shows what each extra pick adds, and the check panel re-rolls a picked substat on its lowest roll and keeps one on its highest; adding the card marks the ranking stale and undo takes it back',
+    ikState.rows === ikState.owned && ikState.ladder === 5 && ikState.sorted && ikState.likely && ikState.needsAll && ikState.lowRerolled && ikState.checkRows &&
+    ikState.keepTop && ikState.added && ikState.stale && ikState.undone && !ikState.nan, JSON.stringify(ikState));
   await p.click('#upSubtabs button[data-uptab="fortune"]');
   await p.waitForFunction(() => frCache, null, { timeout: 60000 });
   const frState = await p.evaluate(async () => {

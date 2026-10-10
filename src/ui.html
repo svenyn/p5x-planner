@@ -386,6 +386,8 @@ details.sect>.inner{margin-top:10px}
 .notice.trade{margin:0 0 12px}
 .notice.trade.bad{background:#2a1218;border-color:#6b2433;border-left-color:var(--red)}
 .gainpos{color:var(--ok)}
+/* Ink card: the row of the ladder you chose, and the re-roll it recommends. */
+#up-pane-ink tr.on td{background:rgba(127,127,127,.12)}
 
 /* ---- card picker: one compact row per candidate ---- */
 .pick td{padding:6px 8px}
@@ -697,6 +699,7 @@ details.sect>.inner{margin-top:10px}
       <button data-uptab="better" class="on">Better cards available</button>
       <button data-uptab="headroom">Weakest slots</button>
       <button data-uptab="craft">Custom card</button>
+      <button data-uptab="ink">Ink card</button>
       <button data-uptab="fortune">Fortune Revelation</button>
     </div>
 
@@ -844,6 +847,71 @@ details.sect>.inner{margin-top:10px}
         <div id="ccCheckOut" style="margin-top:12px"></div>
       </div>
     </div><!-- /up-pane-craft -->
+
+    <div id="up-pane-ink" class="hide">
+      <div class="panel">
+        <h2>Ink card</h2>
+        <details class="explain" style="margin:0 0 12px"><summary>What to make with Vicissitude Ink, how many substats are worth
+          the Elysian Ink, and which substat to re-roll with Prophetic Ink.</summary>
+          <div class="body">
+            <p>The Customize button on the revelation screen makes a new 5★ card at level 0. One <b>Vicissitude Ink</b> buys a
+              Sun, Moon, Star or Sky card in the set and with the main stat you choose. <b>Elysian Ink</b> picks substats: 1, 2, 4
+              or 8 of it in all for one, two, three or four of them. The game fills the rest of the card's four at random.
+              <b>Prophetic Ink</b> rolls each picked substat's value, one each. One more re-rolls a picked substat, and the new
+              value replaces the old one even when it is lower.</p>
+            <p><b>Gain</b> is the build-score points the card adds over the best loadout your inventory can already give that
+              character, averaged over what luck decides: the substats you did not pick and every value. It compares across
+              characters. <b>By substats picked</b> shows the gain with none to all four picked, so you can see what each extra
+              pick is worth against the Elysian Ink it costs. <b>Likely</b> is where the gain lands in 8 of 10 cards made and
+              levelled at random.</p>
+            <p>Once the card is made, <b>Check a roll</b> below takes its substats and values and says which picked substat is
+              worth a re-roll, if any.</p>
+          </div></details>
+        <div class="row">
+          <div class="field"><label>Characters</label><select id="ikScope">
+            <option value="owned">Characters I own</option>
+            <option value="all">All characters</option></select></div>
+          <div class="field"><label>Substats you pick</label><select id="ikPick">
+            <option value="0">None (no Elysian Ink)</option>
+            <option value="1">1 (1 Elysian Ink)</option>
+            <option value="2" selected>2 (2 Elysian Ink)</option>
+            <option value="3">3 (4 Elysian Ink)</option>
+            <option value="4">4 (8 Elysian Ink)</option></select></div>
+          <div class="field"><label>Set policy</label><select id="ikPolicy">
+            <option value="pref">Honour preferred sets</option>
+            <option value="force4">Force preferred 4-piece</option>
+            <option value="any4">Best complete 4-piece</option>
+            <option value="stats">Pure stat maximum</option></select></div>
+          <label class="check"><input type="checkbox" id="ikFree" checked> Ignore cards equipped on someone else</label>
+          <div class="field"><label>Element</label><select id="ikElement"><option value="">Any</option></select></div>
+          <div class="field"><label>Search</label><input id="ikQ" placeholder="character, set or stat"></div>
+          <button class="primary" id="ikRun">Rank characters</button>
+        </div>
+        <div id="ikSummary" style="margin-top:12px"></div>
+      </div>
+      <div class="hide" id="ikPanel">
+        <div class="flowTable"><table id="ikTable"></table></div>
+      </div>
+      <div class="panel" id="ikCheckPanel">
+        <h2>Check a roll</h2>
+        <p class="tiny muted" style="margin:0 0 10px">Enter the card as the Customize screen shows it: all four substats with
+          their level-0 values, the ones you picked ticked. It says what the card adds once levelled and which picked substat,
+          if any, is worth a Prophetic Ink re-roll.</p>
+        <div class="row">
+          <div class="field"><label for="ikChar">Character</label><select id="ikChar"></select></div>
+          <div class="field"><label for="ikSlot">Slot</label><select id="ikSlot">
+            <option>Sun</option><option>Moon</option><option>Star</option><option>Sky</option></select></div>
+          <div class="field"><label for="ikSet">Set</label><select id="ikSet"></select></div>
+          <div class="field"><label for="ikMain">Main stat</label><select id="ikMain"></select></div>
+        </div>
+        <div class="row" id="ikSubs" style="margin-top:10px"></div>
+        <div class="row" style="margin-top:10px">
+          <button class="ghost" id="ikFillRec">Fill in the recommended card</button>
+          <button class="ghost" id="ikAdd" title="Adds this card at level 0 to your inventory, unequipped">Add to inventory</button>
+        </div>
+        <div id="ikCheckOut" style="margin-top:12px"></div>
+      </div>
+    </div><!-- /up-pane-ink -->
 
     <div id="up-pane-fortune" class="hide">
       <div class="panel">
