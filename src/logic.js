@@ -1525,7 +1525,7 @@ const KIT_STAT_BUFFS = {
     { s: 'ATK%', pct: true, weapon: '4', stacks: 3, ladder: [7.3, 9.6, 9.6, 11.9, 11.9, 14.2, 14.2], why: 'Ame-no-Nuboko: +ATK for 3 turns after granting a buff, held at 3; every skill she casts grants one' }
   ],
   'Mitsuru Kirijo': [
-    { s: 'ATK%', v: 7, pct: true, stacks: 5, aw: 0, why: "President's Duty: +7% ATK per Frost stack on the target when attacking it, at 5" }
+    { s: 'ATK%', v: 7, pct: true, stacks: 5, aw: 0, why: "Captain's Duty: +7% ATK per Frostbound stack on the target when attacking it, at 5" }
   ],
   'Shoki Ikenami [Notte]': [
     { s: 'Crit Multiplier', tiers: [48.8, 53.8, 51.8, 56.8], pct: true, why: "Spada dell'Alba: +48.8% crit damage for 2 turns, used every other turn" },

@@ -460,6 +460,7 @@ function main() {
 
   /* ---------------- SPACE_SETS ---------------- */
   const spaceLines = [];
+  const globalPairs = {};   // Space card -> the pairings Global has, read by every character pick below
   const spaceEntries = Object.entries(L.en.main)
     .sort((a, b) => (isUnrel(L.en.set_effects[a[0]]) - isUnrel(L.en.set_effects[b[0]])) || a[0].localeCompare(b[0]));
   /* A Space card's pairings are released one at a time, not with the card, and it is the
@@ -470,7 +471,11 @@ function main() {
      Aran a pairing that does not exist on their server yet. A pairing only the Korean table
      has is reported, never used. So is the reverse, an English pairing the schedule has not
      released yet, because nothing else would catch it: `unreleased` is per card, not per
-     pairing. */
+     pairing. Since the 15 Oct 2026 refresh the English table no longer waits for the
+     schedule — it lists Acuity + Hindrance ahead of 4.16 — so such a pairing is held out
+     of `pairs` and of every character's pick (`globalPairs`), not only reported. One whose
+     Heavens set is itself unreleased stays listed, as it always has: nobody may target that
+     set anyway. */
   const pairRelease = revSetSchedule(L.schedule, L.map, new Set(Object.keys(L.en.main)));
   const today = new Date().toISOString().slice(0, 10);
   const when = r => r ? ` (lufel's GLB schedule: ${r.version}, ${r.date || 'undated'})` : '';
@@ -478,16 +483,20 @@ function main() {
   for (const [k, v] of Object.entries(L.map)) if (!(v in krName)) krName[v] = k;
   for (const [name, pairs] of spaceEntries) {
     const eff = L.en.set_effects[name] || {};
-    const canon = pairs.map(canonSet);
+    const listed = pairs.map(canonSet);
     const kr = (L.kr && L.kr.main && L.kr.main[krName[name]]) || [];
-    const onlyKr = kr.map(x => canonSet(L.map[x] || x)).filter(p => !canon.includes(p));
+    const onlyKr = kr.map(x => canonSet(L.map[x] || x)).filter(p => !listed.includes(p));
     if (onlyKr.length)
       notes.push(`${name}: lufel's Korean table also pairs it with ${onlyKr.map(p => p + when(pairRelease[`${name}+${p}`])).join('; ')} — not in the English table, so not used`);
-    for (const p of canon) {
+    const canon = listed.filter(p => {
       const r = pairRelease[`${name}+${p}`];
-      if (r && !(r.date && r.date <= today) && !isUnrel(eff) && !(setMeta[p] && setMeta[p].unreleased))
-        notes.push(`${name} + ${p}: both halves are tagged released, but the pairing is not out yet${when(r)} — a character recommended it will be scored on an effect they cannot have`);
-    }
+      if (r && !(r.date && r.date <= today) && !isUnrel(eff) && !(setMeta[p] && setMeta[p].unreleased)) {
+        notes.push(`${name} + ${p}: both halves are tagged released, but the pairing is not out yet${when(r)} — held out until the schedule dates it`);
+        return false;
+      }
+      return true;
+    });
+    globalPairs[name] = canon;
     // One effect string per pairing — a Space card does something different depending
     // on which 4-piece is live, so the UI shows only the clause that is actually firing.
     const effects = canon.map(p => {
@@ -625,7 +634,7 @@ function main() {
        Space card does nothing at all without a matching 4-piece, so lufel's top-ranked
        card is the wrong pick when the set it was ranked alongside got dropped. Sets are
        tried in preference order, and only then does the ranking break the tie. */
-    const pairsWith = (sp, st) => (L.en.main[sp] || []).map(canonSet).includes(st);
+    const pairsWith = (sp, st) => (globalPairs[sp] || []).includes(st);
     let space = '';
     for (const st of sets) {
       space = spacesRanked.find(sp => pairsWith(sp, st));

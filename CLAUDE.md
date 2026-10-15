@@ -1237,14 +1237,16 @@ full accounting. The load-bearing caveats:
    single-sourced; the same scan's level-0 cards (one roll per substat) reproduce every
    maximum exactly, for all 13 stats on both the Heavens and Space layouts, and show each
    roll has five tiers (ATK% 2.0/2.5/2.8/3.2/3.5).
-4. **Seven sets and two Space cards are `unreleased: true`** — lufel lists them, the game
+4. **Six sets and two Space cards are `unreleased: true`** — lufel lists them, the game
    has not shipped them on Global. They stay in the tables so imports resolve, but a test
-   asserts no character targets one, and names the nine so a release shows up on the next
-   refresh. Release is also **per pairing**, which no tag records: lufel's GLB schedule
-   releases Space+Heavens combinations on their own (`rev_set`), and its English table is
-   the one that tracks Global — Acuity shipped pairing with Satiety alone, while the Korean
-   table already has its Wealth and Hindrance pairings. The generator reads the English
-   table and reports the difference; never take pairings from the Korean one.
+   asserts no character targets one, and names the eight so a release shows up on the next
+   refresh (Satiety left the list in the 15 Oct 2026 refresh, and YUI [Prism] moved to it).
+   Release is also **per pairing**, which no tag records: lufel's GLB schedule releases
+   Space+Heavens combinations on their own (`rev_set`). Acuity shipped pairing with Satiety
+   alone; since Oct 2026 lufel's English table also lists Acuity + Hindrance, ahead of the
+   schedule's 4.16. The generator reads the English table, reports what only the Korean one
+   has, and holds out a pairing whose halves are both released but which the schedule has
+   not dated yet — never take a pairing early, from either table.
 5. **Do not add speculative `SET_ALIASES`.** A wrong one silently corrupts the user's
    imported inventory. Every entry there has evidence behind it.
 

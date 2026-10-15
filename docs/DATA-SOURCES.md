@@ -41,7 +41,7 @@ writes. Re-run it after any hand-edit to `src/data.js` to see what you have dive
 ### Sets, Space cards, pairings — high, from lufel
 
 Thirty-four Heavens sets and nineteen Space cards, with the pairing table as Global has it.
-Seven sets (`Cruelty`, `Debauch`, `Failure`, `Happiness`, `Satiety`, `Tenacity`, `Wealth`)
+Six sets (`Cruelty`, `Debauch`, `Failure`, `Happiness`, `Tenacity`, `Wealth`)
 and two Space cards (`Ego`, `Purity`) are tagged `unreleased: true` — lufel lists them but
 the game has not shipped them on Global. They stay in the tables so names resolve on import
 and so the data is right the day they land, but a test asserts no character targets one.
@@ -57,22 +57,20 @@ one is exactly what not to add.
 **Pairings are released one at a time, and no tag says so.** A Space card does not ship with
 every pairing it will eventually have. Lufel's GLB schedule lists pairing releases of their
 own (`rev_set`: Hope + Change in 4.8, Nativity + Strife in 4.10, Acuity + Hindrance in 4.16
-with Koromaru), and lufel's English table is the one that tracks Global. Acuity is the live
-case: it shipped pairing with Satiety alone, which is all the English table lists, while the
-Korean table already pairs it with Wealth, Satiety and Hindrance. Read from the Korean table,
-Koromaru and Aran Hirano — whose top build is Hindrance + Acuity — would have been handed a
-pairing that does not exist on their server. `gen-data-from-lufel.js` reads the English
-table, reports on stderr what only the Korean one has, and warns if the schedule has not yet
-released a pairing that the English table lists with both halves out (none today). Those two
-characters keep Creation, and their notes say why. Every other one of lufel's 132 ranked
-Space + Heavens combos is a pairing the English table has.
+with Koromaru). Acuity is the live case: it shipped pairing with Satiety alone. Until Oct
+2026 lufel's English table tracked that and only the Korean one listed Wealth and Hindrance;
+the 15 Oct 2026 refresh brought both into the English table too, ahead of the schedule.
+Taken as they stand, Koromaru and Aran Hirano — whose top build is Hindrance + Acuity — would
+have been handed a pairing that does not exist on their server. So `gen-data-from-lufel.js`
+reads the English table, reports on stderr what only the Korean one has, and **holds out** a
+pairing whose two halves are released but which the schedule has not dated yet (Acuity +
+Hindrance today), from the Space card's `pairs` and from every character's pick. A pairing
+whose Heavens set is itself unreleased (Acuity + Wealth) stays listed, as such pairings always
+have: nobody can target the set. Those two characters keep Creation, and their notes say why.
 
-**One tag disagrees with lufel's own schedule.** `Satiety` is still tagged unreleased, but
-the schedule lists it in 4.9 beside Acuity and Gain, whose tags were updated — and Acuity
-pairs with nothing else on Global, so it would be a dead card without it. It is kept
-unreleased because the tag is lufel's statement of record and no scan has seen a Satiety
-card. If one turns up, YUI [Prism]'s target should move from the Truth fallback to lufel's
-Satiety + Acuity.
+**Satiety is released.** It was tagged unreleased while the schedule listed it in 4.9 beside
+Acuity and Gain; lufel corrected the tag in the 15 Oct 2026 refresh, and YUI [Prism]'s target
+moved from the Truth + Awareness fallback to lufel's Satiety + Acuity, as planned.
 
 `Ruin` and `Prudence` were previously carried as `unverified: true` with no 2-piece,
 because no English source listed them. Both are real and now fully specified:

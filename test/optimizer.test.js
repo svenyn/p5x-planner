@@ -243,12 +243,13 @@ function weightOverrideDrift() {
       Object.values(SPACE_SETS).every(v => v.pairs.length >= 1 && v.pairs.length <= 4 && v.pairs.every(pp => v.effects && v.effects[pp])) &&
       Object.values(SPACE_SETS).filter(v => v.pairs.length >= 3).length >= 16,
       Object.entries(SPACE_SETS).map(([k, v]) => `${k} ${v.pairs.length}`).join(', '));
-    /* Pairings are Global's, from lufel's English table: its Korean one already pairs Acuity
-       with Wealth and Hindrance, which the GLB schedule releases later (Acuity + Hindrance in
-       4.16). Update this when a refresh brings the pairing in — never by reading the Korean
-       table, which would hand Koromaru and Aran an effect their server does not have. */
-    fail('Acuity pairs as it does on Global (Satiety only, until 4.16 brings Hindrance)',
-      SPACE_SETS.Acuity && SPACE_SETS.Acuity.pairs.join() === 'Satiety' &&
+    /* Pairings are Global's: lufel's English table, less any pairing the GLB schedule has not
+       dated yet. Since Oct 2026 the English table lists Acuity + Hindrance ahead of 4.16, and
+       the generator holds it back. Update this when a refresh dates the pairing — never by
+       taking it early, which would hand Koromaru and Aran an effect their server does not have.
+       Wealth is listed because its set is itself unreleased, so nobody can target it. */
+    fail('Acuity pairs as it does on Global (Satiety; Wealth unreleased; Hindrance not until 4.16)',
+      SPACE_SETS.Acuity && SPACE_SETS.Acuity.pairs.join() === 'Wealth,Satiety' &&
       ['Koromaru', 'Aran Hirano'].every(n => CHARACTERS.find(c => c.n === n).space !== 'Acuity'),
       SPACE_SETS.Acuity && SPACE_SETS.Acuity.pairs.join());
     const deadOwnSets = [];
@@ -257,14 +258,14 @@ function weightOverrideDrift() {
       if (def && def.elem && def.elem !== ch.e) deadOwnSets.push(`${ch.n} (${ch.e}) lists off-element set ${s} (${def.elem})`);
     });
     fail('no character lists an off-element set among their own preferred sets', deadOwnSets.length === 0, deadOwnSets.join(' | '));
-    /* Seven Heavens sets and two Space cards are lufel-listed but unshipped on Global. They
+    /* Six Heavens sets and two Space cards are lufel-listed but unshipped on Global. They
        stay in the tables so an import resolves, but nobody may be built around one. Named,
        not counted, so a release that moves one is a line to review on the next refresh
        rather than a number that silently still adds up. */
     const unreleased = Object.keys(SETS).filter(s => SETS[s].unreleased).sort();
     const unreleasedSpace = Object.keys(SPACE_SETS).filter(s => SPACE_SETS[s].unreleased).sort();
     fail('the unreleased sets are still marked',
-      unreleased.join() === 'Cruelty,Debauch,Failure,Happiness,Satiety,Tenacity,Wealth' && unreleasedSpace.join() === 'Ego,Purity',
+      unreleased.join() === 'Cruelty,Debauch,Failure,Happiness,Tenacity,Wealth' && unreleasedSpace.join() === 'Ego,Purity',
       `${unreleased.join(', ')} / ${unreleasedSpace.join(', ')}`);
     fail('no character targets an unreleased set or Space card',
       CHARACTERS.every(c => !(c.sets || []).some(s => SETS[s] && SETS[s].unreleased) && !(c.space && SPACE_SETS[c.space] && SPACE_SETS[c.space].unreleased)),
