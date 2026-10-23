@@ -1087,6 +1087,41 @@ details.sect>.inner{margin-top:10px}
         Don't want to type four thousand cards by hand? <button class="linky" data-goto="howto">See how to scan your cards</button>.
       </p>
     </div>
+    <div class="panel" id="syncPanel">
+      <h2>Sync with GitHub</h2>
+      <details class="explain" style="margin:0 0 12px"><summary>Keep the save in a private GitHub repository, so the laptop
+        and the phone share one. Once connected, the header's <b>Load</b> and <b>Save</b> use it instead of a file.</summary>
+        <p>The buttons above still download and load files. Every save to GitHub is kept there as a version, so an older one can
+          always be fetched from the repository's history. If the save on GitHub was changed on another device since this one
+          loaded it, Save asks before replacing it.</p>
+        <p><b>Setting it up, once:</b></p>
+        <ol>
+          <li>On GitHub, create a new repository, e.g. <code>p5x-planner-save</code>, and set it to <b>Private</b>. It can stay empty.</li>
+          <li>Make an access token: your picture → <b>Settings</b> → <b>Developer settings</b> → <b>Personal access tokens</b> →
+            <b>Fine-grained tokens</b> → <b>Generate new token</b>. Pick an expiry; under <b>Repository access</b> choose
+            <b>Only select repositories</b> and that repository; under <b>Permissions</b> → <b>Repository permissions</b> set
+            <b>Contents</b> to <b>Read and write</b>. Generate it and copy it.</li>
+          <li>On each device, fill in the repository and the token below and press Connect.</li>
+        </ol>
+        <p>The token can read and write that one repository and nothing else. "Remember on this device" keeps the repository name and the
+          token in this browser so the app opens on your save; your cards are never kept there. Untick it on a shared computer.
+          If a device is lost, delete the token on GitHub.</p>
+      </details>
+      <div class="row">
+        <div class="field"><label for="syncRepo">Repository</label>
+          <input id="syncRepo" placeholder="your-name/p5x-planner-save" autocomplete="off" autocapitalize="off" spellcheck="false" style="width:230px"></div>
+        <div class="field"><label for="syncPath">File in it</label>
+          <input id="syncPath" value="p5x-planner-save.json" autocomplete="off" autocapitalize="off" spellcheck="false" style="width:190px"></div>
+        <div class="field"><label for="syncToken">Access token</label>
+          <input id="syncToken" type="password" placeholder="github_pat_…" autocomplete="off" spellcheck="false" style="width:230px"></div>
+      </div>
+      <div class="row" style="margin-top:10px">
+        <label class="tiny"><input type="checkbox" id="syncRemember" checked> Remember on this device</label>
+        <button class="primary" id="syncConnect">Connect</button>
+        <button class="ghost hide" id="syncDisconnect">Disconnect</button>
+        <span id="syncMsg" class="tiny muted" aria-live="polite"></span>
+      </div>
+    </div>
     <div class="panel">
       <h2>Import cards (merge)</h2>
       <p class="tiny muted" style="margin:0 0 10px">
@@ -11024,68 +11059,245 @@ function save() {
 }
 function load(file) {
   const fr = new FileReader();
-  fr.onload = () => {
-    try {
-      const d = JSON.parse(fr.result);
-      const good = [], bad = [];
-      (d.cards || []).forEach((rc, i) => {
-        const c = normalizeCard(rc);
-        const errs = validateCard(c);
-        if (errs.length) bad.push(`card ${i + 1}: ${errs[0]}`); else good.push(c);
-      });
-      state.cards = good.map((c, i) => Object.assign({ id: 'c' + i }, c));
-      // A main value from an older scan than the card's level (see mainValueFitsLevel) is
-      // already ignored by the scoring; dropping it here keeps it out of the next save.
-      const staleMain = state.cards.filter(c => !mainValueFitsLevel(c));
-      staleMain.forEach(c => { delete c.mainValue; });
-      state.nextId = d.nextId || state.cards.length + 1;
-      CHARACTERS.forEach(c => { state.chars[c.n] = (d.characters && d.characters[c.n]) || { owned: false, benched: false, targets: null }; });
-      // Saves from before edits were stored as a diff carry whole snapshots; see target().
-      const dropped = migrateSavedTargets();
-      const tc = +(d.settings && d.settings.teamCritRate);
-      state.teamCrit = tc > 0 ? Math.min(100, tc) : 0;   // absent on files saved before it existed
-      state.den = denFrom(d.settings && d.settings.thievesDen);   // likewise
-      syncTeamCritField();
-      applyPrefs(d.prefs);
-      /* A different file is a different session: last run's Triage and Vault results were for
-         another inventory, so they go, and the tabs run afresh on the next visit. An undo
-         offered before the load would restore that other inventory over this one. */
-      hideToast();
-      /* A dialog open over the old data (a file can be dropped on one) would act through closures
-         holding the old cards — and ids are reassigned by position on load, so its buttons could
-         reach whichever new card now has that id. The same goes for a forced Optimise pick. */
-      if ($('#dlg').open) $('#dlg').close();
-      optForced = null;
-      trCache = null; vaCache = null; ccCache = null; ccJob++; ccCheckFilled = false; ikCache = null; ikJob++; ikCheckFilled = false; ikFocus = null; frCache = null; frJob++; rgCache = null; rgJob++;
-      ['#trSummary', '#vaSummary', '#ccSummary', '#ccCheckOut', '#ikSummary', '#ikCheckOut', '#frSummary', '#rgSummary'].forEach(id => { $(id).innerHTML = ''; });
-      ['#trPanel', '#vaPanel', '#ccPanel', '#ikPanel', '#frPanel', '#rgPanel'].forEach(id => $(id).classList.add('hide'));
-      ccFillCheckChars(); ikFillCheckChars();
-      commit(); markSaved();
-      if (!$('#tab-triage').classList.contains('hide')) autoRunTriage();
-      if (!$('#tab-upgrades').classList.contains('hide') && !$('#up-pane-craft').classList.contains('hide')) runCustomCard();
-      if (!$('#tab-upgrades').classList.contains('hide') && !$('#up-pane-ink').classList.contains('hide')) runInkCard();
-      renderFrChars();
-      if (!$('#tab-upgrades').classList.contains('hide') && !$('#up-pane-fortune').classList.contains('hide')) runFortune();
-      if (!$('#tab-upgrades').classList.contains('hide') && !$('#up-pane-retro').classList.contains('hide')) runRetrograde();
-      $('#dataMsg').innerHTML = `Loaded <b>${state.cards.length}</b> cards.` +
-        (bad.length ? ` <span style="color:#e87a5c">${bad.length} skipped</span> — ${esc(bad.slice(0, 3).join('; '))}${bad.length > 3 ? ' …' : ''}` : '') +
-        (staleMain.length ? `<br><span class="tiny">${staleMain.length} card${staleMain.length === 1 ? '' : 's'} carried a scanned main
-          value from a lower level than ${staleMain.length === 1 ? 'its' : 'their'} own (levelled up after the scan); ${staleMain.length === 1 ? 'it now reads' : 'they now read'}
-          the value for the level: ${esc(staleMain.slice(0, 6).map(c => `${c.set} ${c.slot} ${c.main} Lv${c.level}${c.equipped ? ' on ' + c.equipped : ''}`).join('; '))}${staleMain.length > 6 ? ' …' : ''}.</span>` : '') +
-        (dropped.length ? `<br><span class="tiny">Saved targets now keep only what you changed, so later data fixes reach
-          everything else. ${dropped.length} saved value${dropped.length === 1 ? '' : 's'} that no longer matched the
-          data ${dropped.length === 1 ? 'was' : 'were'} handed back to it — re-enter any you meant under Targets:
-          ${esc(dropped.map(x => `${x.n} ${x.stat} ${x.saved} → ${x.data}`).join('; '))}.</span>` : '');
-      // Said wherever the load was started from, not only on the Data tab.
-      if ($('#tab-data').classList.contains('hide'))
-        notify(`Loaded ${state.cards.length} cards${bad.length ? `, ${bad.length} skipped` : ''}${dropped.length ? `; ${dropped.length} saved value${dropped.length === 1 ? '' : 's'} handed back to the data` : ''}.`,
-          bad.length || dropped.length ? { label: 'Details', run: () => { hideToast(); showTab('data'); } } : null);
-    } catch (e) {
-      $('#dataMsg').innerHTML = `<span style="color:#e87a5c">Could not read that file: ${esc(e.message)}</span>`;
-      if ($('#tab-data').classList.contains('hide')) notify(`Could not read that file: ${e.message}`, null);
-    }
-  };
+  fr.onload = () => applySave(fr.result, '');
   fr.readAsText(file);
+}
+/* Replaces everything with a save file's text — a file's (load) or GitHub's (syncLoad, `from`
+   ' from GitHub'). True when it was applied. */
+function applySave(text, from) {
+  const what = from ? 'the save on GitHub' : 'that file';
+  try {
+    const d = JSON.parse(text);
+    const good = [], bad = [];
+    (d.cards || []).forEach((rc, i) => {
+      const c = normalizeCard(rc);
+      const errs = validateCard(c);
+      if (errs.length) bad.push(`card ${i + 1}: ${errs[0]}`); else good.push(c);
+    });
+    state.cards = good.map((c, i) => Object.assign({ id: 'c' + i }, c));
+    // A main value from an older scan than the card's level (see mainValueFitsLevel) is
+    // already ignored by the scoring; dropping it here keeps it out of the next save.
+    const staleMain = state.cards.filter(c => !mainValueFitsLevel(c));
+    staleMain.forEach(c => { delete c.mainValue; });
+    state.nextId = d.nextId || state.cards.length + 1;
+    CHARACTERS.forEach(c => { state.chars[c.n] = (d.characters && d.characters[c.n]) || { owned: false, benched: false, targets: null }; });
+    // Saves from before edits were stored as a diff carry whole snapshots; see target().
+    const dropped = migrateSavedTargets();
+    const tc = +(d.settings && d.settings.teamCritRate);
+    state.teamCrit = tc > 0 ? Math.min(100, tc) : 0;   // absent on files saved before it existed
+    state.den = denFrom(d.settings && d.settings.thievesDen);   // likewise
+    syncTeamCritField();
+    applyPrefs(d.prefs);
+    /* A different file is a different session: last run's Triage and Vault results were for
+       another inventory, so they go, and the tabs run afresh on the next visit. An undo
+       offered before the load would restore that other inventory over this one. */
+    hideToast();
+    /* A dialog open over the old data (a file can be dropped on one) would act through closures
+       holding the old cards — and ids are reassigned by position on load, so its buttons could
+       reach whichever new card now has that id. The same goes for a forced Optimise pick. */
+    if ($('#dlg').open) $('#dlg').close();
+    optForced = null;
+    trCache = null; vaCache = null; ccCache = null; ccJob++; ccCheckFilled = false; ikCache = null; ikJob++; ikCheckFilled = false; ikFocus = null; frCache = null; frJob++; rgCache = null; rgJob++;
+    ['#trSummary', '#vaSummary', '#ccSummary', '#ccCheckOut', '#ikSummary', '#ikCheckOut', '#frSummary', '#rgSummary'].forEach(id => { $(id).innerHTML = ''; });
+    ['#trPanel', '#vaPanel', '#ccPanel', '#ikPanel', '#frPanel', '#rgPanel'].forEach(id => $(id).classList.add('hide'));
+    ccFillCheckChars(); ikFillCheckChars();
+    commit(); markSaved();
+    if (!$('#tab-triage').classList.contains('hide')) autoRunTriage();
+    if (!$('#tab-upgrades').classList.contains('hide') && !$('#up-pane-craft').classList.contains('hide')) runCustomCard();
+    if (!$('#tab-upgrades').classList.contains('hide') && !$('#up-pane-ink').classList.contains('hide')) runInkCard();
+    renderFrChars();
+    if (!$('#tab-upgrades').classList.contains('hide') && !$('#up-pane-fortune').classList.contains('hide')) runFortune();
+    if (!$('#tab-upgrades').classList.contains('hide') && !$('#up-pane-retro').classList.contains('hide')) runRetrograde();
+    $('#dataMsg').innerHTML = `Loaded <b>${state.cards.length}</b> cards${from}.` +
+      (bad.length ? ` <span style="color:#e87a5c">${bad.length} skipped</span> — ${esc(bad.slice(0, 3).join('; '))}${bad.length > 3 ? ' …' : ''}` : '') +
+      (staleMain.length ? `<br><span class="tiny">${staleMain.length} card${staleMain.length === 1 ? '' : 's'} carried a scanned main
+        value from a lower level than ${staleMain.length === 1 ? 'its' : 'their'} own (levelled up after the scan); ${staleMain.length === 1 ? 'it now reads' : 'they now read'}
+        the value for the level: ${esc(staleMain.slice(0, 6).map(c => `${c.set} ${c.slot} ${c.main} Lv${c.level}${c.equipped ? ' on ' + c.equipped : ''}`).join('; '))}${staleMain.length > 6 ? ' …' : ''}.</span>` : '') +
+      (dropped.length ? `<br><span class="tiny">Saved targets now keep only what you changed, so later data fixes reach
+        everything else. ${dropped.length} saved value${dropped.length === 1 ? '' : 's'} that no longer matched the
+        data ${dropped.length === 1 ? 'was' : 'were'} handed back to it — re-enter any you meant under Targets:
+        ${esc(dropped.map(x => `${x.n} ${x.stat} ${x.saved} → ${x.data}`).join('; '))}.</span>` : '');
+    // Said wherever the load was started from, not only on the Data tab.
+    if ($('#tab-data').classList.contains('hide'))
+      notify(`Loaded ${state.cards.length} cards${from}${bad.length ? `, ${bad.length} skipped` : ''}${dropped.length ? `; ${dropped.length} saved value${dropped.length === 1 ? '' : 's'} handed back to the data` : ''}.`,
+        bad.length || dropped.length ? { label: 'Details', run: () => { hideToast(); showTab('data'); } } : null);
+    return true;
+  } catch (e) {
+    $('#dataMsg').innerHTML = `<span style="color:#e87a5c">Could not read ${what}: ${esc(e.message)}</span>`;
+    if ($('#tab-data').classList.contains('hide')) notify(`Could not read ${what}: ${e.message}`, null);
+    return false;
+  }
+}
+
+/* ------------------------------ GitHub sync ------------------------------
+   The save file can live in a private GitHub repository instead of a download, so the laptop
+   and the phone app share one. Once connected, the header's Load and Save read and write that
+   file (the Data tab's buttons stay file-based). Through GitHub's contents API: a write must
+   name the version it replaces (`sha`), so a save from a device that has not seen the other
+   device's latest save is refused, and the question is put to the user instead of one device
+   silently overwriting the other. Every save is a commit, so the repository is the history.
+
+   The one thing kept in browser storage, and only when "Remember on this device" is ticked: the
+   repository name and the access token. Never the inventory — the save stays a file, on GitHub
+   or on disk. Every access is guarded, so where storage is unavailable (the Cowork artifact)
+   the connection simply lasts the session. */
+const SYNC_KEY = 'p5x-planner-sync';
+let sync = null;      // { repo: 'owner/name', path, token, remember }
+let syncSha = null;   // GitHub's id for the save as this session last loaded or saved it
+const syncOn = () => !!(sync && sync.repo && sync.token);
+function syncStored() { try { const v = localStorage.getItem(SYNC_KEY); return v ? JSON.parse(v) : null; } catch (e) { return null; } }
+function syncStore() {
+  try { if (sync && sync.remember) localStorage.setItem(SYNC_KEY, JSON.stringify(sync)); else localStorage.removeItem(SYNC_KEY); } catch (e) {}
+}
+function utf8ToB64(s) {
+  const b = new TextEncoder().encode(s);
+  let bin = '';
+  for (let i = 0; i < b.length; i += 0x8000) bin += String.fromCharCode.apply(null, b.subarray(i, i + 0x8000));
+  return btoa(bin);
+}
+function b64ToUtf8(s) {
+  const bin = atob(String(s).replace(/\s/g, ''));
+  const b = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) b[i] = bin.charCodeAt(i);
+  return new TextDecoder().decode(b);
+}
+const syncDevice = () => /Android|iPhone|iPad|Mobile/i.test(navigator.userAgent) ? 'phone' : 'computer';
+const syncFilePath = () => (sync.path || 'p5x-planner-save.json').split('/').map(encodeURIComponent).join('/');
+
+async function ghApi(method, rest, body, accept) {
+  const headers = { Authorization: 'Bearer ' + sync.token, Accept: accept || 'application/vnd.github+json' };
+  if (body) headers['Content-Type'] = 'application/json';
+  try {
+    return await fetch('https://api.github.com/repos/' + sync.repo + rest,
+      { method, headers, cache: 'no-store', body: body ? JSON.stringify(body) : undefined });
+  } catch (e) {
+    throw new Error('Could not reach GitHub. Is there a connection?');
+  }
+}
+function ghFail(res) {
+  if (res.status === 401) return new Error('GitHub did not accept the access token. It may have expired: make a new one and paste it under Data → Sync with GitHub.');
+  if (res.status === 403) return new Error('The access token is not allowed to do that. It needs Contents: "Read and write" on this repository.');
+  if (res.status === 404) return new Error(`GitHub cannot find ${sync.repo}, or the access token was not given that repository.`);
+  return new Error(`GitHub answered ${res.status} ${res.statusText || ''}`.trim() + '.');
+}
+// The save on GitHub as { sha, text }, or null when there is none yet.
+async function syncFetch() {
+  const res = await ghApi('GET', '/contents/' + syncFilePath());
+  if (res.status === 404) {
+    const repo = await ghApi('GET', '');   // tells a missing file from a repository the token cannot see
+    if (!repo.ok) throw ghFail(repo);
+    return null;
+  }
+  if (!res.ok) throw ghFail(res);
+  const meta = await res.json();
+  if (meta.type !== 'file') throw new Error(`${sync.path} on GitHub is not a file.`);
+  // GitHub inlines a file up to 1 MB; past that the content has to be asked for raw
+  if (meta.encoding === 'base64' && meta.content) return { sha: meta.sha, text: b64ToUtf8(meta.content) };
+  const raw = await ghApi('GET', '/contents/' + syncFilePath(), null, 'application/vnd.github.raw+json');
+  if (!raw.ok) throw ghFail(raw);
+  return { sha: meta.sha, text: await raw.text() };
+}
+function syncSay(text, button) {
+  $('#syncMsg').textContent = text;
+  if ($('#tab-data').classList.contains('hide') || button) notify(text, button || null);
+}
+function syncBusy(label) {
+  ['#hdrLoad', '#hdrSave', '#syncConnect'].forEach(id => { $(id).disabled = !!label; });
+  $('#hdrSave').textContent = label === 'save' ? 'Saving…' : 'Save';
+  $('#hdrLoad').textContent = label === 'load' ? 'Loading…' : 'Load';
+}
+
+function requestSyncLoad() {
+  if (isDirty()) { askToast('Loading from GitHub replaces everything here, including changes you have not saved.', 'Load anyway', syncLoad); return; }
+  syncLoad();
+}
+async function syncLoad() {
+  syncBusy('load');
+  try {
+    const f = await syncFetch();
+    if (!f) { syncSay('There is no save on GitHub yet. Press Save to put this one there.'); return; }
+    if (applySave(f.text, ' from GitHub')) { syncSha = f.sha; $('#syncMsg').textContent = `Loaded ${state.cards.length} cards from GitHub.`; }
+  } catch (e) {
+    syncSay(e.message);
+  } finally { syncBusy(null); }
+}
+async function syncSave(overwrite) {
+  syncBusy('save');
+  try {
+    const sig = dataSignature();
+    const body = { message: `Save from ${syncDevice()}: ${state.cards.length} cards`,
+      content: utf8ToB64(JSON.stringify(savePayload(), null, 2)) };
+    let sha = syncSha;
+    if (overwrite) { const cur = await syncFetch(); sha = cur ? cur.sha : null; }
+    if (sha) body.sha = sha;
+    const res = await ghApi('PUT', '/contents/' + syncFilePath(), body);
+    // 409: the save there is not the one this session loaded; 422 naming the sha: there is one
+    // and this session never loaded it
+    const why = res.status === 422 ? ((await res.clone().json().catch(() => ({}))).message || '') : '';
+    if (res.status === 409 || /sha/i.test(why)) {
+      let who = '';
+      try {
+        const log = await ghApi('GET', '/commits?per_page=1&path=' + syncFilePath());
+        const c = log.ok && (await log.json())[0];
+        if (c) who = ` (${c.commit.message}, ${new Date(c.commit.committer.date).toLocaleString()})`;
+      } catch (e) {}
+      syncSay(`The save on GitHub was changed somewhere else since this device loaded it${who}. Saving now replaces it; Load first to see it.`,
+        { label: 'Save over it', run: () => { hideToast(); syncSave(true); } });
+      return;
+    }
+    if (!res.ok) throw ghFail(res);
+    syncSha = (await res.json()).content.sha;
+    savedSig = sig; updateSaveState();
+    $('#syncMsg').textContent = `Saved to GitHub at ${new Date().toLocaleTimeString()}.`;
+    $('#dataMsg').textContent = 'Saved to GitHub.';
+  } catch (e) {
+    syncSay(`Not saved: ${e.message}`, { label: 'Download instead', run: () => { hideToast(); save(); } });
+  } finally { syncBusy(null); }
+}
+
+function syncShowState() {
+  const on = syncOn();
+  $('#syncRepo').value = sync ? sync.repo : '';
+  $('#syncPath').value = sync && sync.path ? sync.path : 'p5x-planner-save.json';
+  $('#syncToken').value = sync ? sync.token : '';
+  $('#syncRemember').checked = sync ? !!sync.remember : true;
+  $('#syncDisconnect').classList.toggle('hide', !on);
+  $('#syncConnect').textContent = on ? 'Update' : 'Connect';
+  $('#emptyLoad').textContent = on ? 'Load from GitHub' : 'Load save file';
+  $('#hdrLoad').title = on ? `Replace everything here with the save on GitHub (${sync.repo})` : 'Replace everything here with a save file';
+  $('#hdrSave').title = on ? `Save to GitHub (${sync.repo})` : 'Download a save file. This tool keeps nothing between sessions on its own.';
+}
+async function syncConnect() {
+  const repo = $('#syncRepo').value.trim().replace(/^https?:\/\/github\.com\//i, '').replace(/\.git$/i, '').replace(/\/+$/, '');
+  const token = $('#syncToken').value.trim();
+  if (!/^[\w.-]+\/[\w.-]+$/.test(repo)) { $('#syncMsg').textContent = 'The repository is your-name/repository-name, e.g. svenyn/p5x-planner-save.'; return; }
+  if (!token) { $('#syncMsg').textContent = 'Paste the access token first.'; return; }
+  const prev = sync;
+  sync = { repo, path: $('#syncPath').value.trim() || 'p5x-planner-save.json', token, remember: $('#syncRemember').checked };
+  syncBusy('connect');
+  try {
+    const res = await ghApi('GET', '');
+    if (!res.ok) throw ghFail(res);
+    if (!(await res.json()).private) {
+      sync = prev;
+      $('#syncMsg').textContent = `${repo} is public, so anyone could read your inventory there. Make it private on GitHub (Settings → General → Change visibility), or use another repository.`;
+      return;
+    }
+    if (!prev || prev.repo !== repo || prev.path !== sync.path) syncSha = null;
+    syncStore();
+    syncShowState();
+    if (!state.cards.length && !isDirty()) { syncBusy(null); await syncLoad(); return; }
+    $('#syncMsg').textContent = `Connected to ${repo}. The header's Save now saves there, and Load loads from there.`;
+  } catch (e) {
+    sync = prev;
+    $('#syncMsg').textContent = e.message;
+  } finally { syncBusy(null); }
+}
+function syncDisconnect() {
+  sync = null; syncSha = null;
+  try { localStorage.removeItem(SYNC_KEY); } catch (e) {}
+  syncShowState();
+  $('#syncMsg').textContent = 'Disconnected. The header\'s Load and Save use files again; nothing on GitHub was changed.';
 }
 
 /* ------------------------------ import merge (rescans) ------------------------------
@@ -11526,11 +11738,14 @@ function requestLoad() {
   $('#fileIn').click();
 }
 $('#dlSave').onclick = save;
-$('#hdrSave').onclick = save;
+// the header's pair, and the empty page's Load, follow GitHub once it is connected
+$('#hdrSave').onclick = () => { if (syncOn()) syncSave(); else save(); };
 $('#dlCsv').onclick = csv;
 $('#upSave').onclick = requestLoad;
-$('#hdrLoad').onclick = requestLoad;
-$('#emptyLoad').onclick = requestLoad;
+$('#hdrLoad').onclick = () => { if (syncOn()) requestSyncLoad(); else requestLoad(); };
+$('#emptyLoad').onclick = () => { if (syncOn()) requestSyncLoad(); else requestLoad(); };
+$('#syncConnect').onclick = syncConnect;
+$('#syncDisconnect').onclick = syncDisconnect;
 $('#fileIn').onchange = e => { if (e.target.files[0]) load(e.target.files[0]); e.target.value = ''; };
 $('#upImport').onclick = () => $('#fileImport').click();
 $('#hdrImport').onclick = () => $('#fileImport').click();
@@ -11580,6 +11795,9 @@ fillSelects(); linkLabels(); syncTeamCritField(); renderInv(); renderRoster(); r
 upViewsStale = true;   // nothing has run yet: the first visit to Upgrades runs its pass,
 optStale = true;       // and the first visit to Optimise its plan for the selected character
 markSaved();           // an empty page has nothing unsaved
+// A device that remembers its GitHub connection opens on the save there.
+sync = syncStored(); syncShowState();
+if (syncOn()) syncLoad();
 
 </script>
 <script>
