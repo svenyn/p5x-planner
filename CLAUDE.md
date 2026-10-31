@@ -17,7 +17,15 @@ npm run shots        # writes docs/shot-*.png for visual review, laptop and phon
 npm run export-tables # build, then write dist/tables.json — the slot/set/substat/alias/
                        # character vocabulary the OCR pipeline should read instead of
                        # hand-copying src/data.js
+npm run site         # build, then write site/ — the phone app (PWA) for GitHub Pages:
+                     # index.html + manifest, icons, offline service worker; README
+                     # "On your phone". `-- --with-art` adds the portraits (public!)
 ```
+
+`site/` is the only place a manifest or service worker goes. `tools/build-site.js` injects
+them into a copy of the built page, so `dist/p5x-planner.html` stays a file:// / artifact
+page with neither (a manifest fetch from file:// is a console error, and the tests fail on
+those).
 
 Game data is re-derived from lufel.net rather than hand-edited (see
 `docs/DATA-SOURCES.md`):
@@ -27,6 +35,7 @@ node tools/fetch-lufel-data.js lufel.json    # download lufel's raw /data/ files
 node tools/audit-lufel.js lufel.json         # diff against src/data.js, reports only
 node tools/gen-data-from-lufel.js lufel.json # emit replacement SETS/SPACE_SETS/CHARACTERS
 node tools/gen-awareness.js lufel.json       # patch CHAR_STATS[*].awareness into src/data.js in place
+node tools/gen-teams.js lufel.json           # replace the TEAMS block (lufel's parties, partners, rotations)
 ```
 
 Run the audit before changing anything in `src/data.js` by hand — it will usually tell you
@@ -52,6 +61,15 @@ executes immediately on load and depends on both of the others:
 artifact where those APIs fail. Persistence is explicit JSON download/upload only
 (`save()` / `load()` in `logic.js`). Do not add browser storage; it will silently break
 the artifact build.
+
+The one sanctioned exception is the **GitHub sync** (Data tab, Oct 2026): the save can live in
+a private GitHub repository through the contents API, and the header's Load/Save use it once
+connected (`syncLoad`/`syncSave`; the Data tab's buttons stay file-based). Only its connection —
+repository, file name, access token — goes in `localStorage`, only when "Remember on this device"
+is ticked, and every access is in try/catch, so the artifact just forgets it. The inventory itself
+is never stored in the browser. A write names the version it replaces (`syncSha`); GitHub refuses
+a stale one (409, or 422 naming the sha) and the user is asked before overwriting another
+device's save. Connect refuses a public repository. Tests run it against a fake API (section 10).
 
 Because the save file is the only persistence, the page guards it without storage: the header
 says "Unsaved changes" and turns Save red whenever the state differs from the last load or save
@@ -622,7 +640,8 @@ Four things the score does that look odd until you know why:
   lose it, so scoring it only handed every loadout the same free points and watered down the
   targets gear does move. Fuuka is the standing case: lufel's Crit Multiplier 64-78% is the
   crit damage at which her party crit-damage buff stops growing ("10% + 0.625% per 1% of
-  Fuuka's critical damage, up to 40%" — lufel's number is the cap over 0.625). Kit text means
+  Fuuka's critical damage, up to 40%" — lufel's number is the cap over 0.625; Global's 4.12
+  buff made it 12% + 0.75% up to 48%, and 48 over 0.75 is the same 64). Kit text means
   the *total* there, as Starlight Ren's "up to 31.4% … at 197.6% critical damage" (his target
   is 197.6) and Tempest Riko's explicit "the portion that exceeds 100%" show, so her 150%
   base clears it before a card is worn. It was half her block, leaving her ATK target — the
@@ -666,7 +685,14 @@ It writes the file's own line endings (a bare `\n` left 476 mixed ones in the CR
 `src/data.js`), and a second run is byte-identical to the first.
 A new character's `CHAR_STATS` entry has to exist before it runs; it only adds the field.
 After a full regeneration — the generator emits `CHAR_STATS` without the field — run it
-again, or every Awareness tooltip goes blank.
+again, or every Awareness tooltip goes blank. Global text that differs from lufel's goes in its
+`GLB_AWARENESS_OVERRIDES` table (whole levels, a `why` each, printed on stderr when applied, and
+a test holds `src/data.js` to it): today Fuuka's 4.12 buff to Awareness 1, 2 and 6, in our own
+wording from the user's change list. Drop an entry once lufel's English table carries the change.
+Her skill buffs (Radiant Power, Holy Prayer, Spirit Wave: base, rate and cap each ×1.2, or ×4/3
+for Holy Prayer) are stored nowhere, since skill text is not data here, and they leave her stat
+targets as they were: lufel's targets are each cap over its rate, and both grew alike. None of it
+enters scoring — an Elucidator's party buffs are not on her own panel (Miku's reference panel, above).
 
 Two separate things move a stat here, and only one comes from lufel:
 
@@ -695,6 +721,102 @@ effect text) — mostly for reference, since almost none of them add anything be
 percentage. `awareness` defaults to `0`, not maxed like Ascension and weapon do — the
 same reasoning as `mind: false`, since it is a per-character grind rather than something
 a well-progressed account has finished on everyone.
+
+### Teams: lufel's parties, filled from the roster (Oct 2026)
+
+The Teams tab (`#tab-teams`, `tmTeams`/`tmAssemble`/`tmCandidates`/`renderTeams`) builds a party
+around one character from `TEAMS` at the end of `src/data.js`, which `tools/gen-teams.js` writes
+between two marker comments from lufel's `party.js` and `operation.js` (re-run after a refresh;
+a second run is byte-identical). Rules that hold it together:
+
+- **lufel decides, build scores only break ties.** A seat keeps lufel's pick when it is owned, not
+  benched and not marked busy; otherwise it goes to the candidate with the most lufel evidence —
+  the same seat in another lufel team with this character, a partner either side lists (with
+  lufel's sentence as the reason), the same archetype as the missing pick. Only a thief or
+  Elucidator seat with no such candidate takes the best-built free character, labelled "filler".
+  Teams rank by required seats left empty, then lufel picks kept, then a team from the
+  character's own page, then mean build score.
+- **Fuuka's backup is a seat only while Fuuka is the Elucidator**, filled only from lufel's
+  reasons (her partner list is her backup list) and optional: an empty backup never makes a team
+  rank below one of fillers. A partner entry's `a` is the Awareness lufel's reason relies on; a
+  candidate whose Setup is below it is ranked down and the row says so.
+- **Rotations are lufel's, chosen, never composed**: the highest Awareness level the member's
+  Setup reaches (lufel's lowest, flagged, when it reaches none), and a rotation whose label names
+  a teammate ("Miku", "with Manaka") only when that teammate is in the team (`tmLabelWho`).
+- **Turn order is in-battle Speed** — `totalStat` with worn cards plus the Thieves Den. Wonder's
+  is the user's entry (`state.wonderSpd`, saved as `settings.wonderSpeed` beside the team crit
+  rate, in the unsaved-changes fingerprint and the undo snapshot): his Persona is not a card, so
+  the planner cannot compute it. Unset is unknown, never zero — he is listed last, not slowest.
+  The Elucidator acts outside the order; the page says so.
+- **No lufel prose beyond one-liners.** Partner reasons and rotation notes are short and shown
+  as lufel's; the long reviews are linked, not copied (the site build is public). A mechanic worth
+  explaining goes in `TEAM_MECHANICS` in our own words — today only Fuuka's Oracle Shift.
+- The busy list is a pref (`tmBusy`), the chosen party and seat overrides are this session only
+  (`tmPick`). It reads state and writes none, so `commit()` only redraws it (or marks it
+  stale while hidden, `tmStale`). A team renders in 10-30 ms on the real save.
+
+### Teams, calculated: what the others do for one damage dealer (Oct 2026)
+
+lufel's team lists are written once and age as characters release (Ann's page still names
+Futaba where Miku or Fuuka buff more), so the Teams tab's default basis ("Build from:
+Calculated from the kits", `#tmBasis`, a pref) prices every team the user can field instead
+(`tcSearch`/`tcLineup`/`tcMember`/`tcMultiplier`/`tcTeams`). The number is how many times the
+damage dealer's own damage the team makes it, against one reference boss, through lufel's
+damage formula (`docs/DATA-SOURCES.md`, the damage-formula section):
+
+- **ⓐⓑⓓ are `damageFactors(..., extra)`** — the damage dealer's own cards, Setup, conversions
+  and crit profile with the team's buffs added; an ATK buff reaches ⓐ only for an ATK kit (a DEF
+  or HP kit's hits ignore it). The team crit rate setting is zeroed for this: the supports who
+  supply that crit rate are counted one by one.
+- **ⓒ is lufel's defence formula**, 1 − E/(E+1400) with E = DEF × max(0, (1 + coefficient) ×
+  (1 − Pierce) − DEF down), on the article's own example boss (`TC_BOSS`: Lv82 guild-boss Vishnu,
+  DEF 820.7, +158.4%). A test reproduces the article's worked example. ⓕ assumes a weakness hit
+  (1.2) raised by weakness-damage buffs; ⓖ is final damage / damage amplification.
+- **What each member supplies is `TEAM_BUFFS` in `logic.js`**: kit lines turned into numbers,
+  one entry per effect (`k` the factor, four-tier `v` or a 7-step weapon `ladder`, `per` for a
+  value that grows with the supporter's own stat up to a cap, `to`, `on`/`dur` or a judged `up`,
+  `aw`/`weapon` gates, `elem`/`arch` limits, `why`), and `TEAM_BUFF_SKIPS`, what the kit does for
+  damage that cannot be priced (extra turns, gauge, weakness creation, Down, Resonance, skill
+  amplification, copying), shown under each member. Every Elucidator also adds 20% of her ATK
+  (as flat ATK), crit rate, crit multiplier, damage and Pierce from her worn cards (15% at 4★) —
+  computed, not entered. Entered in Oct 2026 for the whole roster (68; 25 in a first pass, the
+  rest in a second, damage dealers mostly with nothing for the team) from lufel's English skill,
+  Awareness and weapon text, by hand-checked batches against one written brief (scratch sheets
+  and brief are not kept); a kit not entered counts as adding nothing and the seat says so. One
+  buff two skills refresh is one entry with `on: ["1", "2"]` (`tcCover` counts its turns once);
+  two entries are kept apart only where the kit says they stack (J&C's Warden's Judgement). Each entry's `why` says where its number comes from; a judged `up` says how it was judged.
+  **"X% + r more per N of a stat, up to a maximum of Y%": Y caps the scaled part, and X comes
+  on top.** lufel's own stat targets prove it — Fuuka's ATK target 3502 is 40 ÷ 1.143 × 100 and
+  her crit-multiplier target 64 is 40 ÷ 0.625; Mio's 31.2% at 1% per 5.47% ailment accuracy lands
+  on 170.7%, the accuracy cap Koromaru's kit names outright, and every tier lands on its own cap.
+  Half the first batches read Y as the total, 20-25% low on Mayumi, Runa, Mio, Kumi, Yukari,
+  Manaka and Fuuka; that was corrected (Oct 2026) and the reading is not a choice to revisit.
+- **Uptime comes from the supporter's own lufel rotation** at their Awareness (`tcCover`: the
+  share of turns `dur` covers over the rotation repeated). A skill missing from the rotation (a
+  Highlight lufel does not write in) counts nothing, and the row says so — no Highlight cadence
+  is assumed. Linear: a buff up half the time counts at half strength.
+- **Wonder** is a member like any other, priced from the setup the user enters on the tab — his
+  Persona, three skill cards, weapon and refinement (`state.wonder`, saved as `settings.wonder`,
+  in the fingerprint and the undo snapshot; `wonderFrom` drops anything `WONDER_BUFFS` does not
+  know). `WONDER_BUFFS`/`WONDER_SKIPS` come from lufel's Persona files, skill cards
+  (`/data/kr/wonder/skills.js`) and Wonder weapons (`/data/kr/wonder/weapons.js`), the DEF-down
+  values cross-checked against lufel's defence calculator (`/data/kr/calc/defense-data.js`).
+  His stats are not tracked, so a value that grows with them is taken at its cap, and his skills
+  at their top rank. He acts once a turn: active skills share his six actions in six turns by how
+  often each needs recasting (`tcWonder`). His Highlight and own damage are not counted. A
+  Persona's innate skills that also exist as cards are priced as the card the user picks, never
+  both. `tcWonderBest` suggests the setup that would help this team most (weapon, then Persona,
+  then cards greedily), labelled "if you own it" — nothing here knows which Personas are owned.
+- **Fuuka's backup** brings its best single skill, for as many turns as her swaps (2 in six
+  turns, 4 at Awareness 6) times its duration; its passives are off while it waits.
+- A member's part on the page is the team's value with them over without them, so parts do not
+  multiply to the total. Replacements are priced as the whole team with them swapped in, and
+  lufel's recommended team is priced the same way for comparison in the header.
+- **Extra turns for the whole party** (Miku's Virtual Concert: 2 every 6 Wonder actions) are a factor of their own, `turns`: 2 more actions in a six-turn cycle is ×8/6. Buffs that only run during those turns count as uptime.
+- **Not priced, and the page says so**: other extra actions (Manaka's once-a-battle Da Capo, Ayaka's extra Highlight) and action order, Wonder's Highlight and own damage, Highlight/Theurgy gauge,
+  weakness creation, Down/Technical, Resonance, ailments, healing and survival, Wonder's Persona
+  and weapon, buffs copied from other buffs. The number ranks teams for one damage dealer; it is
+  not a damage forecast and is never compared across damage dealers.
 
 ### Lufel publishes an order, not magnitudes
 
@@ -1228,7 +1350,8 @@ full accounting. The load-bearing caveats:
    generator writes `CHAR_STATS` too; a Global number that differs from lufel's (which
    follows JP) goes in its `GLB_STAT_OVERRIDES` table with the in-game evidence — today only
    Makoto Niijima's Resistance Pierce Mindscape node, which had been a hand edit that the
-   next regeneration would have reverted.
+   next regeneration would have reverted, and Hatsune Miku's Awakening 7. Global Awareness
+   text goes in `tools/gen-awareness.js`'s `GLB_AWARENESS_OVERRIDES` the same way.
 2. **Main stat magnitudes are measured, not published.** No site lists them, lufel included;
    `MAIN_MAGNITUDE` comes from the user's own scan of 3947 5★ cards (every card of a stat
    shows the same value at the same level, linear in level). Other rarities have not been

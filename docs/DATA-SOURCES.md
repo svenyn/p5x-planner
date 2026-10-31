@@ -22,6 +22,13 @@ behind the pages is plain static JavaScript under `/data/`, and it fetches fine.
 | `/data/characters/<Korean name>/base_stats.js` | Base HP/ATK/DEF/Speed by level and ascension |
 | `/data/characters/<Korean name>/weapon.js` | Both weapons: flat HP/ATK/DEF plus the passive text, with its 7-step refinement ladder |
 | `/data/characters/<Korean name>/ritual.js` | The "Awareness" ladder — 7 named passives (levels 0-6). Lufel's own field name is `ritual`; the site's English UI calls it "Awareness". Unrelated to Ascension, Mindscape or the Awakening-7 bonus, despite the similar name |
+| `/data/characters/<Korean name>/party.js` | Recommended teams (3 thieves + Elucidator; Fuuka's carry a 5th, her Oracle Shift backup) and "friends": synergy partners, each with a one-line English reason and sometimes the Awareness it needs. Missing for a few characters, which lufel's own page treats as normal |
+| `/data/characters/<Korean name>/operation.js` | Skill rotations per Awareness level and situation ("with Miku", single target, 2-turn cycle), as a line or a turn grid, with English notes for 38 characters (the rest have none, in any language) |
+| `/data/persona/index.js`, `/data/persona/<Korean name>.js` | 155 Personas: unique skill, passives, innate skills, Highlight, each in English with rank values. Read once (Oct 2026) into `WONDER_BUFFS.personas` by hand-checked batches; not fetched by the tools |
+| `/data/kr/wonder/skills.js` | 459 skill cards (`personaSkillList`), English descriptions. Source of `WONDER_BUFFS.cards` |
+| `/data/kr/wonder/weapons.js` | Wonder's 18 weapons (`matchWeapons`), English effect text with 7 refinement steps. Source of `WONDER_BUFFS.weapons` |
+| `/data/kr/calc/defense-data.js` | lufel's own defence calculator: DEF-down (`defenseCalcData`) and Pierce (`penetrateData`) sources per character and for Wonder, as numbers. Used to cross-check the hand-entered DEF-down values (all seven Wonder ones match) |
+| `/data/kr/calc/boss.js` | 35 bosses with base DEF and DEF coefficient (e.g. 855 / +163.2%, Vishnu 821). The Teams tab's reference boss is the damage-calc article's Vishnu (820.7, +158.4%) |
 | `/apps/guides/data/posts/damage-calc.json` | The damage formula — which stats multiply and which merely add. Not fetched by the tools; read once and encoded in `damageFactors()` |
 
 Three tools wrap this:
@@ -31,7 +38,15 @@ node tools/fetch-lufel-data.js lufel.json    # download and flatten every file a
 node tools/audit-lufel.js lufel.json         # diff it against src/data.js, report only
 node tools/gen-data-from-lufel.js lufel.json # emit replacement SETS/SPACE_SETS/CHARACTERS
 node tools/gen-awareness.js lufel.json       # patch CHAR_STATS[*].awareness into src/data.js in place
+node tools/gen-teams.js lufel.json           # replace the TEAMS block (parties, partners, rotations) in place
 ```
+
+`gen-teams.js` writes everything in English: lufel's English labels and notes where they exist,
+its own small tables for the Korean rotation labels and skill tokens otherwise ("의식 N" is
+Awareness N, 감기 Fatigue, 총격 Gunshot, Miku's song marks), and it prints anything those
+tables do not cover rather than dropping it. lufel's long character reviews are not copied in;
+the Teams tab links to each character's page for them, and the one mechanic it explains itself
+(Fuuka's Oracle Shift, `TEAM_MECHANICS` in `logic.js`) is in our own words.
 
 `audit-lufel.js` is the one to run first when something looks wrong — it reports and never
 writes. Re-run it after any hand-edit to `src/data.js` to see what you have diverged on.
@@ -208,6 +223,18 @@ evidence beside each. Two today: Makoto Niijima's second Mindscape node, which r
 Resistance Pierce 7.5% on Global where lufel has Crit Rate 12% — the user's own panel, and a hand
 edit until the generator carried it — and Hatsune Miku's Awakening 7 (ATK +19%, above). Either
 field (`mind`, `aw`) can be overridden.
+
+Awareness text has its own table, `GLB_AWARENESS_OVERRIDES` in `tools/gen-awareness.js`. One
+entry today: Fuuka's Global 4.12 buff (the user's change list, 29 Oct 2026; lufel, Prydwen and
+the official 4.12 notes still showed the old kit that day). Awareness 1 adds party +15% crit
+damage beside the 6% crit rate, Awareness 2's damage amp after Oracle Shift is 10% (was 6%),
+and Awareness 6 makes that amp last 2 turns and stack twice. The texts are our wording over
+lufel's sentences, not the official Global text. The same buff raised her three skills —
+Radiant Power ATK 10% + 1.143% per 100 ATK up to 40% → 12% + 1.371% up to 48%, Holy Prayer
+6% + 0.686% up to 24% → 8% + 0.914% up to 32%, Spirit Wave crit damage 10% + 0.625% per 1% up to
+40% → 12% + 0.75% up to 48% — but every number in a line grew by the same factor, so lufel's
+targets (each cap over its rate: 3502 ATK, 64% crit damage at LV10) are unchanged and nothing
+was edited for them.
 
 **What the game's own screens showed about the stat model** (Miku, 26 Sep 2026): a 4-piece's
 unconditional line is part of the wearer's stats (her Labor +8% is on her character screen, so

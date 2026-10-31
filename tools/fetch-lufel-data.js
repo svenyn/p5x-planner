@@ -14,6 +14,9 @@
  *   /data/characters/<KR name>/ritual.js   per-character Awareness ladder (lufel's own
  *                                         field name is "ritual"; the site's English UI
  *                                         calls it "Awareness" — 7 levels, r0..r6)
+ *   /data/characters/<KR name>/party.js    recommended teams and synergy partners ("friends",
+ *                                         each with a one-line reason); missing for a few
+ *   /data/characters/<KR name>/operation.js  skill rotations per Awareness level, with notes
  *   /apps/schedule/data.js               GLB/JP release timeline, version by version
  *
  * The schedule is the only place lufel states the order characters actually shipped
@@ -105,9 +108,12 @@ async function main() {
   dump.weapons = {};
   dump.rituals = {};
   dump.skills = {};
+  dump.parties = {};
+  dump.operations = {};
   const failed = [];
   const kinds = [['setting', dump.settings], ['base_stats', dump.base_stats], ['weapon', dump.weapons],
-                 ['ritual', dump.rituals], ['skill', dump.skills]];
+                 ['ritual', dump.rituals], ['skill', dump.skills], ['party', dump.parties],
+                 ['operation', dump.operations]];
   for (const name of names) {
     const enc = encodeURIComponent(name);
     for (const [kind, bag] of kinds) {
@@ -115,12 +121,15 @@ async function main() {
         const got = evalScript(await get(`/data/characters/${enc}/${kind}.js${V}`), `${name}/${kind}`);
         if (got) bag[name] = got;
       } catch (e) {
+        // lufel's own page treats a missing party.js as normal ("없는 캐릭터가 많으므로")
+        if (kind === 'party' && /^404 /.test(e.message)) continue;
         failed.push(`${name}/${kind}: ${e.message}`);
       }
     }
   }
   console.error(`\nsettings: ${Object.keys(dump.settings).length}, base_stats: ${Object.keys(dump.base_stats).length},` +
-    ` weapons: ${Object.keys(dump.weapons).length}, rituals: ${Object.keys(dump.rituals).length}, skills: ${Object.keys(dump.skills).length}`);
+    ` weapons: ${Object.keys(dump.weapons).length}, rituals: ${Object.keys(dump.rituals).length}, skills: ${Object.keys(dump.skills).length},` +
+    ` parties: ${Object.keys(dump.parties).length}, operations: ${Object.keys(dump.operations).length}`);
   if (failed.length) console.error(`missing (${failed.length}): ${failed.join(', ')}`);
 
   fs.writeFileSync(outfile, JSON.stringify(dump, null, 1), 'utf8');

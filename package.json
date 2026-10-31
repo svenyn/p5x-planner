@@ -10,7 +10,8 @@
     "triage-perf": "npm run build && node test/triage-perf.js",
     "shots": "npm run build && node test/screenshots.js",
     "export-tables": "npm run build && node tools/export-tables.js",
-    "open": "npm run build && echo \"open dist/p5x-planner.html in a browser\""
+    "open": "npm run build && echo \"open dist/p5x-planner.html in a browser\"",
+    "site": "node tools/build-site.js"
   },
   "devDependencies": {
     "playwright": "^1.40.0"

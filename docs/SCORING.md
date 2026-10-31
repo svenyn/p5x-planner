@@ -302,7 +302,8 @@ these need their own term.
   "met without cards" tag but left out of the block, which is then split over the targets
   gear can move — or dropped, when none is left. Fuuka's Crit Multiplier target is the
   standing case: lufel's 64-78% is where her party crit-damage buff caps (its cap over
-  0.625% per 1% of her crit damage), and kit text means the total there, so her 150% base
+  0.625% per 1% of her crit damage; Global's 4.12 buff to 48% over 0.75% gives the same
+  64), and kit text means the total there, so her 150% base
   clears it; it used to be half her block, free. Mitsuru's LV10 ATK target is the other.
 - Missing main-stat magnitudes are **unknown, never zero**: when a card that could
   contribute has no `mainValue`, `mainsMissing` trips and the target falls back to the

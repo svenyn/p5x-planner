@@ -52,6 +52,19 @@ function parseRitualBonus(desc) {
   return { s: STAT_EN[m[1].toLowerCase()], v: parseFloat(m[2]), pct: m[3] === '%' || /%/.test(m[2]) };
 }
 
+/* Global Awareness text that differs from lufel's, which follows JP. The whole level's text
+   is replaced, so a refresh keeps it; applying one prints to stderr, and once lufel's English
+   table carries the same change the entry should go. The wording is ours, written from the
+   change list over lufel's own sentences, not the official Global text. */
+const GLB_AWARENESS_OVERRIDES = {
+  'Fuuka Yamagishi': {
+    1: 'At the start of battle, Fuuka gains 2 bonus [Wish Listener] stacks. Increase max stacks of [Wish Listener] to 8.\nAfter using a skill, increase party\'s critical rate by 6% and critical damage by 15% for 2 turns. Stacks up to 2 times.',
+    2: 'After using [Oracle Shift], the [Backup Character] immediately use their Theurgy or HIGHLIGHT once. This effect has a 3 [Combat Turns] cooldown.\nAfter using [Oracle Shift], increase party\'s total damage amp by 10% for 1 turn.\nWhen any ally is below 40% max HP, immediately restore HP equal to 20% of that ally\'s max HP, and restore HP equal to 15% of  that ally\'s max HP for 2 turns. This effect can be activated once per battle.',
+    6: 'Decrease [Wish Listener] cost of [Oracle Shift] to 3 stacks.\nWhen using [Holy Prayer], gain 2 bonus [Wish Listener] stacks.\nThe party damage amp from Strengths and Weaknesses lasts 2 turns and stacks up to 2 times.',
+    why: 'Global 4.12 buff (the user, 29 Oct 2026): Awareness 1 adds party +15% crit damage, Awareness 2\'s damage amp is 10% (was 6%), Awareness 6 makes it last 2 turns and stack twice'
+  }
+};
+
 function loadOurs() {
   const src = fs.readFileSync(DATA_FILE, 'utf8');
   const ctx = vm.createContext({});
@@ -174,10 +187,16 @@ function main() {
     const mod = kr && d.rituals[kr];
     const en = mod && mod.enCharacterRitualData && mod.enCharacterRitualData[kr];
     if (!en) return null;
+    const glb = GLB_AWARENESS_OVERRIDES[enName] || {};
     const nodes = [];
     for (let lvl = 0; lvl <= 6; lvl++) {
       const name = en[`r${lvl}`];
-      const detail = en[`r${lvl}_detail`];
+      let detail = en[`r${lvl}_detail`];
+      if (glb[lvl] != null) {
+        console.error(`${enName}: Awareness ${lvl} from GLB_AWARENESS_OVERRIDES — ${glb.why}` +
+          (glb[lvl] === detail ? ' (lufel now has the same text: remove the entry)' : ''));
+        detail = glb[lvl];
+      }
       if (!name && !detail) continue;
       statLevels++;
       const bonus = parseRitualBonus(detail);

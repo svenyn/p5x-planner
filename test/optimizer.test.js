@@ -17,18 +17,22 @@ const PAGE = 'file://' + path.join(__dirname, '..', 'dist', 'p5x-planner.html');
    regeneration would silently revert) or edited the table without regenerating. Neither
    is visible from inside the page, so it is checked out here, where both files are
    readable. See "Lufel publishes an order, not magnitudes" in CLAUDE.md. */
+const readRepo = f => fs.readFileSync(path.join(__dirname, '..', f), 'utf8');
+/* A generator's `const NAME = {...}` table as source text (braces inside its strings would
+   miscount; none of the tables read here has any). */
+const grabTable = (src, name) => {
+  const at = src.indexOf(`const ${name} = {`);
+  if (at < 0) return null;
+  let i = src.indexOf('{', at), depth = 0, j = i;
+  for (; j < src.length; j++) {
+    if (src[j] === '{') depth++;
+    else if (src[j] === '}' && --depth === 0) { j++; break; }
+  }
+  return src.slice(i, j);
+};
+
 function weightOverrideDrift() {
-  const read = f => fs.readFileSync(path.join(__dirname, '..', f), 'utf8');
-  const grab = (src, name) => {
-    const at = src.indexOf(`const ${name} = {`);
-    if (at < 0) return null;
-    let i = src.indexOf('{', at), depth = 0, j = i;
-    for (; j < src.length; j++) {
-      if (src[j] === '{') depth++;
-      else if (src[j] === '}' && --depth === 0) { j++; break; }
-    }
-    return src.slice(i, j);
-  };
+  const read = readRepo, grab = grabTable;
   const table = grab(read('tools/gen-data-from-lufel.js'), 'WEIGHT_OVERRIDES');
   if (!table) return ['tools/gen-data-from-lufel.js no longer defines WEIGHT_OVERRIDES'];
   const overrides = vm.runInContext('(' + table + ')', vm.createContext({}));
@@ -47,6 +51,29 @@ function weightOverrideDrift() {
   return out;
 }
 
+/* GLB_AWARENESS_OVERRIDES in tools/gen-awareness.js holds Global Awareness text that differs
+   from lufel's (Fuuka's 4.12 buff). Same reasoning as above: src/data.js is written from it,
+   so a hand edit or an un-rerun generator shows up here. */
+function awarenessOverrideDrift() {
+  const table = grabTable(readRepo('tools/gen-awareness.js'), 'GLB_AWARENESS_OVERRIDES');
+  if (!table) return ['tools/gen-awareness.js no longer defines GLB_AWARENESS_OVERRIDES'];
+  const overrides = vm.runInContext('(' + table + ')', vm.createContext({}));
+  const dataCtx = vm.createContext({});
+  vm.runInContext(readRepo('src/data.js').replace(/^(\s*)(?:const|let)\s+/gm, '$1var '), dataCtx);
+  const out = [];
+  for (const [name, spec] of Object.entries(overrides)) {
+    const cs = dataCtx.CHAR_STATS[name];
+    if (!cs) { out.push(`GLB_AWARENESS_OVERRIDES names "${name}", who is not in CHAR_STATS`); continue; }
+    if (!spec.why) out.push(`GLB_AWARENESS_OVERRIDES["${name}"] has no \`why\``);
+    for (const [lvl, text] of Object.entries(spec)) {
+      if (lvl === 'why') continue;
+      const node = (cs.awareness || [])[+lvl];
+      if (!node || node.d !== text) out.push(`${name}: Awareness ${lvl} in src/data.js is not the override's text — re-run tools/gen-awareness.js`);
+    }
+  }
+  return out;
+}
+
 (async () => {
   const b = await chromium.launch();
   const p = await b.newPage();
@@ -60,6 +87,9 @@ function weightOverrideDrift() {
     // feature working, not a fault — but only ignore that exact case.
     const loc = (m.location() && m.location().url) || '';
     if (/\/art\/[^/]+\.webp$/.test(loc)) return;
+    // The GitHub sync checks answer 404 (no save yet) and 409 (a newer save) on purpose; the
+    // browser logs each as a failed resource.
+    if (/^https:\/\/api\.github\.com\//.test(loc)) return;
     errs.push('CONSOLE: ' + m.text());
   });
   await p.goto(PAGE);
@@ -2381,6 +2411,36 @@ function weightOverrideDrift() {
   });
   check('Optimise\'s alternatives are ordered by "vs pick", and in a 4-piece plan the pick heads every Heavens slot', altUi.length === 0, altUi.join('; '));
 
+  /* Each alternatives row can open its card in the editor ready for a level-up (the user, Oct
+     2026: level a card in the game, enter it from where it was suggested). Saving re-runs the
+     recommendation on the new values. */
+  const altEdit = await p.evaluate(() => {
+    const bad = [];
+    const was = $('#optChar').value;
+    const ch = ownedChars()[0];
+    renderOpt(ch.n); $('#optChar').value = ch.n; runOpt();
+    const panel = [...document.querySelectorAll('#optOut > .panel')].find(pn => /Best alternatives per slot/.test(pn.textContent));
+    const rows = panel ? [...panel.querySelectorAll('tbody tr')] : [];
+    if (!rows.length) bad.push('no rows');
+    if (rows.some(tr => !tr.querySelector('[data-edit-lvl]'))) bad.push('a row has no edit button');
+    const btn = rows.map(tr => tr.querySelector('[data-edit-lvl]')).find(b => b && state.cards.find(c => c.id === b.dataset.editLvl).level < 25);
+    if (btn) {
+      const card = state.cards.find(c => c.id === btn.dataset.editLvl), lvl = card.level;
+      const before = JSON.parse(JSON.stringify(card));
+      btn.click();
+      if (!document.getElementById('dlg').open || document.activeElement !== $('#eLvl')) bad.push('editor did not open on the level');
+      if (+$('#eLvl').value !== lvl) bad.push('editor shows another card');
+      $('#eLvl').value = lvl + 1;   // a same-card edit; substats stay valid at any level
+      $('#eSave').click();
+      if (card.level !== lvl + 1) bad.push('level not saved: ' + $('#eErr').textContent);
+      if (document.getElementById('dlg').open) document.getElementById('dlg').close();
+      Object.keys(card).forEach(k => delete card[k]); Object.assign(card, before); commit();
+    }
+    renderOpt(); $('#optChar').value = was;
+    return bad;
+  });
+  check('Every row of Optimise\'s alternatives opens its card in the editor on the level field, and saving it sticks', altEdit.length === 0, altEdit.join('; '));
+
   /* Every place that proposes a single swap chooses it on the build score, not on the card's own
      score (they disagree where the stat targets or the damage balance have a say): the card
      picker's default order, Weakest slots' "Available now", and each Optimise card's own gain. */
@@ -2495,11 +2555,260 @@ function weightOverrideDrift() {
   await p.click('nav button[data-tab="data"]');
   await p.click('#tab-data [data-goto="howto"] >> nth=0'); await p.waitForTimeout(100);
   check('the in-prose link opens the scanning guide tab', await p.evaluate(() => !document.getElementById('tab-howto').classList.contains('hide') && document.getElementById('tab-data').classList.contains('hide')));
+  // GitHub sync, against a fake of the contents API: one file, versioned by sha, refusing a write
+  // that names the wrong version — the rule the conflict question rests on.
+  const gh = { private: true, file: null, puts: [], n: 0 };
+  await p.route('https://api.github.com/**', async route => {
+    const req = route.request(), u = new URL(req.url()), m = req.method();
+    const json = (status, body) => route.fulfill({ status, contentType: 'application/json',
+      headers: { 'access-control-allow-origin': '*' }, body: JSON.stringify(body) });
+    if (req.headers().authorization !== 'Bearer test-token') return json(401, { message: 'Bad credentials' });
+    if (u.pathname === '/repos/me/save') return json(200, { private: gh.private });
+    if (u.pathname === '/repos/me/save/commits') return json(200, [{ commit: { message: 'Save from phone: 3 cards', committer: { date: '2026-10-23T10:00:00Z' } } }]);
+    if (u.pathname !== '/repos/me/save/contents/p5x-planner-save.json') return json(404, { message: 'Not Found' });
+    if (m === 'GET') return gh.file ? json(200, { type: 'file', sha: gh.file.sha, encoding: 'base64', content: Buffer.from(gh.file.text).toString('base64') }) : json(404, { message: 'Not Found' });
+    const body = JSON.parse(req.postData());
+    if (gh.file && !body.sha) return json(422, { message: 'Invalid request.\n\n"sha" wasn\'t supplied.' });
+    if (gh.file && body.sha !== gh.file.sha) return json(409, { message: 'does not match' });
+    gh.file = { sha: 'v' + (++gh.n), text: Buffer.from(body.content, 'base64').toString('utf8') };
+    gh.puts.push(body.message);
+    return json(gh.n === 1 ? 201 : 200, { content: { sha: gh.file.sha } });
+  });
+  const syncWait = () => p.waitForFunction(() => !document.getElementById('hdrSave').disabled, null, { timeout: 5000 }).catch(() => {});
+  await p.click('nav button[data-tab="data"]');
+  const syncBefore = await p.evaluate(() => ({ cards: state.cards.length, text: JSON.stringify(savePayload()) }));
+  await p.fill('#syncRepo', 'https://github.com/me/save'); await p.fill('#syncToken', 'test-token');
+  await p.uncheck('#syncRemember');
+  gh.private = false;
+  await p.click('#syncConnect'); await syncWait();
+  const pub = await p.evaluate(() => ({ on: syncOn(), msg: document.getElementById('syncMsg').textContent }));
+  check('GitHub sync refuses a public repository', !pub.on && /public/.test(pub.msg), JSON.stringify(pub));
+  gh.private = true;
+  await p.click('#syncConnect'); await syncWait();
+  const conn = await p.evaluate(() => ({ on: syncOn(), repo: sync.repo, n: state.cards.length, msg: document.getElementById('syncMsg').textContent }));
+  check('GitHub sync connects to a private repository (pasting its address is fine) and keeps the inventory', conn.on && conn.repo === 'me/save' && conn.n === syncBefore.cards && /Connected/.test(conn.msg), JSON.stringify(conn));
+  await p.evaluate(() => { state.teamCrit = 3; commit(); });
+  await p.click('#hdrSave'); await syncWait();
+  const first = await p.evaluate(() => ({ dirty: isDirty(), sha: syncSha }));
+  const firstFile = gh.file && JSON.parse(gh.file.text);
+  check('the header Save writes the save to GitHub and clears "unsaved changes"',
+    firstFile && firstFile.cards.length === syncBefore.cards && firstFile.settings.teamCritRate === 3 && !first.dirty && first.sha === 'v1' && /^Save from computer: \d+ cards$/.test(gh.puts[0]),
+    JSON.stringify({ first, puts: gh.puts }));
+  // another device saves; this one, not having loaded that, is asked before replacing it
+  gh.file = { sha: 'other', text: JSON.stringify(Object.assign(JSON.parse(syncBefore.text), { cards: [] })) };
+  await p.evaluate(() => { state.teamCrit = 4; commit(); });
+  await p.click('#hdrSave'); await syncWait();
+  const asked = await p.evaluate(() => ({ toast: document.getElementById('toastMsg').textContent, btn: document.getElementById('toastUndo').textContent, dirty: isDirty() }));
+  check('a save over a newer one from another device is asked first, naming it, and nothing is replaced',
+    /changed somewhere else/.test(asked.toast) && /phone/.test(asked.toast) && asked.btn === 'Save over it' && asked.dirty && gh.file.sha === 'other', JSON.stringify(asked));
+  await p.click('#toastUndo'); await syncWait();
+  check('"Save over it" replaces it', gh.file.sha !== 'other' && JSON.parse(gh.file.text).settings.teamCritRate === 4 && !(await p.evaluate(() => isDirty())));
+  // a later load fetches what is there
+  gh.file = { sha: 'v9', text: syncBefore.text };
+  await p.click('#hdrLoad'); await syncWait();
+  const pulled = await p.evaluate(() => ({ n: state.cards.length, tc: state.teamCrit, sha: syncSha, dirty: isDirty() }));
+  check('the header Load replaces everything with the save on GitHub', pulled.n === syncBefore.cards && pulled.sha === 'v9' && !pulled.dirty, JSON.stringify(pulled));
+  check('the save survives the trip as UTF-8 through base64', await p.evaluate(() => b64ToUtf8(utf8ToB64('Kumi ★ — Ailment Acc. 5.7%')) === 'Kumi ★ — Ailment Acc. 5.7%'));
+  await p.click('#syncDisconnect');
+  check('Disconnect hands the header back to files', await p.evaluate(() => !syncOn() && /Download/.test(document.getElementById('hdrSave').title)));
+  await p.unroute('https://api.github.com/**');
+
+  // ---- Teams tab: lufel's parties filled from what is owned, rotations, Fuuka's backup ----
+  const tmData = await p.evaluate(() => {
+    const bad = [];
+    const known = n => n === 'Wonder' || !!charDef(n);
+    const hangul = /[ㄱ-힝]/;
+    for (const [owner, T] of Object.entries(TEAMS)) {
+      if (!charDef(owner)) bad.push('owner ' + owner);
+      for (const pt of T.parties || []) {
+        if (!pt.f.includes(owner) && pt.e !== owner && pt.b !== owner) bad.push(owner + ': a party without its own character');
+        pt.f.forEach(n => { if (n && !known(n)) bad.push(owner + ': ' + n); });
+        if (pt.e && charDef(pt.e).arch !== 'Navigator') bad.push(owner + ': Elucidator seat holds ' + pt.e);
+        if (pt.f.some(n => n && charDef(n) && charDef(n).arch === 'Navigator')) bad.push(owner + ': an Elucidator in a thief seat');
+        if (pt.b && pt.e !== 'Fuuka Yamagishi') bad.push(owner + ': a backup without Fuuka');
+      }
+      (T.partners || []).forEach(x => { if (!known(x.n)) bad.push(owner + ' partner ' + x.n); if (hangul.test(x.why || '')) bad.push(owner + ' partner text'); });
+      (T.rot || []).forEach(r => { if (!r.seq.length || hangul.test(r.label + r.seq.join(''))) bad.push(owner + ' rotation ' + r.label); });
+      (T.notes || []).forEach(x => { if (hangul.test(x)) bad.push(owner + ' note'); });
+    }
+    return { bad, n: Object.keys(TEAMS).length, fuukaBackups: (TEAMS['Fuuka Yamagishi'].partners || []).length };
+  });
+  check('TEAMS (tools/gen-teams.js) names only roster characters, seats Elucidators only as Elucidators, a backup only beside Fuuka, all in English',
+    tmData.bad.length === 0 && tmData.n > 60 && tmData.fuukaBackups > 3, JSON.stringify(tmData).slice(0, 600));
+
+  const tmKeep = await p.evaluate(() => ({ chars: JSON.stringify(state.chars), busy: [...tmBusy], pick: JSON.stringify(tmPick) }));
+  await p.evaluate(() => {
+    CHARACTERS.forEach(c => { state.chars[c.n] = { owned: false, benched: false, targets: null, loadout: null }; });
+    ['Yusuke Kitagawa', 'Justine & Caroline', 'Miyu Sahara [Wavecatcher]', 'Fuuka Yamagishi', 'Minami Miyashita [Beachflower]']
+      .forEach(n => { state.chars[n].owned = true; });
+    tmBusy = new Set(); tmPick = {};
+    $('#tmBasis').value = 'lufel';   // these checks are about lufel's lists; the calculated basis has its own below
+    commit(); showTab('teams');
+  });
+  await p.selectOption('#tmChar', 'Yusuke Kitagawa');
+  const tm1 = await p.evaluate(() => {
+    const t = tmTeams('Yusuke Kitagawa').team;
+    return { seats: t.seats.map(s => [s.role, s.name, s.orig]), text: $('#tmOut').innerText };
+  });
+  const seat = (t, role) => (t.seats.find(s => s[0] === role) || [])[1];
+  check('Teams keeps lufel\'s own party where it is owned: Fuuka as Elucidator, and her backup seat stays empty when no backup lufel names is available',
+    seat(tm1, 'Elucidator') === 'Fuuka Yamagishi' && tm1.seats.some(s => s[0] === 'Backup (Oracle Shift)' && s[1] == null && s[2] === 'Koromaru') &&
+    /Oracle Shift/.test(tm1.text) && /none of the characters lufel recommends as Fuuka's backup/i.test(tm1.text), JSON.stringify(tm1.seats));
+
+  await p.evaluate(() => { state.chars['Mio Natsukawa'].owned = true; commit(); });
+  const tm2 = await p.evaluate(() => {
+    const t = tmTeams('Yusuke Kitagawa').team;
+    const b = t.seats.find(s => s.seat === 'b');
+    return { name: b && b.name, why: b && b.pickWhy, text: $('#tmOut').innerText };
+  });
+  check('an unowned backup is replaced by one lufel recommends for Fuuka, with lufel\'s reason, and the page redraws on the ownership change',
+    tm2.name === 'Mio Natsukawa' && (tm2.why || []).some(w => /Fuuka's backup/.test(w)) && /replaces Koromaru/.test(tm2.text), JSON.stringify(tm2));
+
+  // "Busy elsewhere", clicked in the table: the thief is replaced and listed as busy
+  await p.click('#tmOut [data-tm-busy="Justine & Caroline"]');
+  const tm3 = await p.evaluate(() => ({ seats: tmTeams('Yusuke Kitagawa').team.seats.map(s => s.name), busy: $('#tmBusy').innerText, text: $('#tmOut').innerText }));
+  check('"Busy elsewhere" rebuilds the team without them and says whom they replace',
+    !tm3.seats.includes('Justine & Caroline') && /Justine & Caroline/.test(tm3.busy) && /replaces Justine & Caroline/.test(tm3.text), JSON.stringify(tm3.seats));
+  const tmPrefs = await p.evaluate(() => { const pr = collectPrefs(); tmBusy = new Set(); applyPrefs(pr); return [...tmBusy]; });
+  check('the busy list is kept in the prefs', tmPrefs.length === 1 && tmPrefs[0] === 'Justine & Caroline', JSON.stringify(tmPrefs));
+  await p.click('#tmBusy [data-tm-unbusy="*"]');
+
+  // Wonder's Speed: the user's entry, an account setting saved beside the team crit rate
+  const wsBefore = await p.evaluate(() => ({ spd: tmSpeed('Wonder'), order: $('#tmOut .tmOrder').innerText }));
+  await p.evaluate(() => markSaved());
+  await p.fill('#tmWonderSpd', '250');
+  await p.dispatchEvent('#tmWonderSpd', 'change');
+  const ws = await p.evaluate(() => ({
+    first: $('#tmOut .tmOrder .tmStep').innerText, dirty: isDirty(), saved: savePayload().settings.wonderSpeed,
+    restored: (() => { const t = JSON.stringify(savePayload()); state.wonderSpd = 0; applySave(t, ''); return wonderSpeed(); })()
+  }));
+  await p.evaluate(() => { hideToast(); showTab('teams'); $('#tmChar').value = 'Yusuke Kitagawa'; renderTeams(); });
+  check('Wonder\'s Speed is unset until entered; entered, it places him in the turn order, counts as unsaved, and goes through the save file',
+    wsBefore.spd === null && /Wonder Speed not set/.test(wsBefore.order) && /^Wonder 250/.test(ws.first) && ws.dirty && ws.saved === 250 && ws.restored === 250,
+    JSON.stringify({ wsBefore, ws }));
+  await p.evaluate(() => { state.wonderSpd = 0; commit(); });
+
+  // a replacement chosen from the table's list sticks, and the reset brings back the recommended team
+  const altName = await p.evaluate(() => { const b = $('#tmOut [data-tm-use]'); return b && b.dataset.name; });
+  if (altName) {
+    // its seat's Replacements are folded: open that list, as a click on its summary would
+    await p.evaluate(() => { $('#tmOut [data-tm-use]').closest('details').open = true; });
+    // a DOM click: after a load Playwright's own scroll parks the button under the sticky header
+    await p.dispatchEvent('#tmOut [data-tm-use]', 'click');
+  }
+  const tm4 = await p.evaluate(() => ({ text: $('#tmOut').innerText, seats: tmTeams('Yusuke Kitagawa').team.seats.map(s => s.name) }));
+  check('"Use" seats the chosen replacement, marked as your choice', !!altName && tm4.seats.includes(altName) && /your choice/.test(tm4.text), altName + ' ' + JSON.stringify(tm4.seats));
+  await p.dispatchEvent('#tmOut [data-tm-reset]', 'click');
+  check('"Back to the recommended team" undoes it', await p.evaluate(n => !tmTeams('Yusuke Kitagawa').team.seats.some(s => s.chosen) && !$('#tmOut [data-tm-reset]'), altName));
+
+  // rotations: the Setup's Awareness picks lufel's level; a rotation written for a teammate needs that teammate
+  const tmRot = await p.evaluate(() => {
+    const k = 'Kotone Shiomi';
+    state.chars[k].loadout = Object.assign({}, DEFAULT_LOADOUT, { awareness: 3 });
+    const without = tmRotPick(k, new Set([k]));
+    const withMiku = tmRotPick(k, new Set([k, 'Hatsune Miku']));
+    state.chars[k].loadout = null;
+    const low = tmRotPick('Ann Takamaki [Starlight]', new Set());
+    return {
+      lvl: without.lvl, noMiku: without.pick.every(r => !/Miku/.test(r.label)) && without.pick.length > 0,
+      mikuOnly: withMiku.pick.length > 0 && withMiku.pick.every(r => /Miku/.test(r.label) && r.aw === 2),
+      lowLvl: low && low.lvl, lowBelow: low && low.below
+    };
+  });
+  check('a rotation is lufel\'s at the highest Awareness the Setup reaches, and one written for Miku is chosen only with Miku in the team',
+    tmRot.lvl === 2 && tmRot.noMiku && tmRot.mikuOnly && tmRot.lowLvl === 0 && tmRot.lowBelow === false, JSON.stringify(tmRot));
+  check('the tokens of a rotation are spelled out on hover', await p.evaluate(() =>
+    tmTokenText('HL+3') === 'Highlight, then Skill 3' && tmTokenText('1↺+2') === 'Skill 1 (automatic), then Skill 2' && /not ready/.test(tmTokenText('-'))));
+
+  // ---- the calculated basis: team damage from the kits (TEAM_BUFFS) ----
+  const tc = await p.evaluate(() => {
+    const set = n => new Set(tcTurnSkills(n));
+    const eq = (a, b) => a.size === b.length && b.every(x => a.has(x));
+    // lufel's worked example (damage-calc): DEF 400, +158.3%, 10% Pierce, 80% DEF down; without Windswept's 0.88
+    const keep = Object.assign({}, TC_BOSS);
+    Object.assign(TC_BOSS, { def: 400, coef: 1.583 });
+    const def = tcDefence(10, 80);
+    Object.assign(TC_BOSS, keep);
+    const ann = charDef('Ann Takamaki'), yus = charDef('Yusuke Kitagawa');
+    const atk = { atkPct: 30 };
+    const bad = [];
+    for (const [n, list] of Object.entries(TEAM_BUFFS)) {
+      if (!charDef(n)) bad.push('unknown ' + n);
+      list.forEach(e => { if (!TC_FROM_K[e.k] || !['party', 'ally', 'enemy'].includes(e.to) || !e.why) bad.push(n + ' ' + e.k); });
+    }
+    return {
+      turns: eq(set('2×4+1'), ['2', '1']) && eq(set('1111'), ['1']) && eq(set('HL(2)+3'), ['HL', '3']) && eq(set('W+3+TH↺'), ['3', 'TH']) && eq(set('-'), []),
+      cover: [tcCover(['1', '3', '1', '3'], '3', 2), tcCover(['1', '2', '3', '1', '2', '3'], '3', 1), tcCover(['1', '2', '3', '1', '2', '3'], '3', 3), tcCover(['1', '2'], '3', 2)],
+      def,
+      empty: tcMultiplier(ann, []),
+      annAtk: tcMultiplier(ann, [atk]), yusAtk: tcMultiplier(yus, [atk]), yusDmg: tcMultiplier(yus, [{ dm: 20 }]),
+      defdown: tcMultiplier(ann, [{ defdown: 40 }]) > tcMultiplier(ann, [{ defdown: 20 }]),
+      turns: tcMultiplier(ann, [{ turns: 2 }]),
+      n: Object.keys(TEAM_BUFFS).length, bad
+    };
+  });
+  check('the team calculator reads rotations, uptimes and lufel\'s defence formula as written, and a team adds nothing it does not supply',
+    tc.turns && tc.cover[0] === 1 && Math.abs(tc.cover[1] - 1 / 3) < 1e-9 && tc.cover[2] === 1 && tc.cover[3] === null &&
+    Math.abs(tc.def - 0.6966) < 0.001 && Math.abs(tc.empty - 1) < 1e-9 && tc.annAtk > 1.05 && Math.abs(tc.yusAtk - 1) < 1e-9 && tc.yusDmg > 1.1 && tc.defdown && Math.abs(tc.turns - 8 / 6) < 1e-9,
+    JSON.stringify(tc));
+  check('TEAM_BUFFS names roster characters and only priceable effects, each with its reason', tc.n >= 20 && tc.bad.length === 0, JSON.stringify(tc.bad));
+
+  // Wonder: one action a turn shared among his active skills; his setup is saved with the account
+  const tw = await p.evaluate(() => {
+    const ann = charDef('Ann Takamaki');
+    const keep = state.wonder;
+    const fake = { personas: {}, cards: {}, weapons: {} };
+    const real = WONDER_BUFFS;
+    const out = {};
+    // three 2-turn cards ask for 9 actions in 6: each is up two-thirds of the time
+    const card = (k, v) => [{ k, v, to: 'party', src: 'card', dur: 2, why: 't' }];
+    Object.assign(WONDER_BUFFS, { cards: { A: card('atk%', 30), B: card('dmg', 30), C: card('cr', 30) }, personas: { P: [{ k: 'dmg', v: [10, 20, 30], to: 'party', src: 'passive', why: 'p' }] }, weapons: { W: [{ k: 'defdown', ladder: [1, 2, 3, 4, 5, 6, 7], to: 'enemy', src: 'weapon', why: 'w' }] } });
+    const r = tcWonder(ann, { persona: 'P', cards: ['A', 'B', 'C'], weapon: 'W', refine: 3 });
+    out.ups = r.lines.map(l => [l.k, +l.up.toFixed(4), l.v]);
+    out.busy = r.busy;
+    out.none = tcWonder(ann, { persona: '', cards: ['', '', ''], weapon: '', refine: 1 }).lines.length;
+    Object.assign(WONDER_BUFFS, real);
+    state.wonder = { persona: 'nope', cards: ['x'], weapon: 'y', refine: 99 };
+    out.clean = JSON.stringify(wonderSetup());
+    // a real setup goes through the save file and back
+    const pn = Object.keys(WONDER_BUFFS.personas)[0], cn = Object.keys(WONDER_BUFFS.cards)[0], wn = Object.keys(WONDER_BUFFS.weapons)[0];
+    state.wonder = { persona: pn, cards: [cn, '', ''], weapon: wn, refine: 4 };
+    const saved = JSON.stringify(savePayload());
+    state.wonder = {};
+    applySave(saved, '');
+    out.trip = JSON.stringify(wonderSetup()) === JSON.stringify({ persona: pn, cards: [cn, '', ''], weapon: wn, refine: 4 }) && !!pn && !!cn && !!wn;
+    hideToast();
+    state.wonder = keep;
+    return out;
+  });
+  const up = (k) => (tw.ups.find(x => x[0] === k) || [])[1];
+  check('Wonder\'s active skills share his one action a turn, his passives and weapon are always on at their top rank and refinement, and an unknown setup is dropped',
+    tw.busy && Math.abs(up('atkPct') - 2 / 3) < 1e-4 && up('dm') !== undefined && tw.ups.some(x => x[0] === 'dm' && x[2] === 30 && x[1] === 1) &&
+    tw.ups.some(x => x[0] === 'defdown' && x[2] === 3 && x[1] === 1) && tw.none === 0 &&
+    tw.clean === JSON.stringify({ persona: '', cards: ['', '', ''], weapon: '', refine: 7 }) && tw.trip, JSON.stringify(tw));
+
+  await p.evaluate(() => { tmPick = {}; $('#tmBasis').value = 'calc'; $('#tmChar').value = 'Yusuke Kitagawa'; renderTeams(); });
+  const tcPage = await p.evaluate(() => {
+    const r = tcTeams('Yusuke Kitagawa'), s = r.team.seats;
+    const avail = s.filter(x => x.name).every(x => !tmWhyOut(x.name));
+    const roles = s.map(x => x.seat).join('');
+    const fuukaOk = (s[3].name === 'Fuuka Yamagishi') === s.some(x => x.seat === 'b');
+    const sorted = r.list.every((t, i) => !i || t.calc.mult <= r.list[i - 1].calc.mult + 1e-9);
+    return { avail, roles, fuukaOk, sorted, best: r.team.calc.mult, top: r.list[0].calc.mult, text: $('#tmOut').innerText.slice(0, 400), lufel: r.team.calc.lufel };
+  });
+  check('the calculated basis seats the best-valued team of available characters, a backup only beside Fuuka, and prices lufel\'s team for comparison',
+    tcPage.avail && /^fffe(b)?w$/.test(tcPage.roles) && tcPage.fuukaOk && tcPage.sorted && Math.abs(tcPage.best - tcPage.top) < 1e-9 &&
+    /Calculated from the kits/.test(tcPage.text) && !!tcPage.lufel, JSON.stringify(tcPage).slice(0, 700));
+
+  await p.evaluate(k => { state.chars = JSON.parse(k.chars); tmBusy = new Set(k.busy); tmPick = JSON.parse(k.pick); commit(); showTab('roster'); }, tmKeep);
+
   check('no browser storage is touched (Cowork artifact constraint)', await p.evaluate(() => { try { return localStorage.length === 0 && sessionStorage.length === 0; } catch (e) { return true; } }));
 
   // Outside the page: the generator's hand-tuned table must match src/data.js
   const drift = weightOverrideDrift();
   check('WEIGHT_OVERRIDES in the generator matches src/data.js', drift.length === 0, drift.join(' | '));
+  const awDrift = awarenessOverrideDrift();
+  check('GLB_AWARENESS_OVERRIDES in tools/gen-awareness.js matches src/data.js', awDrift.length === 0, awDrift.join(' | '));
 
   const failures = r.checks.filter(c => !c.pass).concat(ui.filter(c => !c.pass));
   console.log(JSON.stringify({ charCount: r.charCount, planned: r.planned, plans: r.plans, checks: r.checks.length + ui.length, errs }, null, 2));

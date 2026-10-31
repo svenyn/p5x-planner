@@ -19,6 +19,49 @@ npm run build
 Then open `dist/p5x-planner.html` in any browser. To pick up where you left off, load your
 save file on the **Save / Load** tab.
 
+## On your phone
+
+A phone will not run a local HTML file properly, so the phone version lives on a web
+address — GitHub Pages, which is free — and installs from there as an app with its own
+icon that also opens with no connection.
+
+```
+npm run site
+```
+
+This writes a `site/` folder: the same page as `dist/p5x-planner.html`, plus what a phone
+needs to install it (an app manifest, icons, and a small offline helper, `sw.js`).
+`dist/p5x-planner.html` itself is unchanged.
+
+One-time setup on GitHub:
+
+1. Create a new **public** repository, e.g. `p5x-planner`.
+2. On its empty page choose **uploading an existing file**, drag in everything inside
+   `site/`, and commit.
+3. **Settings → Pages**: Source "Deploy from a branch", branch `main`, folder `/ (root)`,
+   Save. After a minute the app is at `https://<your-username>.github.io/p5x-planner/`.
+
+On the phone, open that address, then:
+
+- **Android (Chrome):** menu ⋮ → **Install app** (or **Add to Home screen**).
+- **iPhone (Safari):** Share → **Add to Home Screen**.
+
+To update it later: `npm run site` again and upload the new `site/` files over the old
+ones. The installed app picks up the new version the next time it opens online.
+
+Things that work differently on a phone:
+
+- **Share one save between the laptop and the phone** with **Data → Sync with GitHub**: the
+  save goes in a private repository of yours (free), and the header's Load and Save then
+  use it. The setup steps are in that section. Without it, each device has its own save
+  file and you move the `.json` between them.
+- **Save before you leave the app.** A phone closes apps without asking, so the
+  "unsaved changes" warning a laptop browser shows cannot be relied on.
+- **Portraits are left out**, because the site is public and game art is not ours to
+  redistribute; the roster shows initials instead. `npm run site -- --with-art` includes
+  them if you accept that.
+- Triage over a few thousand cards takes noticeably longer on a phone.
+
 ## The tabs
 
 **Optimise** picks a full loadout — Sun, Moon, Star, Sky and a Space card — for one
@@ -32,6 +75,28 @@ bonuses, and **4-piece value** decides how much a 4-piece effect is worth relati
 substats. That second number is a judgement call rather than a known quantity, which is
 exactly why it is exposed — raise it if you think set effects matter more than the default
 assumes.
+
+**Teams** builds a party around one character, usually a damage dealer. By default it
+calculates: every team you can field is priced by how much stronger it makes that character's
+hits, using lufel's damage formula and each member's kit (their buffs and debuffs, unlocked by
+their Awareness and weapon, scaled by their own stats, for as many turns as their rotation keeps
+them up). Each seat shows what that member adds and what their kit does that the calculation
+cannot price; lufel's own recommended team is priced the same way for comparison. Kits are
+entered for the whole roster. Wonder counts too: enter his Persona, three skill cards and weapon
+on the tab (saved with your save file), and it also suggests the setup that would help that team
+most, if you own it. **Build from: lufel's recommended teams** switches to the list-based view
+described next. That view starts from the
+teams lufel.net recommends with them and fills every seat from the characters you own: lufel's
+own pick where you have them, otherwise whoever lufel links to that character most (the same
+seat in another of their teams, a synergy partner it names with its reason, the same role), and
+only then your best-built character, marked "filler". Each seat lists replacements, and **Busy
+elsewhere** takes someone out when they fight in another team, rebuilding the rest. Below the
+team: the order the thieves act in by Speed (with their worn cards; Wonder's comes from the
+**Wonder's Speed** field, since it depends on his Persona), lufel's skill rotation for
+each member at the Awareness their Setup says, any of lufel's stat targets they are short of,
+and the synergies lufel names between the members. With Fuuka as the Elucidator a fifth seat
+holds the backup her Oracle Shift swaps in, chosen from the backups lufel recommends for her,
+with a plain explanation of how the swap works.
 
 **Inventory** takes cards one at a time through a keyboard-driven form, or in bulk through
 a paste box. The bulk format is one card per line:

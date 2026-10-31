@@ -15,3 +15,6 @@ ocr/debug_*.png
 # Character portraits fetched by tools/fetch-art.py — game assets, not ours to commit
 dist/art/
 ocr/debug_out/
+
+# Phone app (PWA) build for GitHub Pages — npm run site
+site/

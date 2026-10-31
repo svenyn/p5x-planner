@@ -414,6 +414,25 @@ details.sect>.inner{margin-top:10px}
 .nowrap{white-space:nowrap}
 
 /* ---- narrow screens: a laptop tool first, but nothing should need sideways scrolling ---- */
+/* Teams tab */
+.tmSlots td{vertical-align:top}
+.tmSlots .role{font-size:11px;text-transform:uppercase;letter-spacing:.05em;color:var(--dim2);font-weight:600;white-space:nowrap}
+.tmAlt{margin-top:8px;border-left:2px solid var(--line);padding-left:10px;display:flex;flex-direction:column;gap:6px}
+.tmAlt .alt{display:flex;gap:8px;align-items:baseline;flex-wrap:wrap}
+.tmOrder{display:flex;gap:6px;flex-wrap:wrap;align-items:center}
+.tmOrder .tmStep{border:1px solid var(--line);border-radius:8px;padding:4px 9px;background:var(--panel2);font-size:12px}
+.tmOrder .tmStep b{font-family:ui-monospace,monospace}
+.tmRot{display:grid;grid-template-columns:repeat(auto-fill,minmax(84px,1fr));gap:4px;margin:6px 0 10px}
+.tmRot .t{border:1px solid var(--line);border-radius:6px;padding:4px 6px;background:#1a1a22;text-align:center}
+.tmRot .t small{display:block;color:var(--dim2);font-size:10px;text-transform:uppercase;letter-spacing:.05em}
+.tmRot .t b{font-family:ui-monospace,monospace;font-size:12px;overflow-wrap:anywhere}
+.tmRot .t.idle b{color:var(--dim2)}
+.tmMember{border-top:1px solid var(--line);padding-top:12px;margin-top:12px}
+.tmMember:first-of-type{border-top:none;margin-top:0;padding-top:0}
+.tmNote{margin:4px 0;color:var(--dim)}
+.tmParty{display:flex;gap:6px;flex-wrap:wrap;align-items:center}
+.tmParty .m{border:1px solid var(--line);border-radius:20px;padding:1px 8px;font-size:12px}
+.tmParty .m.no{color:#e87a5c;border-color:#6b3524;text-decoration:line-through}
 @media (max-width:760px){
   header{position:static;padding:10px 12px;gap:8px 10px}
   header .logo{font-size:15px}
@@ -441,6 +460,7 @@ details.sect>.inner{margin-top:10px}
   <nav aria-label="Sections">
     <button data-tab="roster" class="on">Roster</button>
     <button data-tab="opt">Optimise</button>
+    <button data-tab="teams">Teams</button>
     <button data-tab="inv">Inventory</button>
     <button data-tab="triage">Triage</button>
     <button data-tab="upgrades">Upgrades</button>
@@ -533,6 +553,45 @@ details.sect>.inner{margin-top:10px}
       <div id="optNotes" style="margin-top:12px"></div>
     </div>
     <div id="optOut"></div>
+  </section>
+
+  <!-- ===================== TEAMS ===================== -->
+  <section id="tab-teams" class="hide">
+    <div class="panel">
+      <div class="row">
+        <div class="field" style="min-width:280px">
+          <label>Damage dealer</label>
+          <select id="tmChar"></select>
+        </div>
+        <div class="field">
+          <label>Build from</label>
+          <select id="tmBasis" title="Calculated: every team you can field, priced from the kits. lufel: the teams lufel.net recommends, filled from what you own.">
+            <option value="calc" selected>Calculated from the kits</option>
+            <option value="lufel">lufel's recommended teams</option>
+          </select>
+        </div>
+        <div class="field">
+          <label>Party member</label>
+          <select id="tmBusyAdd" title="Someone who is already fighting in another team — the team below is built without them"></select>
+        </div>
+        <button class="ghost" id="tmBusyBtn">Mark as busy in another team</button>
+        <div class="field" style="margin-left:auto">
+          <label>Wonder's Speed</label>
+          <input id="tmWonderSpd" type="number" min="0" max="999" step="1" placeholder="not set" style="width:90px"
+            title="The Speed on Wonder's character screen with the Persona you take along (without the Thieves Den, which is added). Saved in the save file; places him in the turn order.">
+        </div>
+      </div>
+      <div class="row" style="margin-top:10px">
+        <div class="field"><label>Wonder's Persona</label><select id="tmWPersona" title="The Persona Wonder fights with: its unique skill and passives count for the team"></select></div>
+        <div class="field"><label>Skill cards</label><select id="tmWCard0"></select></div>
+        <div class="field"><label>&nbsp;</label><select id="tmWCard1" aria-label="Second skill card"></select></div>
+        <div class="field"><label>&nbsp;</label><select id="tmWCard2" aria-label="Third skill card"></select></div>
+        <div class="field"><label>Wonder's weapon</label><select id="tmWWeapon"></select></div>
+        <div class="field"><label>Refinement</label><select id="tmWRefine"></select></div>
+      </div>
+      <div id="tmBusy" class="tiny" style="margin-top:10px"></div>
+    </div>
+    <div id="tmOut"></div>
   </section>
 
   <!-- ===================== INVENTORY ===================== -->
@@ -1073,6 +1132,41 @@ details.sect>.inner{margin-top:10px}
       <p class="tiny muted" style="margin:10px 0 0">
         Don't want to type four thousand cards by hand? <button class="linky" data-goto="howto">See how to scan your cards</button>.
       </p>
+    </div>
+    <div class="panel" id="syncPanel">
+      <h2>Sync with GitHub</h2>
+      <details class="explain" style="margin:0 0 12px"><summary>Keep the save in a private GitHub repository, so the laptop
+        and the phone share one. Once connected, the header's <b>Load</b> and <b>Save</b> use it instead of a file.</summary>
+        <p>The buttons above still download and load files. Every save to GitHub is kept there as a version, so an older one can
+          always be fetched from the repository's history. If the save on GitHub was changed on another device since this one
+          loaded it, Save asks before replacing it.</p>
+        <p><b>Setting it up, once:</b></p>
+        <ol>
+          <li>On GitHub, create a new repository, e.g. <code>p5x-planner-save</code>, and set it to <b>Private</b>. It can stay empty.</li>
+          <li>Make an access token: your picture → <b>Settings</b> → <b>Developer settings</b> → <b>Personal access tokens</b> →
+            <b>Fine-grained tokens</b> → <b>Generate new token</b>. Pick an expiry; under <b>Repository access</b> choose
+            <b>Only select repositories</b> and that repository; under <b>Permissions</b> → <b>Repository permissions</b> set
+            <b>Contents</b> to <b>Read and write</b>. Generate it and copy it.</li>
+          <li>On each device, fill in the repository and the token below and press Connect.</li>
+        </ol>
+        <p>The token can read and write that one repository and nothing else. "Remember on this device" keeps the repository name and the
+          token in this browser so the app opens on your save; your cards are never kept there. Untick it on a shared computer.
+          If a device is lost, delete the token on GitHub.</p>
+      </details>
+      <div class="row">
+        <div class="field"><label for="syncRepo">Repository</label>
+          <input id="syncRepo" placeholder="your-name/p5x-planner-save" autocomplete="off" autocapitalize="off" spellcheck="false" style="width:230px"></div>
+        <div class="field"><label for="syncPath">File in it</label>
+          <input id="syncPath" value="p5x-planner-save.json" autocomplete="off" autocapitalize="off" spellcheck="false" style="width:190px"></div>
+        <div class="field"><label for="syncToken">Access token</label>
+          <input id="syncToken" type="password" placeholder="github_pat_…" autocomplete="off" spellcheck="false" style="width:230px"></div>
+      </div>
+      <div class="row" style="margin-top:10px">
+        <label class="tiny"><input type="checkbox" id="syncRemember" checked> Remember on this device</label>
+        <button class="primary" id="syncConnect">Connect</button>
+        <button class="ghost hide" id="syncDisconnect">Disconnect</button>
+        <span id="syncMsg" class="tiny muted" aria-live="polite"></span>
+      </div>
     </div>
     <div class="panel">
       <h2>Import cards (merge)</h2>
