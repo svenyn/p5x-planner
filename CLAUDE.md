@@ -740,9 +740,12 @@ a second run is byte-identical). Rules that hold it together:
   reasons (her partner list is her backup list) and optional: an empty backup never makes a team
   rank below one of fillers. A partner entry's `a` is the Awareness lufel's reason relies on; a
   candidate whose Setup is below it is ranked down and the row says so.
-- **Rotations are lufel's, chosen, never composed**: the highest Awareness level the member's
-  Setup reaches (lufel's lowest, flagged, when it reaches none), and a rotation whose label names
-  a teammate ("Miku", "with Manaka") only when that teammate is in the team (`tmLabelWho`).
+- **Rotations are lufel's, chosen, and since Oct 31 2026 fitted to the team, never composed from
+  nothing**: `tmRotPick` takes the highest Awareness level the member's Setup reaches (lufel's
+  lowest, flagged, when it reaches none), and a rotation whose label names a teammate ("Miku",
+  "with Manaka") only when that teammate is in the team (`tmLabelWho`). The fit (`tcRotFit`, the
+  "Fit rotations to this team" checkbox, a pref on by default) is described under the calculated
+  basis below; it never touches the character the team is built around.
 - **Turn order is in-battle Speed** — `totalStat` with worn cards plus the Thieves Den. Wonder's
   is the user's entry (`state.wonderSpd`, saved as `settings.wonderSpeed` beside the team crit
   rate, in the unsaved-changes fingerprint and the undo snapshot): his Persona is not a card, so
@@ -791,24 +794,79 @@ damage formula (`docs/DATA-SOURCES.md`, the damage-formula section):
   on 170.7%, the accuracy cap Koromaru's kit names outright, and every tier lands on its own cap.
   Half the first batches read Y as the total, 20-25% low on Mayumi, Runa, Mio, Kumi, Yukari,
   Manaka and Fuuka; that was corrected (Oct 2026) and the reading is not a choice to revisit.
-- **Uptime comes from the supporter's own lufel rotation** at their Awareness (`tcCover`: the
+- **A rotation is fitted to the team, within lufel's own** (`tcRotFit`, Oct 31 2026). lufel writes
+  a character's rotations once, for a typical team, so a member's rotation is adjusted to the team on
+  screen without inventing a cadence: every rotation lufel writes for them at their Awareness (the
+  ones `tmRotPick` shows) is a skeleton whose *plain* skill turns — a bare "1", "2" or "3" — are
+  re-chosen among the plain skills those rotations use; every other turn (a burst "1+1+3", a
+  Highlight, a Transformation, an item, Fatigue, an idle "-", Miku's "2 Fire") stays where lufel
+  put it, because its place is the kit's; and no plain skill is used more or less often, per turn
+  of the rotation, than lufel's rotations at that level use it — the stand-in for SP and cooldowns,
+  which nothing models. A skill lufel never writes into a rotation is never introduced. Each
+  candidate is priced as the whole team (the other seats at lufel's rotations, the backup as the
+  backup, Wonder) with the member's rotation-dependent lines re-covered; the winner is the one that
+  makes the damage dealer's hits strongest, ties to lufel's as written, then the fewest turns
+  changed. Candidates and their covers are memoised per member, damage dealer and lufel list
+  (`tcMemo.rot`, one entry per distinct coverage, a few dozen at most); a team context prices
+  those. `tcMember(..., fit)` returns the result as `rot` (seq, base option, changed turns, gain
+  over lufel's first option as written, `same`), null when nothing priced depends on the order or
+  only one way to choose the turns exists; `tcLineup` fits every seat but the backup, so the
+  search's exact re-pricing of the leaders and every replacement see it, while the sweep stays at
+  lufel's. On the real save (Oct 31 2026) it chose Fuuka's idle-free second option (+2.7%) and put
+  Kotone's Skill 3 on turn 4 (+3.9%); Koromaru's rotation follows the damage dealer's element (his
+  shared damage line is `on: ['1','2','3']` since, as its reason always said). A fresh render costs
+  about 40 ms more; a repeat is unchanged. The Rotation panel shows the fitted rotation first with
+  the changed turns highlighted (`.tmRot .t.fit`) and lufel's as written folded under it, or says
+  "Already the best fit" with how many other ways were tried; the member's lines read the fitted
+  uptimes. `tcTeamSet` builds the Set both the lineup and the panel key the memo on, with the 4th
+  seat as `backup`. Off, everything is lufel's as written, as before.
+- **Uptime comes from the supporter's own rotation** at their Awareness (`tcCover`: the
   share of turns `dur` covers over the rotation repeated). A skill missing from the rotation (a
   Highlight lufel does not write in) counts nothing, and the row says so — no Highlight cadence
   is assumed. Linear: a buff up half the time counts at half strength.
-- **Wonder** is a member like any other, priced from the setup the user enters on the tab — his
-  Persona, three skill cards, weapon and refinement (`state.wonder`, saved as `settings.wonder`,
-  in the fingerprint and the undo snapshot; `wonderFrom` drops anything `WONDER_BUFFS` does not
-  know). `WONDER_BUFFS`/`WONDER_SKIPS` come from lufel's Persona files, skill cards
+- **Wonder** is a member like any other, priced from the setup the user enters on the tab — three
+  Persona slots, each with the three skill cards that Persona has learned (a card is cast only
+  while its Persona is in use), plus a weapon and refinement (`state.wonder`, saved as
+  `settings.wonder`, in the fingerprint and the undo snapshot; `wonderFrom` drops anything
+  `WONDER_BUFFS` does not know, and reads a pre-slots save's single Persona as slot 1).
+  `WONDER_BUFFS`/`WONDER_SKIPS` come from lufel's Persona files, skill cards
   (`/data/kr/wonder/skills.js`) and Wonder weapons (`/data/kr/wonder/weapons.js`), the DEF-down
   values cross-checked against lufel's defence calculator (`/data/kr/calc/defense-data.js`).
   His stats are not tracked, so a value that grows with them is taken at its cap, and his skills
-  at their top rank. He acts once a turn: active skills share his six actions in six turns by how
-  often each needs recasting (`tcWonder`). His Highlight and own damage are not counted. A
-  Persona's innate skills that also exist as cards are priced as the card the user picks, never
-  both. `tcWonderBest` suggests the setup that would help this team most (weapon, then Persona,
-  then cards greedily), labelled "if you own it" — nothing here knows which Personas are owned.
+  at their top rank; his Highlight and own damage are not counted.
+  **A Persona's passives work only while it is in use** — the user asked, and the Persona text
+  settles it: the exceptions say so in their own words ("activate even in reserve": Sahimochi-no-
+  Kami, Kohryu, Sraosha, Vasuki, Shiva; Sandalphon's "when not present"), and what they do in
+  reserve is build stacks paid out on use, or raise DEF; lufel's notes agree (Throne's Burn "even
+  in Sub-persona slot", Koumokuten's buff "persists after switching"). So `tcWonder` gives his six
+  actions in six turns to active skills by worth per action, keeping one only if the whole setup
+  gains (casting a second Persona's skill takes turns from the first, whose passives then count
+  for fewer turns), in two orders — by worth, and slot by slot — the better kept, so a later slot
+  never costs anything; idle turns go to the Persona whose passives are worth most. The page
+  shows each Persona's share of his turns and what goes uncast. `tcWonderBest` suggests a whole
+  setup, weapon then slot by slot, then improvement passes over every position, labelled "if you
+  own it". It usually fills one slot: one Persona's unique skill and cards already take all six
+  actions, and the page says slots 2-3 add nothing then rather than inventing picks. A Persona's
+  innate skills that also exist as cards are priced as the card the user picks, never both.
 - **Fuuka's backup** brings its best single skill, for as many turns as her swaps (2 in six
   turns, 4 at Awareness 6) times its duration; its passives are off while it waits.
+- **A render remembers what depends only on the save** (`tcMemo`, Oct 31 2026): the damage dealer's
+  own side of every ratio (`tcEvalFor`), each member's vector (`tcMember`) and each search
+  (`tcSearch`), keyed on `dataSignature()` plus the busy list, so a change made without `commit()`
+  is still seen; an entry point checks the key once and runs `hot` (`tcHot`). Fuuka's backup is
+  searched only for the leading `TC_BACKUP_TOP` (40) pairs, the rest of her lineups being priced
+  without one (the chosen team always gets its best backup, `tcBestBackup`; so does Fuuka offered
+  as a replacement for another Elucidator). On the real save a fresh render went from 0.9 s to
+  about 0.1 s and a repeat (a pick, "Use") to 10 ms, with every team and part unchanged. The
+  Thieves Den goes into both sides of the ratio (`damageFactors`' `extra.flat`, plus its crit);
+  it was in the members' stats but not the damage dealer's.
+- **The page reads a per-factor summary per member first** ("ATK +126% · crit multiplier +112% ·
+  Pierce +38%", `tcSumHtml`, each line at its share of turns), with the kit lines folded under
+  "Where it comes from"; a skill not in the member's rotation is named, not quoted. The next teams
+  and lufel's are shown against the chosen one in percent; a rotation shows one option open and
+  folds the rest; a synergy sentence both pages carry (Fuuka's about Kumi and Kumi's about Fuuka)
+  is listed once, keeping the Awareness note (`tmSynergyItems`). A damage dealer seated with an
+  entered but empty kit reads "nothing to price", not "+0.0%".
 - A member's part on the page is the team's value with them over without them, so parts do not
   multiply to the total. Replacements are priced as the whole team with them swapped in, and
   lufel's recommended team is priced the same way for comparison in the header.

@@ -419,6 +419,8 @@ details.sect>.inner{margin-top:10px}
 .tmSlots .role{font-size:11px;text-transform:uppercase;letter-spacing:.05em;color:var(--dim2);font-weight:600;white-space:nowrap}
 .tmAlt{margin-top:8px;border-left:2px solid var(--line);padding-left:10px;display:flex;flex-direction:column;gap:6px}
 .tmAlt .alt{display:flex;gap:8px;align-items:baseline;flex-wrap:wrap}
+.tmWonder{display:grid;grid-template-columns:auto repeat(4,minmax(150px,1fr));gap:6px 8px;align-items:center;max-width:980px}
+.tmWonder .hd{font-size:11px;text-transform:uppercase;letter-spacing:.05em;color:var(--dim2);font-weight:600}
 .tmOrder{display:flex;gap:6px;flex-wrap:wrap;align-items:center}
 .tmOrder .tmStep{border:1px solid var(--line);border-radius:8px;padding:4px 9px;background:var(--panel2);font-size:12px}
 .tmOrder .tmStep b{font-family:ui-monospace,monospace}
@@ -427,6 +429,8 @@ details.sect>.inner{margin-top:10px}
 .tmRot .t small{display:block;color:var(--dim2);font-size:10px;text-transform:uppercase;letter-spacing:.05em}
 .tmRot .t b{font-family:ui-monospace,monospace;font-size:12px;overflow-wrap:anywhere}
 .tmRot .t.idle b{color:var(--dim2)}
+.tmRot .t.fit{border-color:#1d5c3d;background:#10241a}
+.tmRot .t.fit small{color:var(--ok)}
 .tmMember{border-top:1px solid var(--line);padding-top:12px;margin-top:12px}
 .tmMember:first-of-type{border-top:none;margin-top:0;padding-top:0}
 .tmNote{margin:4px 0;color:var(--dim)}
@@ -570,22 +574,15 @@ details.sect>.inner{margin-top:10px}
             <option value="lufel">lufel's recommended teams</option>
           </select>
         </div>
-        <div class="field">
-          <label>Party member</label>
-          <select id="tmBusyAdd" title="Someone who is already fighting in another team — the team below is built without them"></select>
-        </div>
-        <button class="ghost" id="tmBusyBtn">Mark as busy in another team</button>
+        <label class="check" title="Each member's plain skill turns are re-chosen for this damage dealer, within the skills and frequencies lufel's own rotations for them use; bursts, Highlights, Transformations, items, Fatigue and idle turns stay where lufel put them. Off: every rotation is lufel's as written."><input type="checkbox" id="tmRotFit" checked> Fit rotations to this team</label>
         <div class="field" style="margin-left:auto">
           <label>Wonder's Speed</label>
           <input id="tmWonderSpd" type="number" min="0" max="999" step="1" placeholder="not set" style="width:90px"
             title="The Speed on Wonder's character screen with the Persona you take along (without the Thieves Den, which is added). Saved in the save file; places him in the turn order.">
         </div>
       </div>
-      <div class="row" style="margin-top:10px">
-        <div class="field"><label>Wonder's Persona</label><select id="tmWPersona" title="The Persona Wonder fights with: its unique skill and passives count for the team"></select></div>
-        <div class="field"><label>Skill cards</label><select id="tmWCard0"></select></div>
-        <div class="field"><label>&nbsp;</label><select id="tmWCard1" aria-label="Second skill card"></select></div>
-        <div class="field"><label>&nbsp;</label><select id="tmWCard2" aria-label="Third skill card"></select></div>
+      <div class="tmWonder" id="tmWonderSlots" style="margin-top:10px"></div>
+      <div class="row" style="margin-top:6px">
         <div class="field"><label>Wonder's weapon</label><select id="tmWWeapon"></select></div>
         <div class="field"><label>Refinement</label><select id="tmWRefine"></select></div>
       </div>

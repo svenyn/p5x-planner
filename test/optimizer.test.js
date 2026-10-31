@@ -2762,11 +2762,16 @@ function awarenessOverrideDrift() {
     const out = {};
     // three 2-turn cards ask for 9 actions in 6: each is up two-thirds of the time
     const card = (k, v) => [{ k, v, to: 'party', src: 'card', dur: 2, why: 't' }];
-    Object.assign(WONDER_BUFFS, { cards: { A: card('atk%', 30), B: card('dmg', 30), C: card('cr', 30) }, personas: { P: [{ k: 'dmg', v: [10, 20, 30], to: 'party', src: 'passive', why: 'p' }] }, weapons: { W: [{ k: 'defdown', ladder: [1, 2, 3, 4, 5, 6, 7], to: 'enemy', src: 'weapon', why: 'w' }] } });
-    const r = tcWonder(ann, { persona: 'P', cards: ['A', 'B', 'C'], weapon: 'W', refine: 3 });
+    Object.assign(WONDER_BUFFS, { cards: { A: card('atk%', 30), B: card('dmg', 30), C: card('cr', 30) }, personas: { P: [{ k: 'dmg', v: [10, 20, 30], to: 'party', src: 'passive', why: 'p' }], Q: [{ k: 'cm', v: 40, to: 'party', src: 'passive', why: 'q' }] }, weapons: { W: [{ k: 'defdown', ladder: [1, 2, 3, 4, 5, 6, 7], to: 'enemy', src: 'weapon', why: 'w' }] } });
+    const slot = (name, cards) => ({ name, cards: cards || ['', '', ''] }), none = slot('');
+    const r = tcWonder(ann, { personas: [slot('P', ['A', 'B', 'C']), none, none], weapon: 'W', refine: 3 });
+    // a Persona's passive counts only for the turns it is in use: Q casts A (2 of 6 turns... 3 actions), P takes the idle rest
+    const r2 = tcWonder(ann, { personas: [slot('P'), slot('Q', ['A', '', '']), none], weapon: '', refine: 1 });
+    out.split = r2.lines.map(l => [l.k, +l.up.toFixed(4)]);
+    out.cardless = tcWonder(ann, { personas: [none, { name: '', cards: ['A', '', ''] }, none], weapon: '', refine: 1 }).lines.length;
     out.ups = r.lines.map(l => [l.k, +l.up.toFixed(4), l.v]);
     out.busy = r.busy;
-    out.none = tcWonder(ann, { persona: '', cards: ['', '', ''], weapon: '', refine: 1 }).lines.length;
+    out.none = tcWonder(ann, { personas: [none, none, none], weapon: '', refine: 1 }).lines.length;
     Object.assign(WONDER_BUFFS, real);
     state.wonder = { persona: 'nope', cards: ['x'], weapon: 'y', refine: 99 };
     out.clean = JSON.stringify(wonderSetup());
@@ -2776,16 +2781,20 @@ function awarenessOverrideDrift() {
     const saved = JSON.stringify(savePayload());
     state.wonder = {};
     applySave(saved, '');
-    out.trip = JSON.stringify(wonderSetup()) === JSON.stringify({ persona: pn, cards: [cn, '', ''], weapon: wn, refine: 4 }) && !!pn && !!cn && !!wn;
+    const e3 = { name: '', cards: ['', '', ''] };
+    out.trip = JSON.stringify(wonderSetup()) === JSON.stringify({ personas: [{ name: pn, cards: [cn, '', ''] }, e3, e3], weapon: wn, refine: 4 }) && !!pn && !!cn && !!wn;   // an old one-Persona setup becomes slot 1
     hideToast();
     state.wonder = keep;
     return out;
   });
   const up = (k) => (tw.ups.find(x => x[0] === k) || [])[1];
-  check('Wonder\'s active skills share his one action a turn, his passives and weapon are always on at their top rank and refinement, and an unknown setup is dropped',
-    tw.busy && Math.abs(up('atkPct') - 2 / 3) < 1e-4 && up('dm') !== undefined && tw.ups.some(x => x[0] === 'dm' && x[2] === 30 && x[1] === 1) &&
+  // three 2-turn cards ask for 9 of his 6 actions: the two worth most are kept up, the third gets none
+  const cardUps = ['atkPct', 'cr'].map(up).concat(tw.ups.filter(x => x[0] === 'dm' && x[2] === 30).map(x => x[1]).slice(0, 1));
+  check('Wonder\'s actions go to his most valuable skills first, a Persona\'s passives count only while it is in use, cards need their Persona, and an unknown or old setup is read right',
+    tw.busy && cardUps.filter(u => u === 1).length === 2 && cardUps.filter(u => u === undefined).length === 1 &&
     tw.ups.some(x => x[0] === 'defdown' && x[2] === 3 && x[1] === 1) && tw.none === 0 &&
-    tw.clean === JSON.stringify({ persona: '', cards: ['', '', ''], weapon: '', refine: 7 }) && tw.trip, JSON.stringify(tw));
+    tw.clean === JSON.stringify({ personas: [0, 1, 2].map(() => ({ name: '', cards: ['', '', ''] })), weapon: '', refine: 7 }) && tw.trip &&
+    JSON.stringify(tw.split.slice().sort()) === JSON.stringify([['atkPct', 1], ['cm', 0.5], ['dm', 0.5]]) && tw.cardless === 0, JSON.stringify(tw));
 
   await p.evaluate(() => { tmPick = {}; $('#tmBasis').value = 'calc'; $('#tmChar').value = 'Yusuke Kitagawa'; renderTeams(); });
   const tcPage = await p.evaluate(() => {
@@ -2799,6 +2808,157 @@ function awarenessOverrideDrift() {
   check('the calculated basis seats the best-valued team of available characters, a backup only beside Fuuka, and prices lufel\'s team for comparison',
     tcPage.avail && /^fffe(b)?w$/.test(tcPage.roles) && tcPage.fuukaOk && tcPage.sorted && Math.abs(tcPage.best - tcPage.top) < 1e-9 &&
     /Calculated from the kits/.test(tcPage.text) && !!tcPage.lufel, JSON.stringify(tcPage).slice(0, 700));
+
+  // the page: a per-factor summary line per member with the kit lines folded under it, the next
+  // teams and lufel's priced against the shown one, synergies named once, rotation options folded
+  const tcView = await p.evaluate(() => {
+    const out = $('#tmOut');
+    const sums = [...out.querySelectorAll('.tcSum')].map(x => x.innerText);
+    const seatRows = [...out.querySelectorAll('.tmSlots tbody tr')].slice(1);
+    const folded = seatRows.filter(tr => tr.querySelector('.tcSum')).every(tr => /Where it comes from \(\d+ lines?\)/.test(tr.innerText));
+    const rel = [...out.querySelectorAll('.tmParty')].map(x => x.innerText);
+    const rotOpen = [...out.querySelectorAll('.tmMember')].map(m => [...m.querySelectorAll('.tmRot')].filter(g => !g.closest('details')).length);
+    // a sentence both pages carry (Fuuka's about Kumi, Kumi's about Fuuka) is one synergy
+    const items = tmSynergyItems(new Set(['Fuuka Yamagishi', 'Kumi Katayama', 'Yusuke Kitagawa']), 'Kumi Katayama');
+    return { sums, folded, rel, rotOpen, items, lufelRel: /comes to ×[\d.]+ \([+−]\d+\.\d%\)/.test(out.innerText) };
+  });
+  check('each calculated member reads a per-factor summary first, with the kit lines folded under it',
+    tcView.sums.length >= 2 && tcView.sums.every(s => /(ATK|damage|crit|Pierce|DEF) [+−]\d/.test(s)) && tcView.folded, JSON.stringify(tcView.sums).slice(0, 300));
+  check('the next teams and lufel\'s team are shown against the chosen one, in percent',
+    tcView.rel.length > 0 && tcView.rel.every(r => /\([+−]\d+\.\d%\)/.test(r)) && tcView.lufelRel, JSON.stringify(tcView.rel).slice(0, 300) + ' ' + tcView.lufelRel);
+  check('a member\'s rotation shows one option open and folds the others', tcView.rotOpen.length > 0 && tcView.rotOpen.every(n => n <= 1), JSON.stringify(tcView.rotOpen));
+  check('a synergy both pages carry the same sentence for is listed once, keeping the Awareness note',
+    tcView.items.length === 1 && /needs Awareness 6/.test(tcView.items[0]), JSON.stringify(tcView.items));
+
+  // ---- fitting a rotation to the team (tcRotFit): lufel's skeleton, plain turns re-chosen ----
+  const tcFit = await p.evaluate(() => {
+    const plain = /^[1-3]$/;
+    const dpsOf = e => CHARACTERS.find(c => c.e === e && TM_DPS.includes(c.arch));
+    const fire = dpsOf('Fire'), elec = dpsOf('Electric'), ice = dpsOf('Ice');
+    $('#tmRotFit').checked = true;
+    // Koromaru writes one rotation per element: the fit takes the damage dealer's
+    const koro = [fire, elec, ice].map(d => {
+      const m = tcMember(d, 'Koromaru', tcTeamSet(d.n, ['Koromaru', null, null]), null, true);
+      return { e: d.e, seq: m.rot ? m.rot.seq.join(' ') : null, off: m.lines.filter(l => l.offRot).length, shared: m.lines.filter(l => /Skills 1-3/.test(l.why)).map(l => l.up) };
+    });
+    // invariants over every priced member for one damage dealer: structural turns kept, plain
+    // counts within lufel's per-turn frequencies, never worse than lufel's first option
+    const bad = [];
+    const d = charDef('Yusuke Kitagawa');
+    let fitted = 0;
+    for (const n of Object.keys(TEAM_BUFFS)) {
+      if (n === d.n || !(TEAMS[n] || {}).rot) continue;
+      const team = tcTeamSet(d.n, [n, null, null]);
+      const m = tcMember(d, n, team, null, true), r = tmRotPick(n, team);
+      if (!m.rot) continue;
+      fitted++;
+      const F = m.rot, base = r.pick[F.base.index];
+      if (F.seq.length !== base.seq.length) bad.push(n + ' length');
+      base.seq.forEach((t, i) => { if (!plain.test(t) && F.seq[i] !== t) bad.push(n + ' structural turn ' + (i + 1)); });
+      F.changed.forEach(i => { if (F.seq[i] === base.seq[i] || !plain.test(F.seq[i])) bad.push(n + ' change ' + (i + 1)); });
+      const toks = [...new Set(r.pick.flatMap(b => b.seq.filter(t => plain.test(t))))];
+      for (const t of toks) {
+        const f = F.seq.filter(x => x === t).length / F.seq.length;
+        const fs = r.pick.map(b => b.seq.filter(x => x === t).length / b.seq.length);
+        if (f < Math.min(...fs) - 1e-9 - 1 / F.seq.length || f > Math.max(...fs) + 1e-9 + 1 / F.seq.length) bad.push(n + ' frequency of ' + t);
+      }
+      if (F.seq.some(t => plain.test(t) && !toks.includes(t))) bad.push(n + ' a skill lufel never writes');
+      if (F.gain < -1e-9) bad.push(n + ' worse than lufel');
+      if (F.same && F.gain !== 0) bad.push(n + ' same but gains');
+    }
+    // a rotation that wastes a 2-turn buff by casting it on consecutive turns is re-ordered
+    const keepT = TEAMS['Ryuji Sakamoto'], keepB = TEAM_BUFFS['Ryuji Sakamoto'];
+    TEAMS['Ryuji Sakamoto'] = { rot: [{ aw: 0, label: 'Test', seq: ['3', '3', '1', '1', '3', '1'] }] };
+    TEAM_BUFFS['Ryuji Sakamoto'] = [{ k: 'dmg', v: 20, to: 'enemy', src: '3', on: '3', dur: 2, why: 'test: a 2-turn debuff from Skill 3' }];
+    tcMemo.key = '';
+    const team = tcTeamSet(d.n, ['Ryuji Sakamoto', null, null]);
+    const on = tcMember(d, 'Ryuji Sakamoto', team, null, true), off = tcMember(d, 'Ryuji Sakamoto', team, null, false);
+    const re = { seq: on.rot && on.rot.seq.join(' '), gain: on.rot && on.rot.gain, changed: on.rot && on.rot.changed,
+      upOn: on.lines[0].up, upOff: off.lines[0].up, offRot: off.rot, counts: on.rot && ['1', '3'].map(t => on.rot.seq.filter(x => x === t).length) };
+    // the lineup prices the fitted rotation, and the pref switches it off
+    const withFit = tcLineup(d, ['Ryuji Sakamoto', null, null]).mult;
+    $('#tmRotFit').checked = false;
+    const noFit = tcLineup(d, ['Ryuji Sakamoto', null, null]).mult;
+    const noRot = tcLineup(d, ['Ryuji Sakamoto', null, null]).members[0].rot;
+    $('#tmRotFit').checked = true;
+    const prefOn = collectPrefs().tmRotFit;
+    applyPrefs({ tmRotFit: false }); const prefOff = $('#tmRotFit').checked;
+    $('#tmRotFit').checked = true;
+    TEAMS['Ryuji Sakamoto'] = keepT; TEAM_BUFFS['Ryuji Sakamoto'] = keepB; tcMemo.key = '';
+    return { koro, bad, fitted, re, withFit, noFit, noRot, prefOn, prefOff };
+  });
+  check('Koromaru\'s rotation follows the damage dealer\'s element, and his shared damage line counts whichever skill it is',
+    tcFit.koro[0].seq === 'TH+1 1 TH+1 1 TH+1 1' && tcFit.koro[1].seq === 'TH+2 2 TH+2 2 TH+2 2' && tcFit.koro[2].seq === 'TH+3 3 TH+3 3 TH+3 3' &&
+    tcFit.koro.every(k => k.shared.length === 1 && k.shared[0] === 1), JSON.stringify(tcFit.koro));
+  check('a fitted rotation keeps lufel\'s structural turns, stays within lufel\'s skill frequencies, introduces no skill lufel never writes, and is never worse than lufel\'s first option',
+    tcFit.bad.length === 0 && tcFit.fitted >= 5, JSON.stringify(tcFit.bad).slice(0, 400) + ' fitted ' + tcFit.fitted);
+  check('a 2-turn buff cast on consecutive turns is re-ordered to lapse first, with the same skill counts; the lineup prices it, and the pref turns it off',
+    tcFit.re.seq === '3 1 3 1 3 1' && tcFit.re.gain > 0 && tcFit.re.changed.length === 2 && Math.abs(tcFit.re.upOn - 1) < 1e-9 && Math.abs(tcFit.re.upOff - 5 / 6) < 1e-9 &&
+    tcFit.re.offRot === null && JSON.stringify(tcFit.re.counts) === '[3,3]' && tcFit.withFit > tcFit.noFit && tcFit.noRot === null && tcFit.prefOn === true && tcFit.prefOff === false,
+    JSON.stringify(tcFit.re) + ' ' + tcFit.withFit + ' ' + tcFit.noFit + ' ' + tcFit.prefOn + ' ' + tcFit.prefOff);
+  // the page: a changed turn is highlighted and the panel says what was fitted; off, lufel's as written
+  const tcFitPage = await p.evaluate(() => {
+    const d = 'Yusuke Kitagawa';
+    const keepT = TEAMS['Ryuji Sakamoto'], keepB = TEAM_BUFFS['Ryuji Sakamoto'], keepOwned = state.chars['Ryuji Sakamoto'].owned;
+    TEAMS['Ryuji Sakamoto'] = { rot: [{ aw: 0, label: 'Test', seq: ['3', '3', '1', '1', '3', '1'] }] };
+    TEAM_BUFFS['Ryuji Sakamoto'] = [{ k: 'dmg', v: 20, to: 'enemy', src: '3', on: '3', dur: 2, why: 'test: a 2-turn debuff from Skill 3' }];
+    state.chars['Ryuji Sakamoto'].owned = true;
+    tcMemo.key = ''; tmPick = {};
+    const elu = tcTeams(d).team.seats.find(s => s.seat === 'e').name;
+    tmPick[d] = { key: 'calc:Ryuji Sakamoto||' + elu, seats: {} };
+    $('#tmBasis').value = 'calc'; $('#tmChar').value = d; $('#tmRotFit').checked = true;
+    renderTeams();
+    const panel = () => [...$$('#tmOut .panel')].find(x => /^rotation$/i.test((x.querySelector('h2') || {}).innerText || ''));
+    const on = { hot: panel().querySelectorAll('.tmRot .t.fit').length, text: panel().innerText };
+    $('#tmRotFit').checked = false; renderTeams();
+    const off = { hot: panel().querySelectorAll('.tmRot .t.fit').length, text: panel().innerText };
+    $('#tmRotFit').checked = true; tmPick = {};
+    TEAMS['Ryuji Sakamoto'] = keepT; TEAM_BUFFS['Ryuji Sakamoto'] = keepB; state.chars['Ryuji Sakamoto'].owned = keepOwned; tcMemo.key = '';
+    renderTeams();
+    return { on, off };
+  });
+  check('the Rotation panel highlights the changed turns and names the gain; with the fit off it shows lufel\'s as written',
+    tcFitPage.on.hot === 2 && /Fitted to this team/.test(tcFitPage.on.text) && /\+\d+\.\d% team damage/.test(tcFitPage.on.text) && /turns 2, 3 re-chosen/.test(tcFitPage.on.text) &&
+    tcFitPage.off.hot === 0 && !/Fitted to this team/.test(tcFitPage.off.text) && /as written/.test(tcFitPage.off.text),
+    JSON.stringify({ on: tcFitPage.on.hot, off: tcFitPage.off.hot, t: tcFitPage.on.text.slice(0, 300) }));
+
+  // the memo: what a render remembers is keyed on the save, so a change made without commit()
+  // (as these tests make them) is still seen, and a plain repeat is served from memory
+  const tcMemoT = await p.evaluate(() => {
+    const d = charDef('Ann Takamaki'), atk = { atkPct: 50 };   // an ATK kit: an ATK buff reaches her ⓐ
+    const a = tcMultiplier(d, [atk]);
+    const keepLo = state.chars[d.n].loadout;   // Awareness 6 adds 15% ATK to her base, so the same buff is worth a different ratio
+    state.chars[d.n].loadout = Object.assign({}, DEFAULT_LOADOUT, { weapon: '4', awareness: 6 });
+    const b = tcMultiplier(d, [atk]);
+    state.chars[d.n].loadout = keepLo;
+    const c = tcMultiplier(d, [atk]);
+    const t0 = performance.now(); tcTeams(d.n); const fresh = performance.now() - t0;
+    const t1 = performance.now(); tcTeams(d.n); const again = performance.now() - t1;
+    return { a, b, c, fresh, again, hot: tcMemo.hot };
+  });
+  check('the team memo follows the save: a card changed without commit() re-prices, a repeat is served from memory',
+    Math.abs(tcMemoT.a - tcMemoT.c) < 1e-12 && tcMemoT.a !== tcMemoT.b && tcMemoT.again < tcMemoT.fresh && !tcMemoT.hot, JSON.stringify(tcMemoT));
+
+  // marking a member busy: with no choice the whole team is searched again; a chosen team keeps
+  // the user's other picks and refills the emptied seat, never leaving it empty
+  const tcBusy = await p.evaluate(() => {
+    const d = 'Yusuke Kitagawa', seatNames = r => r.team.seats.filter(s => !s.fixed && s.seat !== 'w').map(s => s.name);
+    tmPick = {}; tmBusy = new Set();
+    const before = seatNames(tcTeams(d));
+    tmBusy.add(before[0]);                       // a thief
+    const after = seatNames(tcTeams(d));
+    tmBusy = new Set();
+    const chosen = tcTeams(d).list[1].calc;      // the runner-up, chosen by the user
+    tmPick[d] = { key: chosen.key, seats: {} };
+    tmBusy.add(chosen.names[0]);
+    const kept = seatNames(tcTeams(d));
+    tmBusy = new Set(); tmPick = {};
+    return { before, after, chosen: chosen.names, kept };
+  });
+  check('marking a member busy re-runs the search, and a chosen team refills the busy seat around the rest',
+    !tcBusy.after.includes(tcBusy.before[0]) && tcBusy.after.slice(0, 3).every(Boolean) &&
+    !!tcBusy.kept[0] && tcBusy.kept[0] !== tcBusy.chosen[0] && tcBusy.kept[1] === tcBusy.chosen[1] && tcBusy.kept[2] === tcBusy.chosen[2],
+    JSON.stringify(tcBusy));
 
   await p.evaluate(k => { state.chars = JSON.parse(k.chars); tmBusy = new Set(k.busy); tmPick = JSON.parse(k.pick); commit(); showTab('roster'); }, tmKeep);
 

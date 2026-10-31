@@ -82,7 +82,7 @@ hits, using lufel's damage formula and each member's kit (their buffs and debuff
 their Awareness and weapon, scaled by their own stats, for as many turns as their rotation keeps
 them up). Each seat shows what that member adds and what their kit does that the calculation
 cannot price; lufel's own recommended team is priced the same way for comparison. Kits are
-entered for the whole roster. Wonder counts too: enter his Persona, three skill cards and weapon
+entered for the whole roster. Wonder counts too: enter his three Personas, each with its skill cards, and his weapon
 on the tab (saved with your save file), and it also suggests the setup that would help that team
 most, if you own it. **Build from: lufel's recommended teams** switches to the list-based view
 described next. That view starts from the
@@ -94,7 +94,12 @@ elsewhere** takes someone out when they fight in another team, rebuilding the re
 team: the order the thieves act in by Speed (with their worn cards; Wonder's comes from the
 **Wonder's Speed** field, since it depends on his Persona), lufel's skill rotation for
 each member at the Awareness their Setup says, any of lufel's stat targets they are short of,
-and the synergies lufel names between the members. With Fuuka as the Elucidator a fifth seat
+and the synergies lufel names between the members. With **Fit rotations to this team** ticked
+(the default), each member's rotation is lufel's adjusted to this team: its plain skill turns are
+re-chosen for what they do for the damage dealer, within the skills and frequencies lufel's own
+rotations use, while bursts, Highlights, Transformations, items, Fatigue and idle turns stay
+where lufel put them; the changed turns are highlighted, lufel's version is folded under it, and
+the team's calculated damage counts the fitted rotation. With Fuuka as the Elucidator a fifth seat
 holds the backup her Oracle Shift swaps in, chosen from the backups lufel recommends for her,
 with a plain explanation of how the swap works.
 
