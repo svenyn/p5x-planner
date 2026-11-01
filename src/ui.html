@@ -685,6 +685,9 @@ details.sect>.inner{margin-top:10px}
             <option value="5">5</option>
           </select>
         </div>
+        <!-- The page calculates only on this button (a fresh calculated team takes a few seconds), so
+             the settings above can be changed one after another without waiting on each. -->
+        <button class="primary" id="tmCalc" style="margin-left:auto;align-self:flex-end" title="Work out the team with the settings above (a few seconds on the calculated basis)">Calculate</button>
       </div>
       <!-- Wonder's setup is set once and read on every visit, so it folds under one line that
            says what is set; his Speed stays in the row above, since it places him in the turn order. -->
@@ -701,6 +704,7 @@ details.sect>.inner{margin-top:10px}
       </details>
       <div id="tmBusy" class="tiny" style="margin-top:10px"></div>
     </div>
+    <div id="tmStatus"></div>
     <div id="tmOut"></div>
   </section>
 

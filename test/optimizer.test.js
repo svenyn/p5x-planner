@@ -2648,9 +2648,16 @@ function awarenessOverrideDrift() {
       .forEach(n => { state.chars[n].owned = true; });
     tmBusy = new Set(); tmPick = {};
     $('#tmBasis').value = 'lufel';   // these checks are about lufel's lists; the calculated basis has its own below
+    tmRunSig = null; tmShownDps = null; $('#tmOut').innerHTML = '';
     commit(); showTab('teams');
   });
   await p.selectOption('#tmChar', 'Yusuke Kitagawa');
+  // the tab and its settings never calculate on their own: only the Calculate button does
+  const tmIdle = await p.evaluate(() => ({ out: $('#tmOut').innerHTML, status: $('#tmStatus').innerText }));
+  check('Teams calculates nothing on a visit or a settings change, and says to press Calculate',
+    tmIdle.out === '' && /press Calculate/i.test(tmIdle.status), JSON.stringify(tmIdle));
+  await p.click('#tmCalc');
+  await p.waitForFunction(() => !$('#tmCalc').disabled && $('#tmOut').innerHTML !== '');
   const tm1 = await p.evaluate(() => {
     const t = tmTeams('Yusuke Kitagawa').team;
     return { seats: t.seats.map(s => [s.role, s.name, s.orig]), text: $('#tmOut').innerText };
@@ -2661,12 +2668,17 @@ function awarenessOverrideDrift() {
     /Oracle Shift/.test(tm1.text) && /none of the characters lufel recommends as Fuuka's backup/i.test(tm1.text), JSON.stringify(tm1.seats));
 
   await p.evaluate(() => { state.chars['Mio Natsukawa'].owned = true; commit(); });
+  const tmStaleNow = await p.evaluate(() => ({ status: $('#tmStatus').innerText, text: $('#tmOut').innerText }));
+  check('a change to the save after a Calculate keeps the team shown and marks it out of date, with a Calculate button',
+    /before your latest changes/.test(tmStaleNow.status) && !!(await p.$('#tmStatus [data-tm-calc]')) && !/replaces Koromaru/.test(tmStaleNow.text), JSON.stringify(tmStaleNow.status));
+  await p.click('#tmStatus [data-tm-calc]');
+  await p.waitForFunction(() => !$('#tmCalc').disabled && !$('#tmStatus .stale-run'));
   const tm2 = await p.evaluate(() => {
     const t = tmTeams('Yusuke Kitagawa').team;
     const b = t.seats.find(s => s.seat === 'b');
     return { name: b && b.name, why: b && b.pickWhy, text: $('#tmOut').innerText };
   });
-  check('an unowned backup is replaced by one lufel recommends for Fuuka, with lufel\'s reason, and the page redraws on the ownership change',
+  check('an unowned backup is replaced by one lufel recommends for Fuuka, with lufel\'s reason, once the ownership change is calculated',
     tm2.name === 'Mio Natsukawa' && (tm2.why || []).some(w => /Fuuka's backup/.test(w)) && /replaces Koromaru/.test(tm2.text), JSON.stringify(tm2));
 
   // "Busy elsewhere", clicked in the table: the thief is replaced and listed as busy
@@ -2683,6 +2695,7 @@ function awarenessOverrideDrift() {
   await p.evaluate(() => markSaved());
   await p.fill('#tmWonderSpd', '250');
   await p.dispatchEvent('#tmWonderSpd', 'change');
+  await p.evaluate(() => renderTeams());
   const ws = await p.evaluate(() => ({
     first: $('#tmOut .tmOrder .tmStep').innerText, dirty: isDirty(), saved: savePayload().settings.wonderSpeed,
     restored: (() => { const t = JSON.stringify(savePayload()); state.wonderSpd = 0; applySave(t, ''); return wonderSpeed(); })()

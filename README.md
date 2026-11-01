@@ -76,7 +76,9 @@ substats. That second number is a judgement call rather than a known quantity, w
 exactly why it is exposed — raise it if you think set effects matter more than the default
 assumes.
 
-**Teams** builds a party around one character, usually a damage dealer. By default it
+**Teams** builds a party around one character, usually a damage dealer, when you press
+**Calculate** — set the character, boss, fight length and other options first; changing them
+afterwards marks the team shown as out of date rather than waiting on a new one. By default it
 calculates: every team you can field is priced by how much stronger it makes that character's
 hits, using lufel's damage formula and each member's kit (their buffs and debuffs, unlocked by
 their Awareness and weapon, scaled by their own stats, for as many turns as their rotation keeps

@@ -691,6 +691,9 @@ details.sect>.inner{margin-top:10px}
             <option value="5">5</option>
           </select>
         </div>
+        <!-- The page calculates only on this button (a fresh calculated team takes a few seconds), so
+             the settings above can be changed one after another without waiting on each. -->
+        <button class="primary" id="tmCalc" style="margin-left:auto;align-self:flex-end" title="Work out the team with the settings above (a few seconds on the calculated basis)">Calculate</button>
       </div>
       <!-- Wonder's setup is set once and read on every visit, so it folds under one line that
            says what is set; his Speed stays in the row above, since it places him in the turn order. -->
@@ -707,6 +710,7 @@ details.sect>.inner{margin-top:10px}
       </details>
       <div id="tmBusy" class="tiny" style="margin-top:10px"></div>
     </div>
+    <div id="tmStatus"></div>
     <div id="tmOut"></div>
   </section>
 
@@ -18577,7 +18581,9 @@ function tcTeamsCalc(dps) {
 
 let tmBusy = new Set();   // characters fielded in another team, left out here; saved in the prefs
 let tmPick = {};          // per damage dealer: { key: chosen party, seats: {seat index: name} } — this session only
-let tmStale = true;
+let tmStale = true;       // the controls (picker, Wonder's setup, busy list) need redrawing on the way in
+let tmRunSig = null;      // tmInputSig() of the result on screen; null until Calculate is first pressed
+let tmShownDps = null;    // the damage dealer that result is for
 let tmBuildMemo = null;   // name -> build score, for one render
 
 const TM_DPS = ['ST DPS', 'AoE DPS'];
@@ -18826,9 +18832,46 @@ const TEAM_MECHANICS = {
   }
 };
 
+/* The Teams tab calculates only when Calculate is pressed (the user asked, Nov 2026: a calculated
+   team takes seconds, and every dropdown change used to wait for one). A change to the settings or
+   the save redraws the controls and says the result on screen is out of date; the buttons inside a
+   result (Use, Busy elsewhere, a lufel party, Wonder's suggested setup) still act at once, since they
+   are a request for that team worked out again. */
+const TM_INPUTS = ['#tmChar', '#tmBasis', '#tmRotFit', '#tmRotCompose', '#tmMedic', '#tmFight', '#tmBoss', '#tmWeak', '#tmFoes'];
+function tmInputSig() {
+  return TM_INPUTS.map(id => { const el = $(id); return el.type === 'checkbox' ? (el.checked ? 1 : 0) : el.value; }).join('|') +
+    '|' + [...tmBusy].sort().join(',') + '|' + dataSignature();
+}
+function tmMarkStale() {
+  const box = $('#tmStatus');
+  if (!box) return;
+  const now = $('#tmChar').value;
+  if (tmRunSig == null) {
+    box.innerHTML = `<div class="notice info">Choose the damage dealer and the settings above, then press <b>Calculate</b>.${$('#tmBasis').value === 'calc' ? ' A calculated team takes a few seconds.' : ''}</div>`;
+  } else if (tmRunSig !== tmInputSig()) {
+    const other = tmShownDps && now && tmShownDps !== now;
+    box.innerHTML = `<div class="notice stale-run"><span>${other
+      ? `This is the team for ${esc(tmShownDps)}. Press Calculate for ${esc(now)}.`
+      : 'Worked out before your latest changes. Press Calculate to update it.'}</span><button class="sm" type="button" data-tm-calc>Calculate</button></div>`;
+  } else box.innerHTML = '';
+}
+// redraw the controls and the status line; never the team itself
+function tmRefresh() {
+  tmStale = false;
+  renderTmPicker();
+  tmMarkStale();
+}
 function renderTeamsIfShown() {
   if ($('#tab-teams').classList.contains('hide')) { tmStale = true; return; }
-  renderTeams();
+  tmRefresh();
+}
+function tmCalculate() {
+  const btn = $('#tmCalc');
+  if (btn.disabled) return;
+  btn.disabled = true; btn.textContent = 'Calculating…';
+  $('#tmStatus').innerHTML = '<div class="notice info">Calculating…</div>';
+  // a moment for the browser to paint the above before the seconds of work
+  setTimeout(() => { try { renderTeams(); } finally { btn.disabled = false; btn.textContent = 'Calculate'; } }, 30);
 }
 
 let tmWant = null;   // the prefs' damage dealer, held until the picker has options to select it among
@@ -18991,7 +19034,8 @@ function renderTeams() {
   renderTmPicker();
   const out = $('#tmOut');
   const dps = $('#tmChar').value;
-  if (!dps || !charDef(dps)) { out.innerHTML = ''; return; }
+  tmShownDps = dps; tmRunSig = tmInputSig();
+  if (!dps || !charDef(dps)) { out.innerHTML = ''; tmMarkStale(); return; }
   tmBuildMemo = new Map();
   try {
     const calcMode = $('#tmBasis').value === 'calc';
@@ -19254,25 +19298,28 @@ function renderTeams() {
         <div class="tmMembers" style="margin-top:12px">${rot}${wonderRot}</div>
       </div>
       ${pairs.length || mech ? `<div class="panel"><h2>How this team works</h2><div class="tmMembers">${mech}${pairs.length ? `<div class="tmMember"><div class="hd"><span class="nm">Synergies lufel names</span></div><ul class="tiny" style="margin:4px 0 0 18px">${pairs.join('')}</ul></div>` : ''}</div></div>` : ''}`;
-  } finally { tmBuildMemo = null; }
+  } finally { tmBuildMemo = null; tmMarkStale(); }
 }
 
 function tmSetBusy(n, on) {
   if (n === '*') tmBusy.clear(); else if (on) tmBusy.add(n); else tmBusy.delete(n);
-  renderTeams();
+  // a result on screen is worked out again without them; before the first Calculate, only noted
+  if (tmRunSig != null) renderTeams(); else tmRefresh();
 }
-$('#tmChar').onchange = () => renderTeams();
-$('#tmBasis').onchange = () => { tmSyncCompose(); renderTeams(); };
+$('#tmCalc').onclick = tmCalculate;
+$('#tmStatus').addEventListener('click', e => { if (e.target.closest('[data-tm-calc]')) tmCalculate(); });
+$('#tmChar').onchange = () => tmRefresh();
+$('#tmBasis').onchange = () => { tmSyncCompose(); tmRefresh(); };
 // composing needs fitting on: the second box is greyed while the first is off; the medic box
 // belongs to the calculated basis
 function tmSyncCompose() {
   $('#tmRotCompose').disabled = !$('#tmRotFit').checked;
   $('#tmMedic').disabled = $('#tmBasis').value !== 'calc';
 }
-$('#tmRotFit').onchange = () => { tmSyncCompose(); renderTeams(); };
-$('#tmRotCompose').onchange = () => renderTeams();
-$('#tmMedic').onchange = () => renderTeams();
-['#tmFight', '#tmBoss', '#tmWeak', '#tmFoes'].forEach(id => { $(id).onchange = () => renderTeams(); });
+$('#tmRotFit').onchange = () => { tmSyncCompose(); tmRefresh(); };
+$('#tmRotCompose').onchange = () => tmRefresh();
+$('#tmMedic').onchange = () => tmRefresh();
+['#tmFight', '#tmBoss', '#tmWeak', '#tmFoes'].forEach(id => { $(id).onchange = () => tmRefresh(); });
 // lufel's bosses (BOSSES), Sea of Souls apart; the damage article's Vishnu is the default
 (() => {
   const opt = b => `<option value="${b.id}"${b.id === 8 ? ' selected' : ''}>${esc(b.name)}${b.res ? '' : ' (no resistance data)'} — DEF ${b.def}</option>`;
@@ -19291,11 +19338,14 @@ $('#tmWRefine').onchange = tmWonderChanged;
 $('#tmWonderSpd').onchange = e => { state.wonderSpd = wonderSpeedFrom(e.target.value); commit(); };
 $('#tmBusy').addEventListener('click', e => { const b = e.target.closest('[data-tm-unbusy]'); if (b) tmSetBusy(b.dataset.tmUnbusy, false); });
 $('#tmOut').addEventListener('click', e => {
-  const dps = $('#tmChar').value;
   const b = e.target.closest('button');
-  if (!b || !dps) return;
+  if (!b) return;
+  // a button acts on the team it sits in, even after another damage dealer was picked above
+  if (tmShownDps && charDef(tmShownDps) && $('#tmChar').value !== tmShownDps) $('#tmChar').value = tmShownDps;
+  const dps = $('#tmChar').value;
+  if (!dps) return;
   if (b.dataset.tmBusy) { tmSetBusy(b.dataset.tmBusy, true); return; }
-  if (b.dataset.tmWonder) { state.wonder = wonderFrom(JSON.parse(b.dataset.tmWonder)); commit(); return; }
+  if (b.dataset.tmWonder) { state.wonder = wonderFrom(JSON.parse(b.dataset.tmWonder)); commit(); renderTeams(); return; }
   if (b.dataset.tmReset) { delete tmPick[dps]; renderTeams(); return; }
   if (b.dataset.tmParty) { tmPick[dps] = { key: b.dataset.tmParty, seats: {} }; renderTeams(); return; }
   if (b.dataset.tmUse != null) {
@@ -19328,7 +19378,7 @@ function showTab(tab) {
   if (tab === 'upgrades' && !$('#up-pane-retro').classList.contains('hide')) { if (!rgCache) runRetrograde(); else markStaleRuns(); }
   if (tab === 'upgrades' && !$('#up-pane-fortune').classList.contains('hide')) { if (!frCache) runFortune(); else { renderFrChars(); markStaleRuns(); } }
   if (tab === 'triage') { autoRunTriage(); markStaleRuns(); }
-  if (tab === 'teams' && tmStale) renderTeams();
+  if (tab === 'teams') tmRefresh();   // controls and status only: the team waits for Calculate
 }
 $$('nav button').forEach(b => b.onclick = () => showTab(b.dataset.tab));
 

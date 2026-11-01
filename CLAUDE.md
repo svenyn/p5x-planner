@@ -760,8 +760,17 @@ a second run is byte-identical). Rules that hold it together:
   as lufel's; the long reviews are linked, not copied (the site build is public). A mechanic worth
   explaining goes in `TEAM_MECHANICS` in our own words — today only Fuuka's Oracle Shift.
 - The busy list is a pref (`tmBusy`), the chosen party and seat overrides are this session only
-  (`tmPick`). It reads state and writes none, so `commit()` only redraws it (or marks it
-  stale while hidden, `tmStale`). A team renders in 10-30 ms on the real save.
+  (`tmPick`). It reads state and writes none.
+- **It calculates only when Calculate is pressed** (`#tmCalc`, `tmCalculate`; the user asked, Nov
+  2026: a calculated team takes seconds, and every dropdown change waited for one). A visit, a
+  settings change and `commit()` only redraw the controls (`tmRefresh`) and the status line above
+  the result (`tmMarkStale`): before the first Calculate it says to press it; after, it compares
+  `tmInputSig()` — the controls, the busy list and `dataSignature()` — with the run's and, when they
+  differ, keeps the team on screen marked out of date with a Calculate button. The buttons inside a
+  result (Use, Busy elsewhere, a lufel party, back to the recommended team, Wonder's suggested
+  setup) still work it out again at once, on the damage dealer it shows (`tmShownDps`).
+  `renderTeams()` is the calculation itself, synchronous; the button defers it 30 ms so
+  "Calculating…" paints first. A lufel-basis team renders in 10-30 ms on the real save.
 
 ### Teams, calculated: what the others do for one damage dealer (Oct 2026)
 
