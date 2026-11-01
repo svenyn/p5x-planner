@@ -2982,6 +2982,15 @@ function awarenessOverrideDrift() {
     const k1 = ksRun({ dur: 1 }), k3 = ksRun({ stack: 3 });
     out.fightOnly.stack = { ev: k3.ev, more: k3.skill > k1.skill * 1.05 };
     KIT_STAT_BUFFS[ann.n] = keepKS;
+    // the twins' mask pairs: each pair takes only its own lines, and the fight keeps the best pair
+    const JC = 'Justine & Caroline';
+    const lineKs = id => tcMemberCalc(ann, JC, null, null, false, id).lines.map(l => l.k + (l.v != null ? ':' + (+l.v).toFixed(1) : ''));
+    tcMemo.key = '';
+    const jcTeam = [JC, 'Ryuji Sakamoto', null];
+    const forced = TC_PAIRS[JC].map(o => { tcPairCtx = { [JC]: o.id }; const m = tcSim(ann, jcTeam, false).mult; tcPairCtx = null; return m; });
+    const free = tcSim(ann, jcTeam, false);
+    out.pairs = { ids: TC_PAIRS[JC].map(o => o.id).join(','), MA: lineKs('MA'), MS: lineKs('MS'), SL: lineKs('SL'),
+      best: Math.abs(free.mult - Math.max(...forced)) < 1e-9 && !!TC_PAIRS[JC].find(o => o.id === free.pairs[JC]) && Math.abs(forced[TC_PAIRS[JC].findIndex(o => o.id === free.pairs[JC])] - free.mult) < 1e-9 };
     // Kira's Bleed: its Almighty part at the cap (60% of ATK a stack) makes damage over time most of his damage
     const kira = charDef('Kira Kitazato'); tcMemo.key = '';
     const kp = tcSimRun(tcSimPrep(kira, [null, null, null], false, true), [kira.n], false).parts;
@@ -3059,6 +3068,9 @@ function awarenessOverrideDrift() {
     th.selfLines.party > 1.1 && th.selfLines.passive > 1.1 && near(th.selfLines.notOwn, 1, 1e-9) && near(th.selfLines.ally, 1, 1e-9) && near(th.selfLines.foe1, 1, 1e-9) && th.selfLines.foe2 > 1.1, JSON.stringify(th.selfLines));
   check('a fight-only stat line (set off by a Highlight or by another ally) stays out of stats and build scores and reaches the fight; a stacking one adds a permanent stack each time',
     !th.fightOnly.stats && th.fightOnly.fight && JSON.stringify(th.fightOnly.stack.ev) === '["Infinity/3"]' && th.fightOnly.stack.more, JSON.stringify(th.fightOnly));
+  check('the twins\' mask pairs: Strategist keeps its party ATK, Medic gets the party damage passive, Saboteur the DEF down and damage taken and no party ATK; the fight plays the best pair',
+    th.pairs.ids === 'MA,MS,SL' && th.pairs.MA.includes('atkPct:30.0') && !th.pairs.MA.includes('dm:24.0') && th.pairs.MS.includes('dm:24.0') && !th.pairs.MS.includes('atkPct:30.0') &&
+    th.pairs.SL.some(x => x.startsWith('defdown:')) && th.pairs.SL.includes('dm:24.0') && !th.pairs.SL.some(x => x.startsWith('atkPct')) && !!th.pairs.best, JSON.stringify(th.pairs));
   check('Kira\'s Bleed counts its Almighty part at the cap (60% of ATK a stack, no crit), so damage over time is most of his damage',
     th.kira.entry && th.kira.dot > 0.45, JSON.stringify(th.kira));
 

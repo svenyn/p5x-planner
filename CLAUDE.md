@@ -1080,6 +1080,20 @@ damage formula (`docs/DATA-SOURCES.md`, the damage-formula section):
   ATK per Highlight (`stack: 5`, permanent). Calibration: mean 69.5 (69.6 before), median 71, range
   42-84, bands 8/53/7 unchanged. On the real save no Optimise pick moved; Akihiko's build score fell
   0.4 (the crit damage sits in his perfect build too).
+- **The twins' mask pairs** (Nov 2026, the user asked): Justine & Caroline pick 2 of 4 masks before
+  battle, and the pair sets their role (Medic, Strategist, Sweeper, Guardian, Saboteur, Assassin), their
+  Skills 1 and 2, their passive and Two Masks as One. Only the Strategist pair was entered. `TC_PAIRS`
+  now lists the three that help someone else's damage — Strategist (party ATK), Medic (party damage
+  +24% passive, Two Masks +43.9% damage) and Saboteur (foes take +24% passive, Two Masks DEF −50.8%) —
+  and a TEAM_BUFFS line with `pair` belongs to those pairs only. `tcSim` prices a lineup with a pair
+  character under each pair (`tcPairCtx` forces one) and keeps the best, returning `pairs`;
+  `tcLineupCalc` holds that pair for the members, their parts and Wonder's (`tcLineupAt`); the quick
+  screen takes the pair whose lines alone add most for the damage dealer (`tcPairFor`); the member,
+  rotation-fit and fight memos key on the pair. The seat says which masks to equip (`tmPairHtml`).
+  On the real save Strategist wins with Ann, Makoto Yuki and Mitsuru, Medic with Frostgale Kotone and
+  Tempest Riko, Saboteur nowhere (Kumi's DEF down is already there); the twins still make no top team
+  on that save. A team with the twins renders in about 1.6 s (three fights a lineup). lufel's rotations
+  are written for the Strategist pair and are read with the same turns for the others.
 - **Kira's Bleed counts its Almighty part** (Nov 2026): 1% of the target's max HP per stack a turn,
   capped at 60% of his ATK (×1.5 from A1), entered at the cap since a boss always reaches it. Only
   lufel's Korean and Chinese text print the cap; the English and Japanese do not, so Global having it
