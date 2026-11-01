@@ -1076,6 +1076,14 @@ damage formula (`docs/DATA-SOURCES.md`, the damage-formula section):
   medic by another, and a team chosen without one gives way. With no medic available the team is built
   without one and the headline says so. On the real save Yukari wins it for Ann, Makoto Yuki, Ryuji and
   Firecracker Rin, at a real cost (Rin 22.4× to 11.7×: Mio goes, Kotone Shiomi stays).
+  **The twins are a medic in their Medic masks** (`TC_MEDIC_PAIR`, Nov 2026; the user found them never
+  offered): Mischief & Innocence + Service & Admonition, whose Two Masks as One heals. A team whose only
+  medic they are holds them to that pair (`tcMedicPairs`, read by `tcSim`'s pair loop), so with the box on
+  any lineup priced that way — lufel's team for comparison included — wears it; beside a Healer they wear
+  whichever masks do most, and the seat reads "Medic" only in the Medic masks. A damage dealer is a medic
+  only by role (`tcIsHealer`), so the twins as damage dealer still get one. On the real save (Nov 1 2026),
+  with the twins at Awareness 1, they take Kasumi's medic seat at 19.1× against Yukari's 16.6×; at
+  Awareness 0 (the saved Setup) Yukari keeps it, 16.6× to 16.3×.
 - A member's part on the page is the team's value with them over without them, so parts do not
   multiply to the total. Replacements are priced as the whole team with them swapped in, and
   lufel's recommended team is priced the same way for comparison in the header.
@@ -1167,6 +1175,20 @@ damage formula (`docs/DATA-SOURCES.md`, the damage-formula section):
   Tempest Riko, Saboteur nowhere (Kumi's DEF down is already there); the twins still make no top team
   on that save. A team with the twins renders in about 1.6 s (three fights a lineup). lufel's rotations
   are written for the Strategist pair and are read with the same turns for the others.
+  **Kasumi's second Glow from the twins** (Nov 2026, the user asked; lufel's partner note): with the twins
+  at Awareness 1+ as her Dance Partner, their automatic Two Masks as One is a second skill use in the
+  same turn and sets off a second Cinderella Glow. A `DPS_KIT`/`DPS_KIT_BONUS` line with `mate: { n, aw }`
+  counts only with that character in a thief seat at that Awareness (`tcMateOk`; `tcKitFor`/
+  `tcKitBonusFor` take the lineup, and with none never count it); a `DPS_KIT` component with `byTok`
+  fires on that teammate's action only when their turn carries the token ('3↺') and it is their
+  `byTurn` [first, last] action since the damage dealer's `byAfter` skill (`mateActs` in `tcSimRun`), so
+  the twins' fitted rotation decides how many Glows double. Below Kasumi's A1 it also adds the third
+  Lead Step (Highlight +15%, judged like her other stacks; `awBelow` on `DPS_KIT_BONUS`). On the real
+  save, twins at Awareness 1: their Kasumi team 17.8× to 19.7×, still under Mayumi / Kotone Shiomi /
+  Fuuka's 21.3×. Not entered: Tempest Riko's A6 note (her automatic Storm of Petals fires when the main
+  target uses a skill, once per Blossoming Season, and whether that falls in her Dance Partner turn is
+  not settled), and the twins' Skill Amplification (Two Masks as One, 14.6-17% to other allies), still in
+  `TEAM_BUFF_SKIPS`, which undercounts them in every team.
 - **Shoki's Improv states** (Nov 2026): he switches state each turn, and his Skill 3 gives the main
   target crit damage (Electrifying Performance, the only one entered before), pierce (Tempestuous
   Drama), damage over time (Blazing Passion) or Technical Precision (Chilling Intensity, with its +20%

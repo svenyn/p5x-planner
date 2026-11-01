@@ -3643,6 +3643,57 @@ function awarenessOverrideDrift() {
   check('the page names the medic seat and the medic, the box is a saved pref, greyed on the lufel basis',
     (md.roles || []).includes('Medic') && /With a medic/.test(md.noteText || '') && md.pref === true && md.greyed, JSON.stringify({ roles: md.roles, note: md.noteText, pref: md.pref, greyed: md.greyed }));
 
+  // the twins: a medic in their Medic masks, and Kasumi's second Glow from their automatic Two Masks as One
+  const jc = await p.evaluate(() => {
+    const JC = 'Justine & Caroline', K = 'Kasumi Yoshizawa';
+    const own = ns => { CHARACTERS.forEach(c => { const cs = state.chars[c.n]; if (cs) { cs.owned = ns.includes(c.n); cs.benched = false; } }); tcMemo.key = ''; };
+    const jcAw = aw => { state.chars[JC].loadout = Object.assign({}, charLoadout(JC), { awareness: aw }); tcMemo.key = ''; };
+    own([K, JC, 'Kotone Shiomi', 'Mayumi Hashimoto', 'Hatsune Miku']);
+    tmBusy = new Set(); tmPick = {};
+    $('#tmBasis').value = 'calc'; tmSyncCompose(); $('#tmRotFit').checked = false;
+    const out = {};
+    // with no Healer owned, the twins are the medic, in their Medic masks
+    jcAw(0);
+    $('#tmMedic').checked = true;
+    const T = tcTeams(K), seat = T.team.seats.find(s => s.name === JC && s.seat === 'f');
+    out.medicSeat = seat ? { role: seat.role, pair: seat.pair } : null;
+    out.everyListed = T.list.every(l => l.calc.names.slice(0, 2).includes(JC));
+    out.note = T.team.calc.medic;
+    // beside a Healer they wear whichever masks do most
+    out.besideHealer = tcMedicPairs(K, [JC, 'Yukari Takeba', 'Hatsune Miku']);
+    out.alone = tcMedicPairs(K, [JC, 'Kotone Shiomi', 'Hatsune Miku']);
+    $('#tmMedic').checked = false;
+    out.offPairs = tcMedicPairs(K, [JC, 'Kotone Shiomi', 'Hatsune Miku']);
+    // Kasumi's second Glow: listed only with the twins at Awareness 1+, and priced only when the fight plays it
+    const D = charDef(K), names = [JC, 'Kotone Shiomi', 'Hatsune Miku'];
+    const mateLines = ns => tcKitFor(D, ns).filter(c => c.mate).length + tcKitBonusFor(D, ns).filter(b => b.mate).length;
+    const keepKit = DPS_KIT[K], keepBonus = DPS_KIT_BONUS[K];
+    const fight = noMate => {
+      if (noMate) { DPS_KIT[K] = keepKit.filter(c => !c.mate); DPS_KIT_BONUS[K] = keepBonus.filter(b => !b.mate); }
+      tcMemo.key = '';
+      try { return tcHot(() => { const s = tcSim(D, names, false); return { total: s.total, fu: (s.parts || {}).fu || 0 }; }); }
+      finally { DPS_KIT[K] = keepKit; DPS_KIT_BONUS[K] = keepBonus; }
+    };
+    out.linesA0 = mateLines(names);
+    out.a0 = [fight(false), fight(true)];
+    jcAw(1);
+    out.linesA1 = mateLines(names);
+    out.linesNoTeam = mateLines(undefined);
+    out.linesOtherTeam = mateLines(['Mayumi Hashimoto', 'Kotone Shiomi', 'Hatsune Miku']);
+    out.a1 = [fight(false), fight(true)];
+    jcAw(0);
+    $('#tmRotFit').checked = true;
+    return out;
+  });
+  check('"Include a medic" counts the twins as a medic in their Medic masks when no Healer is owned, and labels the seat',
+    jc.medicSeat && jc.medicSeat.role === 'Medic' && jc.medicSeat.pair === 'MS' && jc.everyListed && jc.note && (jc.note.names || []).includes('Justine & Caroline'), JSON.stringify(jc));
+  check('the twins are held to their Medic masks only as the team\'s only medic, and only with the box on',
+    jc.besideHealer === null && jc.alone && jc.alone['Justine & Caroline'] === 'MS' && jc.offPairs === null, JSON.stringify({ b: jc.besideHealer, a: jc.alone, off: jc.offPairs }));
+  check('Kasumi\'s second Glow is in her kit only with the twins in a thief seat at Awareness 1 or above',
+    jc.linesA0 === 0 && jc.linesA1 > 0 && jc.linesNoTeam === 0 && jc.linesOtherTeam === 0, JSON.stringify({ a0: jc.linesA0, a1: jc.linesA1, none: jc.linesNoTeam, other: jc.linesOtherTeam }));
+  check('the twins\' automatic Two Masks as One sets off a second Glow in the fight at their Awareness 1, nothing at 0',
+    jc.a1[0].total > jc.a1[1].total && jc.a1[0].fu > jc.a1[1].fu && Math.abs(jc.a0[0].total - jc.a0[1].total) < 1e-9, JSON.stringify({ a0: jc.a0, a1: jc.a1 }));
+
   await p.evaluate(k => { state.chars = JSON.parse(k.chars); tmBusy = new Set(k.busy); tmPick = JSON.parse(k.pick); commit(); showTab('roster'); }, tmKeep);
 
   check('no browser storage is touched (Cowork artifact constraint)', await p.evaluate(() => { try { return localStorage.length === 0 && sessionStorage.length === 0; } catch (e) { return true; } }));

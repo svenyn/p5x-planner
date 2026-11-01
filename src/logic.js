@@ -12192,7 +12192,9 @@ const DPS_KIT = {
   ],
   'Kasumi Yoshizawa': [
     { kind: 'fu', v: [121.6, 134.1, 129.1, 141.5], on: 'self:2', cond: 'the Dance Partner uses a skill during their Dance Partner turn', why: 'Invitation: when the ally with Dance Partner uses a skill, Kasumi casts Cinderella Glow at its partner-triggered value (121.6%). Dance Partner lasts 1 turn, so one per Invitation; priced on Invitation because only the one chosen ally can trigger it.' },
-    { kind: 'fu', v: [121.6, 134.1, 129.1, 141.5], on: 'self:2', aw: 1, cond: 'the Dance Partner uses a skill on its second turn too', why: 'A1 Charming Invite: Dance Partner lasts 1 more turn - a second triggered Cinderella Glow.' }
+    { kind: 'fu', v: [121.6, 134.1, 129.1, 141.5], on: 'self:2', aw: 1, cond: 'the Dance Partner uses a skill on its second turn too', why: 'A1 Charming Invite: Dance Partner lasts 1 more turn - a second triggered Cinderella Glow.' },
+    { kind: 'fu', v: [121.6, 134.1, 129.1, 141.5], on: 'ally', mate: { n: 'Justine & Caroline', aw: 1 }, byTok: '3↺', byAfter: '2', byTurn: [1, 1], why: 'Invitation with J&C (Awareness 1+) as Dance Partner: their automatic Two Masks as One (Strict Tolerance) is a second skill use in the same turn, so it sets off a second Cinderella Glow (lufel\'s partner note). Played out: only on the twins\' first turn after Invitation, and only when that turn carries the automatic cast.' },
+    { kind: 'fu', v: [121.6, 134.1, 129.1, 141.5], on: 'ally', aw: 1, mate: { n: 'Justine & Caroline', aw: 1 }, byTok: '3↺', byAfter: '2', byTurn: [2, 2], why: 'A1 Charming Invite with J&C as Dance Partner: the same second Glow on the twins\' second Dance Partner turn, when it carries the automatic Two Masks as One.' }
   ],
   'Goro Akechi': [
     { kind: 'fu', v: [11.6, 12.8, 12.3, 13.5], on: 'self:3', after: '2', dur: 2, why: 'Decisive Scheme: Stratagem (2 turns) adds 1 hit to Arrow of Perjury, at 15% (same target).' },
@@ -12370,7 +12372,7 @@ const DPS_KIT_SKIPS = {
   'Kasumi Yoshizawa': [
     'Glows are priced at Invitation\'s cast, at most a round before the partner\'s skill actually triggers them.',
     'A6 second Highlight in Masquerade deals 80% of normal; if the simulator prices lufel\'s \'2HL\' token as two full Highlights it is 20% of one Highlight high.',
-    'J&C\'s A1 auto Skill 3 doubling the triggered Glow (lufel\'s partner note) is teammate-specific and not entered.'
+    'J&C\'s A1 auto Skill 3 doubling the triggered Glow (lufel\'s partner note) is priced, played out on the twins\' Dance Partner turns. Tempest Riko\'s A6 note (her automatic Storm of Petals counting toward Invitation) is not: Full Blossom fires it when the main target uses a skill, once per Blossoming Season, and whether that falls in her Dance Partner turn is not settled.'
   ],
   'Goro Akechi': [
     'From A1 Stratagem lasts 4 turns; the 2-round window above misses its extra hit on a Skill 3 cast 3-4 rounds after Skill 2 (1 in 3 casts of lufel\'s A1 rotation).',
@@ -12581,6 +12583,7 @@ const DPS_KIT_BONUS = {
     { to: 'skill:3', v: 30, after: 'Transform', dur: 2, why: 'Midnight Magic (Skill 3): skill damage +30% when cast in Masquerade. lufel writes it as \'Transform+HL+3\' (Spellbound Cinders on her own turn: Masquerade to the end of the next turn)' },
     { to: 'hl', v: 15, stacks: 2, why: 'Highlight Lead Step: +15% Highlight damage per Lead Step. In lufel\'s 2,1,Transform+HL+3: the partner\'s skill after Invitation triggers a Glow (+1) and Skill 1 gives +1, so 2 at the Highlight (stacks are lost when Masquerade ends)' },
     { to: 'hl', v: 15, aw: 1, why: 'Charming Invite (A1): Dance Partner lasts a second turn, a second partner Glow, so 3 Lead Steps (the cap) at the Highlight' },
+    { to: 'hl', v: 15, awBelow: 1, mate: { n: 'Justine & Caroline', aw: 1 }, why: 'With J&C (Awareness 1+) as Dance Partner below her A1: their automatic Two Masks as One sets off a second partner Glow, one more Lead Step, so 3 (the cap) at the Highlight. Judged like the stacks above, not played out; from her A1 the cap is already reached' },
     { to: 'hl', v: 50, aw: 4, why: 'Toll the Hour (A4): Highlight damage +50% with 4 Step stacks: 3 Lead Steps (from A1, as above) + Invitation\'s Follow Step' },
     { to: 'all', ladder: [8.4, 11.1, 11.1, 13.8, 13.8, 16.5, 16.5], stacks: 2, chance: 0.6, weapon: '5', why: 'Royal Etoile (5-star weapon): each ally Highlight/Theurgy gives a Glass Slipper, her damage +8.4-16.5% for 3 turns, 2 stacks. Her own Highlight costs no gauge, so the gauge goes to teammates; at about 0.5 ally Highlights a round, 3-turn stacks average about 1.2: judged 2 x 0.6' },
     { to: 'hl', ladder: [30, 39, 39, 48, 48, 57, 57], chance: 0.45, weapon: '5', why: 'Royal Etoile (5-star weapon): her Highlight damage +30-57% more at 2 Glass Slipper stacks; with the rate above, 2 are held about 45% of the time' }
@@ -13194,10 +13197,14 @@ const tcIsVc = e => /Virtual Concert/.test(e.cond || '');
    so outright with `foes: 'one'` or `'all'`. Only matters when the page sets more than one enemy. */
 const tcOneFoe = e => e.foes ? e.foes === 'one' : !/all foes|all enemies|\bfoes\b/i.test(e.why || '') && /\b(foe|target|attacker)\b/i.test(e.why || '');
 
+/* A kit line that needs a particular teammate (`mate: { n, aw }`: that character in one of the two thief
+   seats, at that Awareness or above) counts only in a team that has them; with no team (`names` absent)
+   it never does. */
+const tcMateOk = (x, names) => !x.mate || (!!names && names.slice(0, 2).includes(x.mate.n) && tmAw(x.mate.n) >= (x.mate.aw || 0));
 /* The damage dealer's kit beyond SKILL_DMG, as the sim needs it: each component with its tier value. */
-function tcKitFor(D) {
+function tcKitFor(D, names) {
   const lo = charLoadout(D.n), aw = +lo.awareness || 0, ti = kitTierIndex(D, lo), ri = Math.max(1, Math.min(7, +lo.refine || 1)) - 1;
-  return (DPS_KIT[D.n] || []).filter(c => (c.aw == null || aw >= c.aw) && (!c.weapon || lo.weapon === c.weapon)).map(c => {
+  return (DPS_KIT[D.n] || []).filter(c => (c.aw == null || aw >= c.aw) && (!c.weapon || lo.weapon === c.weapon) && tcMateOk(c, names)).map(c => {
     const v = c.ladder ? c.ladder[ri] : Array.isArray(c.v) ? c.v[ti] : c.v;
     // a token written with its "automatic" mark ("tok:3↺") is the same token
     const strip = x => x == null ? x : String(x).replace(/↺/g, '');
@@ -13207,9 +13214,9 @@ function tcKitFor(D) {
 }
 /* The damage dealer's own damage bonuses (DPS_KIT_BONUS) that apply at their Setup, with the value
    resolved; `fewer` counts the foes the page sets. */
-function tcKitBonusFor(D) {
+function tcKitBonusFor(D, names) {
   const lo = charLoadout(D.n), aw = +lo.awareness || 0, ti = kitTierIndex(D, lo), ri = Math.max(1, Math.min(7, +lo.refine || 1)) - 1;
-  return (DPS_KIT_BONUS[D.n] || []).filter(b => (b.aw == null || aw >= b.aw) && (!b.weapon || lo.weapon === b.weapon)).map(b => {
+  return (DPS_KIT_BONUS[D.n] || []).filter(b => (b.aw == null || aw >= b.aw) && (b.awBelow == null || aw < b.awBelow) && (!b.weapon || lo.weapon === b.weapon) && tcMateOk(b, names)).map(b => {
     const v = b.ladder ? b.ladder[ri] : Array.isArray(b.v) ? b.v[ti] : b.v;
     const val = (v || 0) * (b.stacks || 1) * (b.chance == null ? 1 : b.chance) * (b.fewer ? Math.max(0, b.fewer - tcFoes()) : 1);
     const always = b.alwaysAw != null && aw >= b.alwaysAw;
@@ -13340,7 +13347,7 @@ function tcSimPrep(D, names, fit, blank, opt) {
   if (thieves.some(a => a.n && a.n !== 'Wonder' && state.cards.filter(c => c.equipped === a.n && c.set === 'Prosperity' && c.slot !== 'Space').length >= 4)) gauge0 += 25;
   const concerto = thieves.find(a => a.n === 'Ayaka Sakai [Summer]') || null;
   gauge0 = Math.min(gauge0, concerto ? (concerto.aw >= 2 ? 300 : 250) : 100);
-  return { D, E, F, X0, skill, hlCrit, dpsWeak: tcWeakFor(D.e) === 'weak', foes: tcFoes(), aoe: (SKILL_DMG[D.n] || {}).aoe || [0, 0, 0, 0], alm: (SKILL_DMG[D.n] || {}).alm || [0, 0, 0, 0], dps, thieves, elu, concerto, gauge0, kit: tcKitFor(D), bonus: tcCurseBonus(tcKitBonusFor(D), X0.curse || 0), names, mems, blank, fuuka, gated, X0one, constsMin,
+  return { D, E, F, X0, skill, hlCrit, dpsWeak: tcWeakFor(D.e) === 'weak', foes: tcFoes(), aoe: (SKILL_DMG[D.n] || {}).aoe || [0, 0, 0, 0], alm: (SKILL_DMG[D.n] || {}).alm || [0, 0, 0, 0], dps, thieves, elu, concerto, gauge0, kit: tcKitFor(D, names), bonus: tcCurseBonus(tcKitBonusFor(D, names), X0.curse || 0), names, mems, blank, fuuka, gated, X0one, constsMin,
     ailSelf: (TC_AIL_SELF[D.n] || []).filter(c => c.aw == null || (+charLoadout(D.n).awareness || 0) >= c.aw)
       // their own stat lines on a foe with an ailment (Rin's Prosperity in Red), left out of the baseline (`noTimed`)
       .concat(kitStatBuffs(D, null).filter(b => b.needAil && TC_KIT_STAT_K[b.s] && b.v).map(b => ({ k: TC_KIT_STAT_K[b.s], v: b.v, needAil: b.needAil }))),
@@ -13371,6 +13378,7 @@ function tcSimRun(P, order, hold) {
   const cap = concerto ? (concerto.aw >= 2 ? 300 : 250) : 100;
   const cover = new Map();   // owner name -> Map(ref -> DPS actions it covered)
   const lastUse = {};        // the damage dealer's skills: round last used, for kit components gated on it
+  const mateActs = {};       // the same skills: each teammate's actions since (name -> count), for `byTurn`
   const perRound = new Map();
   // Wavecatcher Miyu's Surf (TC_SURF): her SP, Surf, Offshore stacks, SP recovered, catches, her turns in Surf
   const SF = P.surf ? Object.assign({}, P.surf, { sp: P.surf.full ? P.surf.spMax : 0, on: false, off: 0, got: 0, mark: 0, n: 0, catches: 0, inSurf: 0 }) : null;
@@ -13473,6 +13481,14 @@ function tcSimRun(P, order, hold) {
       kit.forEach((c, i) => {
         if (c.on !== on && !(on === 'ally' && c.on === 'allySkill')) return;
         if (c.after != null && !(lastUse[c.after] != null && round - lastUse[c.after] < (c.dur || 1))) return;
+        /* `byTok`: only when the `mate` acts with that token in their turn, on their `byTurn` [first, last]
+           action since the damage dealer last used `byAfter` (Kasumi's Dance Partner turns after Invitation) */
+        if (c.byTok) {
+          const by = opts && opts.by, m = mateActs[c.byAfter];
+          if (!by || by.n !== c.mate.n || !m || !(opts.toks || []).includes(c.byTok)) return;
+          const k = (m.get(by.n) || 0) + 1;
+          if (k < c.byTurn[0] || k > c.byTurn[1]) return;
+        }
         if (c.max) { const k = round + '|' + i; const n = perRound.get(k) || 0; if (n >= c.max) return; perRound.set(k, n + 1); }
         if (c.notAfter != null && lastUse[c.notAfter] != null && round - lastUse[c.notAfter] < (c.notDur || 1)) return;
         if (c.ailNone && ailN()) return;
@@ -13643,8 +13659,8 @@ function tcSimRun(P, order, hold) {
         // the turn's skills and tokens ("Gunshot", "Transform", a whole "1111" Heat Score) count as used
         // before its components fire, so one gated on them ("after Transform") fires on that turn too
         const raw = String(step).split('+').map(t => t.trim().replace(/↺/g, '')).filter(m => m && m !== '-');
-        uses.forEach((u, i) => { if (u) lastUse[String(i + 1)] = round; });
-        raw.forEach(m => { lastUse[m] = round; });
+        uses.forEach((u, i) => { if (u) { lastUse[String(i + 1)] = round; mateActs[String(i + 1)] = new Map(); } });
+        raw.forEach(m => { lastUse[m] = round; mateActs[m] = new Map(); });
         // their own buffs the turn's skills and tokens set off, on before the hit (a Theurgy's or a
         // Highlight's are set off where it fires)
         const mine = new Set([...toks, ...raw].filter(t => t !== 'HL' && t !== 'TH'));
@@ -13686,7 +13702,8 @@ function tcSimRun(P, order, hold) {
         // Wonder's schedule tokens are his own; a teammate's skills and tokens inflict
         if (!a.wonder) { const t = tcAilToks(step); t.delete('HL'); t.delete('TH'); inflict(a, t); }
         // a teammate acting, kit or not (the reference fight's blank teammates act too)
-        kitFire('ally', curX());
+        kitFire('ally', curX(), { by: a, toks: String(step).split('+').map(t => t.trim()) });
+        Object.values(mateActs).forEach(m => { if (a.n) m.set(a.n, (m.get(a.n) || 0) + 1); });
         surfCatch();
       }
       // Summer Ayaka's own gauge: Celestial Concerto restores 100%, Improvised Song (Skill 2, 2 turns;
@@ -13933,9 +13950,12 @@ function tcSim(D, names, fit, noWonder, wset) {
   const open = [D.n].concat(names).filter(n => n && TC_PAIRS[n] && !(tcPairCtx && tcPairCtx[n]));
   if (open.length) {
     const n = open[0], keep = tcPairCtx;
+    // the twins as the team's only medic wear their Medic masks ("Include a medic")
+    const med = tcMedicPairs(D.n, names);
     let top = null;
     try {
       for (const o of TC_PAIRS[n]) {
+        if (med && med[n] && o.id !== med[n]) continue;
         tcPairCtx = Object.assign({}, keep, { [n]: o.id });
         const t = tcSim(D, names, fit, noWonder, wset);
         if (!top || t.mult > top.mult + 1e-9) top = t;
@@ -14025,9 +14045,23 @@ const TC_BACKUP_TOP = 40, TC_FULL_TOP = 3;
 /* "Include a medic" (#tmMedic, a pref): one of the two thief seats goes to a medic — lufel's Healer
    role — unless the damage dealer is one. Healing is not priced, so the medic is whichever adds most
    to the damage dealer, and the rest of the team is searched around them. Fuuka's backup sits outside
-   the party and never counts. With no medic available the search runs as if the box were off. */
-const tcIsMedic = n => !!n && (charDef(n) || {}).arch === 'Healer';
-const tcMedicNeed = dps => !!($('#tmMedic') && $('#tmMedic').checked) && !tcIsMedic(dps);
+   the party and never counts. With no medic available the search runs as if the box were off.
+   The twins are a medic in their Medic masks (TC_MEDIC_PAIR: Mischief & Innocence + Service &
+   Admonition, whose Two Masks as One heals): a team whose only medic they are holds them to that
+   pair (tcMedicPairs). A damage dealer is a medic only by role, so the twins as the damage dealer
+   still get one. */
+const TC_MEDIC_PAIR = { 'Justine & Caroline': 'MS' };
+const tcIsHealer = n => !!n && (charDef(n) || {}).arch === 'Healer';
+const tcIsMedic = n => tcIsHealer(n) || !!TC_MEDIC_PAIR[n];
+const tcMedicNeed = dps => !!($('#tmMedic') && $('#tmMedic').checked) && !tcIsHealer(dps);
+// the pair a thief must wear for the team to have its medic, or null
+function tcMedicPairs(dps, names) {
+  if (!tcMedicNeed(dps)) return null;
+  const th = names.slice(0, 2);
+  if (th.some(tcIsHealer)) return null;
+  const n = th.find(x => TC_MEDIC_PAIR[x]);
+  return n ? { [n]: TC_MEDIC_PAIR[n] } : null;
+}
 const tcMedicsFree = dps => CHARACTERS.filter(c => c.n !== dps && tcIsMedic(c.n) && TEAM_BUFFS[c.n] && !tmWhyOut(c.n)).map(c => c.n);
 const tcHasMedic = names => tcIsMedic(names[0]) || tcIsMedic(names[1]);
 function tcSearch(dps, limit) {
@@ -14148,6 +14182,8 @@ function tcTeamsCalc(dps) {
     if (!names[3] || names.slice(0, 3).includes(names[3])) names[3] = tcBestBackup(D, names.slice(0, 3));
   } else names.length = 3;
   const L = tcLineup(D, names);
+  // the twins are this team's medic only in the Medic masks the fight chose for them
+  const asMedic = n => tcIsHealer(n) || (!!TC_MEDIC_PAIR[n] && (L.pairs || {})[n] === TC_MEDIC_PAIR[n]);
   /* Replacements and Wonder's suggestion are fought with the cheaper fit (the damage dealer's in the
      fight, the teammates' quick), so they are measured against this team priced that way and put on
      the headline's scale. */
@@ -14155,7 +14191,7 @@ function tcTeamsCalc(dps) {
   const roles = ['Thief', 'Thief', 'Elucidator', 'Backup (Oracle Shift)'];
   const kinds = ['f', 'f', 'e', 'b'];
   const seats = [{ seat: 'f', role: TM_DPS.includes(D.arch) ? 'Damage dealer' : 'Built around', orig: dps, name: dps, fixed: true, pair: L.pairs && L.pairs[dps] }];
-  names.forEach((n, i) => seats.push({ seat: kinds[i], role: medics && i < 2 && tcIsMedic(n) ? 'Medic' : roles[i], orig: null, name: n,
+  names.forEach((n, i) => seats.push({ seat: kinds[i], role: medics && i < 2 && asMedic(n) ? 'Medic' : roles[i], orig: null, name: n,
     chosen: seatsPick[i + 1] === n && !!n, part: L.parts[i], lines: L.members[i] ? L.members[i].lines : [],
     shifts: L.members[i] && L.members[i].shifts, swapSkill: L.members[i] && L.members[i].swapSkill, pair: n && L.pairs ? L.pairs[n] : null,
     known: !!(n && (TEAM_BUFFS[n] || (charDef(n) || {}).arch === 'Navigator')),
@@ -14203,8 +14239,8 @@ function tcTeamsCalc(dps) {
   return {
     list: found.map(f => ({ party: null, calc: { key: 'calc:' + f.names.map(n => n || '').join('|'), names: f.names, mult: f.mult * scale } })),
     team: { party: null, seats, calc: { key, mult: L.mult, lufel, sim: L.sim,
-      medic: tcIsMedic(dps) && $('#tmMedic').checked ? { self: true }
-        : medics ? { names: names.slice(0, 2).filter(tcIsMedic), none: !medics.length } : null } }
+      medic: tcIsHealer(dps) && $('#tmMedic').checked ? { self: true }
+        : medics ? { names: names.slice(0, 2).filter(asMedic), none: !medics.length } : null } }
   };
 }
 
@@ -14671,7 +14707,8 @@ function renderTeams() {
         const S = C.sim, sum = Object.values(S.parts || {}).reduce((a, b) => a + b, 0) || 1;
         const pills = Object.entries(S.parts || {}).filter(([, v]) => v / sum >= 0.005).sort((a, b) => b[1] - a[1])
           .map(([k, v]) => `<span class="st"><small>${esc(TC_PART_LABEL[k] || k)}</small> <b>${Math.round(100 * v / sum)}%</b></span>`).join('');
-        const kit = tcKitFor(d), bonus = tcKitBonusFor(d), skips = DPS_KIT_SKIPS[s.name] || [];
+        const mates = team.seats.filter(x => !x.fixed && x.seat === 'f').map(x => x.name);
+        const kit = tcKitFor(d, mates), bonus = tcKitBonusFor(d, mates), skips = DPS_KIT_SKIPS[s.name] || [];
         const selfLines = (tcMember(d, s.name, null, null, false).lines || []);
         status = tmPairHtml(s) + '<div class="muted" style="margin-bottom:4px">the character this team is built around — their own damage in this fight:</div>' +
           (pills ? `<div class="tcSum" title="Shares of ${esc(s.name)}'s own damage over the fight, with this team">${pills}</div>` : '') +
