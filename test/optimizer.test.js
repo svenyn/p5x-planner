@@ -2907,7 +2907,8 @@ function awarenessOverrideDrift() {
     SKILL_DMG[ann.n] = keepS; TEAMS[ann.n] = keepAT; TEAMS['Ryuji Sakamoto'] = keepRT; TEAM_BUFFS['Ryuji Sakamoto'] = keepRB; tmSpeed = keepSp; tcMemo.key = '';
     out.skillBad = Object.entries(SKILL_DMG).filter(([n, s]) => !charDef(n) || !['HL', 'TH'].includes(s.hl) || !Array.isArray(s.d) || s.d.length !== 4 || s.d.some(x => !(x >= 0)) || (s.hl === 'TH' && !(s.th > 0))).map(([n]) => n);
     out.skillN = Object.keys(SKILL_DMG).length;
-    const ON = /^(self|self:[123]|tok:.+|selfHL|ally|allySkill|allyHL|anyHL|turnEnd|turnStart|round)$/;
+    // 'wave': fired by Wavecatcher Miyu's Surf engine (TC_SURF), her character only
+    const ON = /^(self|self:[123]|tok:.+|selfHL|ally|allySkill|allyHL|anyHL|turnEnd|turnStart|round|wave)$/;
     out.kitBad = [];
     Object.entries(DPS_KIT).forEach(([n, list]) => { if (!charDef(n)) out.kitBad.push(n); list.forEach((c, i) => { if (!['res', 'fu', 'dot', 'hit'].includes(c.kind) || !ON.test(c.on) || !c.why || (c.v == null && !c.ladder)) out.kitBad.push(n + ' #' + i); }); });
     out.kitN = Object.keys(DPS_KIT).length;
@@ -3490,12 +3491,23 @@ function awarenessOverrideDrift() {
       return { move: !!tcComposeSetup(haru, tmRotPick(haru, new Set([haru]))).R.moves['3+Gunshot'], core: tmRotPick(haru, new Set([haru])).pick.some(o => /Mindscape Core/.test(o.label)) }; };
     out.mind = { off: mindMoves(false), on: mindMoves(true) };
     state.chars[haru].loadout = keepLo;
-    // Surf's lines follow Paddle Out below A6 and hold for good from it
+    // Surf's lines hold while Surf is on below A6 and for good from it; Catch a Wave is fired by the Surf engine
     const miyu = 'Miyu Sahara [Wavecatcher]', keepM = state.chars[miyu] && state.chars[miyu].loadout;
     const surf = aw => { state.chars[miyu].loadout = Object.assign({}, DEFAULT_LOADOUT, { awareness: aw });
       const D = charDef(miyu), c = tcKitFor(D).filter(x => /Catch a Wave/.test(x.why));
-      return { kit: c.map(x => x.after || 'always'), ride: kitStatBuffs(D, null, { fight: true }).filter(b => /Ride it Out/.test(b.why)).map(b => b.on || 'always') }; };
+      return { kit: c.map(x => x.on), ride: kitStatBuffs(D, null, { fight: true }).filter(b => /Ride it Out/.test(b.why)).map(b => b.on || 'always') }; };
     out.surf = { a0: surf(0), a6: surf(6) };
+    /* In the fight Jellyfish Splash keeps Surf (only Aerial Tide or Paddle Out again ends it), so Paddle Out then
+       Splash on every turn holds it all fight and fires more catches than Paddle Out / Aerial Tide; and lufel's
+       option written for another team seeds the search */
+    state.chars[miyu].loadout = Object.assign({}, DEFAULT_LOADOUT);
+    const keepRot = TEAMS[miyu].rot, MD = charDef(miyu);
+    const play = seq => { TEAMS[miyu].rot = [{ aw: 0, label: 'Test', seq }]; tcMemo.key = ''; tcMemoFor();
+      const P = tcSimPrep(MD, [null, null, null], false, true); return tcSimRun(P, [miyu], false).surf; };
+    const Fn = tcFight();
+    out.surfFight = { splash: play(['3'].concat(Array(Fn - 1).fill('1'))), tide: play(['3', '2']), mixed: play(['3', '2', '1']), fight: Fn };
+    TEAMS[miyu].rot = keepRot; tcMemo.key = '';
+    out.surfSeed = (tcComposeSetup(miyu, tmRotPick(miyu, new Set([miyu]))).others || []).map(x => x.slice(0, 6).join(','));
     state.chars[miyu].loadout = keepM;
     // an idle turn is never offered to the search
     out.idle = CHARACTERS.filter(c => KIT_ROT[c.n] && tcComposeSetup(c.n, tmRotPick(c.n, new Set([c.n]))) && tcComposeSetup(c.n, tmRotPick(c.n, new Set([c.n]))).moves.some(m => m === '-' || m === '·')).map(c => c.n);
@@ -3511,9 +3523,18 @@ function awarenessOverrideDrift() {
     JSON.stringify(kr.engine) === JSON.stringify([-1, 1, -1, 1, 2, 2, -1, 4]), JSON.stringify(kr.engine));
   check('a move and a lufel option written for a Mindscape Core need a completed Mindscape',
     !kr.mind.off.move && !kr.mind.off.core && kr.mind.on.move && kr.mind.on.core, JSON.stringify(kr.mind));
-  check('Wavecatcher Miyu\'s Surf lines follow Paddle Out below Awareness 6 and hold for good from it',
-    kr.surf.a0.kit.length >= 1 && kr.surf.a0.kit.every(x => x === '3') && kr.surf.a0.ride[0] === '3' &&
-    kr.surf.a6.kit.every(x => x === 'always') && kr.surf.a6.ride[0] === 'always', JSON.stringify(kr.surf));
+  check('Wavecatcher Miyu\'s Surf lines hold while Surf is on below Awareness 6 and for good from it; Catch a Wave is the Surf engine\'s',
+    kr.surf.a0.kit.length === 1 && kr.surf.a6.kit.length === 1 && kr.surf.a0.kit[0] === 'wave' && kr.surf.a6.kit[0] === 'wave' &&
+    kr.surf.a0.ride[0] === 'surf' && kr.surf.a6.ride[0] === 'always', JSON.stringify(kr.surf));
+  /* Which fires more catches depends on her SP Recovery (Aerial Tide's reset keeps them cheap), so only the
+     mechanics are pinned: one Paddle Out held through Splash catches past the 3 ally turns a single
+     Paddle Out / Aerial Tide window holds */
+  check('Wavecatcher Miyu: Jellyfish Splash keeps Surf, Aerial Tide ends it, and a held Surf keeps catching',
+    kr.surfFight.splash.inSurf === kr.surfFight.splash.acts && kr.surfFight.tide.inSurf === kr.surfFight.tide.acts &&
+    kr.surfFight.mixed.inSurf === kr.surfFight.mixed.acts - Math.floor(kr.surfFight.fight / 3) &&
+    kr.surfFight.splash.catches > 3, JSON.stringify(kr.surfFight));
+  check('the composer also starts from lufel\'s options at the same Awareness written for another team',
+    kr.surfSeed.includes('3,1,1,1,1,2'), JSON.stringify(kr.surfSeed));
   check('the composer never offers an idle turn', !kr.idle.length, kr.idle.join(', '));
   check('the SP limit: lufel\'s pace is allowed, a rotation of dearer skills every turn is not',
     kr.sp.rate === (22 + 20) / 2 && kr.sp.lufelOk && !kr.sp.allThree, JSON.stringify(kr.sp));
@@ -3564,6 +3585,63 @@ function awarenessOverrideDrift() {
   });
   check('the Rotation panel names a composed rotation', kcPage.composed && kcPage.turns > 0, JSON.stringify(kcPage));
   await p.evaluate(() => { $('#tmRotCompose').checked = false; });
+
+  // "Include a medic": a medic in a thief seat, kept through replacements and busy marks
+  const md = await p.evaluate(() => {
+    const own = ns => { CHARACTERS.forEach(c => { const cs = state.chars[c.n]; if (cs) { cs.owned = ns.includes(c.n); cs.benched = false; } }); tcMemo.key = ''; };
+    const roster = ['Ann Takamaki', 'Kotone Shiomi', 'Mio Natsukawa', 'Mayumi Hashimoto', 'Yukari Takeba', 'Tomoko Noge [Seaside]', 'Hatsune Miku', 'Yumi Shiina'];
+    own(roster);
+    tmBusy = new Set(); tmPick = {};
+    $('#tmBasis').value = 'calc'; tmSyncCompose(); $('#tmRotFit').checked = false;
+    const d = 'Ann Takamaki', thiefSeats = T => T.team.seats.filter(s => s.seat === 'f' && !s.fixed);
+    $('#tmMedic').checked = false;
+    const off = tcTeams(d);
+    $('#tmMedic').checked = true;
+    const on = tcTeams(d);
+    const medicSeat = thiefSeats(on).find(s => s.role === 'Medic');
+    const out = {
+      offMedic: off.team.calc.medic,
+      onNames: thiefSeats(on).map(s => s.name),
+      onHasMedic: tcHasMedic(thiefSeats(on).map(s => s.name)),
+      everyListed: on.list.every(l => tcHasMedic(l.calc.names)),
+      altsMedics: medicSeat ? (medicSeat.alts || []).every(a => tcIsMedic(a.n)) && (medicSeat.alts || []).length > 0 : false,
+      note: on.team.calc.medic
+    };
+    if (!medicSeat) { $('#tmMedic').checked = false; $('#tmRotFit').checked = true; return out; }
+    // the medic marked busy: the other medic takes the seat
+    tmBusy = new Set([medicSeat.name]);
+    out.busyNames = thiefSeats(tcTeams(d)).map(s => s.name);
+    out.busyMedic = out.busyNames.some(tcIsMedic) && !out.busyNames.includes(medicSeat.name);
+    tmBusy = new Set();
+    // a team chosen without a medic gives way once the box is on
+    tmPick[d] = { key: 'calc:Kotone Shiomi|Mio Natsukawa|Hatsune Miku', seats: {} };
+    out.choiceGivesWay = thiefSeats(tcTeams(d)).some(s => tcIsMedic(s.name));
+    tmPick = {};
+    // no medic owned: built without one, and said so
+    own(roster.filter(n => !tcIsMedic(n)));
+    out.none = tcTeams(d).team.calc.medic;
+    // a medic as the damage dealer needs no other
+    own(roster);
+    out.self = tcTeams('Yukari Takeba').team.calc.medic;
+    // the page: the seat reads "Medic", the headline names the medic
+    $('#tmChar').value = d; renderTeams();
+    out.roles = [...$$('#tmOut .tmSeat .role')].map(e => e.textContent);
+    out.noteText = ($('#tmOut .tmMedicNote') || {}).textContent || '';
+    out.pref = collectPrefs().tmMedic;
+    $('#tmBasis').value = 'lufel'; tmSyncCompose(); out.greyed = $('#tmMedic').disabled;
+    $('#tmBasis').value = 'calc'; tmSyncCompose();
+    $('#tmMedic').checked = false; $('#tmRotFit').checked = true;
+    return out;
+  });
+  check('"Include a medic" puts a medic in a thief seat and every listed team, and is off by default',
+    md.offMedic === null && md.onHasMedic && md.everyListed && md.note && md.note.names.length >= 1, JSON.stringify(md));
+  check('the medic seat offers only medics as replacements, and a busy medic is replaced by another medic',
+    md.altsMedics && md.busyMedic, JSON.stringify({ alts: md.altsMedics, busy: md.busyNames }));
+  check('a team chosen without a medic gives way once the box is on', md.choiceGivesWay);
+  check('with no medic owned the team is built without one and says so; a medic damage dealer needs no other',
+    md.none && md.none.none === true && md.self && md.self.self === true, JSON.stringify({ none: md.none, self: md.self }));
+  check('the page names the medic seat and the medic, the box is a saved pref, greyed on the lufel basis',
+    (md.roles || []).includes('Medic') && /With a medic/.test(md.noteText || '') && md.pref === true && md.greyed, JSON.stringify({ roles: md.roles, note: md.noteText, pref: md.pref, greyed: md.greyed }));
 
   await p.evaluate(k => { state.chars = JSON.parse(k.chars); tmBusy = new Set(k.busy); tmPick = JSON.parse(k.pick); commit(); showTab('roster'); }, tmKeep);
 

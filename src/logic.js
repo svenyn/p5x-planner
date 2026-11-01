@@ -1507,13 +1507,13 @@ const KIT_STAT_BUFFS = {
      cards' 58.3 plus the Thieves Den's 2 (the user's panels, 26 Sep 2026). It is a party
      buff, not a stat of hers, so it is not listed. */
   'Miyu Sahara [Wavecatcher]': [
-    { s: 'Damage Multiplier', v: 30, pct: true, on: '3', dur: 2, alwaysAw: 6, why: 'Ride it Out!: +30% damage while Surf is active: Paddle Out (Skill 3) enters it and her next Aerial Tide ends it, so in the fight it is on for the Paddle Out turn and the next; for good from A6 (Surf from battle start, never ended)' },
-    { s: 'ATK%', v: 25, pct: true, aw: 0, why: 'Surfing Mermaid: +25% ATK at 100 SP recovered, reached in the first turns' },
-    { s: 'Damage Multiplier', v: 25, pct: true, aw: 0, why: 'Surfing Mermaid: +25% damage at 200 SP recovered' },
-    { s: 'Crit Rate', v: 12, pct: true, aw: 0, why: 'Surfing Mermaid: +12% crit rate at 300 SP recovered' },
-    { s: 'Crit Multiplier', v: 24, pct: true, aw: 0, why: 'Surfing Mermaid: +24% crit damage at 400 SP recovered' },
-    { s: 'Crit Multiplier', v: 20, pct: true, aw: 2, on: '3', dur: 2, alwaysAw: 6, why: 'Roaring Surf Line: +20% crit damage while Surf is active (as Ride it Out!)' },
-    { s: 'ATK%', pct: true, weapon: '4', ladder: [22, 29, 29, 36, 36, 43, 43], on: '3', dur: 2, alwaysAw: 6, why: 'Jellie Voyager: +ATK while Surf is active (as Ride it Out!)' },
+    { s: 'Damage Multiplier', v: 30, pct: true, on: 'surf', hold: true, alwaysAw: 6, why: 'Ride it Out!: +30% damage while Surf is active: Paddle Out (Skill 3) enters it and Aerial Tide (Skill 2) ends it, Jellyfish Splash (Skill 1) does not; the fight holds it while Surf is on (TC_SURF), for good from A6 (Surf from battle start, never ended)' },
+    { s: 'ATK%', v: 25, pct: true, aw: 0, on: 'sp100', hold: true, why: 'Surfing Mermaid: +25% ATK once she has recovered 100 SP in the battle (SP over the cap included); the fight switches it on when her SP recovery reaches it (TC_SURF)' },
+    { s: 'Damage Multiplier', v: 25, pct: true, aw: 0, on: 'sp200', hold: true, why: 'Surfing Mermaid: +25% damage at 200 SP recovered (as above)' },
+    { s: 'Crit Rate', v: 12, pct: true, aw: 0, on: 'sp300', hold: true, why: 'Surfing Mermaid: +12% crit rate at 300 SP recovered (as above)' },
+    { s: 'Crit Multiplier', v: 24, pct: true, aw: 0, on: 'sp400', hold: true, why: 'Surfing Mermaid: +24% crit damage at 400 SP recovered (as above)' },
+    { s: 'Crit Multiplier', v: 20, pct: true, aw: 2, on: 'surf', hold: true, alwaysAw: 6, why: 'Roaring Surf Line: +20% crit damage while Surf is active (as Ride it Out!)' },
+    { s: 'ATK%', pct: true, weapon: '4', ladder: [22, 29, 29, 36, 36, 43, 43], on: 'surf', hold: true, alwaysAw: 6, why: 'Jellie Voyager: +ATK while Surf is active (as Ride it Out!)' },
     { s: 'Damage Multiplier', pct: true, weapon: '5', ladder: [6.8, 8.8, 8.8, 10.8, 10.8, 12.8, 12.8], stacks: 5, why: 'Mermaid Dreamer: +damage each time she spends SP on a skill or Resonance, permanent, up to 5 stacks; a skill every turn and a Resonance on most ally actions reach the cap in the first round' }
   ],
   'Ichigo Shikano': [
@@ -7627,7 +7627,7 @@ const PREF_SELECTS = ['rsFilter', 'rsElement', 'rsSort', 'flSlot', 'flSet', 'flR
   'hrShow', 'hrElement', 'hrSlot', 'hrRar', 'ccScope', 'ccKind', 'ccRolls', 'ccPolicy', 'ccElement', 'ikScope', 'ikPick', 'ikPolicy', 'ikElement', 'frKind', 'frPolicy', 'rgScope', 'rgFourth', 'rgShow', 'rgSlot', 'rgWho', 'tmBasis', 'tmFight', 'tmBoss', 'tmWeak', 'tmFoes',
   'trFlSlot', 'trFlSet', 'trFlRar', 'trFlMain', 'trFlSubMode',
   'vaFlSlot', 'vaFlSet', 'vaFlRar', 'vaFlMain', 'vaFlSubMode'];
-const PREF_CHECKS = ['rsHideBenched', 'upSameSet', 'upIgnoreEquipped', 'hrTakeEquipped', 'ccFree', 'ikFree', 'frFree', 'tmRotFit', 'tmRotCompose'];
+const PREF_CHECKS = ['rsHideBenched', 'upSameSet', 'upIgnoreEquipped', 'hrTakeEquipped', 'ccFree', 'ikFree', 'frFree', 'tmRotFit', 'tmRotCompose', 'tmMedic'];
 const PREF_TEXT = ['rsQ', 'flQ', 'trFlQ', 'vaFlQ', 'hrMin', 'hrQ', 'ccQ', 'ikQ', 'rgQ'];
 function collectPrefs() {
   const p = { invSort: { key: invSort.key, dir: invSort.dir },
@@ -11268,7 +11268,11 @@ function tcComposeSetup(n, r) {
   pick.forEach(b => b.seq.forEach(t => { freq[t] = (freq[t] || 0) + 1; }));
   const order = moves.concat(Object.keys(R.moves).filter(idle)).sort((a, b) => (idle(a) - idle(b)) || (freq[b] || 0) - (freq[a] || 0));
   const legal = s => tcRotWalk(n, s, aw, R) < 0 && tcSpOk(s, sp);
-  return { n, aw, R, L, sp, moves, order, unroll, legal, lufel: pick.map(b => unroll(b.seq)) };
+  /* lufel's options at the same Awareness written for another team ("with Manaka") are not shown for this
+     one, but they are still plays of this kit: the search starts from them too (Wavecatcher Miyu's
+     3 › 1 › 1 › 1 › 1 › 2 is several changes away from her 3 › 2 › 3 › 2, each of which loses on its own). */
+  const others = r && r.all ? r.all.filter(b => !pick.includes(b) && (b.aw == null || b.aw === r.lvl)).map(b => unroll(b.seq)) : [];
+  return { n, aw, R, L, sp, moves, order, unroll, legal, lufel: pick.map(b => unroll(b.seq)), others };
 }
 /* The stepper's state before each turn of a legal rotation (the search re-plays from there). */
 function tcComposeStates(C, seq) {
@@ -11311,7 +11315,7 @@ function tcCompose(n, r, price, start, passes, extra) {
   const seen = new Map();
   const val = s => { const k = s.join('\u0001'); let v = seen.get(k); if (v === undefined) { v = price(s); seen.set(k, v); } return v; };
   const S0 = tcRotStart(n, C.R);
-  const seeds = C.lufel.concat(start && start.length ? [C.unroll(start)] : [], extra || [])
+  const seeds = C.lufel.concat(start && start.length ? [C.unroll(start)] : [], extra || [], C.others)
     .map(s => C.legal(s) ? s : tcComposeRepair(C, s, 0, S0)).filter(Boolean);
   if (!seeds.length) return null;
   let cur = seeds[0], cv = val(cur);
@@ -12210,10 +12214,7 @@ const DPS_KIT = {
     { kind: 'res', v: 13.5, on: 'self:3', stacks: 4, aw: 6, why: 'Striving for Power (A6): Finishing Blow after a Grit-spending Lightning Fist, 13.5% of Attack per Grit stack spent that turn, counted as a Resonance, Ignore Defense, guaranteed critical. 4 stacks (the A6 cap, reached as above). The simulator should treat it as always crit and ignoring DEF.' }
   ],
   'Miyu Sahara [Wavecatcher]': [
-    { kind: 'res', v: [50.2, 55.3, 53.3, 58.4], on: 'ally', chance: 0.5, after: '3', dur: 2, alwaysAw: 6, why: 'Only in Surf: from her Paddle Out round to the next (her Aerial Tide ends it), for good from A6. Paddle Out (Skill 3) Surf: at the end of an ally\'s turn, if she has the SP, Catch a Wave deals 50.2% of Attack (Resonance). Chance judged: in lufel\'s A0 rotations Surf covers about half to five-sixths of ally turns, and SP caps the rest (15 SP x her ~287% SP Recovery target = 43 per other ally\'s turn start, plus 115 per Jellyfish Splash, against a cost of 30 rising 30 per Offshore stack): about 1.5 catches a round, i.e. half of the three other thieves\' actions.' },
-    { kind: 'res', v: [50.2, 55.3, 53.3, 58.4], on: 'ally', chance: 0.25, aw: 1, after: '3', dur: 2, alwaysAw: 6, why: 'Offshore Paradise (A1): Catch a Wave costs 40% less and Offshore caps at 6, so SP stops binding in the longer Surf rotations; judged to raise catches to about three-quarters of ally actions (this entry is the increment).' },
-    { kind: 'res', v: [50.2, 55.3, 53.3, 58.4], on: 'ally', chance: 0.15, aw: 2, after: '3', dur: 2, alwaysAw: 6, why: 'Roaring Surf Line (A2): every 4th Catch a Wave fires one more, free. A quarter of the ~0.5-0.75 catches per ally action, judged 0.15.' },
-    { kind: 'res', v: [50.2, 55.3, 53.3, 58.4], on: 'ally', chance: 0.25, aw: 6, why: 'Summer Sea Mermaid (A6): Surf from battle start and never removed by Aerial Tide, max SP 450 and refilled whenever Offshore is lost after Aerial Tide, so a catch on essentially every ally action (increment to ~1.0).' }
+    { kind: 'res', v: [50.2, 55.3, 53.3, 58.4], on: 'wave', why: 'Catch a Wave (Paddle Out, Skill 3): 50.2% of Attack to all foes (Resonance) at the end of another ally\'s turn while Surf is on and she has the SP. The fight plays her SP, Surf and Offshore stacks out (TC_SURF): when it fires, how much it costs, its +5% per stack, A1\'s cheaper catches, A2\'s free 4th, A6\'s Surf for good.' }
   ],
   'Ichigo Shikano': [
     { kind: 'hit', v: [11.7, 12.9, 12.4, 13.6], on: 'self:3', stacks: 10, why: 'My Beloved Prince (Skill 3): + 11.7% of Attack per Lovesick stack on the target, part of the same cast but missing from SKILL_DMG (which has the base and the 10-stack bonus). lufel\'s rotation reaches the 10-stack cap before her first Skill 3 (2 + 4 + 4) and Skill 3 refreshes the duration, so 10.' },
@@ -12387,8 +12388,8 @@ const DPS_KIT_SKIPS = {
     'Flash Blow\'s +8% damage taken on downed foes and No Rules\' +30% vs downed foes: Down is not modelled.'
   ],
   'Miyu Sahara [Wavecatcher]': [
-    'Whether "at the end of an ally\'s turn" includes her own turn is not clear from the text; only other thieves\' actions are counted.',
-    'The Highlight\'s 494.1 already includes the 164.7% Surf bonus hit; in the 3/2 rotation Surf is off on about half her turns, left as is.'
+    'Whether "at the end of an ally\'s turn" includes her own turn is not clear from the text; only other thieves\' actions fire Catch a Wave.',
+    'Surf\'s "extend the duration of buffs and debuffs applied by 1 turn" (and Offshore Paradise\'s on entering Surf) is not priced.'
   ],
   'Ichigo Shikano': [
     'Lovesick ticks: lufel never prints what one Lovesick stack deals (no English, Korean or other definition in the dump), so the DoT, the Highlight\'s "activate all continuous damage once" and its "Lovesick 2 more times" cannot be priced.',
@@ -12621,11 +12622,6 @@ const DPS_KIT_BONUS = {
     { to: 'res', match: 'Finishing Blow', ladder: [34, 44, 44, 54, 54, 64, 64], weapon: '5', chance: 0.15, aw: 6, why: 'Sabazios: Finishing Blow always crits, so the full value (0.85 + 0.15)' }
   ],
   'Miyu Sahara [Wavecatcher]': [
-    { to: 'res', v: 5, stacks: 0.5, why: 'Catch a Wave: skill damage +5% per Offshore stack held when it fires (each catch adds one, Aerial Tide clears them). In lufel\'s 3,2 rotation about 1.5 catches per Surf window, the first at 0 stacks: judged 0.5 on average' },
-    { to: 'res', v: 5, stacks: 0.5, aw: 1, why: 'Offshore Paradise (A1): cheaper catches and a cap of 6, about 2-3 catches a window: about 1 stack on average' },
-    { to: 'skill:2', v: 10, stacks: 1.5, after: '3', dur: 2, alwaysAw: 6, why: 'Aerial Tide (Skill 2): damage +10% per Offshore stack when cast in Surf (the round after Paddle Out). lufel\'s 3,2 rotation casts it after about 1.5 catches' },
-    { to: 'skill:2', v: 10, stacks: 0.75, aw: 1, after: '3', dur: 2, alwaysAw: 6, why: 'Offshore Paradise (A1): more catches before Aerial Tide (catch chance ~0.75 per ally action): about 2.25 stacks' },
-    { to: 'skill:2', v: 10, stacks: 0.75, aw: 6, why: 'Summer Sea Mermaid (A6): a catch after nearly every ally action, about 3 stacks at each Aerial Tide (they are lost at the end of her Aerial Tide turn)' },
     { to: 'res', v: 30, after: 'HL', dur: 2, aw: 4, why: 'Refreshing Beach Resort (A4): enhanced Highlight raises her Resonance damage by 30% for 2 turns (Catch a Wave)' },
     { to: 'skill:2', v: 30, after: 'HL', dur: 2, aw: 4, why: 'Refreshing Beach Resort (A4): Aerial Tide is counted as a Resonance, so it takes the same +30%' }
   ],
@@ -13166,6 +13162,32 @@ const TC_THEURGY = {
 const TC_HL_START = {
   'Ayaka Sakai': { weapon: '5', ladder: [40, 52, 52, 64, 64, 76, 76], why: 'Superstar (5-star weapon): Highlight gauge +40-76% at the start of battle' }
 };
+/* Wavecatcher Miyu's Surf, played out in the fight (Nov 2026; the user: 3 › 1 › 1 › 1 beats 3 › 2 › 3 › 2
+   because Jellyfish Splash keeps Surf, so Catch a Wave fires on far more of the teammates' turns). From
+   lufel's English and Korean text: her own SP, max 200, 0 at battle start; 15 at the start of each other
+   ally's turn and 40 per Jellyfish Splash (Skill 1), both times her SP Recovery, Skill 1's up to twice the
+   max. Paddle Out (Skill 3) costs 60 and enters Surf; only Aerial Tide (Skill 2) or Paddle Out again ends
+   it. In Surf, at the end of each other ally's turn, Catch a Wave fires if she has the SP: 30 plus 30 per
+   Offshore stack, +5% damage per stack, a stack each (cap 4); Aerial Tide +10% per stack in Surf, and
+   both are cleared with Surf. The Highlight's second hit (164.7 of 494.1) lands in Surf only. Surfing
+   Mermaid's four buffs come at 100/200/300/400 SP recovered in the battle (over the cap included).
+   A1: catches 40% cheaper, cap 6. A2: every 4th catch fires one more, free, with no stack. A6: max SP
+   450, full SP and Surf at battle start, cap 8, Skill 1 +50% SP, Aerial Tide keeps Surf and its stacks
+   are lost at the end of her turn, refilling her SP. Whether her own turn's end fires a catch is not
+   clear from the text; only other thieves' turns do, as before. */
+const TC_SURF = {
+  'Miyu Sahara [Wavecatcher]': { spMax: 200, ally: 15, s1: 40, enter: 60, cost: 30, step: 30, cap: 4, wave: 5, tide: 10, hlOff: 329.4 / 494.1, marks: [100, 200, 300, 400],
+    aw: { 1: { cut: 0.4, cap: 6 }, 2: { free: 4 }, 6: { spMax: 450, full: true, cap: 8, s1x: 1.5, keep: true } } }
+};
+/* TC_SURF at the damage dealer's Awareness and SP Recovery, or null. */
+function tcSurfFor(D) {
+  const S = TC_SURF[D.n];
+  if (!S) return null;
+  const aw = +charLoadout(D.n).awareness || 0, o = Object.assign({ cut: 0, free: 0, s1x: 1, full: false, keep: false }, S);
+  Object.keys(S.aw).map(Number).sort((a, b) => a - b).forEach(l => { if (aw >= l) Object.assign(o, S.aw[l]); });
+  o.rec = (tcStat(D.n, 'SP Recovery') || 100) / 100;
+  return o;
+}
 const TC_DMG_KEYS = ['atkPct', 'atk', 'dm', 'cr', 'cm', 'pierce', 'defdown', 'final', 'weak', 'hlDm', 'hlFinal', 'xDm', 'xFinal', 'xAtkPct', 'resDm', 'dotDm', 'dotFinal', 'resFinal', 'curse', 'tp'];
 const tcIsVc = e => /Virtual Concert/.test(e.cond || '');
 /* An enemy-side effect that lands on one foe ("the target", "a foe"), not on all of them; an entry can say
@@ -13212,10 +13234,11 @@ const TC_KIT_STAT_K = { 'ATK%': 'atkPct', 'Damage Multiplier': 'dm', 'Crit Rate'
 function tcTimedKit(D) {
   const aw = +charLoadout(D.n).awareness || 0;
   // `stack`: each use adds one more, permanently, up to that many; `durAw`: a longer duration from an Awareness;
-  // `notSelf` on 'anyHL': another ally's Highlight or Theurgy only
+  // `notSelf` on 'anyHL': another ally's Highlight or Theurgy only; `hold`: on until the kit's state ends it
+  // (Wavecatcher Miyu's Surf lines, TC_SURF)
   return kitStatBuffs(D, null, { fight: true }).filter(b => b.on && TC_KIT_STAT_K[b.s] && b.v).map((b, i) =>
     ({ e: { on: b.on, to: 'self', notSelf: !!b.notSelf }, k: TC_KIT_STAT_K[b.s], v: b.v, ref: 'self' + i, self: true, why: b.why, stackMax: b.stack || 0,
-      dur: b.stack ? Infinity : b.durAw && aw >= b.durAw[0] ? b.durAw[1] : b.dur || 1 }));
+      dur: b.stack || b.hold ? Infinity : b.durAw && aw >= b.durAw[0] ? b.durAw[1] : b.dur || 1 }));
 }
 
 /* Everything about one lineup that does not depend on the spending order: the actors, their
@@ -13321,7 +13344,7 @@ function tcSimPrep(D, names, fit, blank, opt) {
     ailSelf: (TC_AIL_SELF[D.n] || []).filter(c => c.aw == null || (+charLoadout(D.n).awareness || 0) >= c.aw)
       // their own stat lines on a foe with an ailment (Rin's Prosperity in Red), left out of the baseline (`noTimed`)
       .concat(kitStatBuffs(D, null).filter(b => b.needAil && TC_KIT_STAT_K[b.s] && b.v).map(b => ({ k: TC_KIT_STAT_K[b.s], v: b.v, needAil: b.needAil }))),
-    radCounts: names.includes('Chizuko Nagao') || D.n === 'Chizuko Nagao',
+    radCounts: names.includes('Chizuko Nagao') || D.n === 'Chizuko Nagao', surf: tcSurfFor(D),
     hits: tcHits(D.n), as: ['1', '2', '3', 'hl'].map(k => tcCountsAs(D.n, k)) };
 }
 
@@ -13349,6 +13372,8 @@ function tcSimRun(P, order, hold) {
   const cover = new Map();   // owner name -> Map(ref -> DPS actions it covered)
   const lastUse = {};        // the damage dealer's skills: round last used, for kit components gated on it
   const perRound = new Map();
+  // Wavecatcher Miyu's Surf (TC_SURF): her SP, Surf, Offshore stacks, SP recovered, catches, her turns in Surf
+  const SF = P.surf ? Object.assign({}, P.surf, { sp: P.surf.full ? P.surf.spMax : 0, on: false, off: 0, got: 0, mark: 0, n: 0, catches: 0, inSurf: 0 }) : null;
   /* Elemental ailments on the main target: type -> turns left. Radiation counts only with Chizuko (P.radCounts).
      `inflicted`: ailments the team has inflicted (Queen's Nuclear Finisher Heat reads it between Transforms). */
   const ail = new Map(), ailAcc = new Map();
@@ -13457,7 +13482,7 @@ function tcSimRun(P, order, hold) {
         const add = c.kind === 'res' ? X.resDm || 0 : c.kind === 'dot' ? X.dotDm || 0 : 0;
         const ob = own(c.kind, c, X);
         const dotFin = c.kind === 'dot' ? 1 + (X.dotFinal || 0) / 100 : c.kind === 'res' ? 1 + (X.resFinal || 0) / 100 : 1;
-        const x = c.val * af * ob.amp * dotFin * spread(c.aoe, X, add + ob.add, (opts && opts.xAtk) || 0, (opts && opts.fin) || 1, dot, !!c.noWeak);
+        const x = c.val * af * ob.amp * dotFin * spread(c.aoe, X, add + ob.add + ((opts && opts.dm) || 0), (opts && opts.xAtk) || 0, (opts && opts.fin) || 1, dot, !!c.noWeak);
         gain(c.kind, x); techGain(ob, x);
       });
     };
@@ -13503,6 +13528,30 @@ function tcSimRun(P, order, hold) {
     const trigger = (on, who) => T.concat(elu ? [elu] : []).forEach(a => (a.events || []).forEach(ev => {
       if (ev.e.on === on && (on !== 'dpsHL' || who === dpsA) && !(ev.e.notSelf && who === a)) apply(a, ev);
     }));
+    /* Wavecatcher Miyu's Surf (TC_SURF): her Surf lines are on while Surf is, Surfing Mermaid's come as her SP
+       recovered passes each mark, and Catch a Wave fires at the end of another ally's turn while she has the SP. */
+    const surfRefs = SF ? new Set(dpsA.events.filter(ev => ev.e.on === 'surf').map(ev => ev.ref)) : null;
+    const surfGot = g => {
+      SF.got += g;
+      while (SF.mark < SF.marks.length && SF.got >= SF.marks[SF.mark] - 1e-9) castBy(dpsA, new Set(['sp' + SF.marks[SF.mark++]]));
+    };
+    const surfSet = on => {
+      if (SF.on === on) return;
+      SF.on = on;
+      if (on) castBy(dpsA, new Set(['surf']));
+      else for (let i = buffs.length - 1; i >= 0; i--) if (buffs[i].owner === D.n && surfRefs.has(buffs[i].ref)) buffs.splice(i, 1);
+    };
+    const surfCatch = () => {
+      if (!SF || !SF.on) return;
+      const cost = (SF.cost + SF.step * SF.off) * (1 - SF.cut);
+      if (SF.sp < cost - 1e-9) return;
+      SF.sp -= cost;
+      const X = curX();
+      kitFire('wave', X, { dm: SF.wave * SF.off });
+      SF.off = Math.min(SF.cap, SF.off + 1); SF.catches++;
+      // Roaring Surf Line (A2): every 4th catch fires one more, free, with no stack
+      if (SF.free && ++SF.n % SF.free === 0) { kitFire('wave', X, { dm: SF.wave * SF.off }); SF.catches++; }
+    };
     function fireHl(a, opt) {
       opt = opt || {};
       if (!opt.free) { if (a.kind === 'TH') a.th = 0; else gauge -= 100; }
@@ -13517,7 +13566,7 @@ function tcSimRun(P, order, hold) {
         pending.length = 0;
         if (skill && skill.d[3]) {
           const ob = own('hl', null, X), as = P.as[3];
-          const x = skill.d[3] * ob.amp * (1 + as.dot * (X.dotFinal || 0) / 100) * (1 + as.res * (X.resFinal || 0) / 100) * spread(P.aoe[3], X, X.hlDm + (opt.bonus || 0) + ob.add + as.dot * (X.dotDm || 0) + as.res * (X.resDm || 0), 0, 1 + X.hlFinal / 100, !P.hlCrit, !!P.alm[3], P.hits[3]);
+          const x = skill.d[3] * (SF && !SF.on ? SF.hlOff : 1) * ob.amp * (1 + as.dot * (X.dotFinal || 0) / 100) * (1 + as.res * (X.resFinal || 0) / 100) * spread(P.aoe[3], X, X.hlDm + (opt.bonus || 0) + ob.add + as.dot * (X.dotDm || 0) + as.res * (X.resDm || 0), 0, 1 + X.hlFinal / 100, !P.hlCrit, !!P.alm[3], P.hits[3]);
           gain('hl', x); techGain(ob, x);
         }
         castBy(a, tok, toFoe);
@@ -13545,14 +13594,17 @@ function tcSimRun(P, order, hold) {
         if (concerto.isDps && gauge >= need) { fireHl(T.find(a => a.n === concerto.n), { free: true }); gauge -= need; }
         return;
       }
+      // Wavecatcher Miyu's Highlight waits for Surf when her next turn enters it (its second hit lands in Surf only)
+      const surfWait = a => SF && a === dpsA && !SF.on && a.seq && tcSkillUses(a.seq[a.acts % a.seq.length])[2] > 0;
       for (let guard = 0; guard < 4 && gauge >= 100; guard++) {
-        const pick = order.map(n => T.find(a => a.n === n)).find(a => a && hlReady(a));
+        const pick = order.map(n => T.find(a => a.n === n)).find(a => a && hlReady(a) && !surfWait(a));
         if (!pick) break;
         if (hold && next !== dpsA && gauge + TC_GAUGE_ACT <= cap) break;
         fireHl(pick);
       }
     };
     const act = (a, extra) => {
+      if (SF && !a.isDps) { const g = SF.ally * SF.rec; surfGot(g); SF.sp = Math.max(SF.sp, Math.min(SF.spMax, SF.sp + g)); }
       // the start of the turn: Theurgy gauge, Summer Ayaka's Concerto of Time
       if (a.kind === 'TH') a.th = Math.max(a.th, Math.min(a.req, a.th + TC_TH_TURN * (a.rate || 1)));
       if (concerto && a.n === concerto.n && !extra) {
@@ -13574,6 +13626,7 @@ function tcSimRun(P, order, hold) {
         BK.acts++;
         charge(!!BK.skill && tcStepHits(BK.n, BK.skill) && BK.weak);
         kitFire('ally', curX());
+        surfCatch();
       }
       decide(a);
       const seq = a.seq && a.seq.length ? a.seq : null;
@@ -13598,13 +13651,16 @@ function tcSimRun(P, order, hold) {
         if (raw.includes('Transform')) { heat = inflicted - heatAt; heatAt = inflicted; }
         inflict(a, new Set(raw.filter(m => !/^[1-3]$/.test(m) && m !== 'HL' && m !== 'TH')));
         if (a.events.length) castBy(a, mine, toAlly);
+        // Paddle Out enters Surf (cast in Surf, leaves it), before the turn's hits
+        if (SF && uses[2]) { if (SF.on) { surfSet(false); SF.off = 0; } else if (SF.sp >= SF.enter - 1e-9) { SF.sp -= SF.enter; surfSet(true); } }
+        if (SF && SF.on) SF.inSurf++;
         const X = curX();
         const xd = extra ? X.xDm : 0, xa = extra ? X.xAtkPct : 0, fin = extra ? 1 + X.xFinal / 100 : 1;
         // each skill with what reaches a cast of its hit count, and what it counts as (continuous damage, Resonance)
         if (skill) uses.forEach((u, i) => {
           if (!u) return;
           const Xi = P.hits[i] > 1 ? curX(false, P.hits[i]) : X, ob = own('skill:' + (i + 1), null, Xi), as = P.as[i];
-          const asDm = as.dot * (Xi.dotDm || 0) + as.res * (Xi.resDm || 0), asFin = (1 + as.dot * (Xi.dotFinal || 0) / 100) * (1 + as.res * (Xi.resFinal || 0) / 100);
+          const asDm = as.dot * (Xi.dotDm || 0) + as.res * (Xi.resDm || 0) + (SF && i === 1 && SF.on ? SF.tide * SF.off : 0), asFin = (1 + as.dot * (Xi.dotFinal || 0) / 100) * (1 + as.res * (Xi.resFinal || 0) / 100);
           const x = u * skill.d[i] * ob.amp * asFin * spread(P.aoe[i], Xi, xd + ob.add + asDm, xa, fin, false, !!P.alm[i], P.hits[i]);
           gain(extra ? 'extra' : 'skill', x); techGain(ob, x);
         });
@@ -13614,6 +13670,16 @@ function tcSimRun(P, order, hold) {
         uses.forEach((u, i) => { if (u) kitFire('self:' + (i + 1), X, { xAtk: xa, fin }); });
         raw.forEach(m => kitFire('tok:' + m, X, { xAtk: xa, fin }));
         kitFire('turnEnd', X, { xAtk: xa, fin });
+        if (SF) {
+          // Jellyfish Splash restores SP, up to twice the max; Aerial Tide ends Surf and clears the stacks
+          // (from A6 it keeps Surf, and the stacks go at the end of her turn, refilling her SP)
+          if (uses[0]) { const g = SF.s1 * SF.s1x * SF.rec * uses[0]; surfGot(g); SF.sp = Math.min(2 * SF.spMax, SF.sp + g); }
+          if (uses[1] && SF.on) {
+            if (!SF.keep) surfSet(false);
+            else if (SF.off) { surfGot(Math.max(0, SF.spMax - SF.sp)); SF.sp = Math.max(SF.sp, SF.spMax); }
+            SF.off = 0;
+          }
+        }
         inflict(a, new Set(uses.map((u, i) => u ? String(i + 1) : null).filter(Boolean)));
       } else {
         castBy(a, toks);
@@ -13621,6 +13687,7 @@ function tcSimRun(P, order, hold) {
         if (!a.wonder) { const t = tcAilToks(step); t.delete('HL'); t.delete('TH'); inflict(a, t); }
         // a teammate acting, kit or not (the reference fight's blank teammates act too)
         kitFire('ally', curX());
+        surfCatch();
       }
       // Summer Ayaka's own gauge: Celestial Concerto restores 100%, Improvised Song (Skill 2, 2 turns;
       // for good once Summer Starscape is open at A6) 32% at the end of her turn
@@ -13650,6 +13717,8 @@ function tcSimRun(P, order, hold) {
     }
     const mikuA1 = elu && elu.n === 'Hatsune Miku' && elu.aw >= 1;
     P.mikuA1 = mikuA1;
+    // from A6 Miyu starts in Surf with full SP (which counts as recovered)
+    if (SF && SF.full) { surfGot(SF.spMax); surfSet(true); }
     for (round = 1; round <= F; round++) {
       let vcNow = false;
       // the Elucidator, at the start of the round
@@ -13692,7 +13761,8 @@ function tcSimRun(P, order, hold) {
   const hl = {}; T.forEach(a => { if (a.n) hl[a.n] = a.hlN; });
   if (BK && BK.hlN) hl[BK.n] = BK.hlN;
   // ailMean: the ailments the foe carried at the end of each round, on average (the seat reports it)
-  return { total, parts, hl, shifts, cover: share, order: T.map(a => a.n || '—'), gaugeLeft: Math.round(gauge), ailMean: F ? ailSum / F : 0, tech };
+  return { total, parts, hl, shifts, cover: share, order: T.map(a => a.n || '—'), gaugeLeft: Math.round(gauge), ailMean: F ? ailSum / F : 0, tech,
+    surf: SF ? { catches: SF.catches, inSurf: SF.inSurf, acts: dpsActs } : null };
 }
 
 /* The fight under the spending orders worth trying, the best kept. */
@@ -13952,9 +14022,17 @@ function tcLineupAt(dps, names) {
    Elucidator, plus Fuuka's best backup when she is the one. Members' vectors are worked out once
    each; a lineup is then a sum and one damage evaluation, about a millisecond for 30 thieves. */
 const TC_BACKUP_TOP = 40, TC_FULL_TOP = 3;
+/* "Include a medic" (#tmMedic, a pref): one of the two thief seats goes to a medic — lufel's Healer
+   role — unless the damage dealer is one. Healing is not priced, so the medic is whichever adds most
+   to the damage dealer, and the rest of the team is searched around them. Fuuka's backup sits outside
+   the party and never counts. With no medic available the search runs as if the box were off. */
+const tcIsMedic = n => !!n && (charDef(n) || {}).arch === 'Healer';
+const tcMedicNeed = dps => !!($('#tmMedic') && $('#tmMedic').checked) && !tcIsMedic(dps);
+const tcMedicsFree = dps => CHARACTERS.filter(c => c.n !== dps && tcIsMedic(c.n) && TEAM_BUFFS[c.n] && !tmWhyOut(c.n)).map(c => c.n);
+const tcHasMedic = names => tcIsMedic(names[0]) || tcIsMedic(names[1]);
 function tcSearch(dps, limit) {
   return tcHot(() => {
-    const mk = dps.n + '|' + (limit || 8) + (tmFitOn() ? '|fit' : '');
+    const mk = dps.n + '|' + (limit || 8) + (tmFitOn() ? '|fit' : '') + (tcMedicNeed(dps.n) ? '|medic' : '');
     if (!tcMemo.search.has(mk)) tcMemo.search.set(mk, tcSearchCalc(dps, limit));
     return tcMemo.search.get(mk);
   });
@@ -13968,9 +14046,13 @@ function tcSearchCalc(dps, limit) {
   const out = [], fuuka = [];
   const wv = tcWonder(dps).vec;
   const consider = names => out.push({ names, mult: tcMultiplier(dps, names.map((n, i) => n ? vOf(n, i === 3) : null).filter(Boolean).concat(wv)) });
-  const pairs = [];
+  let pairs = [];
   for (let i = 0; i < thieves.length; i++) for (let j = i + 1; j < thieves.length; j++) pairs.push([thieves[i].n, thieves[j].n]);
   if (!pairs.length) pairs.push([thieves[0] ? thieves[0].n : null, null]);
+  if (tcMedicNeed(dps.n) && thieves.some(c => tcIsMedic(c.n))) {
+    pairs = pairs.filter(tcHasMedic);
+    if (!pairs.length) pairs.push([thieves.find(c => tcIsMedic(c.n)).n, null]);
+  }
   for (const [a, b] of pairs) for (const e of (elus.length ? elus : [null])) {
     if (e && e.n === TM_FUUKA) fuuka.push({ names: [a, b, e.n, null], mult: tcMultiplier(dps, [a && vOf(a), b && vOf(b), vOf(e.n), wv].filter(Boolean)) });
     else consider([a, b, e ? e.n : null]);
@@ -14034,11 +14116,18 @@ function tcTeams(dps) { return tcHot(() => tcTeamsCalc(dps)); }
 function tcTeamsCalc(dps) {
   const D = charDef(dps);
   const found = tcSearch(D, 8);
-  const choice = tmPick[dps] && String(tmPick[dps].key || '').startsWith('calc:') ? tmPick[dps] : null;
-  let names = choice ? choice.key.slice(5).split('|').map(x => x || null)
-    : found.length ? found[0].names.slice() : [null, null, null];
+  const medics = tcMedicNeed(dps) ? tcMedicsFree(dps) : null;   // null: no medic asked for
+  const medicOk = ns => !medics || !medics.length || tcHasMedic(ns);
+  let choice = tmPick[dps] && String(tmPick[dps].key || '').startsWith('calc:') ? tmPick[dps] : null;
+  const chosenNames = ch => {
+    const ns = ch.key.slice(5).split('|').map(x => x || null), sp = ch.seats || {};
+    Object.keys(sp).forEach(i => { if (!tmWhyOut(sp[i])) ns[+i - 1] = sp[i]; });
+    return ns;
+  };
+  // a team chosen with the medic box off, and no medic in it, gives way to the search once it is on
+  if (choice && !medicOk(chosenNames(choice))) choice = null;
+  let names = choice ? chosenNames(choice) : found.length ? found[0].names.slice() : [null, null, null];
   const seatsPick = (choice && choice.seats) || {};
-  Object.keys(seatsPick).forEach(i => { if (!tmWhyOut(seatsPick[i])) names[+i - 1] = seatsPick[i]; });
   names = names.map(n => n && !tmWhyOut(n) ? n : null);
   /* A team the user chose keeps their choices, but a member marked busy since is replaced by
      whoever adds most alongside the rest — never left empty. With no choice the whole team was
@@ -14046,8 +14135,10 @@ function tcTeamsCalc(dps) {
   if (choice) for (let i = 0; i < 3; i++) {
     if (names[i]) continue;
     let bm = -1;
+    // the medic marked busy since is replaced by another medic, unless the other thief is one
+    const needMedic = i < 2 && medics && medics.length && !tcHasMedic(names);
     CHARACTERS.filter(c => c.n !== dps && !names.includes(c.n) && !tmWhyOut(c.n) &&
-      (i === 2 ? c.arch === 'Navigator' : c.arch !== 'Navigator' && TEAM_BUFFS[c.n])).forEach(c => {
+      (i === 2 ? c.arch === 'Navigator' : c.arch !== 'Navigator' && TEAM_BUFFS[c.n]) && (!needMedic || tcIsMedic(c.n))).forEach(c => {
       const alt = names.slice(0, 3); alt[i] = c.n;
       const m = tcSim(D, alt, tmFitOn()).mult;
       if (m > bm) { bm = m; names[i] = c.n; }
@@ -14064,7 +14155,7 @@ function tcTeamsCalc(dps) {
   const roles = ['Thief', 'Thief', 'Elucidator', 'Backup (Oracle Shift)'];
   const kinds = ['f', 'f', 'e', 'b'];
   const seats = [{ seat: 'f', role: TM_DPS.includes(D.arch) ? 'Damage dealer' : 'Built around', orig: dps, name: dps, fixed: true, pair: L.pairs && L.pairs[dps] }];
-  names.forEach((n, i) => seats.push({ seat: kinds[i], role: roles[i], orig: null, name: n,
+  names.forEach((n, i) => seats.push({ seat: kinds[i], role: medics && i < 2 && tcIsMedic(n) ? 'Medic' : roles[i], orig: null, name: n,
     chosen: seatsPick[i + 1] === n && !!n, part: L.parts[i], lines: L.members[i] ? L.members[i].lines : [],
     shifts: L.members[i] && L.members[i].shifts, swapSkill: L.members[i] && L.members[i].swapSkill, pair: n && L.pairs ? L.pairs[n] : null,
     known: !!(n && (TEAM_BUFFS[n] || (charDef(n) || {}).arch === 'Navigator')),
@@ -14074,8 +14165,10 @@ function tcTeamsCalc(dps) {
   seats.forEach((s, i) => {
     if (s.fixed) return;
     const k = i - 1;
+    // the team's only medic is replaced by medics only, so a replacement keeps the team's medic
+    const medicSeat = medics && k < 2 && tcIsMedic(names[k]) && !tcIsMedic(names[1 - k]);
     const pool = CHARACTERS.filter(c => c.n !== dps && !names.includes(c.n) && !tmWhyOut(c.n) &&
-      (s.seat === 'e' ? c.arch === 'Navigator' : c.arch !== 'Navigator' && TEAM_BUFFS[c.n]));
+      (s.seat === 'e' ? c.arch === 'Navigator' : c.arch !== 'Navigator' && TEAM_BUFFS[c.n]) && (!medicSeat || tcIsMedic(c.n)));
     const lineupWith = c => {
       const alt = names.slice(); alt[k] = c.n;
       if (s.seat === 'e') {
@@ -14109,7 +14202,9 @@ function tcTeamsCalc(dps) {
   const key = 'calc:' + names.map(n => n || '').join('|');
   return {
     list: found.map(f => ({ party: null, calc: { key: 'calc:' + f.names.map(n => n || '').join('|'), names: f.names, mult: f.mult * scale } })),
-    team: { party: null, seats, calc: { key, mult: L.mult, lufel, sim: L.sim } }
+    team: { party: null, seats, calc: { key, mult: L.mult, lufel, sim: L.sim,
+      medic: tcIsMedic(dps) && $('#tmMedic').checked ? { self: true }
+        : medics ? { names: names.slice(0, 2).filter(tcIsMedic), none: !medics.length } : null } }
   };
 }
 
@@ -14558,6 +14653,12 @@ function renderTeams() {
       ? `Built on a team lufel recommends${P.from[0] === dps ? ` on ${esc(dps)}'s page` : ` (listed on ${P.from.map(esc).join(', ')}'s page${P.from.length > 1 ? 's' : ''})`}: ` +
         `${P.f.map(x => esc(x || 'free slot')).join(', ')}${P.e ? ' with ' + esc(P.e) : ''}${P.b ? ', backup ' + esc(P.b) : ''}.`
       : `lufel lists no team with ${esc(dps)}, so this one is built from the characters lufel names as their partners and from your best-built characters.`;
+    // "Include a medic": who took the seat, or why no one did
+    const M = C && C.medic;
+    const medicNote = !M ? ''
+      : M.self ? `<div class="cmp tiny muted tmMedicNote">${esc(dps)} is a medic, so no other medic is added.</div>`
+      : M.none ? `<div class="cmp tiny tmMedicNote"><span class="tag miss">no medic</span> <span class="muted">No medic is available (owned, not benched, not busy), so this team is built without one.</span></div>`
+      : `<div class="cmp tiny muted tmMedicNote">With a medic: ${M.names.map(n => `<b>${esc(n)}</b>`).join(' and ')} — the medic that adds most to ${esc(dps)}'s damage, with the rest of the team chosen around them. Healing itself is not priced, so medics are compared on what they add to the damage.</div>`;
 
     // the largest share in the team, for the bars under the seats' numbers
     const maxShare = Math.max(1e-9, ...team.seats.filter(s => !s.fixed && s.part > 1.001).map(s => 100 * (s.part - 1)));
@@ -14684,6 +14785,7 @@ function renderTeams() {
       ? `<div class="tmHero">
           <div><div class="num">${xFmt(C.mult)}</div><div class="lbl">Calculated from the kits: how many times ${esc(dps)}'s own hits this team makes them, against ${esc((tcBossNow() || {}).name || 'a reference boss')}.</div></div>
           ${C.lufel ? `<div class="cmp">lufel's recommended team (${C.lufel.names.filter(Boolean).map(esc).join(', ')}) comes to <b>${xFmt(C.lufel.mult)}</b> ${tcRelHtml(C.lufel.mult, C.mult)} priced the same way.</div>` : ''}
+          ${medicNote}
           <div class="cmp tiny tmHlNote">${tcFightNote(dps, C.sim)}</div>
           ${custom ? '<div class="acts"><button class="sm ghost" data-tm-reset="1">Back to the best calculated team</button></div>' : ''}
         </div>`
@@ -14806,11 +14908,16 @@ function tmSetBusy(n, on) {
   renderTeams();
 }
 $('#tmChar').onchange = () => renderTeams();
-$('#tmBasis').onchange = () => renderTeams();
-// composing needs fitting on: the second box is greyed while the first is off
-function tmSyncCompose() { $('#tmRotCompose').disabled = !$('#tmRotFit').checked; }
+$('#tmBasis').onchange = () => { tmSyncCompose(); renderTeams(); };
+// composing needs fitting on: the second box is greyed while the first is off; the medic box
+// belongs to the calculated basis
+function tmSyncCompose() {
+  $('#tmRotCompose').disabled = !$('#tmRotFit').checked;
+  $('#tmMedic').disabled = $('#tmBasis').value !== 'calc';
+}
 $('#tmRotFit').onchange = () => { tmSyncCompose(); renderTeams(); };
 $('#tmRotCompose').onchange = () => renderTeams();
+$('#tmMedic').onchange = () => renderTeams();
 ['#tmFight', '#tmBoss', '#tmWeak', '#tmFoes'].forEach(id => { $(id).onchange = () => renderTeams(); });
 // lufel's bosses (BOSSES), Sea of Souls apart; the damage article's Vishnu is the default
 (() => {

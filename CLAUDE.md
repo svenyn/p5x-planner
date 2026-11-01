@@ -1067,6 +1067,15 @@ damage formula (`docs/DATA-SOURCES.md`, the damage-formula section):
   folds the rest; a synergy sentence both pages carry (Fuuka's about Kumi and Kumi's about Fuuka)
   is listed once, keeping the Awareness note (`tmSynergyItems`). A damage dealer seated with an
   entered but empty kit reads "nothing to price", not "+0.0%".
+- **"Include a medic"** (`#tmMedic`, a pref, off by default, greyed on the lufel basis; the user
+  asked, Nov 2026): one of the two thief seats must hold a medic — lufel's Healer role (Morgana, Lufel,
+  Minami, Seaside Tomoko, Yukari, Summer Ichigo) — unless the damage dealer is one. The search keeps
+  only pairs with a medic (`tcHasMedic`, the search memo keyed on it), so the medic and the rest of the
+  team are chosen together by the fight; healing is not priced, so the medic is the one adding most to
+  the damage. Fuuka's backup never counts. The team's only medic is replaced by medics only, a busy
+  medic by another, and a team chosen without one gives way. With no medic available the team is built
+  without one and the headline says so. On the real save Yukari wins it for Ann, Makoto Yuki, Ryuji and
+  Firecracker Rin, at a real cost (Rin 22.4× to 11.7×: Mio goes, Kotone Shiomi stays).
 - A member's part on the page is the team's value with them over without them, so parts do not
   multiply to the total. Replacements are priced as the whole team with them swapped in, and
   lufel's recommended team is priced the same way for comparison in the header.
@@ -1285,7 +1294,8 @@ damage formula (`docs/DATA-SOURCES.md`, the damage-formula section):
     skill that earns it is free credit once the rotation can drop that skill: Wavecatcher Miyu's Catch a
     Wave, Offshore and Surf stats, and Yusuke's taunt counters and shield stats, were. They now follow
     the skill (`after`/`on` with `dur`, so lufel's rotation prices exactly as before), with `alwaysAw` for
-    an Awareness from which the state holds for good (Miyu's A6). Ryuji's charge/hit and Starlight
+    an Awareness from which the state holds for good (Miyu's A6; her Surf is now played out instead, see
+    `TC_SURF` below). Ryuji's charge/hit and Starlight
     Morgana's Waltz/Crash! alternate through a `flip` counter, which keeps their averaged Skill 3 price
     true. `tmRotPick` now drops lufel's "Mindscape Core" options for a character whose Mindscape is not
     complete (`tmMindDone`; the Setup has no Core field, so complete stat and skill paths stand in). The
@@ -1294,14 +1304,37 @@ damage formula (`docs/DATA-SOURCES.md`, the damage-formula section):
   - **Measured against lufel on the real save (Nov 2026)**: on one boss the composer moves Ann to Trifire
     (Skill 2) every turn, +25% — lufel's 3,1 is a multi-foe rotation, and at 3 foes the composer writes
     it back (+0.3%); Ryuji mixes Skill 1 between charge/hit pairs (+4.5%; Skill 3's low-HP growth is not
-    priced); Wavecatcher Miyu casts Aerial Tide (0 SP) almost every turn (+21%, more at 3 foes: Surf's
-    buff extension and Catch a Wave's SP costs are judged, so treat it with care); Makoto Niijima at A3
+    priced); Wavecatcher Miyu cast Aerial Tide (0 SP) almost every turn (+21%; that was the judged Surf
+    window, since replaced by the Surf engine below); Makoto Niijima at A3
     and Ann at A6, for which lufel writes only A0, gain 10-25%. Most others land within a few percent of
     lufel. Teams differ far more: lufel's parties were written at each character's launch (for 13 of 16
     damage dealers no party member is newer than the damage dealer), so Fuuka (#54, with Kumi as backup:
     Hard Knocks on every Oracle Shift is most of her value — 14.8 without, 21.2 with), Kotone Shiomi (#52,
     in no lufel party) and Beachflower Minami (#47) are missing; Leo's value for Ryuji (lowering his HP)
     and healers' survival are not priced; unowned picks (Kayo, Junpei) price without cards.
+  - **The search also starts from lufel's options for other teams** (`tcComposeSetup`'s `others`, Nov 2026):
+    every option lufel writes at the member's Awareness, including one labelled for a teammate who is not
+    in this team ("with Manaka"). It is still a play of the kit; it is not shown as lufel's for this team.
+    Wavecatcher Miyu's 3 › 1 › 1 › 1 › 1 › 2 is several changes away from her 3 › 2 › 3 › 2, each of
+    which loses on its own, so the search never reached it. No measurable cost; the other damage dealers
+    tried kept their rotations.
+- **Wavecatcher Miyu's Surf is played out** (`TC_SURF`, Nov 2026; the user: 3 › 1 › 1 › 1 beats 3 › 2 › 3 › 2
+  because Jellyfish Splash keeps Surf and Catch a Wave fires on far more of the teammates' turns). Until then
+  Surf was judged as "Paddle Out's turn and the next", Catch a Wave as a fixed share of ally actions (0.5,
+  0.75 from A1, 1.0 at A6) and the Offshore stacks as fixed counts, so 3 › 1 › 1 › 1 lost Surf on turn 3
+  and the planner rated it 17% below 3 › 2 › 3 › 2. From lufel's text: only Aerial Tide or Paddle Out again
+  ends Surf; the fight tracks her SP (15 at the start of each other ally's turn and 40 per Splash, times her
+  SP Recovery; Splash up to twice the 200 max; Paddle Out 60), Surf and the stacks, and fires Catch a Wave
+  at the end of another ally's turn when she has the SP (30 + 30 a stack, +5% a stack; A1 40% cheaper, cap
+  6; A2's free 4th; A6's Surf for good, refilled SP). Her Surf lines (`KIT_STAT_BUFFS` `on: 'surf'`, `hold`)
+  are on while Surf is, Surfing Mermaid's four buffs come at 100/200/300/400 SP recovered (`on: 'sp100'`…),
+  Aerial Tide takes +10% a stack in Surf, the Highlight's second hit (a third of it) lands in Surf only, and
+  her Highlight waits for Surf when her next turn enters it. On the real save (326.7% SP Recovery, with
+  Mayumi, Kotone Shiomi, Fuuka and Kumi) 3 › 1 › 1 › 1 › 1 › 2 holds Surf all 12 turns for 20 catches and
+  beats 3 › 2 › 3 › 2 (18) by 9%, and the fit chooses it. It depends on SP Recovery: at the test fixture's
+  ~189% (no cards) Surf held through Splash catches less often than 3 › 2, whose Aerial Tide resets the
+  stacks and so the cost; a test pins only the mechanics. Aerial Tide outside Surf is still allowed (lufel:
+  0 SP, no cooldown).
 
 ### Lufel publishes an order, not magnitudes
 
