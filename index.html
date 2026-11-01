@@ -4043,8 +4043,9 @@ const TEAMS = {
 /* Damage per use of skills 1-3 and the Highlight/Theurgy (`d`, % of the stat the kit scales with, base
    skill level, hits added up; `dt` the same at each of the four skill-level tiers), whether the character
    has a Highlight or a Theurgy (`hl`, `th` its gauge need), lufel's Highlight cooldown in turns (`cd`) and
-   skill cooldowns (`cool`), and `hlCrit` for the few Highlights that can crit. The Teams tab's fight
-   deals the damage dealer's damage from these. See tools/gen-skill-damage.js. */
+   skill cooldowns (`cool`), `hlCrit` for the few Highlights that can crit, and which hit every foe
+   (`aoe`) or are Almighty (`alm`, never on a weakness). The Teams tab's fight deals the damage
+   dealer's damage from these. See tools/gen-skill-damage.js. */
 const SKILL_DMG = {
   'Ann Takamaki': { hl:'HL', cd:4, d:[94.8,134.2,96.3,195.2], dt:[[94.8,104.5,100.6,110.3],[134.2,148,142.5,156.2],[96.3,106.2,102.3,112.1],[195.2,215.2,207.2,227.2]], aoe:[1,0,1,1] },
   'Ryuji Sakamoto': { hl:'HL', cd:4, d:[194.1,67.1,170.8,405], dt:[[194.1,213.9,206.1,225.9],[67.1,74,71.3,78.2],[170.8,188.3,181.3,198.8],[405,446.5,429.9,471.4]], aoe:[0,1,0,0] },
@@ -4073,7 +4074,7 @@ const SKILL_DMG = {
   'Kira Kitazato': { hl:'HL', cd:4, d:[189.2,168.4,0,492.8], dt:[[189.2,208.7,200.8,220.3],[168.4,185.7,178.8,196],[0,0,0,0],[492.8,543.3,523.1,573.6]] },
   'Masaki Ashiya': { hl:'HL', cd:4, d:[194,0,0,0], dt:[[194,213.9,206,225.8],[0,0,0,0],[0,0,0,0],[0,0,0,0]], aoe:[1,0,1,1], cool:[0,0,1] },
   'Haru Okumura': { hl:'HL', cd:4, d:[151.6,151.6,142.1,206.9], dt:[[151.6,167.2,161,176.6],[151.6,167.1,160.9,176.4],[142.1,156.7,150.8,165.4],[206.9,228.1,219.6,240.8]], aoe:[1,0,1,1] },
-  'Justine & Caroline': { hl:'HL', cd:4, d:[149,149,126.9,488], dt:[[149,164.2,158,173.4],[149,164.2,158,173.4],[126.9,139.8,134.6,147.7],[488,538,518,568]], hlCrit:true },
+  'Justine & Caroline': { hl:'HL', cd:4, d:[149,149,126.9,488], dt:[[149,164.2,158,173.4],[149,164.2,158,173.4],[126.9,139.8,134.6,147.7],[488,538,518,568]], alm:[0,0,0,1], hlCrit:true },
   'Kotone Montagne [Frostgale]': { hl:'HL', cd:4, d:[221.4,93.9,278.4,637.5], dt:[[221.4,244,235,257.7],[93.9,103.5,99.8,109.4],[278.4,305.8,294.9,322.3],[637.5,702.7,676.6,741.9]], aoe:[0,1,0,0] },
   'Runa Dogenzaka': { hl:'HL', cd:4, d:[73.2,170.8,219.6,214.7], dt:[[73.2,80.7,77.7,85.2],[170.8,188.3,181.3,198.8],[219.6,219.6,233.1,233.1],[214.7,236.7,227.9,249.9]], aoe:[1,0,1,1] },
   'Riko Tanemura [Tempest]': { hl:'HL', cd:4, d:[183,0,0,0], dt:[[183,201.8,194.2,213],[0,0,0,0],[0,0,0,0],[0,0,0,0]], aoe:[0,1,0,0] },
@@ -4081,7 +4082,7 @@ const SKILL_DMG = {
   'Yaoling Li [Firecracker]': { hl:'HL', cd:4, d:[120.4,73.8,0,226.5], dt:[[120.4,132.8,127.8,140.2],[73.8,81.3,78.3,85.9],[0,0,0,0],[226.5,249.7,240.5,263.7]], aoe:[1,1,0,1], cool:[0,0,1] },
   'Kasumi Yoshizawa': { hl:'HL', d:[186.9,0,249.1,273.1], dt:[[186.9,206.1,198.4,217.5],[0,0,0,0],[249.1,274.6,264.4,289.9],[273.1,301,289.8,317.8]], hlCrit:true },
   'Mayumi Hashimoto': { hl:'HL', cd:4, d:[134.2,0,0,0], dt:[[134.2,148,142.5,156.2],[0,0,0,0],[0,0,0,0],[0,0,0,0]], aoe:[1,1,1,1] },
-  'Goro Akechi': { hl:'HL', cd:4, d:[93.2,116.5,112.2,248.2], dt:[[93.2,102.8,98.9,108.5],[116.5,128.5,123.7,135.6],[112.2,112.2,112.2,112.2],[248.2,273.8,263.6,289]], aoe:[1,1,1,1] },
+  'Goro Akechi': { hl:'HL', cd:4, d:[93.2,116.5,112.2,248.2], dt:[[93.2,102.8,98.9,108.5],[116.5,128.5,123.7,135.6],[112.2,112.2,112.2,112.2],[248.2,273.8,263.6,289]], aoe:[1,1,1,1], alm:[0,0,1,1] },
   'Shoki Ikenami': { hl:'HL', cd:4, d:[151.8,0,0,0], dt:[[151.8,167.3,158,173.5],[0,0,0,0],[0,0,0,0],[0,0,0,0]], aoe:[0,0,1,1], cool:[0,2,0] },
   'Makoto Yuki': { hl:'TH', th:100, d:[179.4,0,183,590], dt:[[179.4,198,190.5,208.8],[0,0,0,0],[183,201.7,194.3,213.1],[590,650.4,626,686.4]], aoe:[0,1,0,0] },
   'Yukari Takeba': { hl:'TH', th:70, d:[200.1,0,0,406], dt:[[200.1,220.6,212.4,232.9],[0,0,0,0],[0,0,0,0],[406,447.6,431,472.6]], aoe:[0,1,1,0] },
@@ -4101,7 +4102,7 @@ const SKILL_DMG = {
   'Motoha Arai [Radiance]': { hl:'HL', d:[282.8,0,325.8,446.6], dt:[[282.8,311.8,300.2,329.2],[0,0,0,0],[325.8,359.2,345.8,379.2],[446.6,492.4,474,519.8]], aoe:[1,0,1,1], hlCrit:true },
   'Aran Hirano': { hl:'HL', d:[153.7,0,0,361.8], dt:[[153.7,169.5,160,175.8],[0,0,0,0],[0,0,0,0],[361.8,398.9,376.6,413.7]] },
   'Aigis': { hl:'TH', th:70, d:[80.2,80.2,0,248.4], dt:[[80.2,88.4,85.2,93.4],[80.2,88.4,85.2,93.4],[0,0,0,0],[248.4,273.8,263.7,289.1]], aoe:[1,1,0,1] },
-  'Ren Amamiya [Starlight]': { hl:'HL', cd:4, d:[0,124.6,572.4,0], dt:[[0,0,0,0],[124.6,137.4,132.3,145.1],[572.4,631.1,607.6,666.2],[0,0,0,0]], aoe:[0,1,1,0] },
+  'Ren Amamiya [Starlight]': { hl:'HL', cd:4, d:[0,124.6,572.4,0], dt:[[0,0,0,0],[124.6,137.4,132.3,145.1],[572.4,631.1,607.6,666.2],[0,0,0,0]], aoe:[0,1,1,0], alm:[0,0,1,0] },
   'Morgana [Starlight]': { hl:'HL', cd:4, d:[128.8,130.9,145.4,207.9], dt:[[128.8,142,136.8,150],[130.9,144.3,138.9,152.3],[145.4,160.2,154.4,169.2],[207.9,229.2,220.7,242]], aoe:[1,1,1,1] },
   'Ann Takamaki [Starlight]': { hl:'HL', cd:4, d:[83.8,132.3,411.1,545.1], dt:[[83.8,92.2,93.9,102.2],[132.3,145.5,148.2,161.4],[411.1,452.2,460.4,501.5],[545.1,600.9,578.6,634.5]] },
   'Ayaka Sakai [Summer]': { hl:'HL', d:[330.9,173.7,210.2,0], dt:[[330.9,364.8,351.2,385.1],[173.7,191.5,184.4,202.2],[210.2,231.8,223.2,244.6],[0,0,0,0]], aoe:[1,1,1,1] },
@@ -12353,13 +12354,14 @@ function csv() {
 const TC_BOSS = { def: 820.7, coef: 1.584 };
 const TC_WEAK = 1.2;
 const TC_KEYS = ['atkPct', 'atk', 'dm', 'cr', 'cm', 'pierce', 'defdown', 'final', 'weak', 'turns',
-  'hlDm', 'hlFinal', 'hlx', 'hlxDm', 'hlGauge', 'thGauge', 'hlCdRate', 'hlCd', 'hlFree', 'xturns', 'xDm', 'xFinal', 'xAtkPct', 'hlGaugeTo'];
+  'hlDm', 'hlFinal', 'hlx', 'hlxDm', 'hlGauge', 'thGauge', 'hlCdRate', 'hlCd', 'hlFree', 'xturns', 'xDm', 'xFinal', 'xAtkPct', 'hlGaugeTo', 'resDm', 'dotDm'];
 const TC_FROM_K = { 'atk%': 'atkPct', atk: 'atk', dmg: 'dm', cr: 'cr', cm: 'cm', pierce: 'pierce', defdown: 'defdown', final: 'final', weak: 'weak', turns: 'turns' };
 TC_KEYS.slice(10).forEach(k => { TC_FROM_K[k] = k; });
 const TC_LABEL = { atkPct: 'ATK', atk: 'ATK', dm: 'damage', cr: 'crit rate', cm: 'crit multiplier', pierce: 'Pierce', defdown: 'enemy DEF', final: 'final damage', weak: 'weakness damage', turns: 'extra actions in 6 turns',
   hlDm: 'Highlight damage', hlFinal: 'Highlight final damage', hlx: 'extra Highlights in 6 turns', hlxDm: 'damage on those extra Highlights',
   hlGauge: 'Highlight gauge a turn', thGauge: 'Theurgy gauge a turn', hlCdRate: 'Highlight cooldown turns cut in 6 turns', hlCd: 'Highlight cooldown', hlFree: 'Highlights cost no gauge', hlGaugeTo: 'Highlight gauge refilled to',
-  xturns: 'extra actions in the fight', xDm: 'damage on extra actions', xFinal: 'final damage on extra actions', xAtkPct: 'ATK on extra actions' };
+  xturns: 'extra actions in the fight', xDm: 'damage on extra actions', xFinal: 'final damage on extra actions', xAtkPct: 'ATK on extra actions',
+  resDm: 'Resonance damage', dotDm: 'damage over time' };
 /* Keys that are a rate or a count rather than a percentage the damage formula adds. */
 const TC_RATE_KEYS = ['hlx', 'hlGauge', 'thGauge', 'hlCdRate', 'hlCd', 'hlFree', 'xturns', 'hlGaugeTo'];
 /* Uses per battle of a once-per-battle effect, by name (TEAM_BUFFS `battle`): Manaka's Da Capo starts
@@ -12574,16 +12576,20 @@ const TEAM_BUFFS = {
 
   ],
   'Justine & Caroline': [
-    { k: 'atk%', v: 30, to: 'party', src: 'passive', why: 'Oxymoron (passive), Strategist pair (Mischief & Innocence + Absurdity & Nonsense): party ATK +30% while on the field' },
-    { k: 'atk%', v: [39, 43, 41.4, 45.4], to: 'party', src: '1', on: '1', dur: 3, why: 'Selected Skill 1 = Mask of Mischief & Innocence: party ATK +39-45.4% per 100 Desire Level, 3 turns; encoded at Desire 100' },
-    { k: 'pierce', v: [9.8, 10.8, 10.4, 11.4], to: 'ally', src: '2', on: '2', dur: 3, arch: ['AoE DPS', 'ST DPS'], why: 'Selected Skill 2 = Mask of Absurdity & Nonsense: pierce for the highest-ATK Sweeper/Assassin, 4.9% + 4.9% per 100 Desire, 3 turns; encoded at Desire 100' },
-    { k: 'cm', v: [19.5, 21.5, 20.7, 22.7], to: 'party', src: '3', on: '3', dur: 2, why: 'Two Masks as One (Mischief + Absurdity Facades): party critical damage +19.5-22.7% per 100 Desire, duration taken as the same 2 turns; encoded at Desire 100' },
-    { k: 'atk%', v: [24.4, 26.9, 25.9, 28.4], to: 'party', src: 'HL', on: 'HL', dur: 2, why: 'Highlight, Mischief & Innocence version: party ATK up for 2 turns' },
-    { k: 'dmg', v: [34.2, 37.7, 36.3, 39.8], to: 'party', src: 'HL', on: 'HL', dur: 2, why: 'Highlight, Mischief & Innocence version: party damage up for 2 turns' },
-    { k: 'atk%', v: 30, to: 'party', src: 'aw', on: '1', dur: 2, aw: 2, why: 'A2 Callous Kindness: gaining the Mischief & Innocence Facade (Selected Skill 1) gives party ATK +30% for 2 turns' },
-    { k: 'cm', v: 20, to: 'ally', src: 'aw', on: '2', dur: 2, aw: 2, arch: ['AoE DPS', 'ST DPS'], why: 'A2 Callous Kindness: gaining the Absurdity & Nonsense Facade (Selected Skill 2) gives the highest-ATK Sweeper/Assassin critical damage +20% for 2 turns' },
+    { k: 'atk%', v: 30, to: 'party', src: 'passive', pair: ['MA'], why: 'Oxymoron (passive), Strategist pair (Mischief & Innocence + Absurdity & Nonsense): party ATK +30% while on the field' },
+    { k: 'atk%', v: [39, 43, 41.4, 45.4], to: 'party', src: '1', on: '1', dur: 3, pair: ['MA','MS'], why: 'Selected Skill 1 = Mask of Mischief & Innocence: party ATK +39-45.4% per 100 Desire Level, 3 turns; encoded at Desire 100' },
+    { k: 'pierce', v: [9.8, 10.8, 10.4, 11.4], to: 'ally', src: '2', on: '2', dur: 3, arch: ['AoE DPS', 'ST DPS'], pair: ['MA'], why: 'Selected Skill 2 = Mask of Absurdity & Nonsense: pierce for the highest-ATK Sweeper/Assassin, 4.9% + 4.9% per 100 Desire, 3 turns; encoded at Desire 100' },
+    { k: 'cm', v: [19.5, 21.5, 20.7, 22.7], to: 'party', src: '3', on: '3', dur: 2, pair: ['MA'], why: 'Two Masks as One (Mischief + Absurdity Facades): party critical damage +19.5-22.7% per 100 Desire, duration taken as the same 2 turns; encoded at Desire 100' },
+    { k: 'atk%', v: [24.4, 26.9, 25.9, 28.4], to: 'party', src: 'HL', on: 'HL', dur: 2, pair: ['MA','MS'], why: 'Highlight, Mischief & Innocence version: party ATK up for 2 turns' },
+    { k: 'dmg', v: [34.2, 37.7, 36.3, 39.8], to: 'party', src: 'HL', on: 'HL', dur: 2, pair: ['MA','MS'], why: 'Highlight, Mischief & Innocence version: party damage up for 2 turns' },
+    { k: 'atk%', v: 30, to: 'party', src: 'aw', on: '1', dur: 2, aw: 2, pair: ['MA','MS'], why: 'A2 Callous Kindness: gaining the Mischief & Innocence Facade (Selected Skill 1) gives party ATK +30% for 2 turns' },
+    { k: 'cm', v: 20, to: 'ally', src: 'aw', on: '2', dur: 2, aw: 2, arch: ['AoE DPS', 'ST DPS'], pair: ['MA'], why: 'A2 Callous Kindness: gaining the Absurdity & Nonsense Facade (Selected Skill 2) gives the highest-ATK Sweeper/Assassin critical damage +20% for 2 turns' },
     { k: 'atk%', v: 20, to: 'party', src: 'aw', on: 'HL', dur: 2, aw: 4, own: false, why: 'A4 Execution of Rebirth: on Highlight, other allies get half of her ATK +40% for 2 turns (not for herself: the other allies only)' },
     { k: 'dmg', v: 10, to: 'party', src: 'aw', on: 'HL', dur: 2, aw: 4, own: false, why: 'A4 Execution of Rebirth: on Highlight, other allies get half of her damage +20% for 2 turns (not for herself: the other allies only)' },
+    { k: 'dmg', v: 24, to: 'party', src: 'passive', pair: ['MS'], why: 'Oxymoron (passive), Medic pair (Mischief & Innocence + Service & Admonition): party damage +24% while on the field' },
+    { k: 'dmg', v: [43.9, 48.4, 46.6, 51.1], to: 'party', src: '3', on: '3', dur: 2, pair: ['MS'], why: 'Two Masks as One (Mischief + Service Facades): party damage +43.9-51.1% per 100 Desire for 2 turns (and a heal); encoded at Desire 100' },
+    { k: 'dmg', v: 24, to: 'enemy', src: 'passive', pair: ['SL'], why: 'Oxymoron (passive), Saboteur pair (Service & Admonition + Luck & Loss): all foes take +24% damage while she is on the field' },
+    { k: 'defdown', v: [50.8, 56, 53.8, 59], to: 'enemy', src: '3', on: '3', dur: 2, pair: ['SL'], why: 'Two Masks as One (Service + Luck Facades): all foes DEF -25.4% plus 25.4% per 100 Desire for 2 turns, encoded at Desire 100 (and Shock, Windswept and Curse on the main target, not priced). Her Skills 1 and 2 in this pair, Service (party damage taken down, a heal) and Luck (her own ATK, damage and crit), add nothing to the damage dealer\'s' },
     { k: 'cm', ladder: [13, 17, 17, 21, 21, 25, 25], to: 'party', src: 'weapon', on: '1', dur: 2, weapon: '5', why: 'Warden\'s Judgement: each Facade gained gives party critical damage for 2 turns, stacks to 2; this entry is the Facade from Selected Skill 1' },
     { k: 'cm', ladder: [13, 17, 17, 21, 21, 25, 25], to: 'party', src: 'weapon', on: '2', dur: 2, weapon: '5', why: 'Warden\'s Judgement: second stack, the Facade from Selected Skill 2' },
     { k: 'dmg', ladder: [13, 17, 17, 21, 21, 25, 25], to: 'party', src: 'weapon', on: '1', dur: 2, weapon: '5', why: 'Warden\'s Judgement: each Facade gained gives party damage dealt for 2 turns, stacks to 2; Facade from Selected Skill 1' },
@@ -12681,7 +12687,9 @@ const TEAM_BUFFS = {
     { k: 'dmg', v: 0, per: { s: 'ATK', rate: 0.8, cap: [4388, 4838, 4575, 5025] }, to: 'party', src: '1', on: '1', dur: 2, why: 'Followspot (Skill 1): all allies get 2 Blessing stacks and damage +0.8% per 100 of Shoki\'s ATK (up to 35.1%), 2 turns' },
     { k: 'dmg', v: 5, to: 'party', src: 'passive', on: '1', dur: 2, stacks: 2, why: 'Supporting Role (passive): allies gaining Blessing get damage +5% per Blessing stack (max 25%); counted at the 2 stacks Followspot grants, assuming Blessing lasts 2 turns' },
     { k: 'atk', v: 0, per: { s: 'ATK', rate: 15, cap: [3793, 4180, 3947, 4333] }, to: 'party', src: '3', on: '3', dur: 2, why: 'Improvise (Skill 3): party ATK + 15% of Shoki\'s ATK (up to 569), 2 turns' },
-    { k: 'cm', v: [24.4, 26.9, 25.4, 27.9], to: 'ally', src: '3', on: '3', dur: 2, why: 'Improvise (Skill 3) in the Electrifying Performance state: main target\'s crit damage +24.4%, 2 turns (4 at A6); the state is the player\'s choice, the pierce one is the alternative' },
+    { k: 'cm', v: [24.4, 26.9, 25.4, 27.9], to: 'ally', src: '3', on: '3', dur: 2, pair: ['E'], why: 'Improvise (Skill 3) in the Electrifying Performance state: main target\'s crit damage +24.4%, 2 turns (4 at A6)' },
+    { k: 'pierce', v: [12, 13.2, 12.5, 13.7], to: 'ally', src: '3', on: '3', dur: 2, pair: ['T'], why: 'Improvise (Skill 3) in the Tempestuous Drama state: main target\'s pierce +12-13.7%, 2 turns' },
+    { k: 'dotDm', v: [14, 15.4, 14.5, 16], to: 'ally', src: '3', on: '3', dur: 2, pair: ['B'], why: 'Improvise (Skill 3) in the Blazing Passion state: main target\'s damage over time +14-16% (and ailment accuracy +30%), 2 turns' },
     { k: 'dmg', v: 3, to: 'ally', src: 'aw', on: '3', dur: 2, aw: 1, stacks: 2, why: 'In the Limelight (A1): a skill used on an ally gives them damage +3% per Blessing stack they hold (max 15%), 2 turns; counted at the 2 stacks from the preceding Followspot' },
     { k: 'atk', v: 0, per: { s: 'ATK', rate: 6.5, cap: [4369, 4831, 4554, 5000] }, to: 'party', src: 'HL', on: 'HL', dur: 2, why: 'Highlight: party ATK + 6.5% of Shoki\'s ATK (up to 284), 2 turns' },
     { k: 'atk%', v: 10, to: 'ally', src: 'aw', on: 'HL', dur: 2, aw: 4, why: 'Standing Ovation (A4): enhanced Highlight gives the main target ATK +10%, 2 turns' },
@@ -13154,7 +13162,7 @@ const TEAM_BUFF_SKIPS = {
     'A6 Heroine of Justice: Focused Round lowers foe ailment resistance - ailment chance, not damage'
   ],
   'Justine & Caroline': [
-    'Persona pair: everything above assumes the Strategist pair (Mischief & Innocence + Absurdity & Nonsense), the one lufel\'s team notes name; rotation slot 1 = Mischief, 2 = Absurdity, 3 = Two Masks as One. Other pairs (Medic: party damage +24% passive, +43.9%/100 Desire on Two Masks; Saboteur: foes\' damage taken +24% passive, DEF down 25.4% + 25.4%/100 Desire; Sweeper/Assassin/Guardian) are not encoded',
+    'Persona pair: three pairs are entered and the fight plays the one that does most for each team, named on her seat (TC_PAIRS): Strategist (Mischief & Innocence + Absurdity & Nonsense), Medic (Mischief + Service & Admonition) and Saboteur (Service + Luck & Loss). Rotation slot 1 is the first mask, 2 the second, 3 Two Masks as One; lufel writes her rotations for the Strategist pair, and the others are read with the same turns. Sweeper and Assassin buff only her, Guardian only defends: not entered',
     'Desire Level: values encoded at Desire 100 (25 from A0 + 45 ATK + 15 Damage Mult + 15 Crit Mult caps); A6\'s +20% and Warden\'s Judgement\'s Desire gain not encoded',
     'Two Masks as One (Mischief + Absurdity): Skill Amplification 14.6-17% to other allies; skill effect amplification not priced',
     'Highlight, Absurdity & Nonsense version: ATK +34.2-39.8% for the highest-ATK ally; Highlights share the gauge, so only the party Mischief version is encoded',
@@ -14205,7 +14213,7 @@ function tcRotVariants(r, name) {
 }
 function tcRotFit(dps, name, inTeam, r, fixed, dep) {
   if (!r || !r.pick.length || !dep.length) return null;
-  const rk = dps.n + '|' + name + '|' + r.pick.map(b => b.label + ':' + b.seq.join(' ')).join('|');
+  const rk = dps.n + '|' + name + '|' + (tcPairFor(dps, name) || '') + '|' + r.pick.map(b => b.label + ':' + b.seq.join(' ')).join('|');
   let cands = tcMemo.rot.get(rk);
   if (!cands) { cands = tcRotCands(r, dep, name); tcMemo.rot.set(rk, cands); }
   if (cands.length < 2) return null;
@@ -14238,18 +14246,60 @@ function tcTeamSet(dps, names) {
   return s;
 }
 
+/* Characters who choose a set-up before battle that changes their kit: the twins pick 2 of their 4
+   masks (Awareness 0), and the pair sets their role, their Skills 1 and 2, their passive and what Two
+   Masks as One does. Only the pairs that do something for a damage dealer's damage are entered; a
+   TEAM_BUFFS line with `pair` belongs to those pairs, one without to every pair. The fight prices a
+   lineup under each pair and keeps the best (tcSim); the quick screen takes the pair whose lines
+   alone add most for this damage dealer (tcPairFor). The other three pairs (Sweeper and Assassin
+   buff only the twins, Guardian only defends) add nothing to someone else's damage. */
+const TC_PAIRS = {
+  'Justine & Caroline': [
+    { id: 'MA', role: 'Strategist', masks: 'Mischief & Innocence + Absurdity & Nonsense' },
+    { id: 'MS', role: 'Medic', masks: 'Mischief & Innocence + Service & Admonition' },
+    { id: 'SL', role: 'Saboteur', masks: 'Service & Admonition + Luck & Loss' }
+  ],
+  // Shoki switches Improv state at the start of each turn; his Skill 3 gives the main target a different
+  // buff in each, so he keeps the one that helps the damage dealer most (Chilling Intensity's Technical
+  // bonuses are not modelled)
+  'Shoki Ikenami': [
+    { id: 'E', role: 'Electrifying Performance', masks: 'Skill 3 gives crit damage' },
+    { id: 'T', role: 'Tempestuous Drama', masks: 'Skill 3 gives pierce' },
+    { id: 'B', role: 'Blazing Passion', masks: 'Skill 3 gives damage over time' }
+  ]
+};
+const TC_PAIR_LABEL = { 'Justine & Caroline': 'Masks', 'Shoki Ikenami': 'Improv state' };
+// the pairs forced while one is being priced (tcSim), by character
+let tcPairCtx = null;
+function tcPairFor(dps, name) {
+  const opts = TC_PAIRS[name];
+  if (!opts) return null;
+  if (tcPairCtx && tcPairCtx[name]) return tcPairCtx[name];
+  if (!tcMemo.hot) tcMemoFor();
+  const k = 'pair|' + dps.n + '|' + name;
+  let p = tcMemo.member.get(k);
+  if (!p) {
+    let bm = -1;
+    opts.forEach(o => { const m = tcMultiplier(dps, [tcMemberCalc(dps, name, null, null, false, o.id).vec]); if (m > bm) { bm = m; p = o.id; } });
+    tcMemo.member.set(k, p);
+  }
+  return p;
+}
+const tcPairInfo = (name, id) => (TC_PAIRS[name] || []).find(o => o.id === id) || null;
+
 /* What one member supplies to `dps`: a vector over TC_KEYS and the lines behind it. `backup`
    prices Fuuka's backup (see the header). `inTeam` picks rotations written for a teammate and,
    with `fit`, is the team the rotation is fitted to (tcRotFit); the result's `rot` says what
    the fit did, or is null when the rotation is lufel's as written. */
 function tcMember(dps, name, inTeam, backup, fit) {
   if (!tcMemo.hot) tcMemoFor();
-  const key = dps.n + '|' + name + '|' + (backup ? backup.swaps : '') + '|' + (inTeam ? [...inTeam].sort().join(',') + (inTeam.backup ? '|b=' + inTeam.backup : '') : '') + (fit ? '|fit' : '');
+  const pair = tcPairFor(dps, name);
+  const key = dps.n + '|' + name + '|' + (backup ? backup.swaps : '') + '|' + (inTeam ? [...inTeam].sort().join(',') + (inTeam.backup ? '|b=' + inTeam.backup : '') : '') + (fit ? '|fit' : '') + (pair ? '|p=' + pair : '');
   let m = tcMemo.member.get(key);
-  if (!m) { m = tcMemberCalc(dps, name, inTeam, backup, fit); tcMemo.member.set(key, m); }
+  if (!m) { m = tcMemberCalc(dps, name, inTeam, backup, fit, pair); if (pair) m.pair = pair; tcMemo.member.set(key, m); }
   return m;
 }
-function tcMemberCalc(dps, name, inTeam, backup, fit) {
+function tcMemberCalc(dps, name, inTeam, backup, fit, pair) {
   const sup = charDef(name);
   const vec = {}; TC_KEYS.forEach(k => { vec[k] = 0; });
   const lines = [];
@@ -14283,6 +14333,7 @@ function tcMemberCalc(dps, name, inTeam, backup, fit) {
   const usable = [];
   for (const e of TEAM_BUFFS[name] || []) {
     if (self && ((e.to !== 'party' && e.to !== 'enemy') || e.own === false || (e.ownAw != null && aw < e.ownAw))) continue;
+    if (e.pair && !(pair && e.pair.includes(pair))) continue;   // a line of a mask pair not played
     if (e.elem && !e.elem.includes(dps.e)) continue;
     if (e.arch && !e.arch.includes(dps.arch)) continue;
     if (e.only && e.only !== dkind) continue;   // a Highlight-only line for a Theurgy user, or the reverse
@@ -14351,17 +14402,21 @@ function tcMemberCalc(dps, name, inTeam, backup, fit) {
   /* For the turn-by-turn fight (tcSim): what is on whatever happens (the Elucidator share, passives,
      judged uptimes) and what a cast, a Highlight or a use per battle sets off, each tied to its line
      so the page can show the uptime the fight gave it. A backup's single action stays averaged. */
-  const consts = Object.assign({}, shareVec), events = [], gated = [];
+  const consts = Object.assign({}, shareVec), events = [], gated = [], constsOne = {};
   usable.forEach((u, i) => {
     if (!backup && (u.e.battle != null || (u.e.on && u.e.up == null)))
       events.push({ e: u.e, k: u.k, v: u.v, dur: u.e.dur === 'next' ? 'next' : u.dur, ref: shareN + i, gate: u.gate });
     // the fight switches a gated line on round by round; any judged uptime it also carries stays
     else if (!backup && u.gate) gated.push({ k: u.k, v: u.v * (u.e.up != null ? u.e.up : 1), gate: u.gate, one: u.e.to === 'enemy' && tcOneFoe(u.e) });
-    else consts[u.k] += u.v * u.up;
+    else {
+      consts[u.k] += u.v * u.up;
+      // an always-on debuff on one foe: on the main target only when the fight has more foes
+      if (u.e.to === 'enemy' && tcOneFoe(u.e)) constsOne[u.k] = (constsOne[u.k] || 0) + u.v * u.up;
+    }
   });
   const base = seq.length ? seq : ['-'];
   const hlAdded = !backup && tcSeqHL(base, name) !== base;
-  return { vec, lines, known: !!TEAM_BUFFS[name], rot: fitted, hlEvery: hlAdded ? tcEvery(name) : 0, sim: { consts, events, seq, gated } };
+  return { vec, lines, known: !!TEAM_BUFFS[name], rot: fitted, hlEvery: hlAdded ? tcEvery(name) : 0, sim: { consts, events, seq, gated, constsOne } };
 }
 
 /* ---- Wonder: three Personas, each with its own three skill cards, and a weapon (the user's
@@ -14505,7 +14560,7 @@ function tcWonder(dps, setup) {
       if (sched[at] === '-') sched[at] = tok;
     }
   });
-  const wConst = {}, castEv = [], wGated = [];
+  const wConst = {}, castEv = [], wGated = [], wOne = {};
   TC_KEYS.forEach(k => { wConst[k] = 0; });
   best.ups.forEach(([i, up]) => {
     if (!up) return;
@@ -14518,7 +14573,10 @@ function tcWonder(dps, setup) {
       // the fight switches it on round by round: its value without the gate's share of the fight
       const g = tcGate(i.e, 0);
       wGated.push({ k: i.k, v: i.v * up / tcGateMean(g, F), gate: g, one: i.e.to === 'enemy' && tcOneFoe(i.e) });
-    } else wConst[i.k] += i.v * up;
+    } else {
+      wConst[i.k] += i.v * up;
+      if (i.e.to === 'enemy' && tcOneFoe(i.e)) wOne[i.k] = (wOne[i.k] || 0) + i.v * up;
+    }
   });
   /* His Highlight, from whichever of his Personas' Highlights does most for this damage dealer — he
      switches to it for the cast; the fight fires it from the shared gauge. */
@@ -14544,7 +14602,7 @@ function tcWonder(dps, setup) {
     });
   }
   const uncast = order.filter(o => !given.get(o.s)).map(o => o.s.label);
-  return { vec, lines, idle, uncast, busy: asked > 6, inUse: best.inUse.map(x => x / 6), sim: { consts: noHl, events: hlEv, gated: wGated, cast: { seq: sched, events: castEv } } };
+  return { vec, lines, idle, uncast, busy: asked > 6, inUse: best.inUse.map(x => x / 6), sim: { consts: noHl, constsOne: wOne, events: hlEv, gated: wGated, cast: { seq: sched, events: castEv } } };
 }
 
 /* The setup that helps this team most, among everything WONDER_BUFFS knows — assuming the player
@@ -14685,7 +14743,8 @@ function tcMultiplier(dps, vecs) {
 }
 
 /* A damage dealer's own damage beyond one cast of a numbered skill or their Highlight (SKILL_DMG):
-   Resonance, follow-ups, summons, damage over time, token turns, each with what triggers it — their
+   Resonance, follow-ups, summons, damage over time, token turns, each with what triggers it (`noWeak`:
+   Almighty, never on a weakness) — their
    own actions, a teammate's, anyone's Highlight, the enemy's turn. Read from lufel's English kit text
    by hand-checked batches (Nov 2026); `why` says where each number comes from. */
 const DPS_KIT = {
@@ -14724,7 +14783,7 @@ const DPS_KIT = {
     { kind: 'res', v: 3.57, n: 5, on: 'self:3', aw: 2, why: 'Flight and Conflict (Awareness 2): 5 Verses from Skill 3' },
     { kind: 'res', v: 3.57, n: 3, on: 'selfHL', aw: 2, why: 'Flight and Conflict (Awareness 2): 3 Verses from his Highlight' },
     { kind: 'res', v: [50.6, 55.7, 52.6, 57.8], n: 2, on: 'selfHL', why: 'Highlight: the next 2 Sonnets of Fate deal an added 50.6% ATK each (Korean: "additionally deal 50.6% of ATK"); HL cooldown 4 leaves time for both' },
-    { kind: 'res', v: 35, on: 'self:3', why: 'Tragicomedy of Love (Skill 3): each Verse of Passion spent in a Sonnet adds 7% ATK Almighty damage; the skill gives 5 = 35% (the 25% conversions of later Verses, up to 2, not counted)' }
+    { kind: 'res', v: 35, on: 'self:3', noWeak: true, why: 'Tragicomedy of Love (Skill 3): each Verse of Passion spent in a Sonnet adds 7% ATK Almighty damage; the skill gives 5 = 35% (the 25% conversions of later Verses, up to 2, not counted)' }
   ],
   'Ren Amamiya': [
     { kind: 'fu', v: 50, on: 'self:3', aw: 6, cond: 'Skill 3 used on an extra action (the skill after "+" in lufel\'s rotations)', why: 'Merciless Pursuit (Awareness 6): after using a skill on an extra action, deal 50% ATK Curse damage to all foes. lufel\'s rotations spend Ren\'s extra actions on Arsene\'s Chains (Skill 3); priced on Skill 3, which in the A5 rotation also appears once as a normal action' }
@@ -14775,7 +14834,13 @@ const DPS_KIT = {
     { kind: 'dot', v: 12, on: 'round', stacks: 5, crit: false, cond: 'ailment accuracy at least 90%', why: 'Hideous Mask (passive 1): +4% of ATK per Bleed tick for every 30% ailment accuracy, up to 90% (so +12%). Doctor mode gives 36% and Bloodletter 15%; his cards build ailment accuracy.' },
     { kind: 'dot', v: 4, on: 'round', stacks: 4, crit: false, aw: 6, why: 'A6 Great Doctor: Bleed cap 13, never fewer than 3, Midnight Surgery no longer removes stacks - judged about 9 stacks held, 4 more than the base entry.' },
     { kind: 'dot', v: 12, on: 'round', stacks: 4, crit: false, aw: 6, cond: 'ailment accuracy at least 90%', why: 'Hideous Mask on the 4 extra A6 stacks.' },
-    { kind: 'dot', v: 16, on: 'self:2', stacks: 5, crit: false, why: 'Crimson Operation (Doctor Skill 2): \'activate Bleed damage\' once on the cast - one extra Bleed tick: 4% + Hideous Mask 12% per stack at 5 stacks. Also fires on \'Transform+2\' (Pathology), which does not tick - see notes.' }
+    { kind: 'dot', v: 16, on: 'self:2', stacks: 5, crit: false, why: 'Crimson Operation (Doctor Skill 2): \'activate Bleed damage\' once on the cast - one extra Bleed tick: 4% + Hideous Mask 12% per stack at 5 stacks. Also fires on \'Transform+2\' (Pathology), which does not tick - see notes.' },
+    { kind: 'dot', v: 60, on: 'round', stacks: 5, crit: false, noWeak: true, why: 'Bleed\'s Almighty part: 1% of the target\'s max HP per stack each turn, capped at 60% of Kira\'s ATK. The cap is in lufel\'s Korean and Chinese text; the English and Japanese leave it out, so the Global value is assumed. A boss\'s max HP always reaches the cap. Same 5 stacks as the Physical part; Almighty takes no weakness bonus (noWeak)' },
+    { kind: 'dot', v: 30, on: 'round', stacks: 5, crit: false, aw: 1, noWeak: true, why: 'Awareness 1: Bleed\'s Almighty damage x1.5, read as a cap of 90% of ATK per stack' },
+    { kind: 'dot', v: 60, on: 'round', stacks: 4, crit: false, aw: 6, noWeak: true, why: 'A6 Great Doctor: Bleed\'s Almighty part on the 4 extra stacks (about 9 held)' },
+    { kind: 'dot', v: 30, on: 'round', stacks: 4, crit: false, aw: 6, noWeak: true, why: 'A6: the Awareness 1 x1.5 on those 4 extra stacks' },
+    { kind: 'dot', v: 60, on: 'self:2', stacks: 5, crit: false, noWeak: true, why: 'Crimson Operation\'s extra Bleed tick: the Almighty part at its cap, 5 stacks' },
+    { kind: 'dot', v: 30, on: 'self:2', stacks: 5, crit: false, aw: 1, noWeak: true, why: 'Crimson Operation\'s extra tick: the Awareness 1 x1.5 on its Almighty part' }
   ],
   'Haru Okumura': [
     { kind: 'hit', v: 66, on: 'tok:Gunshot', why: 'A0 My Name Is Beauty Thief: Haru\'s ranged attacks (lufel\'s \'Gunshot\' token) deal Psychokinesis damage to all foes equal to 66% of ATK.' },
@@ -14786,7 +14851,7 @@ const DPS_KIT = {
     { kind: 'fu', v: [27.3, 30.1, 29, 31.8], on: 'tok:Gunshot', aw: 6, cond: '2+ Thoughtful Round stacks', why: 'A6: same reading for Painpoint Round at 70% (0.7 x 39.0%).' }
   ],
   'Justine & Caroline': [
-    { kind: 'fu', v: 40, n: 8, on: 'turnStart', chance: 0.167, aw: 6, why: 'Power to Resist Ruin (A6): True Desire at battle start and again every 8 turns; spending it enhances the next Two Masks as One with 8 bonus hits of 40% ATK on the main target (at Persona performance/Desire 100, as the team buffs assume). Judged: 2 uses in the default 12-round fight (turn 1 and turn 9) = 1/6 of her turns' },
+    { kind: 'fu', v: 40, n: 8, on: 'turnStart', chance: 0.167, aw: 6, noWeak: true, why: 'Power to Resist Ruin (A6): True Desire at battle start and again every 8 turns; spending it enhances the next Two Masks as One with 8 bonus hits of 40% ATK on the main target (at Persona performance/Desire 100, as the team buffs assume). Judged: 2 uses in the default 12-round fight (turn 1 and turn 9) = 1/6 of her turns' },
     { kind: 'fu', v: [126.9, 139.9, 134.7, 147.7], on: 'turnStart', chance: 0.167, aw: 6, why: 'Power to Resist Ruin (A6): the enhanced Two Masks as One activates every Facade combination, including Absurdity + Luck\'s "1 more hit of Almighty damage" (126.9%); same cadence' }
   ],
   'Kotone Montagne [Frostgale]': [
@@ -14957,7 +15022,8 @@ const DPS_KIT_SKIPS = {
     'A6: +35% crit rate on Resonance damage - a crit buff, not entered. A2 adds a Spark every 2 Resonances (slightly more frequent Resonance), not entered.'
   ],
   'Kira Kitazato': [
-    'Bleed\'s other part, Almighty damage of 1% of the target\'s max HP per stack per turn (x1.5 from A1), is not a % of Kira\'s ATK and cannot be priced in this format; against a boss it is likely most of his Bleed damage.',
+    'Bleed\'s Almighty part is priced at its cap, 60% of his ATK per stack (90% from Awareness 1), which only lufel\'s Korean and Chinese text print; if Global has no cap it is a share of the boss\'s max HP instead, which nothing here models.',
+    'lufel\'s Korean and Chinese text also count all his Persona-skill and Highlight damage as damage over time (the English does not), so a teammate\'s damage-over-time buff would reach his skills too; only his Bleed and Rending take it here.',
     'The self:2 extra Bleed tick also fires on Ripper Skill 2 turns (1 in 6 of lufel\'s rotations) - a small overcount.',
     'A1\'s Ripper bonus beyond his own Bleed (teammates\' debuffs) and Bloodletter\'s pierce are not priced.',
     'Ayaka\'s Highlight stacking Bleed (lufel\'s partner note) would raise the stack counts; not assumed.'
@@ -14970,7 +15036,7 @@ const DPS_KIT_SKIPS = {
   'Justine & Caroline': [
     'A1: Two Masks as One fires automatically at turn start / after her action with 2 Facades - lufel\'s A1 rotation writes these as 3-with-auto tokens (3↺); the simulator must count them as Skill 3 casts.',
     'A6 "Persona performance +20%" would scale every number above by 1.2 if it means 100 -> 120; ambiguous, not entered.',
-    'Only the Strategist pair is encoded. A damage pair (Assassin: Absurdity + Luck) would have Two Masks deal 2 hits and other Highlight numbers.'
+    'As a damage dealer her kit is the Strategist pair\'s; a damage pair (Assassin: Absurdity + Luck) would have Two Masks deal 2 hits and other Highlight numbers.'
   ],
   'Kotone Montagne [Frostgale]': [
     'Whether \'allies\' in Ailes au Vent includes Kotone herself is not clear; read as the other thieves. If it includes her, her own Wind skills in the Edge would add a 20% hit and a stack each.',
@@ -15452,7 +15518,8 @@ function tcSimPrep(D, names, fit, blank, opt) {
   const addConst = c => { if (c) TC_DMG_KEYS.forEach(k => { X0[k] += c[k] || 0; }); };
   // a member's lines that are on whatever happens, and those on for part of the fight only (by round)
   const gated = [];
-  const addSim = sm => { addConst(sm.consts); (sm.gated || []).forEach(g => gated.push(g)); };
+  const X0one = {};
+  const addSim = sm => { addConst(sm.consts); (sm.gated || []).forEach(g => gated.push(g)); Object.keys(sm.constsOne || {}).forEach(k => { X0one[k] = (X0one[k] || 0) + sm.constsOne[k]; }); };
   // the damage dealer's skill numbers at their skill-level tier; a Highlight crits only where its text says so
   const skill = SKILL_DMG[D.n] ? Object.assign({}, SKILL_DMG[D.n], { d: tcSkillD(D.n) }) : null;
   const hlCrit = tcHlKind(D.n) === 'TH' || !!(SKILL_DMG[D.n] || {}).hlCrit;
@@ -15536,7 +15603,7 @@ function tcSimPrep(D, names, fit, blank, opt) {
   if (thieves.some(a => a.n && a.n !== 'Wonder' && state.cards.filter(c => c.equipped === a.n && c.set === 'Prosperity' && c.slot !== 'Space').length >= 4)) gauge0 += 25;
   const concerto = thieves.find(a => a.n === 'Ayaka Sakai [Summer]') || null;
   gauge0 = Math.min(gauge0, concerto ? (concerto.aw >= 2 ? 300 : 250) : 100);
-  return { D, E, F, X0, skill, hlCrit, dpsWeak: tcWeakFor(D.e) === 'weak', foes: tcFoes(), aoe: (SKILL_DMG[D.n] || {}).aoe || [0, 0, 0, 0], dps, thieves, elu, concerto, gauge0, kit: tcKitFor(D), bonus: tcKitBonusFor(D), names, mems, blank, fuuka, gated };
+  return { D, E, F, X0, skill, hlCrit, dpsWeak: tcWeakFor(D.e) === 'weak', foes: tcFoes(), aoe: (SKILL_DMG[D.n] || {}).aoe || [0, 0, 0, 0], alm: (SKILL_DMG[D.n] || {}).alm || [0, 0, 0, 0], dps, thieves, elu, concerto, gauge0, kit: tcKitFor(D), bonus: tcKitBonusFor(D), names, mems, blank, fuuka, gated, X0one };
 }
 
 /* One fight under one spending order: { total, hl: {name: Highlights}, cover: {actor: {ref: share}}, log }.
@@ -15569,30 +15636,32 @@ function tcSimRun(P, order, hold) {
     // what is up for a hit: on the main target, or (`others`) on a foe a one-foe debuff does not reach
     const curX = others => {
       const X = Object.assign({}, P.X0);
+      if (others && P.X0one) Object.keys(P.X0one).forEach(k => { X[k] -= P.X0one[k]; });
       buffs.forEach(b => { if ((!b.vc || vc) && !(others && b.one)) X[b.k] = (X[b.k] || 0) + b.v; });
       // lines on for part of the fight only, at their share in this round
       (P.gated || []).forEach(g => { if (!(others && g.one)) { const f = g.gate(Math.max(1, round)); if (f) X[g.k] = (X[g.k] || 0) + g.v * f; } });
       return X;
     };
-    // one hit's multiplier over the damage dealer's unbuffed hit; `dot` cannot crit
-    const mult = (X, dm, atkPct, fin, dot) => {
-      const key = TC_DMG_KEYS.map(k => Math.round((X[k] || 0) * 100)).join(',') + '|' + Math.round(dm * 100) + '|' + Math.round(atkPct * 100) + '|' + (dot ? 1 : 0);
+    // one hit's multiplier over the damage dealer's unbuffed hit; `dot` cannot crit, `noWeak` (Almighty)
+    // never lands on a weakness
+    const mult = (X, dm, atkPct, fin, dot, noWeak) => {
+      const key = TC_DMG_KEYS.map(k => Math.round((X[k] || 0) * 100)).join(',') + '|' + Math.round(dm * 100) + '|' + Math.round(atkPct * 100) + '|' + (dot ? 1 : 0) + (noWeak ? 'n' : '');
       let m = memo.get(key);
       if (m == null) {
         const Y = Object.assign({}, X, { dm: X.dm + dm, atkPct: X.atkPct + atkPct, flat: E.den.flat, cr: X.cr + E.den.cr, cm: X.cm + E.den.cm });
         const f = damageFactors(E.worn, D, E.t, E.lo, Y);
         // against the unbuffed hit with its crit: a hit that cannot crit is worth that much less
         const body = dot ? f.atk * f.dmg / E.f0 : f.value / E.f0;
-        m = body * tcDefence(E.own + X.pierce, X.defdown) / E.c0 * (P.dpsWeak ? (TC_WEAK + X.weak / 100) / TC_WEAK : 1) * (1 + X.final / 100);
+        m = body * tcDefence(E.own + X.pierce, X.defdown) / E.c0 * (P.dpsWeak && !noWeak ? (TC_WEAK + X.weak / 100) / TC_WEAK : 1) * (1 + X.final / 100);
         memo.set(key, m);
       }
       return m * fin;
     };
     /* A hit, on every foe when it is an area hit and the fight has more than one: the main target with
        everything up, the others without the debuffs that sit on one foe. */
-    const spread = (aoe, X, dm, atkPct, fin, dot) => {
-      let v = mult(X, dm, atkPct, fin, dot);
-      if (aoe && P.foes > 1) v += (P.foes - 1) * mult(curX(true), dm, atkPct, fin, dot);
+    const spread = (aoe, X, dm, atkPct, fin, dot, noWeak) => {
+      let v = mult(X, dm, atkPct, fin, dot, noWeak);
+      if (aoe && P.foes > 1) v += (P.foes - 1) * mult(curX(true), dm, atkPct, fin, dot, noWeak);
       return v;
     };
     // the shared gauge: 21% for a thief's action that hits the boss's weakness, 17% for one that does
@@ -15618,7 +15687,7 @@ function tcSimRun(P, order, hold) {
         const dot = c.kind === 'dot' || c.crit === false;
         const add = c.kind === 'res' ? X.resDm || 0 : c.kind === 'dot' ? X.dotDm || 0 : 0;
         const ob = own(c.kind, c);
-        gain(c.kind, c.val * ob.amp * spread(c.aoe, X, add + ob.add, (opts && opts.xAtk) || 0, (opts && opts.fin) || 1, dot));
+        gain(c.kind, c.val * ob.amp * spread(c.aoe, X, add + ob.add, (opts && opts.xAtk) || 0, (opts && opts.fin) || 1, dot, !!c.noWeak));
       });
     };
     const markCover = () => {
@@ -15671,7 +15740,7 @@ function tcSimRun(P, order, hold) {
         const nx = pending.filter(p => TC_DMG_KEYS.includes(p.k));
         nx.forEach(p => { X[p.k] = (X[p.k] || 0) + p.v; });
         pending.length = 0;
-        if (skill && skill.d[3]) { const ob = own('hl'); gain('hl', skill.d[3] * ob.amp * spread(P.aoe[3], X, X.hlDm + (opt.bonus || 0) + ob.add, 0, 1 + X.hlFinal / 100, !P.hlCrit)); }
+        if (skill && skill.d[3]) { const ob = own('hl'); gain('hl', skill.d[3] * ob.amp * spread(P.aoe[3], X, X.hlDm + (opt.bonus || 0) + ob.add, 0, 1 + X.hlFinal / 100, !P.hlCrit, !!P.alm[3])); }
         castBy(a, tok, toFoe);
         lastUse.HL = round; lastUse.TH = round;
         kitFire('selfHL', X);
@@ -15749,7 +15818,7 @@ function tcSimRun(P, order, hold) {
         if (a.events.length) castBy(a, mine, toAlly);
         const X = curX();
         const xd = extra ? X.xDm : 0, xa = extra ? X.xAtkPct : 0, fin = extra ? 1 + X.xFinal / 100 : 1;
-        if (skill) uses.forEach((u, i) => { if (!u) return; const ob = own('skill:' + (i + 1)); gain(extra ? 'extra' : 'skill', u * skill.d[i] * ob.amp * spread(P.aoe[i], X, xd + ob.add, xa, fin, false)); });
+        if (skill) uses.forEach((u, i) => { if (!u) return; const ob = own('skill:' + (i + 1)); gain(extra ? 'extra' : 'skill', u * skill.d[i] * ob.amp * spread(P.aoe[i], X, xd + ob.add, xa, fin, false, !!P.alm[i])); });
         if (a.events.length) castBy(a, mine, toFoe);
         markCover();
         kitFire('self', X, { xAtk: xa, fin });
@@ -15951,18 +16020,35 @@ function tcSimFitTeam(P) {
    (the best one the page suggests), in place of the user's. */
 function tcSim(D, names, fit, noWonder, wset) {
   if (!tcMemo.hot) tcMemoFor();
-  const key = D.n + '|' + names.map(n => n || '').join('|') + (fit ? '|fit=' + fit : '') + (noWonder ? '|noW' : '') + (wset ? '|w=' + JSON.stringify(wset) : '');
+  // characters with a set-up to choose (the twins' mask pairs): each pair not already forced is tried
+  const open = [D.n].concat(names).filter(n => n && TC_PAIRS[n] && !(tcPairCtx && tcPairCtx[n]));
+  if (open.length) {
+    const n = open[0], keep = tcPairCtx;
+    let top = null;
+    try {
+      for (const o of TC_PAIRS[n]) {
+        tcPairCtx = Object.assign({}, keep, { [n]: o.id });
+        const t = tcSim(D, names, fit, noWonder, wset);
+        if (!top || t.mult > top.mult + 1e-9) top = t;
+      }
+    } finally { tcPairCtx = keep; }
+    return top;
+  }
+  const pairs = {};
+  [D.n].concat(names).forEach(n => { if (n && TC_PAIRS[n]) pairs[n] = tcPairCtx[n]; });
+  const pk = Object.keys(pairs).map(n => n + '=' + pairs[n]).join(',');
+  const key = D.n + '|' + names.map(n => n || '').join('|') + (fit ? '|fit=' + fit : '') + (noWonder ? '|noW' : '') + (wset ? '|w=' + JSON.stringify(wset) : '') + (pk ? '|p:' + pk : '');
   let r = tcMemo.sim.get(key);
   if (r) return r;
   // the damage dealer alone is fitted whenever their rotation is (fit true or 'full')
   const dfit = fit === true || fit === 'full';
-  const bk = D.n + '|blank' + (dfit ? '|fit' : '');
+  const bk = D.n + '|blank' + (dfit ? '|fit' : '') + (pairs[D.n] ? '|p=' + pairs[D.n] : '');
   let base = tcMemo.sim.get(bk);
   if (!base) { base = tcSimFitDps(tcSimPrep(D, [null, null, null], false, true), dfit); tcMemo.sim.set(bk, base); }
   // `fit`: true fits the teammates and the damage dealer; 'mates' only the teammates (the search's first pass)
   const P = tcSimPrep(D, names, !!fit, false, { noWonder, wset });
   const best = fit === 'full' ? tcSimFitTeam(P) : tcSimFitDps(P, dfit);
-  r = Object.assign({}, best, { mult: base.total > 0 ? best.total / base.total : 1, base, prep: P });
+  r = Object.assign({}, best, { mult: base.total > 0 ? best.total / base.total : 1, base, prep: P, pairs });
   tcMemo.sim.set(key, r);
   return r;
 }
@@ -15972,6 +16058,14 @@ const TC_SWAPS = () => tmAw(TM_FUUKA) >= 6 ? 4 : 2;
    is what the team loses without them, so the parts do not multiply back to the total. */
 function tcLineup(dps, names) { return tcHot(() => tcLineupCalc(dps, names)); }
 function tcLineupCalc(dps, names) {
+  // the twins' mask pair: the one the fight chose for this lineup holds for everything priced below
+  const fit = tmFitOn();
+  const chosen = (tcSim(dps, names, fit ? 'full' : false).pairs) || {};
+  const keepPairs = tcPairCtx;
+  tcPairCtx = Object.assign({}, keepPairs, chosen);
+  try { return Object.assign(tcLineupAt(dps, names), { pairs: chosen }); } finally { tcPairCtx = keepPairs; }
+}
+function tcLineupAt(dps, names) {
   const inTeam = tcTeamSet(dps.n, names);
   const elu = names[2];
   const fit = tmFitOn();
@@ -16125,10 +16219,10 @@ function tcTeamsCalc(dps) {
   const Lref = tmFitOn() ? tcSim(D, names, true).mult : L.mult;
   const roles = ['Thief', 'Thief', 'Elucidator', 'Backup (Oracle Shift)'];
   const kinds = ['f', 'f', 'e', 'b'];
-  const seats = [{ seat: 'f', role: TM_DPS.includes(D.arch) ? 'Damage dealer' : 'Built around', orig: dps, name: dps, fixed: true }];
+  const seats = [{ seat: 'f', role: TM_DPS.includes(D.arch) ? 'Damage dealer' : 'Built around', orig: dps, name: dps, fixed: true, pair: L.pairs && L.pairs[dps] }];
   names.forEach((n, i) => seats.push({ seat: kinds[i], role: roles[i], orig: null, name: n,
     chosen: seatsPick[i + 1] === n && !!n, part: L.parts[i], lines: L.members[i] ? L.members[i].lines : [],
-    shifts: L.members[i] && L.members[i].shifts, swapSkill: L.members[i] && L.members[i].swapSkill,
+    shifts: L.members[i] && L.members[i].shifts, swapSkill: L.members[i] && L.members[i].swapSkill, pair: n && L.pairs ? L.pairs[n] : null,
     known: !!(n && (TEAM_BUFFS[n] || (charDef(n) || {}).arch === 'Navigator')),
     // a kit entered with nothing for the team (a damage dealer's): not "unknown", but nothing to add
     empty: !!(n && TEAM_BUFFS[n] && !TEAM_BUFFS[n].length && (charDef(n) || {}).arch !== 'Navigator') }));
@@ -16545,6 +16639,14 @@ function tcFightNote(dps, S) {
   ].filter(Boolean).join(' ');
   return head + explainHtml('How the fight was played', how);
 }
+/* A seat whose character picks a set-up before battle (the twins' mask pair): which one this team
+   was priced with, so the player knows what to equip. */
+function tmPairHtml(s) {
+  const o = s && s.pair ? tcPairInfo(s.name, s.pair) : null;
+  if (!o) return '';
+  const others = TC_PAIRS[s.name].filter(x => x.id !== o.id).map(x => x.role).join(' and ');
+  return `<div class="tiny" style="margin-bottom:4px">${esc(TC_PAIR_LABEL[s.name] || 'Set-up')}: <b>${esc(o.role)}</b> — ${esc(o.masks)} <span class="muted">(does most in this team; ${esc(others)} were tried too)</span></div>`;
+}
 /* The one line under "Wonder's setup" when it is folded: what is set, or that nothing is. */
 function tmWonderSumText() {
   const W = wonderSetup();
@@ -16615,7 +16717,7 @@ function renderTeams() {
           .map(([k, v]) => `<span class="st"><small>${esc(TC_PART_LABEL[k] || k)}</small> <b>${Math.round(100 * v / sum)}%</b></span>`).join('');
         const kit = tcKitFor(d), bonus = tcKitBonusFor(d), skips = DPS_KIT_SKIPS[s.name] || [];
         const selfLines = (tcMember(d, s.name, null, null, false).lines || []);
-        status = '<div class="muted" style="margin-bottom:4px">the character this team is built around — their own damage in this fight:</div>' +
+        status = tmPairHtml(s) + '<div class="muted" style="margin-bottom:4px">the character this team is built around — their own damage in this fight:</div>' +
           (pills ? `<div class="tcSum" title="Shares of ${esc(s.name)}'s own damage over the fight, with this team">${pills}</div>` : '') +
           // their own lines, each list folded the same way as "Not priced" below
           [[`Their kit's other damage, counted`, kit.map(c => c.why)],
@@ -16635,7 +16737,7 @@ function renderTeams() {
         const off = (s.lines || []).filter(l => l.offRot);
         const sum = tcSumHtml(live);
         // the member's share is the tile beside the name (below); here only what needs words
-        status = (s.chosen ? '<div style="margin-bottom:4px"><span class="tag">your choice</span></div>' : '') +
+        status = (s.chosen ? '<div style="margin-bottom:4px"><span class="tag">your choice</span></div>' : '') + tmPairHtml(s) +
           (s.shifts ? `<div class="tiny muted tmShifts" style="margin-bottom:4px">${s.shifts.length ? `Swapped in by Oracle Shift ${s.shifts.length} time${s.shifts.length > 1 ? 's' : ''} (round${s.shifts.length > 1 ? 's' : ''} ${s.shifts.join(', ')}), just before ${esc(dps)} acts${s.swapSkill ? `, using Skill ${s.swapSkill}` : ''}${tmAw(TM_FUUKA) >= 2 ? ', and their Highlight or Theurgy with it (Pros and Cons, once every 3 rounds)' : ''}.` : 'Never swapped in: Fuuka\'s stacks do not reach an Oracle Shift in this fight.'}</div>` : '') +
           (!s.known ? '<div style="margin-bottom:4px"><span class="tag miss">kit not entered yet</span> <span class="muted">counted as adding nothing</span></div>'
            : s.empty && !(s.part > 1.001) ? '<div style="margin-bottom:4px"><span class="tag">nothing to price</span> <span class="muted">their kit is entered and has no buff for the team\'s damage</span></div>'
