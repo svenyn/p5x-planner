@@ -12364,23 +12364,30 @@ function tcSumHtml(lines) {
     return `<span class="st"><small>${esc(a.label)}</small>${a.val ? ` <b>${esc(a.val)}</b>` : ''}</span>`;
   }).join('');
 }
-/* What the fight was: its length, who used the shared Highlight gauge how often and in what order
-   it was spent, and what the damage dealer's own damage was made of. */
+/* The fight beside the headline (tcFightNote), as HTML: what it was and who used the gauge in two short
+   lines, how it was played folded under them; the damage dealer's damage mix is on their seat. */
 const TC_PART_LABEL = { skill: 'skills', hl: 'Highlight', extra: 'extra actions', res: 'Resonance', fu: 'follow-ups', dot: 'damage over time', hit: 'other hits' };
 function tcFightNote(dps, S) {
   const D = charDef(dps);
   if (!D || !S) return '';
   const F = tcFight(), word = tcHlKind(dps) === 'TH' ? 'Theurgies' : 'Highlights';
-  const used = Object.entries(S.hl).filter(([, n]) => n > 0).map(([n, c]) => `${n} ${c}`).join(', ');
-  const spend = S.spend && S.spend.length > 1 ? ` The gauge was spent on ${S.spend.filter(n => S.hl[n] > 0).join(', then ')}${S.hold ? `, held for just before ${dps} acts` : ', as soon as it filled'} (the best of the orders tried).` : '';
-  const sum = Object.values(S.parts || {}).reduce((a, b) => a + b, 0) || 1;
-  const parts = Object.entries(S.parts || {}).filter(([, v]) => v / sum >= 0.005).sort((a, b) => b[1] - a[1]).map(([k, v]) => `${TC_PART_LABEL[k] || k} ${Math.round(100 * v / sum)}%`).join(' · ');
-  const shift = S.shifts && S.shifts.length ? ` Oracle Shift swapped the backup in on round${S.shifts.length > 1 ? 's' : ''} ${S.shifts.join(', ')}.` : '';
+  const short = n => esc(n);
+  const used = Object.entries(S.hl).filter(([, n]) => n > 0).map(([n, c]) => `${short(n)} ${c}`).join(', ');
+  const alone = Object.values(S.base.hl).reduce((x, y) => x + y, 0);
   const B = tcBossNow(), wm = tcWeakMode(), foes = tcFoes(), wk = tcWeakFor(D.e);
-  const vs = `against ${B ? B.name : 'the reference boss'}${foes > 1 ? ` and ${foes - 1} more foe${foes > 2 ? 's' : ''} like it (area skills hit them all, an effect on one foe stays on the main target)` : ''}`;
-  const wtxt = wm === 'none' ? 'No hit lands on a weakness' : wm === 'all' ? 'Every hit lands on a weakness' : `${dps}'s ${D.e} hits are ${wk === 'weak' ? 'on its weakness' : wk === 'resist' ? 'resisted' : 'neutral'}, a teammate's by their own element`;
-  return `A ${F}-round fight ${vs}, turn by turn in Speed order (set at the top). ${wtxt}. Highlights and Theurgies used: ${used || 'none'} (the shared gauge fills 21% a thief action that hits a weakness, 17% one that does not; ${dps} alone would use ${Object.values(S.base.hl).reduce((a, b) => a + b, 0)} ${word}).${spend}${shift}` +
-    (parts ? ` ${dps}'s own damage here: ${parts}.` : '');
+  const weak = wm === 'none' ? 'no weakness hits' : wm === 'all' ? 'every hit on a weakness'
+    : `${esc(D.e)} ${wk === 'weak' ? 'on its weakness' : wk === 'resist' ? 'resisted' : 'neutral'}`;
+  const head = `<div>${F}-round fight against ${esc(B ? B.name : 'the reference boss')}${foes > 1 ? ` and ${foes - 1} more` : ''} · ${weak}</div>` +
+    `<div>Highlights and Theurgies used: ${used || 'none'} <span class="muted">(${short(dps)} alone: ${alone})</span></div>`;
+  const how = [
+    'Turn by turn in Speed order (set at the top); the Elucidator at the start of each round, the enemy last.',
+    wm === 'boss' ? `A thief's hit counts as a weakness hit when their element is weak on ${esc(B ? B.name : 'the boss')}; ${esc(dps)}'s ${esc(D.e)} hits are ${wk === 'weak' ? 'on its weakness' : wk === 'resist' ? 'resisted' : 'neutral'}.` : '',
+    foes > 1 ? `${foes - 1} more foe${foes > 2 ? 's' : ''} like the boss: area skills hit them all, an effect on one foe stays on the main target.` : '',
+    `The shared gauge fills 21% for a thief action that hits a weakness and 17% for one that does not; ${esc(dps)} alone would use ${alone} ${word}.`,
+    S.spend && S.spend.length > 1 ? `The gauge was spent on ${S.spend.filter(n => S.hl[n] > 0).map(esc).join(', then ')}${S.hold ? `, held for just before ${esc(dps)} acts` : ', as soon as it filled'} (the best of the orders tried).` : '',
+    S.shifts && S.shifts.length ? `Oracle Shift swapped the backup in on round${S.shifts.length > 1 ? 's' : ''} ${S.shifts.join(', ')}.` : ''
+  ].filter(Boolean).join(' ');
+  return head + explainHtml('How the fight was played', how);
 }
 /* The one line under "Wonder's setup" when it is folded: what is set, or that nothing is. */
 function tmWonderSumText() {
@@ -12454,9 +12461,16 @@ function renderTeams() {
         const selfLines = (tcMember(d, s.name, null, null, false).lines || []);
         status = '<div class="muted" style="margin-bottom:4px">the character this team is built around — their own damage in this fight:</div>' +
           (pills ? `<div class="tcSum" title="Shares of ${esc(s.name)}'s own damage over the fight, with this team">${pills}</div>` : '') +
-          (kit.length ? `<details class="tiny" style="margin-top:4px"><summary class="muted">Their kit's other damage, counted (${kit.length})</summary><div class="muted" style="margin-top:4px">${kit.map(c => esc(c.why)).join('<br>')}</div></details>` : '') +
-          (bonus.length ? `<details class="tiny" style="margin-top:4px"><summary class="muted">Their own damage bonuses, counted (${bonus.length})</summary><div class="muted" style="margin-top:4px">${bonus.map(b => esc(b.why)).join('<br>')}</div></details>` : '') +
-          (selfLines.length ? `<details class="tiny" style="margin-top:4px"><summary class="muted">Their own party buffs and enemy debuffs, which reach them too (${selfLines.length})</summary><div class="muted" style="margin-top:4px">${selfLines.map(l => esc(l.why)).join('<br>')}</div></details>` : '') +
+          // their own lines, each list folded the same way as "Not priced" below
+          [[`Their kit's other damage, counted`, kit.map(c => c.why)],
+           ['Their own damage bonuses, counted', bonus.map(b => b.why)],
+           ['Their own party buffs and enemy debuffs, which reach them too', selfLines.map(l => l.why), selfLines.filter(l => l.up > 0)]]
+            .filter(([, list]) => list.length).map(([title, list, sumOf]) => {
+              const sum = sumOf ? tcSumHtml(sumOf) : '';
+              return `<details class="tiny" style="margin-top:4px"><summary class="muted">${esc(title)} (${list.length})</summary>` +
+                (sum ? `<div class="tcSum" style="margin-top:4px" title="Averaged over the fight; the fight itself plays each one out turn by turn">${sum}</div>` : '') +
+                `<ul style="margin:4px 0 0 16px">${list.map(x => `<li class="muted">${esc(x)}</li>`).join('')}</ul></details>`;
+            }).join('') +
           (skips.length ? `<details class="tiny" style="margin-top:4px"><summary class="muted">Not priced in their own damage (${skips.length})</summary><ul style="margin:4px 0 0 16px">${skips.map(x => `<li class="muted">${esc(x)}</li>`).join('')}</ul></details>` : '');
       }
       else if (s.fixed) status = '<span class="muted">the character this team is built around</span>';
@@ -12553,7 +12567,7 @@ function renderTeams() {
       ? `<div class="tmHero">
           <div><div class="num">${xFmt(C.mult)}</div><div class="lbl">Calculated from the kits: how many times ${esc(dps)}'s own hits this team makes them, against ${esc((tcBossNow() || {}).name || 'a reference boss')}.</div></div>
           ${C.lufel ? `<div class="cmp">lufel's recommended team (${C.lufel.names.filter(Boolean).map(esc).join(', ')}) comes to <b>${xFmt(C.lufel.mult)}</b> ${tcRelHtml(C.lufel.mult, C.mult)} priced the same way.</div>` : ''}
-          <div class="cmp tiny muted tmHlNote">${esc(tcFightNote(dps, C.sim))}</div>
+          <div class="cmp tiny tmHlNote">${tcFightNote(dps, C.sim)}</div>
           ${custom ? '<div class="acts"><button class="sm ghost" data-tm-reset="1">Back to the best calculated team</button></div>' : ''}
         </div>`
       : `<div class="tmHero">
