@@ -2753,93 +2753,146 @@ function awarenessOverrideDrift() {
     JSON.stringify(tc));
   check('TEAM_BUFFS names roster characters and only priceable effects, each with its reason', tc.n >= 20 && tc.bad.length === 0, JSON.stringify(tc.bad));
 
-  // ---- Highlights, Theurgies and the fight length (Nov 2026) ----
+  // ---- Highlights, Theurgies, turn order and the fight (Nov 2026) ----
   const th = await p.evaluate(() => {
     const out = {};
-    const setHl = (hl, t, f) => { $('#tmHlEvery').value = String(hl); $('#tmThEvery').value = String(t); $('#tmFight').value = String(f); tcMemo.key = ''; };
-    setHl(4, 2, 12);
+    const setF = f => { $('#tmFight').value = String(f); tcMemo.key = ''; };
+    setF(12);
     out.count = [tcKindCount('HL×2+3', 'HL'), tcKindCount('2HL+3', 'HL'), tcKindCount('3+HL+HL', 'HL'), tcKindCount('HL(2)+3', 'HL'), tcKindCount('W+3+TH↺', 'TH'), tcKindCount('1+3', 'HL')];
     out.uses = [tcSkillUses('2×4+1'), tcSkillUses('1111'), tcSkillUses('HL+1+3'), tcSkillUses('2HL+3')].map(x => x.join(''));
     const six = ['1', '3', '1', '3', '1', '3'], withHl = ['1', 'HL+3', '1', '3', '1', '3'];
+    // the quick screen's cadence: a Highlight every 5 turns (84% of gauge a round shared four ways)
     const ov = tcSeqHL(six, 'Haruna Nishimori');
     out.overlay = { len: ov.length, at: ov.map((s, i) => /HL/.test(s) ? i + 1 : 0).filter(Boolean), kept: tcSeqHL(withHl, 'Haruna Nishimori') === withHl, elu: tcSeqHL(six, 'Fuuka Yamagishi') === six };
-    // a Highlight buff counts on the cadence where lufel's rotation writes none; off, only lufel's own count
+    out.cool = [tcBreaksCooldown(['3', '3', '1'], 'Ayaka Sakai'), tcBreaksCooldown(['3', '1', '3', '1'], 'Ayaka Sakai'), tcBreaksCooldown(['3', '1'], 'Kotone Shiomi')];
     const ann = charDef('Ann Takamaki');
-    const keepT = TEAMS['Ryuji Sakamoto'], keepB = TEAM_BUFFS['Ryuji Sakamoto'];
+    const keepT = TEAMS['Ryuji Sakamoto'], keepB = TEAM_BUFFS['Ryuji Sakamoto'], keepSpeed = tmSpeed;
     TEAMS['Ryuji Sakamoto'] = { rot: [{ aw: 0, label: 'Test', seq: six }] };
     TEAM_BUFFS['Ryuji Sakamoto'] = [
       { k: 'dmg', v: 20, to: 'party', src: 'HL', on: 'HL', dur: 2, why: 'test: a 2-turn Highlight buff' },
       { k: 'atk%', v: 30, to: 'ally', src: 'passive', on: 'dpsHL', dur: 2, why: 'test: on the damage dealer\'s Highlight' },
       { k: 'cm', v: 30, to: 'party', src: 'passive', on: 'anyHL', dur: 2, why: 'test: on any ally\'s Highlight' }];
-    const up = () => tcMember(ann, 'Ryuji Sakamoto', null, null, false).lines.map(l => [l.k, +l.up.toFixed(4), !!l.offRot]);
-    out.at4 = up(); setHl(6, 2, 12); out.at6 = up(); setHl(0, 0, 12); out.off = up(); setHl(4, 2, 12);
-    TEAMS['Ryuji Sakamoto'] = keepT; TEAM_BUFFS['Ryuji Sakamoto'] = keepB; tcMemo.key = '';
+    tcMemo.key = '';
+    out.screen = tcMember(ann, 'Ryuji Sakamoto', null, null, false).lines.map(l => [l.k, +l.up.toFixed(4), !!l.offRot]);
     // the damage dealer's own Highlight, from lufel's skill numbers: Ann's 3-1 rotation against her Highlight
-    const H = tcEvalFor(ann).hl;
-    const q = SKILL_DMG['Ann Takamaki'].d[3] / ((SKILL_DMG['Ann Takamaki'].d[0] + SKILL_DMG['Ann Takamaki'].d[2]) / 2);
-    out.ann = { q: H.q, qExp: q, r0: H.r0, share: H.share };
+    const H = tcEvalFor(ann).hl, S0 = SKILL_DMG['Ann Takamaki'];
+    out.ann = { q: H.q, qExp: S0.d[3] / ((S0.d[0] + S0.d[2]) / 2), r0: H.r0, share: H.share };
     out.m = {
-      hlDm: tcMultiplier(ann, [{ hlDm: 50 }]), dm: tcMultiplier(ann, [{ dm: 50 }]),
-      hlx: tcMultiplier(ann, [{ hlx: 0.25 }]), gauge4: tcMultiplier(ann, [{ hlGauge: 50 }]), cd4: tcMultiplier(ann, [{ hlCdRate: 0.25 }]),
+      hlDm: tcMultiplier(ann, [{ hlDm: 50 }]), dm: tcMultiplier(ann, [{ dm: 50 }]), hlx: tcMultiplier(ann, [{ hlx: 0.25 }]),
+      gauge: tcMultiplier(ann, [{ hlGauge: 50 }]), cd: tcMultiplier(ann, [{ hlCdRate: 0.25 }]),
       xturns: tcMultiplier(ann, [{ xturns: 1 / 6 }]), xDmAlone: tcMultiplier(ann, [{ xDm: 45 }]), xBoth: tcMultiplier(ann, [{ xturns: 1 / 6, xDm: 45 }])
     };
-    setHl(8, 2, 12); out.m.gauge8 = tcMultiplier(ann, [{ hlGauge: 50 }]); out.m.base8 = tcEvalFor(ann).hl.r0;
-    setHl(0, 0, 12); out.m.hlDmOff = tcMultiplier(ann, [{ hlDm: 50 }]); out.m.hlxOff = tcMultiplier(ann, [{ hlx: 0.25 }]); setHl(4, 2, 12);
-    // a Theurgy user: 70 gauge, every 2 turns by default; Theurgy gauge speeds it, Highlight gauge does not
-    const yuki = charDef('Makoto Yuki');
-    out.th = { kind: tcEvalFor(yuki).hl.kind, r0: tcEvalFor(yuki).hl.r0, th: tcMultiplier(yuki, [{ thGauge: 35 }]), hl: tcMultiplier(yuki, [{ hlGauge: 35 }]) };
-    // Da Capo: one extra action per use, its uses spread over the fight
-    const manaka = F => { setHl(4, 2, F); return tcMember(ann, 'Manaka Nagao', null, null, false).vec.xturns; };
+    // the fight: the damage dealer alone gets a Highlight in rounds 2, 6, 10 (cooldown 4 actions, gauge empty at the start)
+    out.base = [12, 6].map(f => { setF(f); return tcSim(ann, ['Ryuji Sakamoto', null, null], false).base.hl['Ann Takamaki']; });
+    setF(12);
+    // turn order: a 1-turn debuff from a teammate who acts before the damage dealer meets this round's hit; after it, it expires first
+    TEAM_BUFFS['Ryuji Sakamoto'] = [{ k: 'defdown', v: 40, to: 'enemy', src: '1', on: '1', dur: 1, why: 'test: a 1-turn DEF down' }];
+    TEAMS['Ryuji Sakamoto'] = { rot: [{ aw: 0, label: 'Test', seq: ['1'] }] };
+    tmSpeed = n => n === 'Ryuji Sakamoto' ? 200 : n === 'Ann Takamaki' ? 100 : 50;
+    tcMemo.key = '';
+    const fast = tcSim(ann, ['Ryuji Sakamoto', null, null], false);
+    tmSpeed = n => n === 'Ryuji Sakamoto' ? 50 : n === 'Ann Takamaki' ? 100 : 40;
+    tcMemo.key = '';
+    const slow = tcSim(ann, ['Ryuji Sakamoto', null, null], false);
+    out.order = { fast: fast.mult, slow: slow.mult, fastUp: fast.cover.get('Ryuji Sakamoto') && fast.cover.get('Ryuji Sakamoto').get(0), slowUp: slow.cover.get('Ryuji Sakamoto') ? slow.cover.get('Ryuji Sakamoto').get(0) || 0 : 0 };
+    tmSpeed = keepSpeed;
+    TEAMS['Ryuji Sakamoto'] = keepT; TEAM_BUFFS['Ryuji Sakamoto'] = keepB; tcMemo.key = '';
+    // the shared gauge: four thieves charge 84% a round, so a 12-round fight holds at most 10 Highlights in all
+    const team = tcSim(ann, ['Minami Miyashita [Beachflower]', 'Kotone Shiomi', 'Fuuka Yamagishi'], false);
+    out.shared = Object.values(team.hl).reduce((a, b) => a + b, 0) - (team.hl['Kotone Shiomi'] && tmAw('Kotone Shiomi') >= 1 ? 1 : 0);
+    // Catchy Hook fires the damage dealer's Highlight outside its cooldown and the gauge
+    const hook = tcSim(ann, ['Ayaka Sakai', null, null], false);
+    out.hook = { with: hook.hl['Ann Takamaki'], base: hook.base.hl['Ann Takamaki'] };
+    // Summer Ayaka's Concerto of Time: one ally Highlight free each of her turns, cooldown 3
+    const keepSA = state.chars['Ayaka Sakai [Summer]'].owned;
+    const conc = tcSim(ann, ['Ayaka Sakai [Summer]', null, null], false);
+    out.concerto = { ann: conc.hl['Ann Takamaki'], base: conc.base.hl['Ann Takamaki'] };
+    // Theurgy: Yukari's A1 starts her at 70, so a 3-round fight has two where Awareness 0 has one
+    const yuk = charDef('Yukari Takeba'), keepY = state.chars[yuk.n].loadout;
+    setF(3);
+    state.chars[yuk.n].loadout = Object.assign({}, DEFAULT_LOADOUT, { awareness: 0 }); tcMemo.key = '';
+    const y0 = tcSim(yuk, [null, null, null], false).base.hl[yuk.n];
+    state.chars[yuk.n].loadout = Object.assign({}, DEFAULT_LOADOUT, { awareness: 1 }); tcMemo.key = '';
+    const y1 = tcSim(yuk, [null, null, null], false).base.hl[yuk.n];
+    state.chars[yuk.n].loadout = keepY; setF(12);
+    out.theurgy = [y0, y1];
+    // Kotone Shiomi's Echoing Strings (A1): entering Fortune fires her Highlight without gauge
+    const ks = 'Kotone Shiomi', keepK = state.chars[ks].loadout;
+    const kc = aw => { state.chars[ks].loadout = Object.assign({}, DEFAULT_LOADOUT, { awareness: aw }); tcMemo.key = ''; return tcSim(ann, [ks, null, null], false).hl[ks]; };
+    out.fortune = [kc(0), kc(1)];
+    state.chars[ks].loadout = keepK; tcMemo.key = '';
+    // a damage dealer's Resonance, set off by teammates' actions (Wavecatcher Miyu's Catch a Wave)
+    const miyu = charDef('Miyu Sahara [Wavecatcher]');
+    const mr = tcSim(miyu, [null, null, null], false).base;
+    out.res = (mr.parts.res || 0) / mr.total;
+    // Da Capo: extra actions over the fight
+    const manaka = F => { setF(F); return tcMember(ann, 'Manaka Nagao', null, null, false).vec.xturns; };
     out.dacapo = [manaka(12), manaka(6)];
-    setHl(4, 2, 12);
-    // Wonder's Highlight: one every N turns, from his Persona whose Highlight does most
+    setF(12);
+    // Wonder's Highlight: from his Persona whose Highlight does most
     const real = WONDER_BUFFS, keepW = state.wonder;
     Object.assign(WONDER_BUFFS, { personas: { P: [{ k: 'dmg', v: 30, to: 'party', src: 'HL', dur: 2, why: 'p' }], Q: [{ k: 'dmg', v: 10, to: 'party', src: 'HL', dur: 2, why: 'q' }] }, cards: {}, weapons: {} });
     const slot = n => ({ name: n, cards: ['', '', ''] });
-    const w4 = tcWonder(ann, { personas: [slot('Q'), slot('P'), slot('')], weapon: '', refine: 1 });
-    setHl(0, 0, 12);
-    const w0 = tcWonder(ann, { personas: [slot('Q'), slot('P'), slot('')], weapon: '', refine: 1 });
-    setHl(4, 2, 12);
+    const w = tcWonder(ann, { personas: [slot('Q'), slot('P'), slot('')], weapon: '', refine: 1 });
     Object.assign(WONDER_BUFFS, real); state.wonder = keepW; tcMemo.key = '';
-    out.wonder = { on: w4.lines.map(l => [l.v, +l.up.toFixed(3)]), idle: w4.idle.length, off: w0.lines.length, offIdle: w0.idle.length };
+    out.wonder = { lines: w.lines.map(l => l.v), idle: w.idle.length, events: w.sim.events.length };
     // Fuuka's Pros and Cons (A2): the backup also fires their Highlight on the swap
     const keepF = state.chars['Fuuka Yamagishi'].loadout;
     const bk = aw => { state.chars['Fuuka Yamagishi'].loadout = Object.assign({}, DEFAULT_LOADOUT, { awareness: aw }); tcMemo.key = '';
       return tcMember(ann, 'Leo Kamiyama', null, { swaps: 2 }, false).lines.filter(l => /Pros and Cons/.test(l.why)).length; };
     out.backup = [bk(0), bk(2)];
+    // Oracle Shift in the fight: her first lufel rotation ('-', 1, 3, 1, 2+3, 1) and 3 starting stacks
+    // reach 4 on rounds 2, 6 and 11; at A6 (cost 3, +2 per Divine Prayer, 5 to start) more often; from A2
+    // the backup's Highlight comes with the swap (once every 3 rounds)
+    const lineup = [null, null, 'Fuuka Yamagishi', 'Leo Kamiyama'];
+    const shiftAt = aw => { state.chars['Fuuka Yamagishi'].loadout = Object.assign({}, DEFAULT_LOADOUT, { awareness: aw }); tcMemo.key = '';
+      const S = tcSim(ann, lineup, false);
+      return { shifts: S.shifts, leoHl: S.hl['Leo Kamiyama'] || 0, mult: S.mult, without: tcSim(ann, lineup.slice(0, 3), false).mult,
+        courtesy: tcMember(ann, 'Fuuka Yamagishi', tcTeamSet(ann.n, lineup), null, false).lines.filter(l => /Courtesy/.test(l.why)).length,
+        seat: JSON.stringify(tcLineup(ann, lineup).members[3].shifts) === JSON.stringify(tcSim(ann, lineup, tmFitOn()).shifts) };
+    };
+    out.oracle = [shiftAt(0), shiftAt(2), shiftAt(6)];
     state.chars['Fuuka Yamagishi'].loadout = keepF; tcMemo.key = '';
-    // SKILL_DMG: roster characters, four numbers, a known kind
-    out.skillBad = Object.entries(SKILL_DMG).filter(([n, s]) => !charDef(n) || !['HL', 'TH'].includes(s.hl) || !Array.isArray(s.d) || s.d.length !== 4 || s.d.some(x => !(x >= 0))).map(([n]) => n);
+    out.skillBad = Object.entries(SKILL_DMG).filter(([n, s]) => !charDef(n) || !['HL', 'TH'].includes(s.hl) || !Array.isArray(s.d) || s.d.length !== 4 || s.d.some(x => !(x >= 0)) || (s.hl === 'TH' && !(s.th > 0))).map(([n]) => n);
     out.skillN = Object.keys(SKILL_DMG).length;
-    out.prefs = ['tmHlEvery', 'tmThEvery', 'tmFight'].every(id => id in collectPrefs());
+    const ON = /^(self|self:[123]|tok:.+|selfHL|ally|allySkill|allyHL|anyHL|turnEnd|turnStart|round)$/;
+    out.kitBad = [];
+    Object.entries(DPS_KIT).forEach(([n, list]) => { if (!charDef(n)) out.kitBad.push(n); list.forEach((c, i) => { if (!['res', 'fu', 'dot', 'hit'].includes(c.kind) || !ON.test(c.on) || !c.why || (c.v == null && !c.ladder)) out.kitBad.push(n + ' #' + i); }); });
+    out.kitN = Object.keys(DPS_KIT).length;
+    out.prefs = 'tmFight' in collectPrefs() && !$('#tmHlEvery');
     return out;
   });
   const near = (a, b, e) => Math.abs(a - b) < (e || 1e-9);
-  check('a rotation step counts its Highlights and skill uses, and the cadence adds a Highlight where lufel writes none (thieves only)',
+  check('a rotation step counts its Highlights and skill uses; the quick screen adds a Highlight every 5 turns where lufel writes none (thieves only); a re-chosen rotation may not break a cooldown',
     JSON.stringify(th.count) === '[2,2,2,1,1,0]' && JSON.stringify(th.uses) === '["140","400","101","001"]' &&
-    th.overlay.len === 12 && JSON.stringify(th.overlay.at) === '[4,8,12]' && th.overlay.kept && th.overlay.elu, JSON.stringify({ c: th.count, u: th.uses, o: th.overlay }));
+    th.overlay.len === 30 && JSON.stringify(th.overlay.at) === '[5,10,15,20,25,30]' && th.overlay.kept && th.overlay.elu &&
+    JSON.stringify(th.cool) === '[true,false,true]', JSON.stringify({ c: th.count, u: th.uses, o: th.overlay, cool: th.cool }));
   const upOf = (rows, k) => (rows.find(r => r[0] === k) || []);
-  check('a Highlight buff counts on the cadence (half the turns at every 4, a third at every 6), not at all with the cadence off; "on the damage dealer\'s / any ally\'s Highlight" count at their rates',
-    near(upOf(th.at4, 'dm')[1], 0.5) && near(upOf(th.at6, 'dm')[1], 1 / 3, 1e-3) && upOf(th.off, 'dm')[2] === true &&
-    near(upOf(th.at4, 'atkPct')[1], 0.5) && near(upOf(th.at4, 'cm')[1], 1) && upOf(th.off, 'atkPct')[2] === true,
-    JSON.stringify({ at4: th.at4, at6: th.at6, off: th.off }));
-  check('the damage dealer\'s own Highlight is its share of their damage from lufel\'s skill numbers, one every 4 turns',
-    near(th.ann.q, th.ann.qExp, 1e-6) && near(th.ann.r0, 0.25) && near(th.ann.share, th.ann.q * 0.25 / (1 + th.ann.q * 0.25)) && th.ann.share > 0.1 && th.ann.share < 0.6,
-    JSON.stringify(th.ann));
-  check('Highlight damage reaches only the Highlight part; an extra Highlight adds one; gauge helps only where the gauge, not the cooldown, holds it back; with Highlights off nothing of the kind counts',
-    th.m.hlDm > 1.001 && th.m.hlDm < th.m.dm && th.m.hlDm < 1 + 0.5 * th.ann.share + 1e-9 && th.m.hlx > 1.01 &&
-    near(th.m.gauge4, 1) && th.m.cd4 > 1.001 && th.m.gauge8 > 1.001 && near(th.m.base8, 1 / 8) && near(th.m.hlDmOff, 1) && near(th.m.hlxOff, 1),
-    JSON.stringify(th.m));
-  check('Da Capo is extra actions spread over the fight, and damage on extra actions needs one',
-    near(th.dacapo[0], 2 / 12) && near(th.dacapo[1], 1 / 6) && th.m.xturns > 1.05 && near(th.m.xDmAlone, 1) && th.m.xBoth > th.m.xturns,
-    JSON.stringify({ d: th.dacapo, m: th.m }));
-  check('a S.E.E.S. damage dealer\'s Theurgy runs on Theurgy gauge (every 2 turns by default), which Highlight gauge does not speed',
-    th.th.kind === 'TH' && near(th.th.r0, 0.5) && th.th.th > 1.01 && near(th.th.hl, 1), JSON.stringify(th.th));
-  check('Wonder\'s Highlight counts on the cadence from his Persona whose Highlight does most, and is idle with the cadence off',
-    JSON.stringify(th.wonder.on) === '[[30,0.5]]' && th.wonder.idle === 1 && th.wonder.off === 0 && th.wonder.offIdle === 2, JSON.stringify(th.wonder));
+  check('in the quick screen a Highlight buff counts at the cadence, and "on the damage dealer\'s / any ally\'s Highlight" at their rates',
+    near(upOf(th.screen, 'dm')[1], 0.4) && near(upOf(th.screen, 'atkPct')[1], 0.4) && near(upOf(th.screen, 'cm')[1], 1), JSON.stringify(th.screen));
+  check('the damage dealer\'s own Highlight is its share of their damage from lufel\'s skill numbers',
+    near(th.ann.q, th.ann.qExp, 1e-6) && near(th.ann.r0, 0.2) && th.ann.share > 0.1 && th.ann.share < 0.6, JSON.stringify(th.ann));
+  check('quick screen: Highlight damage reaches only the Highlight part; an extra Highlight adds one; the shared gauge, not the cooldown, holds Highlights back',
+    th.m.hlDm > 1.001 && th.m.hlDm < th.m.dm && th.m.hlx > 1.01 && th.m.gauge > 1.001 && near(th.m.cd, 1) &&
+    th.m.xturns > 1.05 && near(th.m.xDmAlone, 1) && th.m.xBoth > th.m.xturns, JSON.stringify(th.m));
+  check('the fight: alone, a damage dealer\'s Highlight comes in rounds 2, 6 and 10 (empty gauge, 4-action cooldown); four thieves\' 84% a round caps the team\'s Highlights',
+    JSON.stringify(th.base) === '[3,2]' && th.shared <= 10, JSON.stringify({ base: th.base, shared: th.shared }));
+  check('the fight plays turn order: a 1-turn debuff from a teammate faster than the damage dealer meets the hit, from a slower one it has expired',
+    th.order.fast > th.order.slow + 0.01 && th.order.fastUp > 0.9 && th.order.slowUp < 0.1, JSON.stringify(th.order));
+  check('Catchy Hook adds Highlights outside the cooldown, and Summer Ayaka\'s Concerto of Time gives the damage dealer one every 3 actions for free',
+    th.hook.with >= th.hook.base + 2 && th.concerto.ann >= th.concerto.base + 1, JSON.stringify({ hook: th.hook, concerto: th.concerto }));
+  check('starting Theurgy gauge counts (Yukari\'s A1: two Theurgies in 3 rounds where Awareness 0 has one), and Kotone Shiomi\'s Fortune fires a free Highlight from A1',
+    JSON.stringify(th.theurgy) === '[1,2]' && th.fortune[1] >= th.fortune[0] + 1, JSON.stringify({ t: th.theurgy, f: th.fortune }));
+  check('a damage dealer\'s own Resonance counts, set off by teammates\' actions (Wavecatcher Miyu)', th.res > 0.05, String(th.res));
+  check('Da Capo is extra actions over the fight; Wonder\'s Highlight is his best Persona\'s, fired from the gauge',
+    near(th.dacapo[0], 2 / 12) && near(th.dacapo[1], 1 / 6) && JSON.stringify(th.wonder) === '{"lines":[30],"idle":1,"events":1}', JSON.stringify({ d: th.dacapo, w: th.wonder }));
   check('Fuuka\'s backup fires their Highlight on the swap from her Awareness 2', th.backup[0] === 0 && th.backup[1] > 0, JSON.stringify(th.backup));
-  check('SKILL_DMG (tools/gen-skill-damage.js) names roster characters with four damage numbers and a Highlight kind, and the cadence settings are saved prefs',
-    th.skillN >= 50 && th.skillBad.length === 0 && th.prefs, JSON.stringify(th.skillBad) + ' ' + th.skillN + ' ' + th.prefs);
+  const [o0, o2, o6] = th.oracle;
+  check('the fight plays Oracle Shift: swaps when Fuuka\'s stacks reach the cost (rounds 2, 6, 11 at A0), more often from A6, the backup\'s Highlight with them from A2, Courtesy from the backup\'s stats, and the backup adds damage',
+    JSON.stringify(o0.shifts) === '[2,6,11]' && o0.leoHl === 0 && o2.leoHl >= 2 && o6.shifts.length > o0.shifts.length &&
+    o0.courtesy > 0 && o0.mult > o0.without && o0.seat === true, JSON.stringify(th.oracle));
+  check('SKILL_DMG and DPS_KIT name roster characters in their formats (a Theurgy with its gauge need); the fight length is a saved pref and the old cadence selects are gone',
+    th.skillN >= 50 && th.skillBad.length === 0 && th.kitN >= 25 && th.kitBad.length === 0 && th.prefs, JSON.stringify({ s: th.skillBad, k: th.kitBad, n: th.kitN, p: th.prefs }));
 
   // Wonder: one action a turn shared among his active skills; his setup is saved with the account
   const tw = await p.evaluate(() => {
@@ -2901,17 +2954,22 @@ function awarenessOverrideDrift() {
   // teams and lufel's priced against the shown one, synergies named once, rotation options folded
   const tcView = await p.evaluate(() => {
     const out = $('#tmOut');
-    const sums = [...out.querySelectorAll('.tcSum')].map(x => x.innerText);
+    const sums = [...out.querySelectorAll('.tmSeat:not(.fixed) .tcSum')].map(x => x.innerText);
+    // the damage dealer's own seat: what their damage in the fight was made of, in shares
+    const own = (out.querySelector('.tmSeat.fixed .tcSum') || {}).innerText || '';
+    const note = (out.querySelector('.tmHlNote') || {}).innerText || '';
     const seatRows = [...out.querySelectorAll('.tmSeats .tmSeat')].slice(1);
     const folded = seatRows.filter(tr => tr.querySelector('.tcSum')).every(tr => /Where it comes from \(\d+ lines?\)/.test(tr.innerText));
     const rel = [...out.querySelectorAll('.tmParty')].map(x => x.innerText);
     const rotOpen = [...out.querySelectorAll('.tmMember')].map(m => [...m.querySelectorAll('.tmRot')].filter(g => !g.closest('details')).length);
     // a sentence both pages carry (Fuuka's about Kumi, Kumi's about Fuuka) is one synergy
     const items = tmSynergyItems(new Set(['Fuuka Yamagishi', 'Kumi Katayama', 'Yusuke Kitagawa']), 'Kumi Katayama');
-    return { sums, folded, rel, rotOpen, items, lufelRel: /comes to ×[\d.]+ \([+−]\d+\.\d%\)/.test(out.innerText) };
+    return { sums, own, note, folded, rel, rotOpen, items, lufelRel: /comes to ×[\d.]+ \([+−]\d+\.\d%\)/.test(out.innerText) };
   });
   check('each calculated member reads a per-factor summary first, with the kit lines folded under it',
     tcView.sums.length >= 2 && tcView.sums.every(s => /(ATK|damage|crit|Pierce|DEF) [+−]\d/.test(s)) && tcView.folded, JSON.stringify(tcView.sums).slice(0, 300));
+  check('the damage dealer\'s seat shows what their own damage in the fight was made of, and the headline says how the fight went',
+    /skills \d+%/.test(tcView.own) && /\d+-round fight/.test(tcView.note) && /Highlights and Theurgies used/.test(tcView.note), JSON.stringify({ own: tcView.own, note: tcView.note }).slice(0, 400));
   check('the next teams and lufel\'s team are shown against the chosen one, in percent',
     tcView.rel.length > 0 && tcView.rel.every(r => /\([+−]\d+\.\d%\)/.test(r)) && tcView.lufelRel, JSON.stringify(tcView.rel).slice(0, 300) + ' ' + tcView.lufelRel);
   check('a member\'s rotation shows one option open and folds the others', tcView.rotOpen.length > 0 && tcView.rotOpen.every(n => n <= 1), JSON.stringify(tcView.rotOpen));

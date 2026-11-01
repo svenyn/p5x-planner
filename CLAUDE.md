@@ -821,45 +821,77 @@ damage formula (`docs/DATA-SOURCES.md`, the damage-formula section):
   "Already the best fit" with how many other ways were tried; the member's lines read the fitted
   uptimes. `tcTeamSet` builds the Set both the lineup and the panel key the memo on, with the 4th
   seat as `backup`. Off, everything is lufel's as written, as before.
-- **Uptime comes from the supporter's own rotation** at their Awareness (`tcCover`: the
-  share of turns `dur` covers over the rotation repeated). A skill missing from the rotation
-  counts nothing, and the row says so. Linear: a buff up half the time counts at half strength.
-  A Highlight is the exception since Nov 2026 (next bullet).
-- **Highlights and Theurgies come on a cadence the page sets** (Nov 2026; the user asked for them
-  to be priced). lufel writes a Highlight into 16 of its 173 rotations, so before this the ~40
-  Highlight-cast buffs in `TEAM_BUFFS` counted for 10 characters only. Facts from lufel's
-  `skill.js`: a thief's Highlight has a 4-turn cooldown (`cool`, every one of them) and needs a full
-  gauge; a S.E.E.S. Theurgy needs 70 gauge and has no cooldown; both are cast in the same turn as a
-  skill ("HL+3"), never instead of one. So `tcSeqHL` adds one every `#tmHlEvery` turns (4, the
-  cooldown, by default — lufel's own Highlight rotations show the same spacing; 0 means only
-  lufel's) or `#tmThEvery` (2, as lufel's S.E.E.S. rotations write it) to a rotation that has none,
-  repeated to a whole number of both cycles. The fit re-chooses turns on the shape lufel wrote; only
-  the covers read the overlay. Elucidators have no Highlight of their own. Wonder's is the one of
-  his Personas' Highlights that does most for the damage dealer (memoised, `tcMemo.hlw`).
-  **The damage dealer's own Highlight is a share of their damage** (`tcDpsHl`): their Highlight's
-  damage per cast against their lufel rotation's skill damage per turn, both from `SKILL_DMG` in
-  `data.js` (`tools/gen-skill-damage.js`, lufel's English skill text; see `docs/DATA-SOURCES.md` for
-  what it misses — Resonance and follow-up kits read high). `tcMultiplier` prices skill turns and
-  Highlights apart: team buffs reach both; `hlDm`/`hlFinal` (Tailwind's Air, Tower Guide, Holy
-  Prayer, Sraosha) reach the Highlight part only, through ⓑ alone (`plus`, exact without a second
-  `damageFactors`). `tcDpsRate` is how often it comes: when the cooldown and the gauge both allow —
-  at a cadence equal to the cooldown the gauge keeps up, a slower one is a slow gauge — so the team
-  can cut the cooldown (`hlCdRate` Ayaka's Spotlight, `hlCd` + `hlFree` Summer Ayaka's A0), fill
-  the gauge (`hlGauge`, `thGauge` for Theurgy: Holy Prayer, Arrow of Life), or add Highlights
-  outside it (`hlx`, Catchy Hook with its own damage `hlxDm`; Miku's A1 cooldown reset). With
-  Highlights off and none in their rotation the damage dealer has no Highlight part, so none of it
-  counts (otherwise an extra Highlight read as their whole Highlight gained). A buff "when an ally
-  uses a Highlight" is `on: 'dpsHL'` (that ally: Tailwind's Air, Let's Sing Together, Bloody Mary,
-  Backing Track) or `on: 'anyHL'` (any ally: Benevolence), up at that rate times its duration;
-  `dur: 'next'` lasts until the damage dealer's next Highlight; `only: 'HL'|'TH'` keeps a line to
-  one kind of damage dealer; `durAw: [aw, dur]` lengthens a buff from an Awareness (Haruna,
-  Mayumi, Beachflower Minami's A4). Not modelled: a supporter's own Highlight sped up by the team,
-  and gauge that only matters past the cooldown at the default.
-- **The fight length** (`#tmFight`, 12 turns by default) prices once-per-battle effects: a `battle`
-  entry's uses (a number, or `TC_BATTLE`: Manaka's Da Capo is 1, +1 once Wonder has acted 7 times,
-  +1 at A6) over the fight. Da Capo is `xturns`, extra actions for the damage dealer, each one more
-  skill turn; `xDm` (Mayumi's Team Ambassador), `xFinal` (Fortissimo) and `xAtkPct` (Crescendo)
-  reach those actions only. The three settings are prefs and part of `tcMemo`'s key.
+- **The number is the fight, played round by round** (`tcSim`, Nov 2026; the user asked for turn
+  order, cooldowns, a measured Highlight gauge, the damage dealers' Resonance and damage over time,
+  and Summer Ayaka, Catchy Hook, starting gauge and Kotone Shiomi's Fortune done properly). Over the
+  rounds `#tmFight` sets (12 by default, a pref and part of `tcMemo`'s key), the Elucidator acts at
+  the start of each round, the four thieves — the damage dealer, two teammates, Wonder — once each
+  in Speed order (`tmSpeed`; Wonder at 100 while his Speed is unset; a tie goes to the teammate), and
+  the enemy last. **A buff on an ally counts down after that ally's own action, a debuff on the
+  enemy after the enemy's** (lufel's "'Speed' and 'Turn Order'" guide): a supporter acting before the
+  damage dealer lands this round's hit, one acting after waits a round, and a 1-turn debuff cast
+  after the damage dealer acted never meets a hit. Each member follows their lufel rotation (or the
+  fitted one); `tcMemberCalc` hands the fight its lines split into what is on whatever happens
+  (`sim.consts`: passives, judged `up`, the Elucidator share) and what a cast, a Highlight or a use
+  per battle sets off (`sim.events`, each tied to its line by `ref`, so the page shows the uptime
+  the fight gave it). The damage dealer's damage is their skills (`SKILL_DMG`, lufel's English text
+  by `tools/gen-skill-damage.js`, with 24 hand corrections in its `FIXES`), their Highlight or
+  Theurgy when it fires, and `DPS_KIT`: Resonance, follow-ups, summons, damage over time and token
+  turns for 32 kits, each with its trigger — their own actions or a skill, a token ("Gunshot",
+  "Transform", a whole "1111"), their Highlight, **a teammate's action or Highlight**, the end of
+  their turn, the enemy's turn — and gates (`after`/`dur` a skill or token, `max` a round, `chance`,
+  `stacks`, `aw`, `weapon`); damage over time does not crit. `DPS_KIT_SKIPS` is what those kits do
+  that cannot be priced, shown on the damage dealer's seat with the damage mix the fight gave them.
+  Both came from four hand-checked research batches against one brief (Nov 2026); each `why` says
+  where its number comes from and what was judged. Every hit is priced with what is up at that
+  moment (memoised per buff state). The team's number is that total over the same fight with
+  teammates who add nothing (they still act: the gauge fills the same and every Highlight is the
+  damage dealer's). A member's part is the fight without them; Wonder's, the fight with his setup
+  blank. Fuuka's backup is played out too (next bullet but one). A fresh render is 0.4-1.0 s on the
+  real save, a repeat 0.1-0.3 s.
+- **The Highlight gauge, as lufel's HIGHLIGHT guide measures it**: one gauge for the team, 17% per
+  thief action and 21% on a weakness hit (`TC_GAUGE_ACT`, the boss is hit on a weakness), capped at
+  100%, empty at the start (so the first Highlight is in round 2), not charged by Highlights,
+  All-Out Attacks or the Elucidator; a Highlight spends 100% and its user cannot use it again for 4
+  of their own actions (`TC_HL_COOL`). Four thieves charge 84% a round, fewer than four Highlights
+  every four rounds, so who gets them is a choice: `tcSimBest` plays the fight with the gauge spent
+  in several orders (the damage dealer first; each teammate whose Highlight carries lines first,
+  then the damage dealer; all those teammates first) and spent as soon as it fills or held for the
+  moment just before the damage dealer acts unless the next action would overflow it, and keeps the
+  best; the page names it. A member whose Highlight carries no line never spends the gauge.
+  **Theurgy, as lufel's Theurgy guide has it**: a gauge per S.E.E.S. member, +35 at the start of
+  their turn (`TC_TH_TURN`), to what their Theurgy needs (`SKILL_DMG` `th`: Yukari, Mitsuru, Koromaru,
+  Aigis 70; Makoto Yuki 100; Akihiko, Junpei 140), used just before the damage dealer acts or before
+  its user's next turn; starting gauge and faster fill from `TC_THEURGY` (Yukari's and Akihiko's
+  A1 +70, Makoto Yuki at least 35, Koromaru's automatic Assist 70, Junpei's and Mitsuru's A6 ×2).
+  Played out from the kits: Catchy Hook fires the damage dealer's Highlight at once, outside its
+  cooldown and the gauge, with its damage bonus, and it triggers every "when an ally uses a
+  Highlight" line like any other; Ayaka's Highlight and Holy Prayer fill the gauge, Spotlight cuts
+  the others' cooldown, Arrow of Life and Holy Prayer fill a Theurgy; Miku's Virtual Concert is 2
+  extra rounds after the thieves act (her timed buffs run 2 turns longer, her Virtual-Concert lines
+  hold only then, and from A1 every cooldown resets and the gauge fills twice as fast); **Summer
+  Ayaka's Concerto of Time**: no one else may spend the gauge, at the start of each of her turns
+  she fires one ally's Highlight free (by the spending order, their cooldown 3), her gauge caps at
+  250% (300% at A2) and refills from Celestial Concerto, Improvised Song and A2, and as the damage
+  dealer she spends 200% (300% at A2) a Highlight as lufel's HL(2)/HL(3); **Kotone Shiomi's
+  Fortune** (A1) fires her Highlight free on the burst turn of her rotation, once (twice at A6);
+  a Highlight with no cooldown that lufel writes into a rotation costs no gauge (Kasumi, Radiance
+  Motoha); Ayaka's Superstar fills the gauge at the start (`TC_HL_START`); Manaka's Da Capo is an
+  extra action for the damage dealer in set rounds, with Crescendo, Fortissimo and Team
+  Ambassador on it. **Skill cooldowns** (`SKILL_DMG` `cool`): the rotation fit never proposes a
+  rotation that casts a skill again inside its cooldown (`tcBreaksCooldown`).
+- **The quick screen** (`tcMultiplier`, `tcMember`'s `vec`) is the averaged model the sweep over
+  every pair of thieves, the fit and replacement shortlists use before the fight prices the
+  leaders: uptime as the share of turns a rotation keeps a line up (`tcCover`), a Highlight every 5
+  turns for a thief whose rotation has none (84% a round shared four ways; `tcSeqHL`), a Theurgy
+  every requirement ÷ 35 turns, and the damage dealer's Highlight as a share of their damage
+  (`tcDpsHl`, `tcDpsRate`) that Highlight-only damage (`hlDm`, `hlFinal`), extra Highlights (`hlx`,
+  `hlxDm`), gauge (`hlGauge`, `thGauge`) and cooldown cuts (`hlCdRate`, `hlCd`, `hlFree`) move; with
+  the gauge shared the gauge, not the cooldown, holds it back there. Lines triggered by Highlights
+  use `on: 'dpsHL'`/`'anyHL'`, `dur: 'next'` (until the damage dealer's next Highlight), `only:
+  'HL'|'TH'`, `durAw: [aw, dur]`; a once-per-battle line `battle` (`TC_BATTLE`). The search's
+  leaders, replacements (the best 6 a seat by the screen), Fuuka's backup and Wonder's suggested
+  setup are all priced by the fight.
 - **Wonder** is a member like any other, priced from the setup the user enters on the tab — three
   Persona slots, each with the three skill cards that Persona has learned (a card is cast only
   while its Persona is in use), plus a weapon and refinement (`state.wonder`, saved as
@@ -869,7 +901,8 @@ damage formula (`docs/DATA-SOURCES.md`, the damage-formula section):
   (`/data/kr/wonder/skills.js`) and Wonder weapons (`/data/kr/wonder/weapons.js`), the DEF-down
   values cross-checked against lufel's defence calculator (`/data/kr/calc/defense-data.js`).
   His stats are not tracked, so a value that grows with them is taken at its cap, and his skills
-  at their top rank; his own damage is not counted, his Highlight is on the cadence (above).
+  at their top rank; his own damage is not counted, his Highlight comes from the shared gauge in
+  the fight (above), from whichever of his Personas' Highlights does most.
   **A Persona's passives work only while it is in use** — the user asked, and the Persona text
   settles it: the exceptions say so in their own words ("activate even in reserve": Sahimochi-no-
   Kami, Kohryu, Sraosha, Vasuki, Shiva; Sandalphon's "when not present"), and what they do in
@@ -884,10 +917,20 @@ damage formula (`docs/DATA-SOURCES.md`, the damage-formula section):
   own it". It usually fills one slot: one Persona's unique skill and cards already take all six
   actions, and the page says slots 2-3 add nothing then rather than inventing picks. A Persona's
   innate skills that also exist as cards are priced as the card the user picks, never both.
-- **Fuuka's backup** brings its best single skill, for as many turns as her swaps (2 in six
-  turns, 4 at Awareness 6) times its duration; its passives are off while it waits. From her
-  Awareness 2 (Pros and Cons) the swap also fires the backup's Highlight or Theurgy, at most once
-  every 3 rounds, so its Highlight lines count for up to 2 swaps in six turns as well.
+- **Fuuka's backup is played out in the fight** (Nov 2026, the user asked; it had been averaged).
+  From her Global text: Over Oracle stacks start at 3 (level 70+; +2 at A1, where the cap goes from
+  4 to 8), +1 per Skill 1 or 3 she casts (+2 per Divine Prayer from A6); Oracle Shift spends 4 (3
+  from A6), once a round. The fight swaps as soon as the stacks allow, during the damage dealer's
+  turn just before they act ("swap the currently acting ally"): the backup takes one action — the
+  skill whose lines alone do most for the damage dealer — then the damage dealer carries on.
+  Fuuka's swap lines fire (`on: 'shift'`: Pros and Cons' +10% final damage at A2, 2 turns at A6;
+  her weapon's crit damage for 3 turns), and from A2 the backup's Highlight or Theurgy fires free
+  with the swap, at most once every 3 rounds, setting off every Highlight trigger. The backup's
+  action fills the gauge and counts as a teammate acting (an assumption, said on the page). Its
+  passives are off while it waits. Courtesy (her passive 2) adds 4.5% of the backup's ATK, crit,
+  damage and Pierce to the party, like the Elucidator share. Her first lufel rotation swaps on
+  rounds 2, 6 and 11 of 12, lufel's "usually rounds 2 and 6"; the seat names the rounds. The quick
+  screen keeps the averaged backup (`tcMember(..., backup)`, `TC_SWAPS` swaps in six turns).
 - **A render remembers what depends only on the save** (`tcMemo`, Oct 31 2026): the damage dealer's
   own side of every ratio (`tcEvalFor`), each member's vector (`tcMember`) and each search
   (`tcSearch`), keyed on `dataSignature()` plus the busy list, so a change made without `commit()`
@@ -920,13 +963,14 @@ damage formula (`docs/DATA-SOURCES.md`, the damage-formula section):
   lufel's recommended team is priced the same way for comparison in the header.
 - **Extra turns for the whole party** (Miku's Virtual Concert: 2 every 6 Wonder actions) are a factor of their own, `turns`: 2 more actions in a six-turn cycle is ×8/6. Buffs that only run during those turns count as uptime.
 - **Not priced, and the page says so**: other extra actions (Narumi's for Wonder, Mayumi's own) and
-  action order, Wonder's own damage, a supporter's Highlight sped up by the team, weakness creation,
-  Down/Technical, Resonance, ailments, healing and survival, buffs copied from other buffs. The
-  number ranks teams for one damage dealer; it is not a damage forecast and is never compared
-  across damage dealers. Counting Highlights (Nov 2026) raised every owned damage dealer's best
-  team on the real save, most for the S.E.E.S. ones whose Theurgy is about half their damage
-  (Makoto Yuki ×25.4 → ×33.6), and put Beachflower Minami, whose Highlight buffs had never
-  counted, in most teams; a fresh render costs about 100 ms more (0.36-0.47 s here).
+  Wonder's own damage, weakness creation, Down/Technical, ailments other than the damage over time a
+  `DPS_KIT` entry prices, damage-percentage bonuses on a kit's own components ("+X% Resonance
+  damage", in `DPS_KIT_SKIPS`), always-crit and DEF-ignoring components, healing and survival, buffs
+  copied from other buffs, and a supporter's Theurgy gauge from teammates. The number ranks teams
+  for one damage dealer; it is not a damage forecast and is never compared across damage dealers.
+  Moving from averaged uptimes to the fight took most real-save numbers 5-15% down (the gauge cannot
+  give every member a Highlight every 4 turns, and the first round has none) and moved a few teams
+  (Mitsuru into short fights).
 
 ### Lufel publishes an order, not magnitudes
 

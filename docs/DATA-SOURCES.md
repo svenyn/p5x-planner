@@ -31,6 +31,10 @@ behind the pages is plain static JavaScript under `/data/`, and it fetches fine.
 | `/data/kr/calc/defense-data.js` | lufel's own defence calculator: DEF-down (`defenseCalcData`) and Pierce (`penetrateData`) sources per character and for Wonder, as numbers. Used to cross-check the hand-entered DEF-down values (all seven Wonder ones match) |
 | `/data/kr/calc/boss.js` | 35 bosses with base DEF and DEF coefficient (e.g. 855 / +163.2%, Vishnu 821). The Teams tab's reference boss is the damage-calc article's Vishnu (820.7, +158.4%) |
 | `/apps/guides/data/posts/damage-calc.json` | The damage formula — which stats multiply and which merely add. Not fetched by the tools; read once and encoded in `damageFactors()` |
+| `/apps/guides/data/posts/HIGHLIGHT.json` | How the Highlight gauge fills: one gauge for the team, 17% per thief action (21% on a weakness hit), never above 100%, not charged by Highlights, All-Out Attacks or Elucidator actions; a user waits 4 of their own actions between Highlights. Read once (Nov 2026) into the Teams tab's fight (`TC_GAUGE_ACT`, `TC_HL_COOL`) |
+| `/apps/guides/data/posts/theurgy.json` | Theurgy: a gauge per character, +35 at the start of their turn, capped at what their Theurgy needs (Makoto Yuki 100, Yukari 70, Akihiko 140, Mitsuru 70), usable outside their turn; not fired by Ayaka's Catchy Hook (`TC_TH_TURN`) |
+| `/apps/guides/data/posts/speed-order.json` | Turn order by Speed (ties left to right in the lineup), and that a buff counts down after its holder's action — why damage dealers are placed last. The fight plays this out |
+| `/apps/guides/data/guides-list.json` | The guide index (ids for the posts above) |
 
 Three tools wrap this:
 
@@ -50,9 +54,17 @@ damage dealer's own damage lands on their Highlight. **Medium confidence, an est
 per character.** Conditional clauses count in full on both sides; damage that is not a numbered
 skill (Resonance, follow-ups, summons, Gunshot/Melee turns, damage over time) is not counted at all,
 so for kits built on those — Wavecatcher Miyu's Resonance is about half her damage — the Highlight's
-share reads high. A text the parser gets wrong goes in its `FIXES` table with the reason (today: a
-Highlight with one version per Persona set or mode, J&C and Frostgale Kotone, and Makoto Niijima's
-Skill 1, whose later hits on the same target fall to 20%).
+share reads high. A text the parser gets wrong goes in its `FIXES` table with the reason: 24 entries (Nov 2026),
+mostly two modes or two Highlight versions added together (Kira, J&C, Frostgale Kotone, Makoto
+Niijima, Runa), later hits on the same target worth a fraction of the first (Motoha, Yusuke,
+Seaside Tomoko), and a recurring effect the skill's text defines that was added to its one cast
+(Summer Ayaka's Summer Starscape, YUI's follow-ups). What those kits deal besides their numbered
+skills — Resonance, follow-ups, summons, damage over time, token turns — is `DPS_KIT` in
+`src/logic.js`, entered by hand from the same English text with each component's trigger (their own
+actions, a teammate's, a Highlight, the enemy's turn); `DPS_KIT_SKIPS` lists what could not be
+expressed (mostly "+X% damage" on a component, always-crit and DEF-ignoring hits, and Burn and
+Lovesick ticks, for which lufel publishes no number). **Medium confidence**: several trigger rates
+are judged (each `why` says how).
 
 `gen-teams.js` writes everything in English: lufel's English labels and notes where they exist,
 its own small tables for the Korean rotation labels and skill tokens otherwise ("의식 N" is

@@ -642,37 +642,19 @@ details.sect>.inner{margin-top:10px}
             title="The Speed on Wonder's character screen with the Persona you take along (without the Thieves Den, which is added). Saved in the save file; places him in the turn order.">
         </div>
       </div>
-      <!-- How often Highlights and Theurgies come up, and how long a fight is: the calculated basis
-           prices Highlight buffs, extra Highlights and once-per-battle effects from these (prefs). -->
+      <!-- The fight the calculated basis plays out turn by turn (a pref): rounds, in which every thief
+           acts once in Speed order and the shared Highlight gauge fills; once-per-battle effects,
+           the opening rounds before the first Highlight and turn order weigh more in a short one. -->
       <div class="row" style="margin-top:8px">
         <div class="field">
-          <label>Highlights</label>
-          <select id="tmHlEvery" title="How often each thief and Wonder use their Highlight where lufel's rotation does not write one in. A Highlight needs its 4-turn cooldown run down and its gauge full; 4 is as soon as the cooldown allows (the gauge keeps up, as lufel's own rotations show), a larger number is a gauge that fills slower. Gauge and cooldown effects from the team speed the damage dealer's up from there.">
-            <option value="4" selected>every 4 turns (the cooldown)</option>
-            <option value="5">every 5 turns</option>
-            <option value="6">every 6 turns</option>
-            <option value="8">every 8 turns</option>
-            <option value="0">only where lufel's rotation has one</option>
-          </select>
-        </div>
-        <div class="field">
-          <label>Theurgy (S.E.E.S.)</label>
-          <select id="tmThEvery" title="How often a S.E.E.S. member uses their Theurgy (it needs 70 gauge) where lufel's rotation does not write one in. lufel's own S.E.E.S. rotations cast it every other turn.">
-            <option value="2" selected>every 2 turns (lufel's rotations)</option>
-            <option value="3">every 3 turns</option>
-            <option value="4">every 4 turns</option>
-            <option value="0">only where lufel's rotation has one</option>
-          </select>
-        </div>
-        <div class="field">
           <label>Fight length</label>
-          <select id="tmFight" title="Turns in the fight you are building for. Once-per-battle effects, such as Manaka's Da Capo, are spread over it: worth more in a short fight than a long one.">
-            <option value="6">6 turns</option>
-            <option value="9">9 turns</option>
-            <option value="12" selected>12 turns</option>
-            <option value="15">15 turns</option>
-            <option value="20">20 turns</option>
-            <option value="30">30 turns</option>
+          <select id="tmFight" title="Rounds in the fight you are building for. The calculated basis plays the fight out round by round: turn order, cooldowns, the shared Highlight gauge (empty at the start, so the first Highlight usually comes in round 2) and once-per-battle effects such as Manaka's Da Capo all count for this many rounds.">
+            <option value="3">3 rounds</option>
+            <option value="6">6 rounds</option>
+            <option value="9">9 rounds</option>
+            <option value="12" selected>12 rounds</option>
+            <option value="15">15 rounds</option>
+            <option value="20">20 rounds</option>
           </select>
         </div>
       </div>
