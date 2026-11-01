@@ -1342,7 +1342,11 @@ const AWARENESS_STAT_PCT = [0, 2, 5, 7, 10, 12, 15];
    `on`/`dur` (Nov 2026): a damage dealer's own buff that a cast sets off for `dur` turns. Everywhere
    else it counts as always on, as above; the Teams tab's fight takes it out of the baseline
    (`noTimed` on the setup) and plays it out instead: on when that skill, token ('Punch') or
-   Theurgy ('TH') is used, so a rotation that drops the skill loses it. */
+   Theurgy ('TH') is used, so a rotation that drops the skill loses it.
+   `fight: true` (Nov 2026): a line the rules above leave out of stats — set off by a Highlight or by
+   another ally's — counted in the Teams fight only, never in totals or build scores. With it: `on:
+   'HL'` or `'anyHL'` (`notSelf`: another ally's Highlight or Theurgy), `durAw: [aw, dur]` a longer
+   duration from an Awareness, `stack: N` one more permanent stack each time, up to N. */
 const KIT_STAT_BUFFS = {
   'Ann Takamaki': [
     { s: 'ATK%', v: 20, pct: true, on: '1', dur: 2, why: 'Crimson Rose: +20% ATK for 2 turns; it is in every rotation' }
@@ -1450,7 +1454,8 @@ const KIT_STAT_BUFFS = {
     { s: 'Damage Multiplier', v: 36, pct: true, why: 'Prosperity in Red: +36% damage to Burning foes; her kit burns everything it hits' },
     { s: 'ATK%', v: 42, pct: true, why: 'Happy New Year!: +42% ATK from the start of battle, extended by every Fire Technical' },
     { s: 'Crit Rate', v: 10, pct: true, aw: 2, why: 'Festival Colors: +10% crit rate while a foe is Burning' },
-    { s: 'Crit Rate', pct: true, weapon: '5', ladder: [16, 21, 21, 26, 26, 31, 31], why: "New Year's Light: +crit rate while Flaming Sword Dance is active" }
+    { s: 'Crit Rate', pct: true, weapon: '5', ladder: [16, 21, 21, 26, 26, 31, 31], why: "New Year's Light: +crit rate while Flaming Sword Dance is active" },
+    { s: 'ATK%', tiers: [19.5, 21.5, 20.7, 22.7], pct: true, fight: true, on: 'HL', dur: 2, durAw: [4, 4], why: 'Highlight: +19.5% ATK for 2 turns (4 from Awareness 4, which extends every buff of her Highlight by 2)' }
   ],
   'Kasumi Yoshizawa': [
     { s: 'ATK%', tiers: [32.4, 35.7, 34.4, 37.7], pct: true, on: '2', dur: 3, why: 'Invitation: +32.4% ATK for 3 turns, used every rotation' },
@@ -1461,7 +1466,8 @@ const KIT_STAT_BUFFS = {
     { s: 'ATK%', v: 33, pct: true, aw: 2, why: 'Blossoming Dance Floor: +33% ATK with 2 Step stacks' },
     { s: 'Crit Multiplier', v: 33, pct: true, aw: 2, why: 'Blossoming Dance Floor: +33% crit damage with 3+ Step stacks' },
     { s: 'Damage Multiplier', pct: true, weapon: '4', ladder: [24, 31, 31, 38, 38, 45, 45], why: 'Divine Sword of Sinai: +damage with 2+ Step stacks' },
-    { s: 'ATK%', pct: true, weapon: '5', ladder: [21, 27, 27, 33, 33, 39, 39], why: 'Royal Étoile: +ATK for 2 turns whenever a Step stack is gained' }
+    { s: 'ATK%', pct: true, weapon: '5', ladder: [21, 27, 27, 33, 33, 39, 39], why: 'Royal Étoile: +ATK for 2 turns whenever a Step stack is gained' },
+    { s: 'ATK%', v: 45, pct: true, fight: true, on: 'anyHL', notSelf: true, dur: 2, why: 'Steps of Faith (passive): +45% ATK for 2 turns when an ally other than Kasumi uses a Highlight or Theurgy, up to 2 stacks (counted as one, refreshed)' }
   ],
   'Goro Akechi': [
     { s: 'Crit Rate', v: 16, pct: true, aw: 1, why: 'Detective Profile: +16% crit rate while Deduction and Stratagem are both active, his normal loop' },
@@ -1490,7 +1496,8 @@ const KIT_STAT_BUFFS = {
     { s: 'ATK%', v: 13.5, pct: true, stacks: 3, why: 'Rough Combo: +13.5% ATK per critical for 3 turns, up to 3; at his crit rate all three are up' },
     { s: 'Resistance Pierce', v: 4, pct: true, stacks: 3, aw: 0, why: 'Reason to Fight: Grit +4% pierce per stack, held at 3' },
     { s: 'Damage Multiplier', v: 30, pct: true, on: 'Punch', dur: 3, aw: 2, why: 'Guardian Fist: +30% damage for 3 turns after Flash Blow, which fires every 3 turns' },
-    { s: 'ATK%', pct: true, weapon: '4', ladder: [22, 29, 29, 36, 36, 43, 43], why: 'Wicked Cestus: +ATK while Grit is at 2+ stacks' }
+    { s: 'ATK%', pct: true, weapon: '4', ladder: [22, 29, 29, 36, 36, 43, 43], why: 'Wicked Cestus: +ATK while Grit is at 2+ stacks' },
+    { s: 'Crit Multiplier', tiers: [23.4, 25.8, 24.9, 27.3], pct: true, on: '1', dur: 3, why: 'Blitzkrieg (Skill 1): +23.4% crit damage for 3 turns; lufel\'s 1, 2, Punch+3 rotation casts it every third turn, so it is always up' }
   ],
   /* Hatsune Miku had Light Up Your World's "Increase party's critical damage by 18.1%" here.
      Her own stat screen does not carry it: in battle it reads Crit Mult 60.5, which is her
@@ -1504,13 +1511,14 @@ const KIT_STAT_BUFFS = {
     { s: 'Crit Multiplier', v: 24, pct: true, aw: 0, why: 'Surfing Mermaid: +24% crit damage at 400 SP recovered' },
     { s: 'Crit Multiplier', v: 20, pct: true, aw: 2, why: 'Roaring Surf Line: +20% crit damage while Surf is active' },
     { s: 'ATK%', pct: true, weapon: '4', ladder: [22, 29, 29, 36, 36, 43, 43], why: 'Jellie Voyager: +ATK while Surf is active' },
-    { s: 'Damage Multiplier', pct: true, weapon: '5', ladder: [6.8, 8.8, 8.8, 10.8, 10.8, 12.8, 12.8], why: 'Mermaid Dreamer: +damage when spending SP on a skill or Resonance, i.e. every action' }
+    { s: 'Damage Multiplier', pct: true, weapon: '5', ladder: [6.8, 8.8, 8.8, 10.8, 10.8, 12.8, 12.8], stacks: 5, why: 'Mermaid Dreamer: +damage each time she spends SP on a skill or Resonance, permanent, up to 5 stacks; a skill every turn and a Resonance on most ally actions reach the cap in the first round' }
   ],
   'Ichigo Shikano': [
     { s: 'ATK%', v: 15, pct: true, stacks: 3, why: 'Overflowing Love: +15% ATK per Chains of Love stack, held at 3' },
     { s: 'Crit Rate', v: 15, pct: true, aw: 0, why: 'Mine Alone: +15% crit rate at 2 Chains of Love stacks' },
     { s: 'Crit Multiplier', v: 36, pct: true, aw: 2, why: 'Power of Love: +36% crit damage at 4 Chains of Love stacks (cap raised to 5)' },
-    { s: 'Damage Multiplier', pct: true, weapon: '5', ladder: [34, 44, 44, 54, 54, 64, 64], why: 'My Destiny: +damage at 3 Chains of Love stacks' }
+    { s: 'Damage Multiplier', pct: true, weapon: '5', ladder: [34, 44, 44, 54, 54, 64, 64], why: 'My Destiny: +damage at 3 Chains of Love stacks' },
+    { s: 'ATK%', v: 6, pct: true, fight: true, on: 'HL', stack: 5, aw: 4, why: 'Awareness 4: each of her Highlights permanently gives +6% ATK, up to 5 stacks' }
   ],
   'Kumi Katayama': [
     { s: 'ATK%', v: 10, pct: true, stacks: 3, aw: 2, why: 'Role Model: permanent party +10% ATK, stacks to 3 over the first turns' },
@@ -1568,10 +1576,10 @@ const KIT_STAT_BUFFS = {
   'Aigis': [
     { s: 'ATK%', tiers: [39, 43, 41.4, 45.4], pct: true, why: 'Gear Boost: +39% ATK, her buff skill' },
     { s: 'Resistance Pierce', tiers: [14.6, 16.1, 15.5, 17.0], pct: true, why: 'Gear Boost: +14.6% pierce' },
-    { s: 'Damage Multiplier', v: 12, pct: true, on: 'TH', dur: 2, why: 'Proof: +12% damage for 2 turns after a Theurgy; her kit auto-fires Theurgy' },
+    { s: 'Damage Multiplier', v: 12, pct: true, stacks: 3, why: 'Proof: +12% damage for 2 turns after a Theurgy skill, up to 3 stacks; in Orgia Mode every skill she casts is a Theurgy skill, so all 3 are held' },
     { s: 'Crit Rate', v: 15, pct: true, aw: 1, why: 'Her Precious: permanent +15% crit rate after the first Gear Boost' },
     { s: 'Crit Multiplier', v: 30, pct: true, aw: 2, why: 'Full Power!: +30% crit damage while Orgia Mode is active' },
-    { s: 'Damage Multiplier', v: 10, pct: true, on: 'TH', dur: 2, aw: 4, why: 'Assigned Duty: +10% damage for 2 turns after a Theurgy' },
+    { s: 'Damage Multiplier', v: 10, pct: true, stacks: 3, aw: 4, why: 'Assigned Duty: +10% damage for 2 turns after a Theurgy skill, up to 3 stacks; held at 3 in Orgia Mode, as Proof' },
     { s: 'Crit Rate', pct: true, weapon: '5', ladder: [18.1, 23.5, 23.5, 28.9, 28.9, 34.3, 34.3], why: 'Pandemonium: +crit rate while Orgia Mode is active' },
     { s: 'Damage Multiplier', pct: true, weapon: '4', ladder: [8.8, 11.6, 11.6, 14.4, 14.4, 17.2, 17.2], why: 'Nucleus Rifle: +damage for 2 turns after Wild Barrage or Flash Strike, her every-turn skills' }
   ],
@@ -1587,8 +1595,8 @@ const KIT_STAT_BUFFS = {
     { s: 'ATK%', pct: true, weapon: '5', ladder: [22.6, 29.4, 29.4, 36.2, 36.2, 43, 43], why: 'Candy Reveler: permanent party +ATK on entering Meowtor Charge' }
   ],
   'Ann Takamaki [Starlight]': [
-    { s: 'Damage Multiplier', tiers: [15, 16.5, 16.8, 18.3], pct: true, on: '1', dur: 3, why: 'Fever Step: +15% damage for 3 turns, in every rotation' },
-    { s: 'Damage Multiplier', v: 10, pct: true, aw: 2, why: "Flickering Dance: Fever Step's damage buff +10%" },
+    { s: 'Damage Multiplier', tiers: [15, 16.5, 16.8, 18.3], pct: true, on: '1', dur: 3, stacks: 4, why: 'Fever Step: +15% damage for 3 turns per stack, up to 6; walking lufel\'s rotations step by step she holds 3-5 at her Flaming Finales, counted at 4' },
+    { s: 'Damage Multiplier', v: 10, pct: true, aw: 2, on: '1', dur: 3, stacks: 4, why: "Flickering Dance: Fever Step's damage buff +10% per stack, at the 4 Fever Step stacks above" },
     { s: 'ATK%', v: 42, pct: true, why: 'Ignite: +42% ATK for 3 turns on each Heat Score' },
     { s: 'Resistance Pierce', v: 15, pct: true, why: 'Flaming Finale: +15% pierce when activating Heat Score, her core loop' },
     { s: 'Damage Multiplier', pct: true, weapon: '5', stacks: 3, ladder: [8.5, 11, 11, 13.5, 13.5, 16, 16], why: 'Fatal Finish: permanent +damage per 100 SP gained; she gains 100 a turn, counted at 3' },
@@ -1603,11 +1611,12 @@ const KIT_STAT_BUFFS = {
     { s: 'Crit Rate', tiers: [14.6, 16.1, 15.5, 17], pct: true, on: '3', dur: 2, why: "Heart's Desire: party +14.6% crit rate for 2 turns, her top skill on a 1-turn cooldown" }
   ]
 };
-/* The entries that apply to a given setup, with the value resolved. */
-function kitStatBuffs(char, lo) {
+/* The entries that apply to a given setup, with the value resolved. `fight` entries only for the Teams
+   fight (opts.fight): they are never in stats or build scores. */
+function kitStatBuffs(char, lo, opts) {
   const L = lo || charLoadout(char.n);
   return (KIT_STAT_BUFFS[char.n] || []).filter(b =>
-    (b.aw == null || (L.awareness || 0) >= b.aw) && (!b.weapon || L.weapon === b.weapon) && !(L.noTimed && b.on)
+    (b.aw == null || (L.awareness || 0) >= b.aw) && (!b.weapon || L.weapon === b.weapon) && !(L.noTimed && b.on) && (!b.fight || (opts && opts.fight))
   ).map(b => Object.assign({}, b, {
     v: (b.ladder ? b.ladder[Math.max(1, Math.min(7, L.refine)) - 1] : b.tiers ? b.tiers[kitTierIndex(char, L)] : b.v) * (b.stacks || 1)
   }));
@@ -11134,8 +11143,6 @@ const DPS_KIT_BONUS = {
     { to: 'skill:1', v: 10, chance: 0.4, aw: 6, why: 'A6 rotation: a Flash Strike precedes nearly every Wild Barrage within 2 turns (all but the first auto attack of each 6-turn cycle): increment to about 0.9.' },
     { to: 'hit', match: 'Suppressive Onslaught|Full Power', v: 10, stacks: 2, why: 'Suppressive Onslaught: spends all Powerful Rounds, +10% skill damage each. Each Wild Barrage/Flash Strike loads 1 (2 turns, cap 3); lufel\'s A0 cycle fires 2 before Onslaught.' },
     { to: 'hit', match: 'Suppressive Onslaught|Full Power', v: 10, stacks: 1, aw: 1, why: 'From A1 lufel\'s cycles fire 3 auto attacks before Onslaught: the cap of 3.' },
-    { to: 'all', v: 12, stacks: 2, why: 'Proof (passive 2): +12% damage for 2 turns after a Theurgy skill, up to 3 stacks. In Orgia Mode every skill is a Theurgy skill, so the autos, Onslaught and Activate Orgia Mode keep 3 stacks up; KIT_STAT_BUFFS prices 1, these are the other 2.' },
-    { to: 'all', v: 10, stacks: 2, aw: 4, why: 'Assigned Duty (A4): +10% damage for 2 turns after a Theurgy skill, up to 3 stacks; the 2 beyond KIT_STAT_BUFFS\' one, as for Proof.' },
     { to: 'hl', ladder: [12, 12, 15.6, 15.6, 19.2, 19.2, 22.8], weapon: '5', amp: true, why: 'Pandemonium (5-star weapon): Theurgy damage amplification +12-22.8%, on Activate Orgia Mode.' },
     { to: 'skill:1', ladder: [12, 12, 15.6, 15.6, 19.2, 19.2, 22.8], weapon: '5', amp: true, why: 'Pandemonium: Wild Barrage cast in Orgia Mode counts as a Theurgy skill (every Wild Barrage in lufel\'s rotations is an Orgia auto attack).' },
     { to: 'skill:2', ladder: [12, 12, 15.6, 15.6, 19.2, 19.2, 22.8], weapon: '5', amp: true, why: 'Pandemonium: Flash Strike in Orgia Mode, as above.' },
@@ -11151,8 +11158,6 @@ const DPS_KIT_BONUS = {
     { to: 'all', v: 12, after: '1', dur: 2, why: 'Rhythm (passive): all allies\' damage +24%, 36% for Starlight characters; the 24 is his TEAM_BUFFS line, which reaches him too, and this is the other 12 for himself. On First Movement (Skill 1, after Fever Time) for 2 turns' }
   ],
   'Ann Takamaki [Starlight]': [
-    { to: 'all', v: [15, 16.5, 16.8, 18.3], stacks: 3, why: 'Fever Step (Skill 1): +15% damage for 3 turns, stacking to 6. KIT_STAT_BUFFS prices one stack; walking lufel\'s A0 rotation step by step she holds about 4 at her Flaming Finales (3-5 across all steps), so 3 more.' },
-    { to: 'all', v: 10, stacks: 3, aw: 2, why: 'Flickering Dance (A2): Fever Step\'s buff +10% per stack (the reading KIT_STAT_BUFFS uses for its one stack), on the 3 extra stacks.' },
     { to: 'skill:3', v: 50, why: 'Pyro Vortex (Skill 2): the next 2 Steps in the same Heat Score +50% skill damage. Every Flaming Finale in lufel\'s rotations follows a Pyro Vortex within 2 Steps (2311, 233233; 213, 211233233 at A1).' },
     { to: 'skill:1', v: 50, chance: 0.42, why: 'Pyro Vortex on Fever Step: 5 of the 12 Fever Steps per lufel\'s A0 cycle fall within 2 Steps after a Pyro Vortex (6 of 14 at A1).' },
     { to: 'skill:3', v: 20, aw: 2, why: 'Flickering Dance (A2): Pyro Vortex +20% more (70%), and it reaches every later Step.' },
@@ -11274,8 +11279,12 @@ function tcKitBonusFor(D) {
    rotation uses that skill, token or Theurgy, before the hit, for `dur` of their actions. */
 const TC_KIT_STAT_K = { 'ATK%': 'atkPct', 'Damage Multiplier': 'dm', 'Crit Rate': 'cr', 'Crit Multiplier': 'cm', 'Resistance Pierce': 'pierce' };
 function tcTimedKit(D) {
-  return kitStatBuffs(D).filter(b => b.on && TC_KIT_STAT_K[b.s] && b.v).map((b, i) =>
-    ({ e: { on: b.on, to: 'self' }, k: TC_KIT_STAT_K[b.s], v: b.v, dur: b.dur || 1, ref: 'self' + i, self: true, why: b.why }));
+  const aw = +charLoadout(D.n).awareness || 0;
+  // `stack`: each use adds one more, permanently, up to that many; `durAw`: a longer duration from an Awareness;
+  // `notSelf` on 'anyHL': another ally's Highlight or Theurgy only
+  return kitStatBuffs(D, null, { fight: true }).filter(b => b.on && TC_KIT_STAT_K[b.s] && b.v).map((b, i) =>
+    ({ e: { on: b.on, to: 'self', notSelf: !!b.notSelf }, k: TC_KIT_STAT_K[b.s], v: b.v, ref: 'self' + i, self: true, why: b.why, stackMax: b.stack || 0,
+      dur: b.stack ? Infinity : b.durAw && aw >= b.durAw[0] ? b.durAw[1] : b.dur || 1 }));
 }
 
 /* Everything about one lineup that does not depend on the spending order: the actors, their
@@ -11466,7 +11475,7 @@ function tcSimRun(P, order, hold) {
       const ex = buffs.find(b => b.owner === a.n && b.ref === ev.ref);
       // a cast line on for part of the fight only lands at its share in this round
       const v = ev.gate ? ev.v * ev.gate(Math.max(1, round)) : ev.v;
-      if (ex) { ex.left = ev.dur; if (ev.gate) ex.v = v; return; }
+      if (ex) { ex.left = ev.dur; if (ev.gate) ex.v = v; if (ev.stackMax) ex.v = Math.min(ex.v + v, v * ev.stackMax); return; }
       if (!v) return;
       buffs.push({ k: ev.k, v, left: ev.dur, enemy, one: enemy && tcOneFoe(ev.e), owner: a.n, ref: ev.ref, self: !!ev.self, vc: tcIsVc(ev.e) });
     };
@@ -11492,7 +11501,7 @@ function tcSimRun(P, order, hold) {
       evs.forEach(ev => apply(a, ev, { hlxDm }));
     };
     const trigger = (on, who) => T.concat(elu ? [elu] : []).forEach(a => (a.events || []).forEach(ev => {
-      if (ev.e.on === on && (on !== 'dpsHL' || who === dpsA)) apply(a, ev);
+      if (ev.e.on === on && (on !== 'dpsHL' || who === dpsA) && !(ev.e.notSelf && who === a)) apply(a, ev);
     }));
     function fireHl(a, opt) {
       opt = opt || {};

@@ -2973,6 +2973,15 @@ function awarenessOverrideDrift() {
       passive: selfRun([{ k: 'dmg', v: 50, to: 'party', src: 'passive', why: 't' }]) / s0
     };
     TEAM_BUFFS[ann.n] = keepTB;
+    // KIT_STAT_BUFFS `fight` lines stay out of stats; `stack` adds a permanent stack each time
+    const kas = charDef('Kasumi Yoshizawa'), keepKS = KIT_STAT_BUFFS[ann.n];
+    out.fightOnly = { stats: kitStatBuffs(kas).some(b => b.fight), fight: kitStatBuffs(kas, null, { fight: true }).some(b => b.fight) };
+    TEAMS[ann.n] = { rot: [{ aw: 0, label: 'Test', seq: ['1'] }] };
+    const ksRun = e => { KIT_STAT_BUFFS[ann.n] = [Object.assign({ s: 'ATK%', v: 10, pct: true, fight: true, on: '1', why: 't' }, e)]; tcMemo.key = '';
+      const P = tcSimPrep(ann, [null, null, null], false, true); return { skill: tcSimRun(P, [ann.n], false).parts.skill, ev: P.dps.events.filter(x => x.self).map(x => x.dur + '/' + x.stackMax) }; };
+    const k1 = ksRun({ dur: 1 }), k3 = ksRun({ stack: 3 });
+    out.fightOnly.stack = { ev: k3.ev, more: k3.skill > k1.skill * 1.05 };
+    KIT_STAT_BUFFS[ann.n] = keepKS;
     DPS_KIT_BONUS[ann.n] = keepKB; TEAMS[ann.n] = keepAR; SKILL_DMG[ann.n] = keepAS; tcMemo.key = '';
     // lufel's '1 / 2' turns alternate the two skills (Akechi's Awareness 0 rotation)
     out.alt = { akechi: TEAMS['Goro Akechi'].rot[0].seq.join(' '), left: Object.values(TEAMS).some(t => (t.rot || []).some(r => r.seq.some(x => /\//.test(x)))) };
@@ -3044,6 +3053,8 @@ function awarenessOverrideDrift() {
     th.alt.akechi === '1 3 2 3 1 3 2 3 1 3 2 3' && !th.alt.left, JSON.stringify(th.alt));
   check('the damage dealer\'s own party buff reaches them before their hit, a line marked own: false or cast on one ally does not, and their own 1-turn debuff lands after their hit (too late for it) while a 2-turn one meets the next',
     th.selfLines.party > 1.1 && th.selfLines.passive > 1.1 && near(th.selfLines.notOwn, 1, 1e-9) && near(th.selfLines.ally, 1, 1e-9) && near(th.selfLines.foe1, 1, 1e-9) && th.selfLines.foe2 > 1.1, JSON.stringify(th.selfLines));
+  check('a fight-only stat line (set off by a Highlight or by another ally) stays out of stats and build scores and reaches the fight; a stacking one adds a permanent stack each time',
+    !th.fightOnly.stats && th.fightOnly.fight && JSON.stringify(th.fightOnly.stack.ev) === '["Infinity/3"]' && th.fightOnly.stack.more, JSON.stringify(th.fightOnly));
 
   // Wonder: one action a turn shared among his active skills; his setup is saved with the account
   const tw = await p.evaluate(() => {

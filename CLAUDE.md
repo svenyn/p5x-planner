@@ -1069,6 +1069,17 @@ damage formula (`docs/DATA-SOURCES.md`, the damage-formula section):
   characters whose kits are mostly party buffs read much lower as damage dealers (Mayumi −36%, Yukari
   −31%, J&C −27%): their own buffs are now in both fights, so a teammate's add less on top. A
   once-per-battle own line (`battle`) is not fired for the damage dealer.
+- **`KIT_STAT_BUFFS` lines the kit-bonus research found short or missing** (Nov 2026): Wavecatcher
+  Miyu's Mermaid Dreamer is permanent and stacks to 5 (it was counted once), Aigis's Proof and
+  Assigned Duty hold 3 stacks in Orgia Mode (once, timed on her Theurgy), Starlight Ann's Fever Step
+  and Flickering Dance 4 of 6 (once), and Akihiko's Blitzkrieg crit damage was missing; the
+  `DPS_KIT_BONUS` entries that had stood in for the extra stacks went. Lines the always-on rules
+  leave out of stats because a Highlight or another ally sets them off are `fight: true`, counted in
+  the Teams fight only (`kitStatBuffs(..., { fight: true })` from `tcTimedKit`): Yaoling's Highlight
+  ATK (`durAw`: 4 turns from A4), Kasumi's Steps of Faith (`on: 'anyHL'`, `notSelf`) and Ichigo's A4
+  ATK per Highlight (`stack: 5`, permanent). Calibration: mean 69.5 (69.6 before), median 71, range
+  42-84, bands 8/53/7 unchanged. On the real save no Optimise pick moved; Akihiko's build score fell
+  0.4 (the crit damage sits in his perfect build too).
 - **Not priced, and the page says so**: other extra actions (Narumi's for Wonder, Mayumi's own) and
   Wonder's own damage, weakness creation, Down/Technical, ailments other than the damage over time a
   `DPS_KIT` entry prices, kit bonuses that hang on the boss's HP, the damage dealer's own HP, Down
