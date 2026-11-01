@@ -1080,6 +1080,13 @@ damage formula (`docs/DATA-SOURCES.md`, the damage-formula section):
   ATK per Highlight (`stack: 5`, permanent). Calibration: mean 69.5 (69.6 before), median 71, range
   42-84, bands 8/53/7 unchanged. On the real save no Optimise pick moved; Akihiko's build score fell
   0.4 (the crit damage sits in his perfect build too).
+- **Kira's Bleed counts its Almighty part** (Nov 2026): 1% of the target's max HP per stack a turn,
+  capped at 60% of his ATK (×1.5 from A1), entered at the cap since a boss always reaches it. Only
+  lufel's Korean and Chinese text print the cap; the English and Japanese do not, so Global having it
+  is an assumption the `why` and the seat's notes say. It takes his damage over time from about a
+  quarter of his damage to about 60% on the real save's numbers, and moves his best team. Almighty
+  takes no weakness bonus in the game, which the fight does not separate (a known gap); the same
+  Korean text counts all his skill and Highlight damage as damage over time, which is not modelled.
 - **Not priced, and the page says so**: other extra actions (Narumi's for Wonder, Mayumi's own) and
   Wonder's own damage, weakness creation, Down/Technical, ailments other than the damage over time a
   `DPS_KIT` entry prices, kit bonuses that hang on the boss's HP, the damage dealer's own HP, Down

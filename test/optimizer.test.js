@@ -2982,6 +2982,10 @@ function awarenessOverrideDrift() {
     const k1 = ksRun({ dur: 1 }), k3 = ksRun({ stack: 3 });
     out.fightOnly.stack = { ev: k3.ev, more: k3.skill > k1.skill * 1.05 };
     KIT_STAT_BUFFS[ann.n] = keepKS;
+    // Kira's Bleed: its Almighty part at the cap (60% of ATK a stack) makes damage over time most of his damage
+    const kira = charDef('Kira Kitazato'); tcMemo.key = '';
+    const kp = tcSimRun(tcSimPrep(kira, [null, null, null], false, true), [kira.n], false).parts;
+    out.kira = { dot: (kp.dot || 0) / Object.values(kp).reduce((x, y) => x + y, 0), entry: DPS_KIT[kira.n].some(c => c.kind === 'dot' && c.v === 60 && c.on === 'round' && c.crit === false) };
     DPS_KIT_BONUS[ann.n] = keepKB; TEAMS[ann.n] = keepAR; SKILL_DMG[ann.n] = keepAS; tcMemo.key = '';
     // lufel's '1 / 2' turns alternate the two skills (Akechi's Awareness 0 rotation)
     out.alt = { akechi: TEAMS['Goro Akechi'].rot[0].seq.join(' '), left: Object.values(TEAMS).some(t => (t.rot || []).some(r => r.seq.some(x => /\//.test(x)))) };
@@ -3055,6 +3059,8 @@ function awarenessOverrideDrift() {
     th.selfLines.party > 1.1 && th.selfLines.passive > 1.1 && near(th.selfLines.notOwn, 1, 1e-9) && near(th.selfLines.ally, 1, 1e-9) && near(th.selfLines.foe1, 1, 1e-9) && th.selfLines.foe2 > 1.1, JSON.stringify(th.selfLines));
   check('a fight-only stat line (set off by a Highlight or by another ally) stays out of stats and build scores and reaches the fight; a stacking one adds a permanent stack each time',
     !th.fightOnly.stats && th.fightOnly.fight && JSON.stringify(th.fightOnly.stack.ev) === '["Infinity/3"]' && th.fightOnly.stack.more, JSON.stringify(th.fightOnly));
+  check('Kira\'s Bleed counts its Almighty part at the cap (60% of ATK a stack, no crit), so damage over time is most of his damage',
+    th.kira.entry && th.kira.dot > 0.45, JSON.stringify(th.kira));
 
   // Wonder: one action a turn shared among his active skills; his setup is saved with the account
   const tw = await p.evaluate(() => {

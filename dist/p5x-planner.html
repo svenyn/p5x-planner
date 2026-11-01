@@ -14768,7 +14768,13 @@ const DPS_KIT = {
     { kind: 'dot', v: 12, on: 'round', stacks: 5, crit: false, cond: 'ailment accuracy at least 90%', why: 'Hideous Mask (passive 1): +4% of ATK per Bleed tick for every 30% ailment accuracy, up to 90% (so +12%). Doctor mode gives 36% and Bloodletter 15%; his cards build ailment accuracy.' },
     { kind: 'dot', v: 4, on: 'round', stacks: 4, crit: false, aw: 6, why: 'A6 Great Doctor: Bleed cap 13, never fewer than 3, Midnight Surgery no longer removes stacks - judged about 9 stacks held, 4 more than the base entry.' },
     { kind: 'dot', v: 12, on: 'round', stacks: 4, crit: false, aw: 6, cond: 'ailment accuracy at least 90%', why: 'Hideous Mask on the 4 extra A6 stacks.' },
-    { kind: 'dot', v: 16, on: 'self:2', stacks: 5, crit: false, why: 'Crimson Operation (Doctor Skill 2): \'activate Bleed damage\' once on the cast - one extra Bleed tick: 4% + Hideous Mask 12% per stack at 5 stacks. Also fires on \'Transform+2\' (Pathology), which does not tick - see notes.' }
+    { kind: 'dot', v: 16, on: 'self:2', stacks: 5, crit: false, why: 'Crimson Operation (Doctor Skill 2): \'activate Bleed damage\' once on the cast - one extra Bleed tick: 4% + Hideous Mask 12% per stack at 5 stacks. Also fires on \'Transform+2\' (Pathology), which does not tick - see notes.' },
+    { kind: 'dot', v: 60, on: 'round', stacks: 5, crit: false, why: 'Bleed\'s Almighty part: 1% of the target\'s max HP per stack each turn, capped at 60% of Kira\'s ATK. The cap is in lufel\'s Korean and Chinese text; the English and Japanese leave it out, so the Global value is assumed. A boss\'s max HP always reaches the cap. Same 5 stacks as the Physical part; Almighty takes no weakness bonus in the game, which the fight does not separate' },
+    { kind: 'dot', v: 30, on: 'round', stacks: 5, crit: false, aw: 1, why: 'Awareness 1: Bleed\'s Almighty damage x1.5, read as a cap of 90% of ATK per stack' },
+    { kind: 'dot', v: 60, on: 'round', stacks: 4, crit: false, aw: 6, why: 'A6 Great Doctor: Bleed\'s Almighty part on the 4 extra stacks (about 9 held)' },
+    { kind: 'dot', v: 30, on: 'round', stacks: 4, crit: false, aw: 6, why: 'A6: the Awareness 1 x1.5 on those 4 extra stacks' },
+    { kind: 'dot', v: 60, on: 'self:2', stacks: 5, crit: false, why: 'Crimson Operation\'s extra Bleed tick: the Almighty part at its cap, 5 stacks' },
+    { kind: 'dot', v: 30, on: 'self:2', stacks: 5, crit: false, aw: 1, why: 'Crimson Operation\'s extra tick: the Awareness 1 x1.5 on its Almighty part' }
   ],
   'Haru Okumura': [
     { kind: 'hit', v: 66, on: 'tok:Gunshot', why: 'A0 My Name Is Beauty Thief: Haru\'s ranged attacks (lufel\'s \'Gunshot\' token) deal Psychokinesis damage to all foes equal to 66% of ATK.' },
@@ -14950,7 +14956,8 @@ const DPS_KIT_SKIPS = {
     'A6: +35% crit rate on Resonance damage - a crit buff, not entered. A2 adds a Spark every 2 Resonances (slightly more frequent Resonance), not entered.'
   ],
   'Kira Kitazato': [
-    'Bleed\'s other part, Almighty damage of 1% of the target\'s max HP per stack per turn (x1.5 from A1), is not a % of Kira\'s ATK and cannot be priced in this format; against a boss it is likely most of his Bleed damage.',
+    'Bleed\'s Almighty part is priced at its cap, 60% of his ATK per stack (90% from Awareness 1), which only lufel\'s Korean and Chinese text print; if Global has no cap it is a share of the boss\'s max HP instead, which nothing here models.',
+    'lufel\'s Korean and Chinese text also count all his Persona-skill and Highlight damage as damage over time (the English does not), so a teammate\'s damage-over-time buff would reach his skills too; only his Bleed and Rending take it here.',
     'The self:2 extra Bleed tick also fires on Ripper Skill 2 turns (1 in 6 of lufel\'s rotations) - a small overcount.',
     'A1\'s Ripper bonus beyond his own Bleed (teammates\' debuffs) and Bloodletter\'s pierce are not priced.',
     'Ayaka\'s Highlight stacking Bleed (lufel\'s partner note) would raise the stack counts; not assumed.'
