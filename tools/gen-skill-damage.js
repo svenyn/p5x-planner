@@ -137,6 +137,10 @@ function main() {
     if (kind === 'TH' && need) bits.push(`th:${+(need[1] || need[2])}`);
     bits.push(`d:[${dmg.join(',')}]`);
     if (dt.some((t, i) => t.some(x => x !== dmg[i]))) bits.push(`dt:[${dt.map(t => '[' + t.join(',') + ']').join(',')}]`);
+    // which hit every foe: lufel's Korean skill type or element says 광역 (area)
+    const krRec = o.kr && o.kr.skill1 ? o.kr : ((o.characterSkillsData || {})[kr] || Object.values(o.characterSkillsData || {})[0] || {});
+    const aoe = SLOTS.map(k => /광역/.test(String((krRec[k] || {}).type || '') + String((krRec[k] || {}).element || '')) ? 1 : 0);
+    if (aoe.some(Boolean)) bits.push(`aoe:[${aoe.join(',')}]`);
     if (hlCrit) bits.push('hlCrit:true');
     // skill cooldowns in turns (lufel's `cool`): a skill with cooldown c is cast at most once in c + 1 turns
     const sc = SLOTS.slice(0, 3).map(k => +((en[k] || {}).cool) || 0);

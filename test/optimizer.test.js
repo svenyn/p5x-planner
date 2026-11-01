@@ -2907,6 +2907,48 @@ function awarenessOverrideDrift() {
     Object.entries(DPS_KIT).forEach(([n, list]) => { if (!charDef(n)) out.kitBad.push(n); list.forEach((c, i) => { if (!['res', 'fu', 'dot', 'hit'].includes(c.kind) || !ON.test(c.on) || !c.why || (c.v == null && !c.ladder)) out.kitBad.push(n + ' #' + i); }); });
     out.kitN = Object.keys(DPS_KIT).length;
     out.prefs = 'tmFight' in collectPrefs() && !$('#tmHlEvery');
+    // ---- the boss, weakness, more foes, round gates, timed own buffs, gauge sources (Nov 2026) ----
+    const keepR = TEAMS['Ryuji Sakamoto'], keepRB2 = TEAM_BUFFS['Ryuji Sakamoto'];
+    const setSel = (id, v) => { $(id).value = String(v); tcMemo.key = ''; };
+    const ryu = (list, seq) => { TEAMS['Ryuji Sakamoto'] = { rot: [{ aw: 0, label: 'Test', seq: seq || ['1'] }] }; TEAM_BUFFS['Ryuji Sakamoto'] = list; tcMemo.key = ''; return tcSim(ann, ['Ryuji Sakamoto', null, null], false); };
+    const vishnu = BOSSES.find(b => b.id === 8);
+    out.boss = { n: BOSSES.length, vishnu: vishnu && [vishnu.def, vishnu.coef, vishnu.res.Fire, vishnu.res.Ice], sel: $('#tmBoss').value, prefs: ['tmBoss', 'tmWeak', 'tmFoes'].every(k => k in collectPrefs()) };
+    out.weakFor = [tcWeakFor('Fire'), tcWeakFor('Ice'), tcWeakFor('Wind')];
+    // a weakness-damage buff counts only when the hits land on a weakness
+    const wk = [{ k: 'weak', v: 50, to: 'party', src: 'passive', why: 'test: weakness damage' }];
+    out.weak = ['boss', 'all', 'none'].map(m => { setSel('#tmWeak', m); return ryu(wk).mult; });
+    setSel('#tmWeak', 'boss');
+    // three foes: Ann's area skills hit all of them; a debuff on one foe helps a third as much there
+    const dd = why => [{ k: 'defdown', v: 40, to: 'enemy', src: '1', on: '1', dur: 2, why }];
+    setSel('#tmFoes', 3);
+    out.foes = { one: ryu(dd('test: the target\'s DEF down')).mult, all: ryu(dd('test: all foes\' DEF down')).mult, oneFoe: [tcOneFoe({ why: 'the target' }), tcOneFoe({ why: 'all foes' }), tcOneFoe({ why: 'x', foes: 'one' })] };
+    setSel('#tmFoes', 1);
+    out.foes.single = [ryu(dd('test: the target\'s DEF down')).mult, ryu(dd('test: all foes\' DEF down')).mult];
+    // round gates: from round 7 a buff is nothing in a 6-round fight; a ramp is its share of stacks
+    const g = tcGate({ fromAw: [[0, 4], [1, 3]] }, 0), g1 = tcGate({ fromAw: [[0, 4], [1, 3]] }, 1), gr = tcGate({ rampAt: [2, 4, 6] }, 0), gu = tcGate({ until: 2 }, 0);
+    out.gate = { g: [g(3), g(4)], g1: g1(3), ramp: [gr(1), gr(3), gr(6)], until: [gu(2), gu(3)], none: tcGate({ up: 0.5 }, 0) };
+    const late = [{ k: 'dmg', v: 100, to: 'party', src: 'aw', from: 7, why: 'test: on from round 7' }];
+    setF(6); out.gateFight = [ryu(late).mult];
+    setF(12); out.gateFight.push(ryu(late).mult, tcMember(ann, 'Ryuji Sakamoto', null, null, false).lines[0].up);
+    // the damage dealer's own timed buff: out of the fight's baseline, on only when the rotation casts its skill
+    const mak = charDef('Makoto Niijima');
+    out.timed = { nt: tcEvalFor(mak, true).f0 < tcEvalFor(mak).f0, kit: kitStatBuffs(mak, Object.assign({}, charLoadout(mak.n), { noTimed: true })).some(b => b.on), events: tcTimedKit(mak).map(e => e.e.on + '/' + e.dur) };
+    const runSeq = (seq, events) => { const P = tcSimPrep(mak, [null, null, null], false, true); P.dps.seq = seq; if (!events) P.dps.events = []; return tcSimRun(P, [mak.n], false).total; };
+    out.timed.cast = runSeq(['2', '1'], true) > runSeq(['2', '1'], false);
+    out.timed.noCast = Math.abs(runSeq(['1', '1'], true) - runSeq(['1', '1'], false)) < 1e-9;
+    // gauge: a fill-to on every teammate action gives the damage dealer more Highlights; Prosperity starts at 25
+    // (a one-round fight with Ryuji acting first: alone, Ann's gauge is short of a Highlight; filled, it is not)
+    const keepSp2 = tmSpeed; tmSpeed = n => n === 'Ryuji Sakamoto' ? 200 : n === ann.n ? 100 : 50; setF(1);
+    const fill = ryu([{ k: 'hlGaugeTo', v: 100, to: 'party', src: '1', on: '1', dur: 1, why: 'test: gauge filled' }]);
+    out.fill = { with: fill.hl[ann.n] || 0, base: fill.base.hl[ann.n] || 0 };
+    tmSpeed = keepSp2; setF(12);
+    out.gaugeLines = ['Ayaka Sakai', 'Aran Hirano'].map(n => TEAM_BUFFS[n].some(e => (e.k === 'hlGaugeTo' || e.k === 'hlGauge') && e.aw === 4));
+    const keepC = state.cards, src = keepC.filter(c => c.slot !== 'Space').slice(0, 4);
+    state.cards = keepC.map(c => c.equipped === ann.n ? Object.assign({}, c, { equipped: null }) : c).concat(src.map(c => Object.assign({}, c, { id: 'pros' + c.id, set: 'Prosperity', equipped: ann.n })));
+    tcMemo.key = '';
+    out.prosperity = tcSimPrep(ann, [null, null, null], false, true).gauge0;
+    state.cards = keepC;
+    TEAMS['Ryuji Sakamoto'] = keepR; TEAM_BUFFS['Ryuji Sakamoto'] = keepRB2; tcMemo.key = '';
     return out;
   });
   const near = (a, b, e) => Math.abs(a - b) < (e || 1e-9);
@@ -2955,6 +2997,20 @@ function awarenessOverrideDrift() {
     o0.courtesy > 0 && o0.mult > o0.without && o0.seat === true, JSON.stringify(th.oracle));
   check('SKILL_DMG and DPS_KIT name roster characters in their formats (a Theurgy with its gauge need); the fight length is a saved pref and the old cadence selects are gone',
     th.skillN >= 50 && th.skillBad.length === 0 && th.kitN >= 25 && th.kitBad.length === 0 && th.prefs, JSON.stringify({ s: th.skillBad, k: th.kitBad, n: th.kitN, p: th.prefs }));
+  check('the fight is against a lufel boss (Vishnu by default: DEF 821, +158.4%, weak to Fire, resists Ice), saved with the page settings',
+    th.boss.n >= 30 && JSON.stringify(th.boss.vishnu) === '[821,1.584,"weak","resist"]' && th.boss.sel === '8' && th.boss.prefs &&
+    JSON.stringify(th.weakFor) === '["weak","resist","normal"]', JSON.stringify({ b: th.boss, w: th.weakFor }));
+  check('a weakness-damage buff counts only when the damage dealer\'s hits land on a weakness (Ann on Vishnu: yes; "no weakness": no)',
+    th.weak[0] > 1.05 && near(th.weak[0], th.weak[1], 1e-9) && near(th.weak[2], 1, 1e-6), JSON.stringify(th.weak));
+  check('with three foes a debuff on one foe helps less than one on all of them; with one foe they are the same',
+    th.foes.one < th.foes.all - 1e-6 && near(th.foes.single[0], th.foes.single[1], 1e-9) && JSON.stringify(th.foes.oneFoe) === '[true,false,true]', JSON.stringify(th.foes));
+  check('round gates: on from a round (earlier at a higher Awareness), stacks by round, the first rounds only; the fight and the quick screen read them',
+    JSON.stringify(th.gate) === '{"g":[0,1],"g1":1,"ramp":[0,0.3333333333333333,1],"until":[1,0],"none":null}' &&
+    near(th.gateFight[0], 1, 1e-9) && th.gateFight[1] > 1.05 && near(th.gateFight[2], 0.5, 1e-9), JSON.stringify({ g: th.gate, f: th.gateFight }));
+  check('the damage dealer\'s own timed buff leaves the fight\'s baseline and counts only on the turns the rotation casts its skill',
+    th.timed.nt && !th.timed.kit && JSON.stringify(th.timed.events) === '["2/2"]' && th.timed.cast && th.timed.noCast, JSON.stringify(th.timed));
+  check('gauge sources: a fill-to gives more Highlights; Spotlight and Aran\'s A4 are lines; Prosperity\'s 4-piece starts the gauge at 25',
+    th.fill.with > th.fill.base && th.gaugeLines.every(Boolean) && th.prosperity === 25, JSON.stringify({ f: th.fill, l: th.gaugeLines, p: th.prosperity }));
 
   // Wonder: one action a turn shared among his active skills; his setup is saved with the account
   const tw = await p.evaluate(() => {

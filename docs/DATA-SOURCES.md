@@ -29,7 +29,7 @@ behind the pages is plain static JavaScript under `/data/`, and it fetches fine.
 | `/data/kr/wonder/skills.js` | 459 skill cards (`personaSkillList`), English descriptions. Source of `WONDER_BUFFS.cards` |
 | `/data/kr/wonder/weapons.js` | Wonder's 18 weapons (`matchWeapons`), English effect text with 7 refinement steps. Source of `WONDER_BUFFS.weapons` |
 | `/data/kr/calc/defense-data.js` | lufel's own defence calculator: DEF-down (`defenseCalcData`) and Pierce (`penetrateData`) sources per character and for Wonder, as numbers. Used to cross-check the hand-entered DEF-down values (all seven Wonder ones match) |
-| `/data/kr/calc/boss.js` | 35 bosses with base DEF and DEF coefficient (e.g. 855 / +163.2%, Vishnu 821). The Teams tab's reference boss is the damage-calc article's Vishnu (820.7, +158.4%) |
+| `/data/kr/calc/boss.js` | 35 bosses with base DEF and DEF coefficient (e.g. 855 / +163.2%, Vishnu 821). `tools/gen-bosses.js` writes all of them, with their element resistances (약 weak, 내 resist), into `BOSSES` at the end of `src/data.js`; the Teams tab fights the one the page picks, by default the damage-calc article's Vishnu (820.7, +158.4%) |
 | `/apps/guides/data/posts/damage-calc.json` | The damage formula — which stats multiply and which merely add. Not fetched by the tools; read once and encoded in `damageFactors()` |
 | `/apps/guides/data/posts/HIGHLIGHT.json` | How the Highlight gauge fills: one gauge for the team, 17% per thief action (21% on a weakness hit), never above 100%, not charged by Highlights, All-Out Attacks or Elucidator actions; a user waits 4 of their own actions between Highlights. Read once (Nov 2026) into the Teams tab's fight (`TC_GAUGE_ACT`, `TC_HL_COOL`) |
 | `/apps/guides/data/posts/theurgy.json` | Theurgy: a gauge per character, +35 at the start of their turn, capped at what their Theurgy needs (Makoto Yuki 100, Yukari 70, Akihiko 140, Mitsuru 70), usable outside their turn; not fired by Ayaka's Catchy Hook (`TC_TH_TURN`) |
@@ -407,7 +407,10 @@ to predict damage. `damageFactors()` computes ⓐⓑⓓ and only ever reports th
 a perfect build for the same character. Three things it deliberately leaves out:
 
 - **ⓒ, ⓔ, ⓕ, ⓖ, ⓗ, ⓘ** are enemy, skill, party or dice — the same for every loadout the
-  character could wear, so they cancel in the ratio.
+  character could wear, so they cancel in the ratio. (The Teams tab, which compares teams rather
+  than loadouts, does price ⓒ and ⓕ, against the boss it picks from `BOSSES`: ⓕ is the article's 1.2 on a
+  weakness, raised by weakness-damage buffs; a resisted hit's 0.5 is the same with or without the
+  team, so it cancels.)
 - **Resistance Pierce** sits inside ⓒ, so pricing it needs the enemy defence value lufel
   says has to be read out of the client. Its substat weight still prices it; the model does
   not, and `damageShare()` deliberately does not count it as captured.

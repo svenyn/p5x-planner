@@ -36,6 +36,7 @@ node tools/audit-lufel.js lufel.json         # diff against src/data.js, reports
 node tools/gen-data-from-lufel.js lufel.json # emit replacement SETS/SPACE_SETS/CHARACTERS
 node tools/gen-awareness.js lufel.json       # patch CHAR_STATS[*].awareness into src/data.js in place
 node tools/gen-teams.js lufel.json           # replace the TEAMS block (lufel's parties, partners, rotations)
+node tools/gen-bosses.js [boss.js]           # replace the BOSSES block (lufel's calc/boss.js: DEF, coefficient, resistances)
 node tools/gen-skill-damage.js lufel.json    # replace the SKILL_DMG block (damage per skill and Highlight)
 ```
 
@@ -773,9 +774,16 @@ damage formula (`docs/DATA-SOURCES.md`, the damage-formula section):
   or HP kit's hits ignore it). The team crit rate setting is zeroed for this: the supports who
   supply that crit rate are counted one by one.
 - **ⓒ is lufel's defence formula**, 1 − E/(E+1400) with E = DEF × max(0, (1 + coefficient) ×
-  (1 − Pierce) − DEF down), on the article's own example boss (`TC_BOSS`: Lv82 guild-boss Vishnu,
-  DEF 820.7, +158.4%). A test reproduces the article's worked example. ⓕ assumes a weakness hit
-  (1.2) raised by weakness-damage buffs; ⓖ is final damage / damage amplification.
+  (1 − Pierce) − DEF down), against the boss the page picks (`#tmBoss`, a pref): one of lufel's
+  defence-calculator bosses, `BOSSES` at the end of `src/data.js`, written by `tools/gen-bosses.js`
+  (base DEF, coefficient, resistances; Korean demon names translated in its `NAME_EN`). The default
+  is the article's own example, Vishnu (DEF 821, +158.4%), and `TC_BOSS` takes the picked boss's
+  numbers whenever `tcMemo`'s key changes. A test reproduces the article's worked example. ⓕ is a
+  weakness hit (1.2) raised by weakness-damage buffs, **only when the damage dealer's element is
+  weak on that boss** (`#tmWeak`: the boss's resistances, every hit, or none; `tcWeakFor`) — a
+  resisted or neutral hit takes no weakness-damage buff, and a resist's ×0.5 is on both sides of the
+  ratio. Each thief's own hits fill the gauge at 21% only on a weakness hit, 17% otherwise. ⓖ is
+  final damage / damage amplification.
 - **What each member supplies is `TEAM_BUFFS` in `logic.js`**: kit lines turned into numbers,
   one entry per effect (`k` the factor, four-tier `v` or a 7-step weapon `ladder`, `per` for a
   value that grows with the supporter's own stat up to a cap, `to`, `on`/`dur` or a judged `up`,
@@ -999,6 +1007,32 @@ damage formula (`docs/DATA-SOURCES.md`, the damage-formula section):
   multiply to the total. Replacements are priced as the whole team with them swapped in, and
   lufel's recommended team is priced the same way for comparison in the header.
 - **Extra turns for the whole party** (Miku's Virtual Concert: 2 every 6 Wonder actions) are a factor of their own, `turns`: 2 more actions in a six-turn cycle is ×8/6. Buffs that only run during those turns count as uptime.
+- **What the fight plays out that used to be judged** (Nov 2026, the user's "do 1-5"):
+  - *More foes* (`#tmFoes`, 1-5, a pref): the extra foes are copies of the boss. A damage dealer's
+    area skill (`SKILL_DMG` `aoe`, from lufel's KR skill type "광역"), area Highlight, and `DPS_KIT`
+    component (`aoe`, else "all foes" in its `why`) hits every foe; an enemy-side buff whose text
+    names one foe (`tcOneFoe`: "the target", "a foe"; an entry may say `foes: 'one'|'all'`) is on the
+    main target only. A constant one-foe debuff still reaches every foe (a known gap: `sim.consts`
+    is a sum).
+  - *Round gates* on a `TEAM_BUFFS`/`WONDER_BUFFS` line (`tcGate`): `from` a round, or by Awareness
+    `fromAw: [[aw, round], ...]`; `until` a round; `rampAt` the rounds its stacks arrive. They replace
+    the judged `up` that stood for a ramp or a battle-start window (Mayumi's Torque Boost, Kotone
+    Shiomi's Lunar Bond, Junpei's Competitive Heart — whose A1 delta lines went, A1 now moving the
+    thresholds — Seaside Tomoko's Resonance stacks, Ayaka's Spirit of Rock, Leo's stacks, Wonder's
+    Auto-Mataru, Koumokuten and Kushinada). The fight switches them on round by round
+    (`sim.gated`); the quick screen and the page's uptime read their share of the fight's rounds,
+    so they follow `#tmFight`.
+  - *The damage dealer's own timed buffs*: a `KIT_STAT_BUFFS` line with `on`/`dur` (12 lines: Ann,
+    YUI, Makoto Niijima, Kasumi ×2, Makoto Yuki, Akihiko's Guardian Fist on 'Punch', Shoki Notte,
+    Aigis ×2 on 'TH', Starlight Ann, Summer Ichigo) is always on everywhere else, but the fight
+    evaluates the damage dealer without them (`tcEvalFor(dps, true)`, `noTimed` on the setup, in
+    `charBaseStat`'s and `damageBase`'s cache keys) and turns each on when the rotation casts its
+    skill, before the hit (`tcTimedKit`), so the damage dealer's fit can no longer drop the skill
+    that buffs them for free.
+  - *Gauge*: Spotlight (Ayaka A4) fills the gauge to 60% on her Highlight (`hlGaugeTo`, fight only),
+    Aran's A4 Highlight regains 15, and Prosperity's 4-piece starts the gauge at 25 once whoever of
+    the thieves wears it. Mitsuru's Assist is a support-slot skill her lufel rotation never casts,
+    so it stays unpriced.
 - **Not priced, and the page says so**: other extra actions (Narumi's for Wonder, Mayumi's own) and
   Wonder's own damage, weakness creation, Down/Technical, ailments other than the damage over time a
   `DPS_KIT` entry prices, damage-percentage bonuses on a kit's own components ("+X% Resonance

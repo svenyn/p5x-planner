@@ -657,6 +657,28 @@ details.sect>.inner{margin-top:10px}
             <option value="20">20 rounds</option>
           </select>
         </div>
+        <div class="field" style="min-width:220px">
+          <label>Boss</label>
+          <select id="tmBoss" title="The enemy the fight is against, from lufel's defence calculator: its DEF and DEF coefficient decide what DEF down and Pierce are worth, and its resistances which hits land on a weakness."></select>
+        </div>
+        <div class="field">
+          <label>Weakness</label>
+          <select id="tmWeak" title="Whether hits land on a weakness: ×1.2 damage (weakness-damage buffs only count then) and 21% Highlight gauge instead of 17%. A resisted hit deals ×0.5.">
+            <option value="boss" selected>by the boss's resistances</option>
+            <option value="all">every hit on a weakness</option>
+            <option value="none">no weakness hits</option>
+          </select>
+        </div>
+        <div class="field">
+          <label>Enemies</label>
+          <select id="tmFoes" title="How many enemies the fight has. The damage dealer's area skills hit each of them; a debuff on one foe reaches only one, a debuff on all foes reaches every hit.">
+            <option value="1" selected>1</option>
+            <option value="2">2</option>
+            <option value="3">3</option>
+            <option value="4">4</option>
+            <option value="5">5</option>
+          </select>
+        </div>
       </div>
       <!-- Wonder's setup is set once and read on every visit, so it folds under one line that
            says what is set; his Speed stays in the row above, since it places him in the turn order. -->
