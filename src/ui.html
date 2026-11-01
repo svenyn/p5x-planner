@@ -665,24 +665,35 @@ details.sect>.inner{margin-top:10px}
         </div>
         <div class="field" style="min-width:220px">
           <label>Boss</label>
-          <select id="tmBoss" title="The enemy the fight is against, from lufel's defence calculator: its DEF and DEF coefficient decide what DEF down and Pierce are worth, and its resistances which hits land on a weakness."></select>
+          <select id="tmBoss" title="The enemy the fight is against, from lufel's defence calculator: its DEF and DEF coefficient decide what DEF down and Pierce are worth, and its resistances which hits land on a weakness. Auto fights lufel's single-boss example (DEF 1280, like Baal or Atabaka in Nightmare's Gateway), or its area-boss example (DEF 821, like Vishnu) for a damage dealer built to hit every enemy."></select>
         </div>
         <div class="field">
           <label>Weakness</label>
-          <select id="tmWeak" title="Whether hits land on a weakness: ×1.2 damage (weakness-damage buffs only count then) and 21% Highlight gauge instead of 17%. A resisted hit deals ×0.5.">
-            <option value="boss" selected>by the boss's resistances</option>
-            <option value="all">every hit on a weakness</option>
+          <select id="tmWeak" title="Whether hits land on a weakness: ×1.2 damage (weakness-damage buffs only count then) and 21% Highlight gauge instead of 17%. A resisted hit deals ×0.5. Every hit is the default: each boss is weak to one element and is fought with a team of it.">
+            <option value="all" selected>every hit on a weakness</option>
+            <option value="boss">by the boss's resistances</option>
             <option value="none">no weakness hits</option>
           </select>
         </div>
         <div class="field">
           <label>Enemies</label>
-          <select id="tmFoes" title="How many enemies the fight has. The damage dealer's area skills hit each of them; a debuff on one foe reaches only one, a debuff on all foes reaches every hit.">
-            <option value="1" selected>1</option>
+          <select id="tmFoes" title="How many enemies the fight has. The damage dealer's area skills hit each of them; a debuff on one foe reaches only one, a debuff on all foes reaches every hit. Auto is 5 (a boss and its 4 helpers, as Vishnu, Kartikeya and Dominion bring) for a damage dealer built to hit every enemy, else 1.">
+            <option value="auto" selected>Auto</option>
+            <option value="1">1</option>
             <option value="2">2</option>
             <option value="3">3</option>
             <option value="4">4</option>
             <option value="5">5</option>
+          </select>
+        </div>
+        <div class="field">
+          <label>Down Points</label>
+          <select id="tmDown" title="The boss's Down Points, as its gauge shows them. Each skill that hits its weakness takes 1 (some skills take more whatever the weakness, such as Kumi's Skill 3); at 0 it is knocked down until its next turn, which it still takes, and the gauge refills. Effects that need a downed foe count only then. Most bosses cannot be knocked down: leave it on that unless yours can.">
+            <option value="0" selected>can't be knocked down</option>
+            <option value="1">1</option><option value="2">2</option><option value="3">3</option>
+            <option value="4">4</option><option value="5">5</option><option value="6">6</option>
+            <option value="7">7</option><option value="8">8</option><option value="9">9</option>
+            <option value="10">10</option><option value="12">12</option><option value="15">15</option>
           </select>
         </div>
         <!-- The page calculates only on this button (a fresh calculated team takes a few seconds), so

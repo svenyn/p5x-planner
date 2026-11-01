@@ -788,14 +788,30 @@ damage formula (`docs/DATA-SOURCES.md`, the damage-formula section):
 - **ⓒ is lufel's defence formula**, 1 − E/(E+1400) with E = DEF × max(0, (1 + coefficient) ×
   (1 − Pierce) − DEF down), against the boss the page picks (`#tmBoss`, a pref): one of lufel's
   defence-calculator bosses, `BOSSES` at the end of `src/data.js`, written by `tools/gen-bosses.js`
-  (base DEF, coefficient, resistances; Korean demon names translated in its `NAME_EN`). The default
-  is the article's own example, Vishnu (DEF 821, +158.4%), and `TC_BOSS` takes the picked boss's
-  numbers whenever `tcMemo`'s key changes. A test reproduces the article's worked example. ⓕ is a
-  weakness hit (1.2) raised by weakness-damage buffs, **only when the damage dealer's element is
-  weak on that boss** (`#tmWeak`: the boss's resistances, every hit, or none; `tcWeakFor`) — a
-  resisted or neutral hit takes no weakness-damage buff, and a resist's ×0.5 is on both sides of the
-  ratio. Each thief's own hits fill the gauge at 21% only on a weakness hit, 17% otherwise. ⓖ is
-  final damage / damage amplification.
+  (base DEF, coefficient, resistances; Korean demon names translated in its `NAME_EN`). `TC_BOSS`
+  takes the picked boss's numbers whenever `tcMemo`'s key changes. A test reproduces the article's
+  worked example. ⓕ is a weakness hit (1.2) raised by weakness-damage buffs, **only when the damage
+  dealer's element is weak on that boss** (`#tmWeak`: every hit, the boss's resistances, or none;
+  `tcWeakFor`) — a resisted or neutral hit takes no weakness-damage buff, and a resist's ×0.5 is on
+  both sides of the ratio. Each thief's own hits fill the gauge at 21% only on a weakness hit, 17%
+  otherwise. ⓖ is final damage / damage amplification.
+- **The fight's defaults follow the damage dealer** (Nov 2026; the user asked for the most faithful
+  setup). lufel's non-Sea-of-Souls bosses are Nightmare's Gateway's: one boss at DEF 1280 (Baal,
+  Atabaka, Yatsukamizu; lufel's "Single Boss (Example)") or a boss with linked helpers at DEF 821
+  (Vishnu, Mara, Surt; the "Area Boss (Example)"), where Vishnu, Kartikeya and Dominion bring 4. Each is
+  weak to one element and is fought with a team of it. So `#tmBoss` and `#tmFoes` default to Auto: an
+  `AoE DPS` (lufel's Sweeper) fights the area example with 4 more foes, everyone else the single example
+  alone (`tcBossNow`, `tcFoes`, `TC_AUTO_BOSS`); `#tmWeak` defaults to every hit on a weakness. They
+  resolve for `tcFocus`, the damage dealer the last entry point named (`tcMemoFor(D)`: `tcSim`,
+  `tcMember`, `tcMultiplier`, `tcSearch`, `tcLineup`, `tcTeams`, `tcWonder`, `tcPairFor`), and the memo
+  key holds what they resolved to. The old default, the article's Vishnu with one foe and weakness by
+  its resistances, fought an area boss's DEF as a lone foe and gave only Fire a weakness (no listed
+  boss is weak to Ice). Measured on the real save (19 damage dealers): boss DEF mattered most (821 to
+  1280 changed the best team for Ren, YUI, the twins and Makoto Yuki); the weakness mode barely moved a
+  team; 9, 12 and 15 rounds mostly agree while 6 changes it for 12 of 19; 3 and 5 foes agree. Fight
+  length stays 12: the Gateway ends after a set number of boss attacks nobody publishes. `applyPrefs`
+  reads a save's exact old trio (`8`/`boss`/`1`), which every save stored, as untouched. Extra foes are
+  still copies of the boss, not the DEF-364 helpers.
 - **What each member supplies is `TEAM_BUFFS` in `logic.js`**: kit lines turned into numbers,
   one entry per effect (`k` the factor, four-tier `v` or a 7-step weapon `ladder`, `per` for a
   value that grows with the supporter's own stat up to a cap, `to`, `on`/`dur` or a judged `up`,
@@ -1046,16 +1062,43 @@ damage formula (`docs/DATA-SOURCES.md`, the damage-formula section):
   with the swap, at most once every 3 rounds, setting off every Highlight trigger. The backup's
   action fills the gauge and counts as a teammate acting (an assumption, said on the page). Its
   passives are off while it waits. Courtesy (her passive 2) adds 4.5% of the backup's ATK, crit,
-  damage and Pierce to the party, like the Elucidator share. Her first lufel rotation swaps on
-  rounds 2, 6 and 11 of 12, lufel's "usually rounds 2 and 6"; the seat names the rounds. The quick
+  damage and Pierce to the party, like the Elucidator share. The seat names the swap rounds. The quick
   screen keeps the averaged backup (`tcMember(..., backup)`, `TC_SWAPS` swaps in six turns).
+  **Checked against her full text and the real save (1 Nov 2026), and four things were added.**
+  (1) *Her opening wait*: an Elucidator's skills wait her first turn (KIT_ROT `prep`, as Miku's), and
+  Mitsuru's Pre-Navigator ("decrease any Elucidator's first cooldown time by 4 actions") cuts it by a
+  turn when she is in the party (`tcPrepCut`, `tcKitRot`'s `team`; not as the backup, who arrives too
+  late). lufel's second A0 option, acting on turn 1, is that Mitsuru case, so `tmRotPick` leaves it out
+  elsewhere; before, the fit chose it everywhere. The wait happens once (`tcUnroll`): cycled as written,
+  a 6-turn rotation opening with "-" also idled round 7. A swap also needs a round to have passed (the
+  text's "once per round elapsed", JP 1ラウンド経過するごとに), so none is in round 1. Swaps now come on
+  rounds 2, 6, 10 at A0 (2, 4, 8, 12 from A1; 2, 3, 5, 6, 9, 10 at A6), `tcFuukaPlan`, which also gives
+  the quick screen its `TC_SWAPS` (it had 2 in six turns at A1, where the fight plays 4 in 12). Alone,
+  this moves a Fuuka team's number by under 1%. (2) *The backup's start-of-battle effects fire on its
+  first swap*, as her text says: TEAM_BUFFS lines tagged `start` (Koromaru's Assist, Mitsuru's A1
+  Snowbound; always on for a party member) come on then (`sim.start`, `startEvs`), its battle-start
+  Theurgy charge (TC_THEURGY: Yukari and Akihiko A1, Koromaru) is set and a full Theurgy fires at once,
+  and a battle-start Highlight-gauge fill (TC_HL_START, `tcHlStart`) lands. (3) *A Highlight's
+  permanent effect starts at the first Highlight* (`on: 'HL', dur: 99`): Kumi's DEF down, Pioneer Shun's
+  and Starlight Morgana's A4 lines had been always on from round 1 for a teammate and never counted for
+  a backup whose Highlight Fuuka's A2 fires. (4) *The backup is chosen by the fight*: the screen keeps
+  its best `TC_BACKUP_SHORT` (6) per lineup and `tcFightBackup` re-fights them for the leading
+  `TC_BACKUP_FIGHT` (4) lineups shown (0.1-0.2 s a render). Before, the screen's pick was kept: at her
+  A1 it chose Kumi for Makoto Yuki where the fight gave Yukari 7 points more. Knockdowns, which lufel's
+  Kumi entry rests on (four swaps to Down the boss, at Fuuka A6), are played out when the page is given
+  the boss's Down Points (see "Knockdowns" below); by default a boss cannot be knocked down. On the
+  real save (Fuuka A0, Kumi at 196 Speed) Kumi is the fight's best backup for all 17 damage dealers both
+  before and after: her Skill 1 puts DEF −48.8% and +39% damage taken on every foe for 3 turns in one
+  action, and none of the leading partners brings DEF down. At A2 her lead roughly doubles (her
+  Highlight's DEF down now counts on the swap).
 - **A render remembers what depends only on the save** (`tcMemo`, Oct 31 2026): the damage dealer's
   own side of every ratio (`tcEvalFor`), each member's vector (`tcMember`) and each search
   (`tcSearch`), keyed on `dataSignature()` plus the busy list, so a change made without `commit()`
   is still seen; an entry point checks the key once and runs `hot` (`tcHot`). Fuuka's backup is
   searched only for the leading `TC_BACKUP_TOP` (40) pairs, the rest of her lineups being priced
-  without one (the chosen team always gets its best backup, `tcBestBackup`; so does Fuuka offered
-  as a replacement for another Elucidator). On the real save a fresh render went from 0.9 s to
+  without one (a chosen team with no backup gets its best by the fight, `tcBestBackup`; so does Fuuka
+  offered as a replacement for another Elucidator; the leading lineups shown re-check theirs by the
+  fight, `tcFightBackup`). On the real save a fresh render went from 0.9 s to
   about 0.1 s and a repeat (a pick, "Use") to 10 ms, with every team and part unchanged. The
   Thieves Den goes into both sides of the ratio (`damageFactors`' `extra.flat`, plus its crit);
   it was in the members' stats but not the damage dealer's.
@@ -1211,6 +1254,20 @@ damage formula (`docs/DATA-SOURCES.md`, the damage-formula section):
   blank teammates no longer set off their follow-ups, so "alone" is lower, which is why a number is never
   compared across damage dealers; Toshiya 28.0× to 29.2×; Frostgale Kotone 23.0× to 21.7× (non-Wind
   allies no longer feed her Edge); Kasumi and YUI [Prism] unchanged.
+- **Kotone Shiomi's Lunar Phaseshift copies** (`TC_COPY`, Nov 2026; the user asked, "it matters which buffs she
+  copies"). Her Skill 3 on another ally copies the buffs that ally has on the Arcana Link ally (the damage dealer,
+  a Sweeper or Assassin) onto them again, at 30% for 1 turn (Global; ×1.25 from A2, which lufel's Korean and
+  Chinese text give with no condition), and from A6 Wonder's buffs too when the target is not him. The fight
+  (`tcSimRun`'s `copyCast`) reads what the teammate (or Wonder) has on the damage dealer at her cast — timed
+  buffs as they stand, always-on and gated lines (`sim.ally`, `gated[].ally`) — picks the target whose copy adds
+  most to a hit then, and puts one buff per stat on for one action; never the Elucidator (not on the field), a
+  debuff on the foe, or a line marked `noCopy` (the game's "certain special buffs" are not named, so none is yet).
+  The quick screen (`tcCopyQuick` in `tcMultiplier`) copies each member's averaged buffs (`vec.allyCopy`) at the
+  share of turns her Skill 3 covers (`vec.copyBy`), so the sweep's shortlist sees the partner too. A teammate's
+  part includes what she copies from them (the fight without them has nothing to copy); her seat lists the
+  average copy, the copied seat how often. Fortune's longer durations are still not modelled. On the real save
+  team numbers rose 0-8% and the best team changed for 3 of 16 damage dealers (Ann and Tropical Motoha to
+  Mayumi, Ren to Beachflower Minami), at no measurable cost.
 - **Shoki's Improv states** (Nov 2026): he switches state each turn, and his Skill 3 gives the main
   target crit damage (Electrifying Performance, the only one entered before), pierce (Tempestuous
   Drama), damage over time (Blazing Passion) or Technical Precision (Chilling Intensity, with its +20%
@@ -1222,6 +1279,29 @@ damage formula (`docs/DATA-SOURCES.md`, the damage-formula section):
   in his rotation. `resDm` and `dotDm` are team-buff keys now (`TC_KEYS`); only Shoki's Blazing
   Passion uses one so far, so other kits' Resonance and damage-over-time buffs in `TEAM_BUFF_SKIPS`
   can be entered.
+- **Beachflower Minami's medicines** (`TC_MEDS`, Nov 2026; the user asked which item her rotation uses).
+  lufel's rotations write her medicine turns as ⓘA/ⓘB/ⓘC with no names; lufel's review of her lists eight:
+  three free (ATK +30%, DEF +45%, damage +25%) and five bought (damage over time, Resonance, One More /
+  All-Out Attack, Highlight / Theurgy +10% each as a multiplier of its own, Technical Precision +600). Each
+  is 1 turn on one ally, 2 through Flower Basket Pharmacy (every ⓘ turn in her rotations) and 3 from A6;
+  her medicine effect increases (A1 +20%, her 5★ weapon +20-38%, `tcMedBoost`) raise them all, and
+  Blossoms by the Beach adds ATK +15% per kind held, so the three slots hold three different medicines.
+  Until then none was priced and her medicine crit-damage lines had judged uptimes; all now fire on the
+  ⓘ tokens (`tcTurnSkills` reads them as `iA`/`iB`/`iC`, `TC_MED_ON`). The choice is a `TC_PAIRS` option
+  with one entry per damage dealer (`tcMedOpts`): each medicine held all fight in the damage dealer's
+  own fight (`tcMedRank`), the best three into A, B, C. Other orders were tried in the fight and dropped:
+  a composed rotation already picks which slot each medicine turn uses, so an order only relabels, and it
+  doubled a search with her for +2% at most. The DEF and One More / All-Out Attack medicines are never
+  priced and only fill a slot. The seat and the Rotation panel name them (`tmMedsHtml`, `tmMedCell`, and
+  `tmTokenText`'s `meds`). Global's English names are not in lufel's data; they go by effect. On the real
+  save: Wavecatcher Miyu ATK / damage / Resonance, Ichigo ATK / damage / damage over time, YUI [Prism]
+  ATK / damage / Resonance (lufel's partner note says All-Out Attack, which is not priced), Yusuke (a DEF
+  kit) damage / Resonance / Highlight, most others damage / ATK / Highlight. Her best team rose 5-10%
+  (Wavecatcher Miyu 15.4× to 16.6×, Ann 18.8× to 20.3×, Ren 18.9× to 20.5×) and now leads for Miyu and
+  Ann over Mayumi's; the search took no longer. The ranking is the damage dealer's fight alone; the team
+  is the composer's to weigh: in Miyu's best team (Kotone adds +143% ATK) her rotation puts the Resonance
+  medicine on most medicine turns and never uses the ATK one, which the list under it says. With composing
+  off, lufel's ⓘA turns play the ranking's first.
 - **Kira's Bleed counts its Almighty part** (Nov 2026): 1% of the target's max HP per stack a turn,
   capped at 60% of his ATK (×1.5 from A1), entered at the cap since a boss always reaches it. Only
   lufel's Korean and Chinese text print the cap; the English and Japanese do not, so Global having it
@@ -1296,11 +1376,38 @@ damage formula (`docs/DATA-SOURCES.md`, the damage-formula section):
   Technical Precision Mio adds to Rin's Fireburn was nearly all diluted by her other bonuses. Not priced: Windburn,
   Short Circuit, Deepfreeze, Freeze and Shock as Technical triggers for Mio's weapon, Happy New Year!'s
   51% (kept at 42%).
+- **Knockdowns: the boss's Down gauge** (Nov 2026; the user asked, and answered the rules from play).
+  `#tmDown` (a pref, in `tcAssumeKey`) is the boss's Down Points as its gauge shows them; 0, the default,
+  is a boss that cannot be knocked down, since most cannot. The fight (`downAct`, `downHl`, `knock` in
+  `tcSimRun`): every skill use that hits the boss's weakness removes 1 however many hits it has (the
+  user: "1 per skill"); a damaging Highlight or Theurgy and Wonder's attack turn count the same (assumed);
+  the reference fight's blank teammates remove nothing (with them attacking, the damage dealer alone was
+  knocked down more often than with a team of buffers, which read against their own Down bonuses);
+  follow-ups, Resonance and damage over time remove nothing. Kumi's Lightning Legs is a state
+  (`TC_DOWN_STATE`): her Skill 3 knockdown opens it for her next 2 actions and her next Skill 1 or 2 uses
+  it; lines, cuts and bonuses with `state` count only in it. A cut with `next` (Riko's Insight, Mayumi's
+  Highlight) waits for the next ally hit that deals damage; `afterHl` holds a line until its owner's first
+  Highlight (Kumi's A4); a teammate's turn tokens ("Special", "Punch") fire their lines as the damage
+  dealer's do. A KIT_STAT_BUFFS line with `needDown` stays in the stats but out of the fight's baseline,
+  where a knockdown-triggered line replaces it (Kumi's Role Model, a stack per knockdown she makes). `TC_DOWN_CUT` is a kit's
+  cut "regardless of affinity" — that many in place of the 1 when larger, or on top with `extra`, `step`
+  for one whole turn (Kotone Shiomi's Skill 2 in her Fortune burst), `maxCut` on 'knockSelf' for a lower
+  maximum. At 0 the boss is knocked down until its own turn at the end of the round, **which it still
+  takes** (the user), then gets up with its gauge full; so a knockdown helps only the hits after it in
+  that round, plus what it sets off. TEAM_BUFFS lines with `down: true` count only while it is down (a
+  constant one in `downX`, a cast one as a buff flagged `down`), `on: 'knock'` lines fire on any knockdown
+  for members on the field and `'knockSelf'` for the knocker (with `stackMax`); DPS_KIT and DPS_KIT_BONUS
+  entries take `down` and `after: 'knockSelf'`; the damage dealer's own stats against a downed foe are
+  KIT_STAT_BUFFS lines with `down: true, fight: true` (`downSelf`), never in their stats. "Damage taken
+  while knocked down" is a multiplier of its own (`downDm`, lufel's damage article ⓗ). The quick screen
+  leaves every such line at 0 and the fight prices the leaders. The fight note gives the knockdown rounds.
+  The kit lines came from one research pass over the 20 kits whose lufel text mentions Down (two batches,
+  one brief, hand-reviewed); All-Out Attacks, Dizzy and Wonder's Personas are not entered.
 - **Not priced, and the page says so**: other extra actions (Narumi's for Wonder, Mayumi's own) and
-  Wonder's own damage, weakness creation, Down/Technical (beyond the ailment readers and the Technicals above), Wonder's own
-  ailments, the boss's ailment resistance, kit bonuses that hang on the boss's HP, the damage dealer's own HP, Down
+  Wonder's own damage, weakness creation, All-Out Attacks and Dizzy, Technicals (beyond the ailment readers and the Technicals above), Wonder's own
+  ailments, the boss's ailment resistance, kit bonuses that hang on the boss's HP, the damage dealer's own HP
   or a specific teammate (what is left in `DPS_KIT_SKIPS`), always-crit and DEF-ignoring components,
-  healing and survival, buffs copied from other buffs, and a supporter's Theurgy gauge from teammates. The number ranks teams
+  healing and survival, buffs copied from other buffs (other than Kotone Shiomi's Lunar Phaseshift), and a supporter's Theurgy gauge from teammates. The number ranks teams
   for one damage dealer; it is not a damage forecast and is never compared across damage dealers.
   Moving from averaged uptimes to the fight took most real-save numbers 5-15% down (the gauge cannot
   give every member a Highlight every 4 turns, and the first round has none) and moved a few teams
@@ -1320,6 +1427,10 @@ damage formula (`docs/DATA-SOURCES.md`, the damage-formula section):
     counters through `ally` are judged rates). **Rules say what is possible, never what is good.** A test
     holds every lufel rotation legal under them, each at its own Awareness; a lufel option that cannot be
     legal means the rule is wrong. `tcKitRot` merges the blocks, `tcRotWalk`/`tcRotStep` play a rotation.
+    The one team-dependent rule is an Elucidator's opening wait (`prep`: Fuuka, Miku, Manaka), one turn
+    shorter with Mitsuru in the party (`tcKitRot`'s `team`); an option legal only with her (Fuuka's second
+    A0 option) is legal for the test with her, and `tmRotPick` offers it only in her teams. The wait is
+    played once, not once per cycle of a rotation (`tcUnroll`).
   - **SP refill is not known** (nothing publishes it; the user did not know), so lufel's rotations stand in
     for it: no more SP per turn, by lufel's SP costs (`SKILL_DMG` `sp`, Korean where the English lacks one;
     none is an HP skill), than the costliest of lufel's options at that Awareness, nor further ahead of
