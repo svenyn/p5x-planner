@@ -2613,6 +2613,11 @@ function awarenessOverrideDrift() {
   check('Disconnect hands the header back to files', await p.evaluate(() => !syncOn() && /Download/.test(document.getElementById('hdrSave').title)));
   await p.unroute('https://api.github.com/**');
 
+  // The Teams tests below were written for lufel's rotations fitted to the team; composing them from
+  // the kits (on by default) has its own section after them, which switches it on again.
+  check('composing rotations from the kits is on by default', await p.evaluate(() => $('#tmRotCompose').checked && !$('#tmRotCompose').disabled));
+  await p.evaluate(() => { $('#tmRotCompose').checked = false; });
+
   // ---- Teams tab: lufel's parties filled from what is owned, rotations, Fuuka's backup ----
   const tmData = await p.evaluate(() => {
     const bad = [];
@@ -2830,7 +2835,7 @@ function awarenessOverrideDrift() {
     out.dacapo = [manaka(12), manaka(6)];
     setF(12);
     // Wonder's Highlight: from his Persona whose Highlight does most
-    const real = WONDER_BUFFS, keepW = state.wonder;
+    const real = Object.assign({}, WONDER_BUFFS), keepW = state.wonder;
     Object.assign(WONDER_BUFFS, { personas: { P: [{ k: 'dmg', v: 30, to: 'party', src: 'HL', dur: 2, why: 'p' }], Q: [{ k: 'dmg', v: 10, to: 'party', src: 'HL', dur: 2, why: 'q' }] }, cards: {}, weapons: {} });
     const slot = n => ({ name: n, cards: ['', '', ''] });
     const w = tcWonder(ann, { personas: [slot('Q'), slot('P'), slot('')], weapon: '', refine: 1 });
@@ -2872,7 +2877,7 @@ function awarenessOverrideDrift() {
     // the gauge: 21% for an action that hits, 17% for one that does not
     out.hits = [tcStepHits('Ann Takamaki', '1'), tcStepHits('Ayaka Sakai', '2'), tcStepHits('Haru Okumura', 'Gunshot'), tcStepHits('Wonder', '-'), tcStepHits('Wonder', 'w0')];
     // Wonder casts turn by turn: a 2-turn card he casts every other turn, attacks between
-    const real2 = WONDER_BUFFS, keepW2 = state.wonder;
+    const real2 = Object.assign({}, WONDER_BUFFS), keepW2 = state.wonder;
     Object.assign(WONDER_BUFFS, { personas: { P: [] }, cards: { A: [{ k: 'atk%', v: 30, to: 'party', src: 'card', dur: 2, why: 'a' }] }, weapons: {} });
     const ws = tcWonder(ann, { personas: [{ name: 'P', cards: ['A', '', ''] }, { name: '', cards: ['', '', ''] }, { name: '', cards: ['', '', ''] }], weapon: '', refine: 1 });
     Object.assign(WONDER_BUFFS, real2); state.wonder = keepW2; tcMemo.key = '';
@@ -2960,10 +2965,113 @@ function awarenessOverrideDrift() {
     const aw1 = almRun(true), aw0 = almRun(false);
     out.alm = { almighty: aw1.parts.hit / aw1.base.parts.hit, normal: aw0.parts.hit / aw0.base.parts.hit, skills: ['Goro Akechi', 'Ren Amamiya [Starlight]'].map(n => (SKILL_DMG[n].alm || []).join('')) };
     DPS_KIT[ann.n] = keepDK; setSel('#tmWeak', 'boss');
+    // gen-skill-damage.js FIXES: hits on the same foe at a reduced share, alternative casts, a tick that is not the cast
+    const sd = (n, i) => SKILL_DMG[n].d[i];
+    out.skillFix = { shun: sd('Shun Kano [Pioneer]', 0), morgana: sd('Morgana [Starlight]', 2), mio: sd('Mio Natsukawa', 2), kiyoshi: sd('Kiyoshi Kurotani', 1), yui: sd('YUI', 1),
+      yuiBonus: (DPS_KIT_BONUS.YUI || []).filter(b => b.to === 'skill:2').map(b => b.v).join(','),
+      flame: (DPS_KIT['Kiyoshi Kurotani'] || []).filter(c => c.kind === 'dot' && c.on === 'round' && c.after === '2').length };
+    // a buff for 4+-hit skills reaches only those; a skill that counts as continuous damage takes DoT buffs
+    const keepH = DPS_HITS[ann.n], keepCA = DPS_COUNTS_AS[ann.n];
+    const hitRun = (hits, list, as) => { DPS_HITS[ann.n] = hits; DPS_COUNTS_AS[ann.n] = as; return ryu(list); };
+    const mh = [{ k: 'atk%', v: 50, to: 'party', src: 'passive', minHits: 4, why: 'test: 4+ hits only' }];
+    const dotB = k => [{ k, v: 50, to: 'party', src: 'passive', why: 'test: continuous damage' }];
+    const r1 = hitRun([1, 1, 1, 1], mh), r4 = hitRun([4, 4, 4, 4], mh);
+    const d0 = hitRun([1, 1, 1, 1], dotB('dotDm')), d1 = hitRun([1, 1, 1, 1], dotB('dotDm'), [{ as: 'dot', skills: ['1', '2', '3'], why: 't' }]);
+    const f1 = hitRun([1, 1, 1, 1], dotB('dotFinal'), [{ as: 'dot', skills: ['1', '2', '3'], why: 't' }]);
+    out.hitsAs = { fewHits: r1.parts.skill / r1.base.parts.skill, manyHits: r4.parts.skill / r4.base.parts.skill,
+      dotNo: d0.parts.skill / d0.base.parts.skill, dotYes: d1.parts.skill / d1.base.parts.skill, dotFinal: f1.parts.skill / f1.base.parts.skill };
+    DPS_HITS[ann.n] = keepH; DPS_COUNTS_AS[ann.n] = keepCA; tcMemo.key = '';
+    // a passive that works in reserve counts whatever Persona is in use; one that does not, only while in use
+    WONDER_BUFFS.personas.TestR = [{ k: 'atk%', v: 10, to: 'party', src: 'passive', reserve: true, why: 't' }];
+    WONDER_BUFFS.personas.TestN = [{ k: 'atk%', v: 10, to: 'party', src: 'passive', why: 't' }];
+    const sl = n => ({ name: n, cards: ['', '', ''] });
+    const upOfP = n => { const w = tcWonder(ann, { personas: [sl('Gabriel'), sl(n), sl('')], weapon: '', refine: 1 }); const l = w.lines.find(x => x.why.startsWith(n)); return l ? l.up : 0; };
+    out.reserve = [upOfP('TestR'), upOfP('TestN')];
+    delete WONDER_BUFFS.personas.TestR; delete WONDER_BUFFS.personas.TestN;
+    // elemental ailments on the boss: a teammate's skill inflicts them, a line reads the count
+    const keepAilX = TC_AILMENTS['Ryuji Sakamoto'], keepAilA = TC_AILMENTS[ann.n], keepKbA = DPS_KIT_BONUS[ann.n];
+    // her own Fireburn reads a Burning foe, and the test's ailments are random kinds: kept out of this check
+    TC_AILMENTS[ann.n] = []; DPS_KIT_BONUS[ann.n] = [];
+    const perAilX = [{ k: 'dmg', v: 20, to: 'party', src: 'passive', perAil: 3, why: 'test: per ailment' }];
+    TC_AILMENTS['Ryuji Sakamoto'] = [];
+    const a0X = ryu(perAilX);
+    TC_AILMENTS['Ryuji Sakamoto'] = [{ on: '1', n: 2, type: 'any', dur: 1, why: 't' }];
+    const a2X = ryu(perAilX), m2X = ryu([{ k: 'dmg', v: 20, to: 'party', src: 'passive', ailMin: 2, why: 't' }]), m3X = ryu([{ k: 'dmg', v: 20, to: 'party', src: 'passive', ailMin: 3, why: 't' }]), noneXX = ryu([]);
+    /* Technicals: a line needing a Burning foe counts only once someone Burns it; Technical Precision scales
+       Iceburn-type lines by 1 + TP/2000 and Fireburn-type bonuses by 1 + TP/1000 (lufel's guide) */
+    TC_AILMENTS['Ryuji Sakamoto'] = [];
+    const needX = (v, tech) => ({ k: 'dmg', v, to: 'enemy', src: '1', on: '1', dur: 2, needAil: 'Burn', tech, why: 'test: on a Burning foe' });
+    const tpX = { k: 'tp', v: 1000, to: 'enemy', src: '1', on: '1', dur: 2, why: 'test: Technical Precision' };
+    const tNoBurn = ryu([needX(40)]).mult;
+    TC_AILMENTS['Ryuji Sakamoto'] = [{ on: '1', n: 1, type: 'Burn', dur: 3, why: 't' }];
+    const tBurn = ryu([needX(40)]).mult, tBare = ryu([]).mult, tTaken = ryu([needX(40, 'taken'), tpX]).mult, tPlain60 = ryu([needX(60)]).mult;
+    DPS_KIT_BONUS[ann.n] = [{ to: 'skill', v: 20, needAil: 'Burn', tech: 'fire', why: 't' }];
+    const fb = ryu([tpX]), fbSkill = fb.parts.skill / fb.base.parts.skill;
+    DPS_KIT_BONUS[ann.n] = [{ to: 'skill', v: 40, needAil: 'Burn', why: 't' }];
+    const fb40 = ryu([]), fb40Skill = fb40.parts.skill / fb40.base.parts.skill;
+    // Fireburn as a multiplier of its own (`amp`): ×1.2, ×1.4 at 1000 points
+    DPS_KIT_BONUS[ann.n] = [{ to: 'skill', v: 20, needAil: 'Burn', tech: 'fire', amp: true, why: 't' }];
+    const fa = ryu([tpX]), faSkill = fa.parts.skill / fa.base.parts.skill;
+    DPS_KIT_BONUS[ann.n] = [{ to: 'skill', v: 40, needAil: 'Burn', amp: true, why: 't' }];
+    const fa40 = ryu([]), fa40Skill = fa40.parts.skill / fa40.base.parts.skill;
+    TC_AILMENTS['Ryuji Sakamoto'] = keepAilX; TC_AILMENTS[ann.n] = keepAilA; DPS_KIT_BONUS[ann.n] = keepKbA; tcMemo.key = '';
+    // the quick screen: Mio's Technical lines wait for a Burning foe, which a member's `burn` share supplies
+    const rinX = charDef('Yaoling Li [Firecracker]'), vMio = tcMember(rinX, 'Mio Natsukawa', null, null).vec, burnOnly = { burn: 1 };
+    /* Rin below Awareness 2 Burns only with Skill 2, which lufel's rotations never cast: the fit may put it on (TC_ROT_ADD),
+       her Prosperity in Red counts in the fight only on a Burning foe, and Mio's rotation is fitted to meet the Burn */
+    const keepRinLo = state.chars[rinX.n].loadout;
+    const rinAt = aw => { state.chars[rinX.n].loadout = Object.assign({}, charLoadout(rinX.n), { awareness: aw }); tcMemo.key = ''; tcMemoFor(); };
+    const twos = aw => { rinAt(aw); const r = tmRotPick(rinX.n, new Set([rinX.n])); return tcRotVariants(r, rinX.n).map(v => v.seq.filter(t => t === '2').length); };
+    const tw0 = twos(0), tw2 = twos(2);
+    rinAt(0);
+    const prosp = { stats: kitStatBuffs(rinX, null).some(b => b.needAil === 'Burn' && b.v === 36), baseline: kitStatBuffs(rinX, Object.assign({}, charLoadout(rinX.n), { noTimed: true })).some(b => b.v === 36 && b.s === 'Damage Multiplier'),
+      ailSelf: tcSimPrep(rinX, [null, null, null], false, true).ailSelf.some(c => c.k === 'dm' && c.v === 36 && c.needAil === 'Burn') };
+    const mioFit = tcSim(rinX, ['Mio Natsukawa', null, null], true);
+    const keepMioB = TEAM_BUFFS['Mio Natsukawa'];
+    TEAM_BUFFS['Mio Natsukawa'] = keepMioB.filter(e => !e.needAil); tcMemo.key = ''; tcMemoFor();
+    const mioNoBurn = tcSim(rinX, ['Mio Natsukawa', null, null], true);
+    TEAM_BUFFS['Mio Natsukawa'] = keepMioB; state.chars[rinX.n].loadout = keepRinLo; tcMemo.key = '';
+    out.rinA0 = { tw0: Math.max(...tw0), tw2: Math.max(...tw2), any0: tw0.some(n => n > 0), prosp, rin: mioFit.dpsRot ? mioFit.dpsRot.seq.join(' ') : 'lufel', mio: (mioFit.fits || {})['Mio Natsukawa'] ? 'fitted' : 'none', with: mioFit.mult, without: mioNoBurn.mult };
+    const needs = [].concat(...Object.values(TEAM_BUFFS).map(l => l.filter(e => e.needAil).map(e => e.needAil)), ...Object.values(DPS_KIT_BONUS).map(l => l.filter(b => b.needAil).map(b => b.needAil)));
+    out.tech = { noBurn: tNoBurn, burn: tBurn, bare: tBare, taken: tTaken, plain60: tPlain60, fb: fbSkill, fb40: fb40Skill, fa: faSkill, fa40: fa40Skill,
+      fireAmp: Object.entries(DPS_KIT_BONUS).flatMap(([n, l]) => l.filter(b => b.tech === 'fire').map(b => n + ':' + !!b.amp)),
+      guide: [68.1 * (1 + tcTechScale('taken', 1000)), 68.1 * (1 + tcTechScale('taken', 1343)), 20 * (1 + tcTechScale('fire', 1000))],
+      mioNeed: vMio.need.map(n => n.k + (n.tech ? ':' + n.tech : '')).join(','),
+      screen: { mio: tcMultiplier(rinX, [vMio]), burn: tcMultiplier(rinX, [burnOnly]), both: tcMultiplier(rinX, [vMio, burnOnly]) },
+      scaldAlone: tcBurnSupply('Mio Natsukawa', ['1', '3']), koromaru: tcBurnSupply('Koromaru', ['1']),
+      users: [...TC_TECH_USERS].filter(n => !charDef(n)), badNeed: needs.filter(a => !TC_AIL_TYPES.includes(a)), nNeed: needs.length };
+    const qAloneXX = tcSimRun(tcSimPrep(mak, [null, null, null], false, true), [mak.n], false), qVinoX = tcSim(mak, ['Chizuko Nagao', null, null], false);
+    out.ail = { none: a0X.mult, with: a2X.mult, mean: a2X.ailMean, min2: m2X.mult, min3: m3X.mult, bare: noneXX.mult, queenAlone: qAloneXX.ailMean, queenVino: qVinoX.ailMean,
+      chief: (TC_AIL_SELF[mak.n] || []).some(c => c.k === 'atkPct' && c.v === 15), sources: Object.keys(TC_AILMENTS).length,
+      bad: Object.entries(TC_AILMENTS).filter(([n, l]) => !charDef(n) || l.some(x => !x.why || !x.on || !(x.type === 'any' || TC_AIL_TYPES.includes(x.type) || x.type === 'Radiation' || Array.isArray(x.type)))).map(([n]) => n) };
+    // Wonder acts just before the damage dealer until his Speed is entered
+    const wSpdX = () => { tcMemo.key = ''; const P = tcSimPrep(ann, ['Ryuji Sakamoto', null, null], false, false); const w = P.thieves.find(a => a.n === 'Wonder'); return [w.speed - P.dps.speed, P.thieves.indexOf(w) < P.thieves.indexOf(P.dps)]; };
+    const keepWSX = state.wonderSpd;
+    state.wonderSpd = 0; out.wonderSpd = { unset: wSpdX() };
+    state.wonderSpd = 1; out.wonderSpd.slow = wSpdX();
+    state.wonderSpd = keepWSX; tcMemo.key = '';
+    // his casts go on the damage dealer's heavy turns: Sraosha's on Kasumi's Highlight turns (3 and 6)
+    const kasX = charDef('Kasumi Yoshizawa'), oneX = k => ({ personas: [{ name: k, cards: ['', '', ''] }, { name: '', cards: ['', '', ''] }, { name: '', cards: ['', '', ''] }], weapon: '', refine: 1 });
+    out.sraosha = { seq: tcWonder(kasX, oneX('Sraosha')).sim.cast.seq.join(','), kasRot: (TEAMS[kasX.n].rot[0] || {}).seq.join(','),
+      stacks: tcWonder(kasX, oneX('Sraosha')).lines.filter(l => l.k === 'dm' && /God/.test(l.why)).map(l => l.v).join(',') };
+    // Sahimochi-no-Kami: Resonance's own multiplier, and Serrated stacks only for a damage dealer whose Resonance fires
+    const keepDK2X = DPS_KIT[ann.n];
+    DPS_KIT[ann.n] = [{ kind: 'res', v: 100, on: 'self', why: 't' }];
+    const rfX = ryu([{ k: 'resFinal', v: 50, to: 'party', src: 'passive', why: 't' }]);
+    DPS_KIT[ann.n] = keepDK2X; tcMemo.key = '';
+    const miyuX = charDef('Miyu Sahara [Wavecatcher]');
+    const serrX = d => tcWonder(d, oneX('Sahimochi-no-Kami')).lines.some(l => /Serrated/.test(l.why));
+    out.sahimochi = { resFinal: rfX.parts.res / rfX.base.parts.res, key: (WONDER_BUFFS.personas['Sahimochi-no-Kami'] || []).some(e => e.k === 'resFinal'), miyu: serrX(miyuX), ann: serrX(ann) };
+    // Pazuzu keeps the foe Cursed, which Toshiya's The Other Prison reads
+    const tosX = charDef('Toshiya Sumi'), cbX = tcKitBonusFor(tosX);
+    const cvX = l => l.filter(b => b.curse).reduce((x, b) => x + b.val, 0);
+    out.pazuzu = { lines: (WONDER_BUFFS.personas.Pazuzu || []).map(e => e.k).join(','), offered: wonderPersonas().includes('Pazuzu'), base: cvX(cbX), with: cvX(tcCurseBonus(cbX, 84)), full: cvX(tcCurseBonus(cbX, 100)) };
     TEAMS['Ryuji Sakamoto'] = keepR; TEAM_BUFFS['Ryuji Sakamoto'] = keepRB2; tcMemo.key = '';
     // Shoki's Improv states, chosen like the twins' masks
     const sho = id => tcMemberCalc(ann, 'Shoki Ikenami', null, null, false, id).lines.filter(l => /Improvise \(Skill 3\) in/.test(l.why)).map(l => l.k).join(',');
-    out.shoki = { ids: TC_PAIRS['Shoki Ikenami'].map(o => o.id).join(','), E: sho('E'), T: sho('T'), B: sho('B') };
+    out.shoki = { ids: TC_PAIRS['Shoki Ikenami'].map(o => o.id).join(','), E: sho('E'), T: sho('T'), B: sho('B'), C: sho('C'),
+      // Chilling Intensity's ATK needs a damage dealer whose kit activates Technicals (Ann's does, Ryuji's not)
+      Cnon: tcMemberCalc(charDef('Ryuji Sakamoto'), 'Shoki Ikenami', null, null, false, 'C').lines.filter(l => /Chilling Intensity/.test(l.why)).map(l => l.k).join(',') };
     // the damage dealer's own damage bonuses: on the hits they name, in their window, added or multiplied
     const keepKB = DPS_KIT_BONUS[ann.n], keepAR = TEAMS[ann.n], keepAS = SKILL_DMG[ann.n];
     SKILL_DMG[ann.n] = { hl: 'HL', cd: 4, d: [100, 100, 100, 200] };
@@ -3006,6 +3114,18 @@ function awarenessOverrideDrift() {
     const free = tcSim(ann, jcTeam, false);
     out.pairs = { ids: TC_PAIRS[JC].map(o => o.id).join(','), MA: lineKs('MA'), MS: lineKs('MS'), SL: lineKs('SL'),
       best: Math.abs(free.mult - Math.max(...forced)) < 1e-9 && !!TC_PAIRS[JC].find(o => o.id === free.pairs[JC]) && Math.abs(forced[TC_PAIRS[JC].findIndex(o => o.id === free.pairs[JC])] - free.mult) < 1e-9 };
+    // Wonder: a Persona's innate skills count as the card of that name; the suggestion is three Personas
+    // and no cards; one skill from two sources counts once; his six turns name the Persona and the skill
+    const slotW = n => ({ name: n, cards: ['', '', ''] });
+    const kou = tcWonder(ann, { personas: [slotW('Koumokuten'), slotW(''), slotW('')], weapon: '', refine: 1 });
+    const two = tcWonder(ann, { personas: [slotW('Apsaras'), slotW('Succubus'), slotW('')], weapon: '', refine: 1 });
+    tcMemo.key = '';
+    const sug = tcWonderBest(ann, []);
+    out.wonder3 = { innate: (WONDER_INNATE['Koumokuten'] || []).includes('Auto-Mataru III') && kou.lines.some(l => /Auto-Mataru III \(innate\)/.test(l.why)),
+      sugN: sug.personas.filter(p => p.name).length, sugCards: sug.personas.some(p => p.cards.some(Boolean)), adds: (sug.adds || []).length,
+      rebellion: two.lines.filter(l => /Rebellion/.test(l.why)).length, once: two.idle.some(x => /the same buff as/.test(x)),
+      turns: kou.turns.length === 6 && kou.turns.every(t => t.persona === 'Koumokuten'),
+      listed: wonderPersonas().includes('Kodama') && wonderPersonas().includes('Ose') };
     // Kira's Bleed: its Almighty part at the cap (60% of ATK a stack) makes damage over time most of his damage
     const kira = charDef('Kira Kitazato'); tcMemo.key = '';
     const kp = tcSimRun(tcSimPrep(kira, [null, null, null], false, true), [kira.n], false).parts;
@@ -3090,8 +3210,37 @@ function awarenessOverrideDrift() {
     th.oneConst[0] < th.oneConst[1] - 1e-6, JSON.stringify(th.oneConst));
   check('Almighty damage takes no weakness bonus (a teammate\'s weakness-damage buff leaves it alone); SKILL_DMG marks Akechi\'s and Starlight Ren\'s Almighty skills',
     Math.abs(th.alm.almighty - 1) < 1e-9 && th.alm.normal > 1.05 && th.alm.skills[0] === '0011' && th.alm.skills[1] === '0010', JSON.stringify(th.alm));
-  check('Shoki\'s Improv states give the main target crit damage, pierce or damage over time, one per state',
-    th.shoki.ids === 'E,T,B' && th.shoki.E === 'cm' && th.shoki.T === 'pierce' && th.shoki.B === 'dotDm', JSON.stringify(th.shoki));
+  check('SKILL_DMG FIXES: Pioneer Shun\'s Skill 1 is one boss\'s 83 (later hits 20%), Starlight Morgana\'s "3" half Waltz and half Crash! (72.7), Mio\'s Skill 3 between her two casts, Kiyoshi\'s Skill 2 without its Sacred Flame tick (a dot instead), YUI\'s Meta Dynamite +25% priced once (as a bonus)',
+    th.skillFix.shun === 83 && th.skillFix.morgana === 72.7 && th.skillFix.mio === 120.8 && th.skillFix.kiyoshi === 20.2 && th.skillFix.yui === 59.6 &&
+    th.skillFix.yuiBonus === '25' && th.skillFix.flame >= 1, JSON.stringify(th.skillFix));
+  check('a 4+-hit buff reaches only skills that hit that often; continuous-damage buffs reach skills that count as continuous damage, the separate multiplier exactly; a reserve passive counts while another Persona is in use',
+    Math.abs(th.hitsAs.fewHits - 1) < 1e-9 && th.hitsAs.manyHits > 1.05 && Math.abs(th.hitsAs.dotNo - 1) < 1e-9 && th.hitsAs.dotYes > 1.05 && Math.abs(th.hitsAs.dotFinal - 1.5) < 1e-6 &&
+    th.reserve[0] > th.reserve[1], JSON.stringify({ h: th.hitsAs, r: th.reserve }));
+  check('elemental ailments: a teammate\'s skill puts them on the boss, a per-ailment line grows with them, an ailMin line needs that many; Queen\'s Chief Strategist reads them, and Chizuko keeps more on the boss than Queen alone',
+    th.ail.with > th.ail.none + 1e-6 && Math.abs(th.ail.none - th.ail.bare) < 1e-9 && th.ail.mean >= 1.5 && th.ail.min2 > th.ail.bare + 1e-6 && Math.abs(th.ail.min3 - th.ail.bare) < 1e-9 &&
+    th.ail.chief && th.ail.queenVino > th.ail.queenAlone && th.ail.sources >= 25 && !th.ail.bad.length, JSON.stringify(th.ail));
+  check('Technicals: a line needing a Burning foe does nothing until a teammate Burns it; Technical Precision raises an Iceburn-type line by 1 + TP/2000 and a Fireburn-type bonus by 1 + TP/1000, matching lufel\'s guide (Cold Flames 68.1% → 102.15% at 1000, 113.9% at 1343; Rin\'s Fireburn 20% → 40%)',
+    near(th.tech.noBurn, 1, 1e-9) && th.tech.burn > 1.05 && near(th.tech.bare, 1, 1e-9) && near(th.tech.taken, th.tech.plain60, 1e-9) && th.tech.fb > 1.05 && near(th.tech.fb, th.tech.fb40, 1e-9) &&
+    near(th.tech.guide[0], 102.15, 1e-9) && Math.abs(th.tech.guide[1] - 113.9) < 0.1 && near(th.tech.guide[2], 40, 1e-9), JSON.stringify(th.tech));
+  check('Mio\'s Scald, Cold Flames and weapon wait for a Burning foe on the quick screen too (a member who Burns brings them in), her Scald only renews a Burn, and every needAil names an elemental ailment; Fireburn is a multiplier of its own (×1.2 grows to exactly ×1.4 at 1000 points, beating the same 40% added into ⓑ) on every kit that has it',
+    th.tech.mioNeed.includes('tp') && th.tech.mioNeed.includes('dm:taken') &&
+    near(th.tech.fa, th.tech.fa40, 1e-9) && th.tech.fa > th.tech.fb + 0.01 && th.tech.fireAmp.length >= 6 && th.tech.fireAmp.every(x => x.endsWith(':true')) && th.tech.screen.both / th.tech.screen.burn > th.tech.screen.mio + 0.05 && th.tech.screen.burn > 1 &&
+    th.tech.scaldAlone === 0 && th.tech.koromaru > 0.9 && !th.tech.users.length && !th.tech.badNeed.length && th.tech.nNeed >= 10, JSON.stringify(th.tech));
+  check('Firecracker Rin below Awareness 2: the fit may cast Skill 2 (her only Burn) on up to 2 of 6 turns, never from Awareness 2; Prosperity in Red stays in her stats but leaves the fight\'s baseline for its Burn-gated line; beside Mio the fight puts the Burn on and fits Mio to it, and her Burn lines are worth a real share',
+    th.rinA0.any0 && th.rinA0.tw0 <= 2 && th.rinA0.tw2 === 0 && th.rinA0.prosp.stats && !th.rinA0.prosp.baseline && th.rinA0.prosp.ailSelf &&
+    th.rinA0.rin.includes('2') && th.rinA0.mio === 'fitted' && th.rinA0.with > th.rinA0.without * 1.1, JSON.stringify(th.rinA0));
+  check('Wonder acts just before the damage dealer while his Speed is unset, and by the entered Speed once set',
+    th.wonderSpd.unset[1] && th.wonderSpd.unset[0] > 0 && th.wonderSpd.unset[0] < 0.1 && !th.wonderSpd.slow[1], JSON.stringify(th.wonderSpd));
+  check('Wonder\'s casts are placed on the damage dealer\'s heavy turns: Sraosha\'s unique on Kasumi\'s Highlight turns 3 and 6, its God\'s Ear stacks full (3) for her',
+    th.sraosha.kasRot.split(',')[2].includes('HL') && th.sraosha.kasRot.split(',')[5].includes('HL') && th.sraosha.seq.split(',')[2] === 'w0' && th.sraosha.seq.split(',')[5] === 'w0' && th.sraosha.stacks === '18', JSON.stringify(th.sraosha));
+  check('Sahimochi-no-Kami: its Resonance amplification multiplies Resonance damage exactly (a separate multiplier), and its Serrated stacks count only for a damage dealer whose Resonance fires',
+    Math.abs(th.sahimochi.resFinal - 1.5) < 1e-6 && th.sahimochi.key && th.sahimochi.miyu && !th.sahimochi.ann, JSON.stringify(th.sahimochi));
+  check('Pazuzu is offered and keeps the foe Cursed: Toshiya\'s Cursed-foe bonus rises with it, to the full bonus when the Curse never lapses',
+    th.pazuzu.lines === 'curse' && th.pazuzu.offered && th.pazuzu.with > th.pazuzu.base && Math.abs(th.pazuzu.full - 50) < 1e-6, JSON.stringify(th.pazuzu));
+  check('Shoki\'s Improv states give the main target crit damage, pierce, damage over time or Technical Precision, one per state; Chilling Intensity\'s ATK only for a kit that activates Technicals',
+    th.shoki.ids === 'E,T,B,C' && th.shoki.E === 'cm' && th.shoki.T === 'pierce' && th.shoki.B === 'dotDm' && th.shoki.C === 'tp,atkPct' && th.shoki.Cnon === 'tp', JSON.stringify(th.shoki));
+  check('Wonder: innate skills count as their card, the suggestion is three Personas with no skill cards, a skill from two sources counts once, and his six turns name the Persona',
+    th.wonder3.innate && th.wonder3.sugN === 3 && !th.wonder3.sugCards && th.wonder3.adds === 3 && th.wonder3.once && th.wonder3.turns && th.wonder3.listed, JSON.stringify(th.wonder3));
   check('Kira\'s Bleed counts its Almighty part at the cap (60% of ATK a stack, no crit), so damage over time is most of his damage',
     th.kira.entry && th.kira.dot > 0.45, JSON.stringify(th.kira));
 
@@ -3100,7 +3249,7 @@ function awarenessOverrideDrift() {
     const ann = charDef('Ann Takamaki');
     const keep = state.wonder;
     const fake = { personas: {}, cards: {}, weapons: {} };
-    const real = WONDER_BUFFS;
+    const real = Object.assign({}, WONDER_BUFFS);
     const out = {};
     // three 2-turn cards ask for 9 actions in 6: each is up two-thirds of the time
     const card = (k, v) => [{ k, v, to: 'party', src: 'card', dur: 2, why: 't' }];
@@ -3306,6 +3455,115 @@ function awarenessOverrideDrift() {
     !tcBusy.after.includes(tcBusy.before[0]) && tcBusy.after.slice(0, 3).every(Boolean) &&
     !!tcBusy.kept[0] && tcBusy.kept[0] !== tcBusy.chosen[0] && tcBusy.kept[1] === tcBusy.chosen[1] && tcBusy.kept[2] === tcBusy.chosen[2],
     JSON.stringify(tcBusy));
+
+  // ---- rotations composed from the kits (KIT_ROT, tcCompose) ----
+  const kr = await p.evaluate(() => {
+    const out = { missing: [], noWhy: [], illegal: [], badPiece: [], badAw: [] };
+    // every piece of a turn the fight reads: lufel's own pieces, plain skill digits, and Highlights
+    const pieces = new Set();
+    Object.values(TEAMS).forEach(T => (T.rot || []).forEach(o => o.seq.forEach(t => t.split('+').forEach(x => pieces.add(x.trim())))));
+    const readable = x => pieces.has(x) || /^[1-3]+↺?$/.test(x) || /^[1-3]×\d+$/.test(x) || /^\d*HL(×\d+)?$/.test(x);
+    for (const c of CHARACTERS) {
+      const K = KIT_ROT[c.n];
+      if (!K) { out.missing.push(c.n); continue; }
+      if (!K.why) out.noWhy.push(c.n);
+      Object.keys(K.aw || {}).forEach(l => { if (!(+l >= 1 && +l <= 6)) out.badAw.push(c.n + ' ' + l); });
+      const allMoves = new Set(Object.keys(K.moves || {}));
+      Object.values(K.aw || {}).forEach(o => Object.keys(o.moves || {}).forEach(m => allMoves.add(m)));
+      allMoves.forEach(m => m.split('+').forEach(x => { if (!readable(x.trim())) out.badPiece.push(c.n + ': ' + m); }));
+      for (const o of (TEAMS[c.n] || {}).rot || []) {
+        const info = {};
+        if (tcRotWalk(c.n, o.seq, o.aw == null ? 0 : o.aw, undefined, info) >= 0) out.illegal.push(`${c.n} ${o.label} turn ${info.at + 1}: ${info.why}`);
+      }
+    }
+    // the engine on a made-up kit: need/spend, gain to a cap, next, uses, a group cooldown, an Awareness block
+    KIT_ROT.__test = { why: 'test', res: { st: [0, 3] }, moves: { '1': { gain: { st: 2 } }, '3': { need: { st: 3 }, spend: { st: 3 } },
+      '1+1+3': { next: ['Fatigue'], uses: 1 }, 'Fatigue': {}, 'Transform+1': { cool: 2, group: 't' }, 'Transform+2': { group: 't', cool: 2 } },
+      aw: { 2: { res: { st: [3, 3] } } } };
+    const w = (seq, aw) => tcRotWalk('__test', seq, aw || 0);
+    out.engine = [w(['1', '1', '3']), w(['1', '3']), w(['3'], 2), w(['1+1+3', '1']), w(['1+1+3', 'Fatigue', '1+1+3']),
+      w(['Transform+1', '1', 'Transform+2']), w(['Transform+1', '1', '1', 'Transform+2']), w(['1', '1', '1', '3', '3'])];
+    delete KIT_ROT.__test;
+    // a move written for a Mindscape Core needs a completed Mindscape, and so does lufel's option for it
+    const haru = 'Haru Okumura', keepLo = state.chars[haru] && state.chars[haru].loadout;
+    const mindMoves = done => { state.chars[haru].loadout = Object.assign({}, DEFAULT_LOADOUT, done ? { mindSkill: true, mind1: 5, mind2: 5 } : {});
+      return { move: !!tcComposeSetup(haru, tmRotPick(haru, new Set([haru]))).R.moves['3+Gunshot'], core: tmRotPick(haru, new Set([haru])).pick.some(o => /Mindscape Core/.test(o.label)) }; };
+    out.mind = { off: mindMoves(false), on: mindMoves(true) };
+    state.chars[haru].loadout = keepLo;
+    // Surf's lines follow Paddle Out below A6 and hold for good from it
+    const miyu = 'Miyu Sahara [Wavecatcher]', keepM = state.chars[miyu] && state.chars[miyu].loadout;
+    const surf = aw => { state.chars[miyu].loadout = Object.assign({}, DEFAULT_LOADOUT, { awareness: aw });
+      const D = charDef(miyu), c = tcKitFor(D).filter(x => /Catch a Wave/.test(x.why));
+      return { kit: c.map(x => x.after || 'always'), ride: kitStatBuffs(D, null, { fight: true }).filter(b => /Ride it Out/.test(b.why)).map(b => b.on || 'always') }; };
+    out.surf = { a0: surf(0), a6: surf(6) };
+    state.chars[miyu].loadout = keepM;
+    // an idle turn is never offered to the search
+    out.idle = CHARACTERS.filter(c => KIT_ROT[c.n] && tcComposeSetup(c.n, tmRotPick(c.n, new Set([c.n]))) && tcComposeSetup(c.n, tmRotPick(c.n, new Set([c.n]))).moves.some(m => m === '-' || m === '·')).map(c => c.n);
+    // the SP limit: lufel's options set the pace, and a rotation of dearer skills breaks it
+    const sp = tcSpRule('Ann Takamaki', [{ seq: ['3', '1', '3', '1', '3', '1'] }], 14, null);
+    out.sp = { rate: sp.rate, lufelOk: tcSpOk(Array(14).fill(0).map((x, i) => i % 2 ? '1' : '3'), sp), allThree: tcSpOk(Array(14).fill('3'), sp) };
+    return out;
+  });
+  check('every character has kit rotation rules with a reason, every move is made of pieces the fight reads, and Awareness blocks are 1-6',
+    !kr.missing.length && !kr.noWhy.length && !kr.badPiece.length && !kr.badAw.length, JSON.stringify([kr.missing, kr.noWhy, kr.badPiece.slice(0, 5), kr.badAw]));
+  check('every lufel rotation is legal under its kit\'s rules at its own Awareness', !kr.illegal.length, kr.illegal.slice(0, 5).join(' | '));
+  check('the rules engine: stacks gained to a cap and spent, a battle-start value from an Awareness, a forced Fatigue, uses per battle, a shared cooldown',
+    JSON.stringify(kr.engine) === JSON.stringify([-1, 1, -1, 1, 2, 2, -1, 4]), JSON.stringify(kr.engine));
+  check('a move and a lufel option written for a Mindscape Core need a completed Mindscape',
+    !kr.mind.off.move && !kr.mind.off.core && kr.mind.on.move && kr.mind.on.core, JSON.stringify(kr.mind));
+  check('Wavecatcher Miyu\'s Surf lines follow Paddle Out below Awareness 6 and hold for good from it',
+    kr.surf.a0.kit.length >= 1 && kr.surf.a0.kit.every(x => x === '3') && kr.surf.a0.ride[0] === '3' &&
+    kr.surf.a6.kit.every(x => x === 'always') && kr.surf.a6.ride[0] === 'always', JSON.stringify(kr.surf));
+  check('the composer never offers an idle turn', !kr.idle.length, kr.idle.join(', '));
+  check('the SP limit: lufel\'s pace is allowed, a rotation of dearer skills every turn is not',
+    kr.sp.rate === (22 + 20) / 2 && kr.sp.lufelOk && !kr.sp.allThree, JSON.stringify(kr.sp));
+
+  const kc = await p.evaluate(() => {
+    $('#tmRotFit').checked = true; $('#tmRotCompose').checked = true; tmSyncCompose();
+    tcMemo.key = '';
+    const out = { bad: [], fits: [] };
+    const teams = [['Ann Takamaki', ['Kotone Shiomi', 'Mio Natsukawa', 'Fuuka Yamagishi', 'Kumi Katayama']],
+      ['Ann Takamaki [Starlight]', ['Ryuji Sakamoto', 'Kotone Shiomi', 'Hatsune Miku']],
+      ['Makoto Yuki', ['Yukari Takeba', 'Mitsuru Kirijo', 'Fuuka Yamagishi', 'Leo Kamiyama']]];
+    for (const [dn, names] of teams) {
+      const D = charDef(dn);
+      const full = tcSim(D, names, 'full');
+      const asW = tcSim(D, names, false);
+      // composing never prices the team below lufel's as written (lufel's options are among its starts)
+      if (!(full.total >= asW.total * (1 - 1e-6))) out.bad.push(dn + ' composed below lufel: ' + full.total + ' < ' + asW.total);
+      const inTeam = tcTeamSet(dn, names);
+      for (const [n, F] of Object.entries(full.fits || {})) {
+        if (!F.composed) { out.bad.push(n + ' not composed'); continue; }
+        const r = tmRotPick(n, inTeam), C = tcComposeSetup(n, r);
+        const info = {};
+        if (tcRotWalk(n, F.seq, C.aw, C.R, info) >= 0) out.bad.push(`${n} illegal at ${info.at + 1}: ${info.why}`);
+        if (!tcSpOk(F.seq, C.sp)) out.bad.push(n + ' breaks the SP limit');
+        if (F.seq.length !== tcComposeLen()) out.bad.push(n + ' length ' + F.seq.length);
+        out.fits.push(n + ': ' + F.seq.join(' '));
+      }
+    }
+    // off, the old fit; the pref is saved, and greyed while fitting is off
+    const prefOn = collectPrefs().tmRotCompose;
+    $('#tmRotFit').checked = false; tmSyncCompose();
+    const greyed = $('#tmRotCompose').disabled, offNow = tmComposeOn();
+    $('#tmRotFit').checked = true; tmSyncCompose();
+    return Object.assign(out, { prefOn, greyed, offNow });
+  });
+  check('composed rotations are legal under the kit rules and the SP limit, as long as the fight, and never price a team below lufel\'s as written',
+    !kc.bad.length && kc.fits.length >= 3, JSON.stringify(kc.bad.slice(0, 5)) + ' ' + kc.fits.length);
+  check('composing is a saved pref, off (and greyed) while fitting is off', kc.prefOn === true && kc.greyed && !kc.offNow, JSON.stringify(kc));
+  const kcPage = await p.evaluate(() => {
+    const d = 'Ann Takamaki';
+    tmPick = {}; tmPick[d] = { key: 'calc:Kotone Shiomi|Mio Natsukawa|Fuuka Yamagishi|Kumi Katayama', seats: {} };
+    $('#tmBasis').value = 'calc'; $('#tmChar').value = d;
+    renderTeams();
+    const panel = [...$$('#tmOut .panel')].find(x => /^rotation$/i.test((x.querySelector('h2') || {}).innerText || ''));
+    const text = panel ? panel.innerText : '';
+    tmPick = {};
+    return { composed: /Composed for this team|Already the best the kit allows/.test(text), turns: panel ? panel.querySelectorAll('.tmRot .t').length : 0 };
+  });
+  check('the Rotation panel names a composed rotation', kcPage.composed && kcPage.turns > 0, JSON.stringify(kcPage));
+  await p.evaluate(() => { $('#tmRotCompose').checked = false; });
 
   await p.evaluate(k => { state.chars = JSON.parse(k.chars); tmBusy = new Set(k.busy); tmPick = JSON.parse(k.pick); commit(); showTab('roster'); }, tmKeep);
 

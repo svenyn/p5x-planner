@@ -37,6 +37,7 @@ node tools/gen-data-from-lufel.js lufel.json # emit replacement SETS/SPACE_SETS/
 node tools/gen-awareness.js lufel.json       # patch CHAR_STATS[*].awareness into src/data.js in place
 node tools/gen-teams.js lufel.json           # replace the TEAMS block (lufel's parties, partners, rotations)
 node tools/gen-bosses.js [boss.js]           # replace the BOSSES block (lufel's calc/boss.js: DEF, coefficient, resistances)
+node tools/gen-wonder-innate.js [folder]     # replace the WONDER_INNATE block (each Persona's innate skills)
 node tools/gen-skill-damage.js lufel.json    # replace the SKILL_DMG block (damage per skill and Highlight)
 ```
 
@@ -751,7 +752,9 @@ a second run is byte-identical). Rules that hold it together:
 - **Turn order is in-battle Speed** — `totalStat` with worn cards plus the Thieves Den. Wonder's
   is the user's entry (`state.wonderSpd`, saved as `settings.wonderSpeed` beside the team crit
   rate, in the unsaved-changes fingerprint and the undo snapshot): his Persona is not a card, so
-  the planner cannot compute it. Unset is unknown, never zero — he is listed last, not slowest.
+  the planner cannot compute it: it follows the Personas he uses and skill cards tune it. Unset is
+  unknown, never zero — he is taken to act just before the damage dealer (the user's rule, Nov 2026:
+  players tune him to), and the turn order says so.
   The Elucidator acts outside the order; the page says so.
 - **No lufel prose beyond one-liners.** Partner reasons and rotation notes are short and shown
   as lufel's; the long reviews are linked, not copied (the site build is public). A mechanic worth
@@ -811,7 +814,9 @@ damage formula (`docs/DATA-SOURCES.md`, the damage-formula section):
   Highlight, a Transformation, an item, Fatigue, an idle "-", Miku's "2 Fire") stays where lufel
   put it, because its place is the kit's; and no plain skill is used more or less often, per turn
   of the rotation, than lufel's rotations at that level use it — the stand-in for SP and cooldowns,
-  which nothing models. A skill lufel never writes into a rotation is never introduced. Each
+  which nothing models. A skill lufel never writes into a rotation is never introduced, with one
+  exception for a stated kit reason (`TC_ROT_ADD`: Firecracker Rin's Skill 2, her only Burn below
+  Awareness 2, on up to 2 of 6 turns — see Technicals below). Each
   candidate is priced as the whole team (the other seats at lufel's rotations, the backup as the
   backup, Wonder) with the member's rotation-dependent lines re-covered; the winner is the one that
   makes the damage dealer's hits strongest, ties to lufel's as written, then the fewest turns
@@ -834,7 +839,7 @@ damage formula (`docs/DATA-SOURCES.md`, the damage-formula section):
   and Summer Ayaka, Catchy Hook, starting gauge and Kotone Shiomi's Fortune done properly). Over the
   rounds `#tmFight` sets (12 by default, a pref and part of `tcMemo`'s key), the Elucidator acts at
   the start of each round, the four thieves — the damage dealer, two teammates, Wonder — once each
-  in Speed order (`tmSpeed`; Wonder at 100 while his Speed is unset; a tie goes to the teammate), and
+  in Speed order (`tmSpeed`; Wonder just before the damage dealer while his Speed is unset; a tie goes to the teammate), and
   the enemy last. **A buff on an ally counts down after that ally's own action, a debuff on the
   enemy after the enemy's** (lufel's "'Speed' and 'Turn Order'" guide): a supporter acting before the
   damage dealer lands this round's hit, one acting after waits a round, and a 1-turn debuff cast
@@ -843,7 +848,7 @@ damage formula (`docs/DATA-SOURCES.md`, the damage-formula section):
   (`sim.consts`: passives, judged `up`, the Elucidator share) and what a cast, a Highlight or a use
   per battle sets off (`sim.events`, each tied to its line by `ref`, so the page shows the uptime
   the fight gave it). The damage dealer's damage is their skills (`SKILL_DMG`, lufel's English text
-  by `tools/gen-skill-damage.js`, with 24 hand corrections in its `FIXES`), their Highlight or
+  by `tools/gen-skill-damage.js`, with 28 hand corrections in its `FIXES`), their Highlight or
   Theurgy when it fires, and `DPS_KIT`: Resonance, follow-ups, summons, damage over time and token
   turns for 32 kits, each with its trigger — their own actions or a skill, a token ("Gunshot",
   "Transform", a whole "1111"), their Highlight, **a teammate's action or Highlight**, the end of
@@ -958,11 +963,69 @@ damage formula (`docs/DATA-SOURCES.md`, the damage-formula section):
   gains (casting a second Persona's skill takes turns from the first, whose passives then count
   for fewer turns), in two orders — by worth, and slot by slot — the better kept, so a later slot
   never costs anything; idle turns go to the Persona whose passives are worth most. The page
-  shows each Persona's share of his turns and what goes uncast. `tcWonderBest` suggests a whole
-  setup, weapon then slot by slot, then improvement passes over every position, labelled "if you
-  own it". It usually fills one slot: one Persona's unique skill and cards already take all six
-  actions, and the page says slots 2-3 add nothing then rather than inventing picks. A Persona's
-  innate skills that also exist as cards are priced as the card the user picks, never both.
+  shows each Persona's share of his turns and what goes uncast.
+  **A Persona's innate skills count** (Nov 2026, the user asked): `WONDER_INNATE` in `src/data.js`
+  (written by `tools/gen-wonder-innate.js` from lufel's 155 Persona files) lists each Persona's
+  innate skills; one with a skill card of the same name is priced as that card, cast while its Persona
+  is in use (16 Personas have such a skill — Auto-Mataru, Matarukaja, Tarukaja, Rakunda, Rebellion,
+  Debilitate; the rest are attacks, heals, DEF or Wonder's own stats). A Persona with only priced innate
+  skills can be chosen too (`wonderPersonas()`). **One skill from two sources counts once**, from the
+  strongest source: two Personas' unique Rebellion, an innate Rakunda and a unique one, a card and an
+  innate skill, Auto-Mataru III and IV — the rest are listed as "the same buff, counted once". Before,
+  each source was its own buff and stacked. Rakunda and Marakunda (or Tarukaja and Matarukaja) are
+  still separate: whether P5X stacks the one-target and party versions is not settled.
+  **`tcWonderBest` suggests three Personas and no skill cards** (the user asked): the weapon, then each
+  slot the Persona that adds most to the others, or, when none adds anything (his six actions are
+  spent), the one that does most on its own. **It is chosen by the fight**, not the quick screen (the
+  user found character-made Personas missing): the screen's averages misjudge short effects, so it only
+  shortlists each slot (its best `TC_WB_SHORT`, 6, plus any Persona with a line it cannot price —
+  continuous damage, Resonance) and `tcSim` with the cheaper fit picks; one improvement pass. Measured on
+  the real save, the fight's top five single Personas sit within the screen's top 13 for every damage
+  dealer tried. A render costs about 0.2 s more (1.2-1.4 s). `adds` (not enumerable, so not saved or
+  compared) is each slot's share, by the fight, and the seat names the ones that add nothing.
+  **Personas made for a kit** (Nov 2026): a research pass over all 155 Personas against lufel's text,
+  in three batches, entered what new fields can now express — `minHits` (a buff for skills hitting
+  that often: Zaou-Gongen's Threefold Transcendence), `dotDm`/`dotFinal`/`resDm` keys (Vasuki's
+  continuous-damage multiplier, Nian, Sahimochi-no-Kami's Resonance), `reserve` (works while another
+  Persona is in use: Kohryu, Koumokuten's battle-start buff) and `onCast` with `dur` (refreshed by each
+  skill he casts with it, for that long) — and corrected 19 lines: Shiva's DEF cut was credited every
+  turn though a cast each turn never reaches the 2 Wisdom it needs, Koumokuten's buff counted 6 rounds
+  not 3, Okuninushi was under-counted, and Parvati, King Frost and Narcissus counted even when their
+  trigger skill is never cast. The damage dealers' side is `DPS_HITS` (hits per cast of each skill and
+  the Highlight, 60 characters, `DPS_HITS_AW` for hits an Awareness adds) and `DPS_COUNTS_AS` (skills a
+  kit says count as continuous damage or Resonance: Ichigo, Kira (Korean only, `koOnly`), Summer Ayaka
+  from A6, Wavecatcher Miyu's Aerial Tide, Runa's Skill 3); the fight prices each skill with what
+  reaches a cast of its hit count (`curX(others, hits)`) and its counts-as share. With all of it on the
+  real save the character-made Personas rise (Vasuki #26 to #8 for Ichigo, Zaou-Gongen #45 to #34 for
+  Makoto Yuki) but Gabriel and Succubus still lead: their packages are larger. Wonder's own damage is
+  still not counted, and much of what character-made Personas do raises it (Shiva's +33% Psychokinesis,
+  the +29.1% ATK talents). The same research found SKILL_DMG numbers that are now fixed in `FIXES`:
+  Pioneer Shun's Skill 1 (249 to 83: later hits on the same foe deal 20%), Mio's Skill 3 (241.6 added
+  her two alternative casts; 120.8, the mean of the two, since at Awareness 0 every other Skill 3
+  reaches the 4 stacks Requiem Guidance needs, so 8% low from Awareness 1), Starlight Morgana's Skill 3
+  (145.4 to 72.7: Whirlwind Waltz and the Crash! it unlocks alternate on her "3"s) and Kiyoshi's Skill 2
+  (45 to 20.2; the Sacred Flame tick is a `DPS_KIT` dot on the enemy's turn, half the turns, 0.8 from
+  Awareness 1). YUI's Skill 2 stays 59.6: its +25% to the main target is a damage bonus, already in
+  `DPS_KIT_BONUS`. On the real save no best team changed: Kiyoshi's multiplier fell 8%, Mio's 6%,
+  Starlight Morgana's 3% and Pioneer Shun's 6% at Awareness 2 (Skill 1 is not in his Awareness 0
+  rotation, so nothing there).
+  **His six turns are under Rotation** (`tcWonder(...).turns`: each turn's Persona and what it casts,
+  or the Persona he attacks with), for your setup and for the suggested one when it differs.
+  **His casts go on the damage dealer's heavy turns** (Nov 2026): skill by skill, `tcWonder` places its
+  casts on the free turns whose coverage (each turn once, over the fight) holds most of the damage
+  dealer's damage, turn by turn from their lufel rotation; a Highlight-only line counts Highlights only.
+  Sraosha's unique lands on Kasumi's Highlight turns 3 and 6, as lufel says.
+  **Why character-made Personas ranked low** (the user asked, Nov 2026), and what was done: Bishamonten's
+  Tower of Purification reads the boss's elemental ailments (`perAil`, below); Sraosha's God's Ear stacks
+  are full for a Bless damage dealer whose rotation uses Highlights (`ifBlessHl`); Sahimochi-no-Kami's
+  Resonance amplification is a separate multiplier (`resFinal`, as lufel says) and its Serrated stacks
+  count the damage dealer's Resonance (`resStacks`, `TC_RES_RATE`: activations a round, judged per kit);
+  Pazuzu keeps the foe Cursed (`curse`, the share of turns), which a damage dealer's `curse` bonus reads
+  (`tcCurseBonus`: Toshiya's The Other Prison, his own chance and the team's combined). On the real save:
+  Bishamonten #35 to #18 for Queen (#7 with Chizuko), Sraosha #26 to #7 for Kasumi, Sahimochi #19 to #9
+  for Wavecatcher Miyu, Pazuzu offered at all (+2.5% for Toshiya: his bonus adds into a large ⓑ). Thor,
+  Zaou-Gongen and Orobas were right as entered: most of what they do is Wonder's own damage (Thor, the
+  +29.1% ATK talents) or lifts a resistance the fight assumes is not there (Orobas's Fire Break).
 - **Fuuka's backup is played out in the fight** (Nov 2026, the user asked; it had been averaged).
   From her Global text: Over Oracle stacks start at 3 (level 70+; +2 at A1, where the cap goes from
   4 to 8), +1 per Skill 1 or 3 she casts (+2 per Divine Prayer from A6); Oracle Shift spends 4 (3
@@ -1097,8 +1160,8 @@ damage formula (`docs/DATA-SOURCES.md`, the damage-formula section):
   are written for the Strategist pair and are read with the same turns for the others.
 - **Shoki's Improv states** (Nov 2026): he switches state each turn, and his Skill 3 gives the main
   target crit damage (Electrifying Performance, the only one entered before), pierce (Tempestuous
-  Drama) or damage over time (Blazing Passion); Chilling Intensity's Technical bonuses are not
-  modelled. They are `TC_PAIRS` options like the twins' masks, and the seat names the state
+  Drama), damage over time (Blazing Passion) or Technical Precision (Chilling Intensity, with its +20%
+  ATK for a damage dealer whose kit activates Technicals — see Technicals below). They are `TC_PAIRS` options like the twins' masks, and the seat names the state
   (`TC_PAIR_LABEL`). On the real save pierce wins for every damage dealer tried (Kira, Ann, Mitsuru,
   Makoto Yuki), 4-11% above the crit-damage state. A scan of lufel's English and Korean kit text for
   other set-up choices found none that changes a team's damage: Aran and Radiance Motoha choose
@@ -1115,15 +1178,130 @@ damage formula (`docs/DATA-SOURCES.md`, the damage-formula section):
   (`SKILL_DMG` `alm`, from lufel's Korean element 만능: Akechi's Skill 3 and Highlight, Starlight
   Ren's Skill 3, the twins' Highlight) skip the weakness factor in the fight; the same
   Korean text counts all his skill and Highlight damage as damage over time, which is not modelled.
+- **Elemental ailments on the boss** (Nov 2026; the user: "the ailment thing is very important for Queen,
+  this is why her best ally is Vino"). Queen's Chief Strategist (+15% ATK per kind of elemental ailment on
+  foes) was priced nowhere, and her Thermonuclear Fury, Highlight and Nuclear Finisher read a judged two.
+  The fight now tracks Burn, Freeze, Shock and Windswept on the main target, and Radiation, which counts
+  only with Chizuko (Vino) in the team (her A0): `TC_AILMENTS` (58 sources for 31 characters, from one
+  research pass over lufel's English and Korean skill, Awareness and weapon text, Nov 2026; Korean used
+  where they disagree; durations lufel does not print taken as 2 turns) says what each kit inflicts,
+  on which skill or token, how often, for how long. 'any' takes a kind the target lacks; a chance is a
+  running tally, so it plays the same every time; ailments count down after the enemy's turn. Rare
+  triggers are a judged share of turns (Ann's La Vie en Rose, Kotone Montagne's Blade Dancer, Kayo's
+  Beat, Kiyoshi's Chosen One, Junpei's Center Stage); Frostgale Kotone is read in Spring mode. The boss's
+  ailment resistance is not modelled. Readers: `TC_AIL_SELF` (Queen's Chief Strategist and A2 pierce),
+  DPS_KIT `perAil`/`ailNone`/`notAfter` (Thermonuclear's Technicals, Nuclear Fury's on an ailing foe
+  only), DPS_KIT_BONUS `perAil: [lo, hi]`/`perHeat` (her Highlight's Frenzied Voltage, Nuclear Finisher's
+  Heat), and a TEAM_BUFFS/WONDER_BUFFS line's `ailMin`, `perAil` or `ailOfElem` (Chizuko's A0, Eagle Eye,
+  A1, A6 and Gravitational Force; Bishamonten; Arc Knife). The quick screen reads lines at
+  `TC_AIL_QUICK` (2) and a damage dealer's own at what the team's rotations supply (`ail`, `tcAilSupply`).
+  The fight note gives the boss's average count. On the real save the boss carries 1.5 with Queen alone,
+  3.3 with Chizuko at her saved Awareness 0 and 3.9 at Awareness 6, where Chizuko joins Queen's best
+  team (16.7×); at Awareness 0 Minami and Kotone Shiomi still lead (16.5×). Her Setup there has no
+  Awareness set, which is worth checking.
+- **Technicals and Technical Precision** (Nov 2026; the user: Firecracker Rin's kit is built on them and Mio
+  is made for her, yet Mio never appeared in Rin's teams). lufel's guide (`technical-master`, recorded in
+  `docs/DATA-SOURCES.md`) gives the rules: a skill that "can activate a Technical" does so on a foe with an
+  elemental ailment — Fire on a Burning foe is Fireburn (+2% that skill's damage; 20% for Rin's Yanhua
+  Slash), Ice on a Burning foe Iceburn (Fire/Ice damage taken +5%; Mio's Skill 3 always gets it and makes it
+  Cold Flames, up to 39-45% damage taken) — and Technical Precision scales them, linearly: Fireburn +10% of
+  itself per 100 points, Iceburn and Cold Flames +5% (`tcTechScale`; the guide's own checks, 68.1% → 102.15%
+  at 1000 and 113.9% at 1343, are a test). `tp` is a team key (Mio's Skill 1 +195-207, her Scald +1186-1381
+  on a Burning foe, Shoki's Chilling Intensity +655-749); the fight scales a `tech: 'taken'` line or a `tech:
+  'fire'` bonus by the points up at the hit. `needAil: 'Burn'` gates a line on the fight's ailment tracker
+  (above): a TEAM_BUFFS cast line lands only if the foe Burns when cast (Scald, also `noRefresh`; Cold
+  Flames; Iceburn; Mio's weapon), a DPS_KIT_BONUS or always-on line counts while it Burns at the hit (Rin's
+  Fireburn and weapon, Ann's +30% and Fireburn, Kiyoshi's Fireburn). Mio's Scald entry in `TC_AILMENTS`
+  renews a Burn only (`ifAil: 'Burn'`, now a name or any), so she is not her own Burn source. The quick
+  screen puts `needAil` lines in `vec.need` at full value and `tcMultiplier` reads them at the share of turns
+  the whole lineup keeps the foe Burning (`burn`, each member's `tcBurnSupply` combined as independent
+  chances), so Mio beside Rin alone is priced without Burn and Mio + Koromaru with it; the damage dealer's
+  own Burn bonuses enter through the share of their fight-alone damage they reach (`tcTechMix`).
+  **Rin Burns for good only from Awareness 2**; below it her one Burn is Skill 2 (90%, 2 turns), which
+  none of lufel's A0/A1 rotations cast, and lufel's own note on Mio says her Skill 1 needs a Burning foe.
+  Three things make Mio work at A0 (the user: she was made for Rin at any Awareness): `TC_ROT_ADD` lets
+  Rin's fitted rotation put Skill 2 on up to 2 of 6 turns in place of a plain Skill 1, below Awareness 2
+  only; Prosperity in Red (and A2's Festival Colors) carry `needAil` in `KIT_STAT_BUFFS`, so stats and build
+  scores keep them always on while the fight leaves them out of its baseline (`noTimed`) and counts them on
+  a Burning foe (`ailSelf`), which is what makes the Burn worth a Skill 1 to her; and a lineup with a
+  member whose lines need a Burning foe gets a one-pass fight fit of that member (and the damage dealer,
+  and the reference fight alike) in the search's cheaper passes too (`tcSimFitTeam`'s `opt`), because the
+  timing decides it — Mio (Speed 106) acts before Rin (98), so with lufel's 1 › 3 her Skill 1 never met
+  Rin's Burn (it lands after Rin's hit and is gone by Mio's next Skill 1) and only 3 › 1 lines them up.
+  On the real save at A0 Mio / Kotone Shiomi / Fuuka (backup Kumi) now leads at 18.5× against 16.0×
+  (Rin: 2 › 3+Melee › 2 › 3+Melee › 1 › 3+Melee; alone she takes Skill 2 too, for Prosperity in Red); at
+  A2 it leads at 20.5× against 18.1× with Mio in six of the ten. A fresh Rin render is about 2.7 s
+  (from about 2). Runa's boss rotation (2 > 3) never casts the Skill 1 that Burns. **Fireburn is a multiplier of its own** (`amp` on its DPS_KIT_BONUS entries: ×1.2 on
+  Rin's slash, ×1.4 at 1000 points), the user's choice on this evidence: lufel's damage article says only
+  that a "damage increase" is ×1.2 for some kits and +20% for others, but a Taiwanese test write-up
+  (Bahamut thread "P5X 傷害計算公式探討", 2024, and its linked study "P5X傷害計算公式及其詳細證明" v2.0, §4)
+  measured a Technical's damage increase (Wonder's Cosmic Flare, +22% on an ailing foe) as an independent
+  multiplier — predicted 880/924/836 as one, 853/895/810 as an addition, observed 880/923/837 — and Rin's
+  Chinese text calls her 20% "the TECHNICAL effect". The same study names Ann's passive 熱忱 (her +30% on
+  Fireburn) as additive, and damage taken (Cold Flames, Iceburn) is in ⓑ, so those stay additions; Rin's
+  weapon (+34-64% "damage" on a Fire Technical) is untested and left additive. Read as an addition, the
+  Technical Precision Mio adds to Rin's Fireburn was nearly all diluted by her other bonuses. Not priced: Windburn,
+  Short Circuit, Deepfreeze, Freeze and Shock as Technical triggers for Mio's weapon, Happy New Year!'s
+  51% (kept at 42%).
 - **Not priced, and the page says so**: other extra actions (Narumi's for Wonder, Mayumi's own) and
-  Wonder's own damage, weakness creation, Down/Technical, ailments other than the damage over time a
-  `DPS_KIT` entry prices, kit bonuses that hang on the boss's HP, the damage dealer's own HP, Down
+  Wonder's own damage, weakness creation, Down/Technical (beyond the ailment readers and the Technicals above), Wonder's own
+  ailments, the boss's ailment resistance, kit bonuses that hang on the boss's HP, the damage dealer's own HP, Down
   or a specific teammate (what is left in `DPS_KIT_SKIPS`), always-crit and DEF-ignoring components,
   healing and survival, buffs copied from other buffs, and a supporter's Theurgy gauge from teammates. The number ranks teams
   for one damage dealer; it is not a damage forecast and is never compared across damage dealers.
   Moving from averaged uptimes to the fight took most real-save numbers 5-15% down (the gauge cannot
   give every member a Highlight every 4 turns, and the first round has none) and moved a few teams
   (Mitsuru into short fights).
+- **Rotations composed from the kits** (`KIT_ROT`, `tcCompose`, Nov 2026; the user asked the planner to
+  write rotations itself rather than re-choose lufel's plain turns). "Compose them from the kits"
+  (`#tmRotCompose`, a pref, on by default, greyed while "Fit rotations" is off) writes each member's
+  rotation for the fight, as long as the fight plus two turns, from the kit's own moves:
+  - **What a kit allows is `KIT_ROT`** (in `logic.js`, between `KIT_ROT begin/end` markers): per character
+    the moves (lufel's turn strings, plus any skill it can cast as a turn) and the counters that gate them
+    — `res` [start, cap], `turn`/`ally` gains, and per move `need`/`max`/`spend`/`gain`/`set`/`flip`,
+    `cool`/`group`, `uses`, `next` (a forced Fatigue), `aw`, `mind` (a completed Mindscape) — with `aw`
+    blocks per Awareness, a `cool` array replacing lufel's skill cooldowns, `spBudget: false` where a kit
+    counts its own SP (Starlight Ann, Wavecatcher Miyu), and `caveats`. Researched for all 68 in four
+    hand-checked batches against one brief, from lufel's English and Korean skill, passive and Awareness
+    text (Korean where they disagree); each `why` says what was read and what judged (teammate-fed
+    counters through `ally` are judged rates). **Rules say what is possible, never what is good.** A test
+    holds every lufel rotation legal under them, each at its own Awareness; a lufel option that cannot be
+    legal means the rule is wrong. `tcKitRot` merges the blocks, `tcRotWalk`/`tcRotStep` play a rotation.
+  - **SP refill is not known** (nothing publishes it; the user did not know), so lufel's rotations stand in
+    for it: no more SP per turn, by lufel's SP costs (`SKILL_DMG` `sp`, Korean where the English lacks one;
+    none is an HP skill), than the costliest of lufel's options at that Awareness, nor further ahead of
+    that pace than any of them runs (`tcSpRule`).
+  - **The search** starts from lufel's options and the rotation the member has, changes one turn or swaps
+    two at most `TC_COMPOSE_SWAP` (3) apart, re-chooses later turns the change made illegal
+    (`tcComposeRepair`, lufel's most used moves first), keeps the best change while it gains
+    `TC_COMPOSE_MIN`. Idle turns ("-", "·") are never offered (chosen freely they only delayed Fuuka's
+    Oracle Shift, which the fight spends at once); Highlight/Theurgy turns only for a kit whose Highlight is
+    free. It runs in full for the damage dealer alone (the reference fight) and in the teams fitted in
+    full, one pass for the damage dealer in a lineup whose timing matters (a member needing a Burning foe:
+    without it Mio's team for Rin was priced on rotations composed for other teams and never led), and
+    once per member on the quick screen; every other fight chooses among lufel's options and what those
+    found (`tcMemo.pool`, `tcMemo.rot`). A render is 2.5-4 s on the real save (1.8-2.7 s fitting lufel's).
+  - **What it exposed.** A damage line whose uptime was judged from lufel's rotation but not tied to the
+    skill that earns it is free credit once the rotation can drop that skill: Wavecatcher Miyu's Catch a
+    Wave, Offshore and Surf stats, and Yusuke's taunt counters and shield stats, were. They now follow
+    the skill (`after`/`on` with `dur`, so lufel's rotation prices exactly as before), with `alwaysAw` for
+    an Awareness from which the state holds for good (Miyu's A6). Ryuji's charge/hit and Starlight
+    Morgana's Waltz/Crash! alternate through a `flip` counter, which keeps their averaged Skill 3 price
+    true. `tmRotPick` now drops lufel's "Mindscape Core" options for a character whose Mindscape is not
+    complete (`tmMindDone`; the Setup has no Core field, so complete stat and skill paths stand in). The
+    other judged lines found (YUI, Akechi A1, Tropical Motoha's weapon, Frostgale Kotone's A4) under-credit
+    a composed rotation rather than over-credit it.
+  - **Measured against lufel on the real save (Nov 2026)**: on one boss the composer moves Ann to Trifire
+    (Skill 2) every turn, +25% — lufel's 3,1 is a multi-foe rotation, and at 3 foes the composer writes
+    it back (+0.3%); Ryuji mixes Skill 1 between charge/hit pairs (+4.5%; Skill 3's low-HP growth is not
+    priced); Wavecatcher Miyu casts Aerial Tide (0 SP) almost every turn (+21%, more at 3 foes: Surf's
+    buff extension and Catch a Wave's SP costs are judged, so treat it with care); Makoto Niijima at A3
+    and Ann at A6, for which lufel writes only A0, gain 10-25%. Most others land within a few percent of
+    lufel. Teams differ far more: lufel's parties were written at each character's launch (for 13 of 16
+    damage dealers no party member is newer than the damage dealer), so Fuuka (#54, with Kumi as backup:
+    Hard Knocks on every Oracle Shift is most of her value — 14.8 without, 21.2 with), Kotone Shiomi (#52,
+    in no lufel party) and Beachflower Minami (#47) are missing; Leo's value for Ryuji (lowering his HP)
+    and healers' survival are not priced; unowned picks (Kayo, Junpei) price without cards.
 
 ### Lufel publishes an order, not magnitudes
 

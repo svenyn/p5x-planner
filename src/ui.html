@@ -475,6 +475,10 @@ details.sect>.inner{margin-top:10px}
 .tmRot .t.idle b{color:var(--dim2)}
 .tmRot .t.fit{border-color:#1d5c3d;background:#10241a}
 .tmRot .t.fit small{color:var(--ok)}
+/* Wonder's turns: a skill name and the Persona under it, wider cells than a skill number needs */
+.tmRot.wonder{grid-template-columns:repeat(auto-fill,minmax(120px,1fr))}
+.tmRot.wonder .t b{font-family:inherit;display:block}
+.tmRot .t .who{display:block;color:var(--dim2);font-size:11px;overflow-wrap:anywhere}
 /* One card per member in the Rotation and "How this team works" panels. */
 .tmMembers{display:flex;flex-direction:column;gap:8px}
 .tmMember{background:var(--panel2);border:1px solid var(--line);border-left:4px solid var(--el,var(--line));border-radius:9px;padding:11px 14px 11px 13px}
@@ -636,6 +640,7 @@ details.sect>.inner{margin-top:10px}
           </select>
         </div>
         <label class="check" title="Each member's plain skill turns are re-chosen for this damage dealer, within the skills and frequencies lufel's own rotations for them use; bursts, Highlights, Transformations, items, Fatigue and idle turns stay where lufel put them. Off: every rotation is lufel's as written."><input type="checkbox" id="tmRotFit" checked> Fit rotations to this team</label>
+        <label class="check" title="On: each member's rotation is written for this team from their kit's own moves, within what the kit allows (stacks, modes, Fatigue, cooldowns) and no more SP per turn than lufel's own rotations spend. Off: lufel's rotations with only their plain skill turns re-chosen."><input type="checkbox" id="tmRotCompose" checked> Compose them from the kits</label>
         <div class="field" style="margin-left:auto">
           <label>Wonder's Speed</label>
           <input id="tmWonderSpd" type="number" min="0" max="999" step="1" placeholder="not set" style="width:90px"

@@ -25,7 +25,7 @@ behind the pages is plain static JavaScript under `/data/`, and it fetches fine.
 | `/data/characters/<Korean name>/party.js` | Recommended teams (3 thieves + Elucidator; Fuuka's carry a 5th, her Oracle Shift backup) and "friends": synergy partners, each with a one-line English reason and sometimes the Awareness it needs. Missing for a few characters, which lufel's own page treats as normal |
 | `/data/characters/<Korean name>/operation.js` | Skill rotations per Awareness level and situation ("with Miku", single target, 2-turn cycle), as a line or a turn grid, with English notes for 38 characters (the rest have none, in any language) |
 | `/data/characters/<Korean name>/skill.js` | Skills 1-3, Highlight (or Theurgy) and passives, in four languages: description with the four skill-level values, SP cost, and `cool` — the Highlight's cooldown is 4 turns for every thief; a Theurgy has none and needs 70 gauge. Source of `SKILL_DMG` |
-| `/data/persona/index.js`, `/data/persona/<Korean name>.js` | 155 Personas: unique skill, passives, innate skills, Highlight, each in English with rank values. Read once (Oct 2026) into `WONDER_BUFFS.personas` by hand-checked batches; not fetched by the tools |
+| `/data/persona/index.js`, `/data/persona/<Korean name>.js` | 155 Personas: unique skill, passives, innate skills, Highlight, each in English with rank values. Read once (Oct 2026) into `WONDER_BUFFS.personas` by hand-checked batches. `tools/gen-wonder-innate.js` fetches them (each file sits at the folder the index's `__path` names, `data/persona` or `data/persona/nonorder`) for the innate skills only, into `WONDER_INNATE` |
 | `/data/kr/wonder/skills.js` | 459 skill cards (`personaSkillList`), English descriptions. Source of `WONDER_BUFFS.cards` |
 | `/data/kr/wonder/weapons.js` | Wonder's 18 weapons (`matchWeapons`), English effect text with 7 refinement steps. Source of `WONDER_BUFFS.weapons` |
 | `/data/kr/calc/defense-data.js` | lufel's own defence calculator: DEF-down (`defenseCalcData`) and Pierce (`penetrateData`) sources per character and for Wonder, as numbers. Used to cross-check the hand-entered DEF-down values (all seven Wonder ones match) |
@@ -34,6 +34,7 @@ behind the pages is plain static JavaScript under `/data/`, and it fetches fine.
 | `/apps/guides/data/posts/HIGHLIGHT.json` | How the Highlight gauge fills: one gauge for the team, 17% per thief action (21% on a weakness hit), never above 100%, not charged by Highlights, All-Out Attacks or Elucidator actions; a user waits 4 of their own actions between Highlights. Read once (Nov 2026) into the Teams tab's fight (`TC_GAUGE_ACT`, `TC_HL_COOL`) |
 | `/apps/guides/data/posts/theurgy.json` | Theurgy: a gauge per character, +35 at the start of their turn, capped at what their Theurgy needs (Makoto Yuki 100, Yukari 70, Akihiko 140, Mitsuru 70), usable outside their turn; not fired by Ayaka's Catchy Hook (`TC_TH_TURN`) |
 | `/apps/guides/data/posts/speed-order.json` | Turn order by Speed (ties left to right in the lineup), and that a buff counts down after its holder's action — why damage dealers are placed last. The fight plays this out |
+| `/apps/guides/data/posts/technical-master.json` | Technicals and Technical Precision (Feb 2026, written around Firecracker Rin and Mio): which element on which ailment gives Fireburn, Iceburn, Windburn, Short Circuit, Deepfreeze; Technical Precision raises Fireburn and Short Circuit by 10% of themselves per 100 points and Iceburn (and Mio's Cold Flames) by 5%, in proportion below 100; Rin's Fireburn is 20%. Read once and encoded as `tcTechScale` and the `tp` / `needAil` / `tech` lines in `logic.js` |
 | `/apps/guides/data/guides-list.json` | The guide index (ids for the posts above) |
 
 Three tools wrap this:
@@ -65,6 +66,14 @@ actions, a teammate's, a Highlight, the enemy's turn); `DPS_KIT_SKIPS` lists wha
 expressed (mostly "+X% damage" on a component, always-crit and DEF-ignoring hits, and Burn and
 Lovesick ticks, for which lufel publishes no number). **Medium confidence**: several trigger rates
 are judged (each `why` says how).
+
+Which kits put elemental ailments (Burn, Freeze, Shock, Windswept, and Chizuko's Radiation) on a foe
+is `TC_AILMENTS` in `src/logic.js`: one hand-checked pass over the same English text and the Korean
+(`characterSkillsData`), every Awareness and weapon line included (Nov 2026). Where they disagree
+the Korean is used and the `why` says so (Ryuji's Rebound chance, Makoto Niijima's A2, Koromaru's
+passive, Starlight Ann's Heat Score). **Medium confidence**: most Burn, Freeze and Shock lines print
+no duration and are taken as 2 turns, a few rare triggers are entered as a share of turns, and
+whether a multi-hit skill rolls its chance per hit is not printed (read as once a cast).
 
 `gen-teams.js` writes everything in English: lufel's English labels and notes where they exist,
 its own small tables for the Korean rotation labels and skill tokens otherwise ("의식 N" is
@@ -398,6 +407,19 @@ article states the resulting rule of thumb directly: *"If you increase critical 
 10%, increasing Critical DMG(Mult) by twice that amount (20%) is most efficient."* That
 factor of two is the ratio of the two stats' `maxRoll` (4.1 / 2.0), which is a real
 independent check on the substat roll table in `src/data.js`.
+
+**One factor the article leaves open, settled by a player test.** lufel says a skill's "+20% damage"
+is ×1.2 for some kits and +20% for others. A Taiwanese research thread (Bahamut, "P5X 傷害計算公式探討",
+Oct 2024, forum.gamer.com.tw bsn=71034 snA=1779) and its linked study ("P5X傷害計算公式及其詳細證明" v2.0,
+OneDrive) find damage dealt, element damage and damage taken all in one sum, and one independent multiplier
+they call the "Tech" multiplier: a damage increase written into an active skill ("under a condition, damage
++x%"), shown with a Technical mark. Their Cosmic Flare test (+22% on an ailing foe, ATK 2846, Shocked dummy
+DEF 3374) predicts 853/895/810 as an addition and 880/924/836 as a multiplier; the hit read 880/923/837. They
+list Joker's Skill 3 and Awareness 1, YUI's Skills 1 and 2 and her passive 靈動, 神山's Skill 1 and two Persona
+uniques, and say several Tech multipliers multiply each other; Persona passives with near-identical text,
+Joker's 吞噬 and Ann's 熱忱 (her Fireburn +30%) tested as additions. The Teams fight reads Fireburn (Rin's
+"TECHNICAL effect rises to 20%") as such a multiplier (`amp`); it predates Rin and Mio and never tests
+Technical Precision.
 
 **Confidence is medium and the article says so itself**: it is reconstructed from early
 Chinese Q&A, "over 100 different stats" feed damage, boss defence values cannot be found

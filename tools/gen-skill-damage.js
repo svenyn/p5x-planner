@@ -43,7 +43,7 @@ const FIXES = {
   'Ryuji Sakamoto': { d: [194.1, 67.1, 170.8, 405], why: 'God Hand Burst (Skill 3) selects a foe on one cast and hits on his next action; lufel writes Skill 3 on every turn, so half the casts deal its 341.6%' },
   'Motoha Arai': { d: [99.7, 157.1, 122, 162.4], why: 'Wrathful Thunder fires 4 bolts of 76.7% but bolts 2-4 go to new targets first and deal only 10% on a foe already hit (Korean: "only 10% damage on follow-up hits on the same target"). On a single boss that is 76.7 x (1 + 3 x 0.10) = 99.7, not 4 x 76.7 = 306.8.' },
   'Toshiya Sumi': { d: [175.8, 71.4, 207.5, 290.4], why: 'Tragicomedy of Love: SKILL_DMG 214.5 = 5 x 41.5 + the 7% "per Verse of Passion" Almighty bonus, which belongs to the Sonnet of Fate when it spends the Verse, not to this cast; entered as a component instead.' },
-  'YUI': { d: [185.4, 59.6, 0, 0], why: 'Sparky Surprise deals no damage on its cast; SKILL_DMG 265.8 = 2 x 132.9 is its two Player 2 follow-ups, which only happen when that ally uses skills. Entered as a component instead.' },
+  'YUI': { d: [185.4, 59.6, 0, 0], why: 'Sparky Surprise deals no damage on its cast; SKILL_DMG 265.8 = 2 x 132.9 is its two Player 2 follow-ups, which only happen when that ally uses skills. Entered as a component instead. Meta Dynamite (Skill 2) stays 59.6: its "+25% damage to the main target" (Korean: skill damage dealt to the main target +25%) is a damage bonus, which adds into the damage-bonus factor beside the team\'s, and is priced there (DPS_KIT_BONUS), not multiplied in here.' },
   'Yusuke Kitagawa': { d: [72.1, 185.8, 0, 178.1], why: 'Bone-Chilling Cold: 5 hits of 92.9% DEF that prefer foes not yet hit; repeat hits on the same foe lose 60% each, floored at 20%. On one boss: 92.9 x (1 + 0.4 + 0.2 + 0.2 + 0.2) = 185.8, not 5 x 92.9 = 464.5. (If instead every repeat hit kept 40%, it would be 241.5.)' },
   'Makoto Niijima': { d: [178.7, 0, 249.6, 468.5], why: 'Skill 3\'s 527.4 added both modes together: Nuclear Fury (210.6 + 39.0 ailment Technical = 249.6) and its Crash Out evolution Thermonuclear Fury (243.6 + one 34.2 ailment hit). Kept Nuclear Fury (with its ailment bonus, the same reading Skill 1\'s 178.7 already makes); the Thermonuclear difference is a component below.' },
   'Tomoko Noge [Seaside]': { d: [147.4, 0, 61, 131.8], why: 'Single boss: Skill 1 is 4 hits of 77.6% but every hit after the first on the same target deals 30% (77.6 x 1.9 = 147.4, not 310.4); the Highlight is 3 hits of 82.4% with the same rule (82.4 x 1.6 = 131.8, not 247.2).' },
@@ -63,7 +63,11 @@ const FIXES = {
   'Aigis': { d: [80.2, 80.2, 0, 248.4], why: 'Skill 3 is Gear Boost (no damage) when cast by hand and Suppressive Onslaught (232.1%) when auto-used as "3↺"; both are Skill 3 in the rotation, so the damage moves to a "3↺" token component and the plain Skill 3 is 0.' },
   'Ren Amamiya [Starlight]': { d: [0, 124.6, 572.4, 0], why: 'Phantom Gala is boosted in every lufel rotation: Fever Time (F) exists to supply the Rhapsodic Beats, and he has at least the 2 Beats one boost costs before every Gala. One boost: 271.1 (Coordinated Strike) + 301.3 (Coordinated Damage) = 572.4, not the unboosted 162.7 + 180.8 = 343.5. The second boost is a component.' },
   'Ayaka Sakai [Summer]': { d: [330.9, 173.7, 210.2, 0], why: 'Skill 1 text defines Summer Starscape (41.4% per turn); the generator added it to Skill 1\'s single cast (330.9 + 41.4 = 372.3). Starscape is now the turnEnd component, which also covers the Skill 1 turn.' },
-  'Ichigo Shikano [Summer]': { d: [92.4, 46.2, 0, 0], why: 'Single boss: Romantic Pearl is 5 hits of 46.2% max HP but hits after the first on the same target deal 25% (46.2 x 2 = 92.4, not 231). Heart\'s Desire\'s 48.3% is the Ram: Miracle Ichi-Boat, which the Helmsman deals with the Helmsman\'s own damage stats, not Ichigo - so her Skill 3 deals 0.' }
+  'Ichigo Shikano [Summer]': { d: [92.4, 46.2, 0, 0], why: 'Single boss: Romantic Pearl is 5 hits of 46.2% max HP but hits after the first on the same target deal 25% (46.2 x 2 = 92.4, not 231). Heart\'s Desire\'s 48.3% is the Ram: Miracle Ichi-Boat, which the Helmsman deals with the Helmsman\'s own damage stats, not Ichigo - so her Skill 3 deals 0.' },
+  'Shun Kano [Pioneer]': { d: [83, 0, 0, 73.2], why: 'Justice Shot (Skill 1) is 6 hits of 41.5% max HP that go to new targets first, and every later hit on the same target deals 20% (Korean: "follow-up attacks on the same target deal only 20% damage"). On one boss: 41.5 x (1 + 5 x 0.2) = 83.0, not 6 x 41.5 = 249.' },
+  'Mio Natsukawa': { d: [97.6, 195.2, 120.8, 156.1], why: 'Skill 3 added two alternative casts: Extinguishing Guidance (109.8%, spends 2 Extinguish stacks) and, at 4+ stacks, Requiem Guidance (131.8%, spends 4); one fires per cast. She gains 1 stack on every action (Awareness 0) and 1 more per Sub-Zero Torrent, so lufel\'s Awareness 0 rotation (1, 3, ...) reaches 4 on about every other Skill 3: the mean of the two, (109.8 + 131.8) / 2 = 120.8. From Awareness 1 (+1 more per Skill 1) every Skill 3 is Requiem (131.8), so this reads 8% low there; Awareness 0 is the default Setup.' },
+  'Morgana [Starlight]': { d: [128.8, 130.9, 72.7, 207.9], why: 'Skill 3\'s 145.4 added two casts: Whirlwind Waltz (32.3% Physical + 32.3% Wind = 64.6) puts him in Meowtor Charge, where his next Persona skill is the special skill Crash! (40.4% Physical, plus 40.4% bonus Wind after it = 80.8), used on a later "3". lufel\'s 1, 2, 3, 3, 3, 3 rotation alternates them, so a "3" is half of each: (64.6 + 80.8) / 2 = 72.7 (unboosted; the Rhapsodic Beat boosts are not counted, as for every unboosted skill here).' },
+  'Kiyoshi Kurotani': { d: [26.2, 20.2, 58.6, 41.5], why: 'Crimson Summon (Skill 2) deals 20.2% max HP on its cast; the 45 added one Sacred Flame tick (24.8%), which lands on Burning foes "when a foe takes an action" (Korean: at the start of the foe\'s turn, for 2 turns), not on the cast. The tick is the dot component in DPS_KIT.' }
 };
 
 const SLOTS = ['skill1', 'skill2', 'skill3', 'skill_highlight'];
@@ -148,6 +152,10 @@ function main() {
     // skill cooldowns in turns (lufel's `cool`): a skill with cooldown c is cast at most once in c + 1 turns
     const sc = SLOTS.slice(0, 3).map(k => +((en[k] || {}).cool) || 0);
     if (sc.some(Boolean)) bits.push(`cool:[${sc.join(',')}]`);
+    // SP cost of skills 1-3 (lufel's `sp`, the Korean record's where the English one has none; a range
+    // such as "50 - 200" is read at its low end; none at all is a skill paid in HP)
+    const sp = SLOTS.slice(0, 3).map(k => parseInt((en[k] || {}).sp != null ? en[k].sp : (krRec[k] || {}).sp, 10) || 0);
+    if (sp.some(Boolean)) bits.push(`sp:[${sp.join(',')}]`);
     lines.push(`  ${q(c.n)}: { ${bits.join(', ')} },`);
     if (!STAT.test(hlText) && dmg[3] === 0 && dmg.some(x => x > 0)) warn.push(`Highlight deals no damage by its text: ${c.n}`);
   }
@@ -156,7 +164,7 @@ function main() {
     '/* Damage per use of skills 1-3 and the Highlight/Theurgy (`d`, % of the stat the kit scales with, base',
     '   skill level, hits added up; `dt` the same at each of the four skill-level tiers), whether the character',
     '   has a Highlight or a Theurgy (`hl`, `th` its gauge need), lufel\'s Highlight cooldown in turns (`cd`) and',
-    '   skill cooldowns (`cool`), `hlCrit` for the few Highlights that can crit, and which hit every foe',
+    '   skill cooldowns (`cool`), SP costs (`sp`), `hlCrit` for the few Highlights that can crit, and which hit every foe',
     '   (`aoe`) or are Almighty (`alm`, never on a weakness). The Teams tab\'s fight deals the damage',
     '   dealer\'s damage from these. See tools/gen-skill-damage.js. */',
     'const SKILL_DMG = {', ...lines, '};', END].join('\n').replace(/\n/g, EOL);
