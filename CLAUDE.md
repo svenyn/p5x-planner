@@ -1013,8 +1013,8 @@ damage formula (`docs/DATA-SOURCES.md`, the damage-formula section):
     area skill (`SKILL_DMG` `aoe`, from lufel's KR skill type "광역"), area Highlight, and `DPS_KIT`
     component (`aoe`, else "all foes" in its `why`) hits every foe; an enemy-side buff whose text
     names one foe (`tcOneFoe`: "the target", "a foe"; an entry may say `foes: 'one'|'all'`) is on the
-    main target only. A constant one-foe debuff still reaches every foe (a known gap: `sim.consts`
-    is a sum).
+    main target only — a cast's (`one` on the buff) and an always-on one's alike (`sim.constsOne`,
+    `X0one`: the board's constants a foe other than the main target does not get).
   - *Round gates* on a `TEAM_BUFFS`/`WONDER_BUFFS` line (`tcGate`): `from` a round, or by Awareness
     `fromAw: [[aw, round], ...]`; `until` a round; `rampAt` the rounds its stacks arrive. They replace
     the judged `up` that stood for a ramp or a battle-start window (Mayumi's Torque Boost, Kotone
@@ -1067,8 +1067,9 @@ damage formula (`docs/DATA-SOURCES.md`, the damage-formula section):
   Starlight Ren gained Rhythm's +12 for a Starlight character. The seat lists the lines. On the real
   save (33 owned characters) the best team changed for 3 (Pioneer Shun, Chizuko, Mayumi), and
   characters whose kits are mostly party buffs read much lower as damage dealers (Mayumi −36%, Yukari
-  −31%, J&C −27%): their own buffs are now in both fights, so a teammate's add less on top. A
-  once-per-battle own line (`battle`) is not fired for the damage dealer.
+  −31%, J&C −27%): their own buffs are now in both fights, so a teammate's add less on top. The
+  only once-per-battle lines (`battle`) are Manaka's Da Capo, fired when she is the Elucidator; an
+  Elucidator is never the damage dealer, so the damage dealer's own `battle` lines are never needed.
 - **`KIT_STAT_BUFFS` lines the kit-bonus research found short or missing** (Nov 2026): Wavecatcher
   Miyu's Mermaid Dreamer is permanent and stacks to 5 (it was counted once), Aigis's Proof and
   Assigned Duty hold 3 stacks in Orgia Mode (once, timed on her Theurgy), Starlight Ann's Fever Step
@@ -1094,12 +1095,25 @@ damage formula (`docs/DATA-SOURCES.md`, the damage-formula section):
   Tempest Riko, Saboteur nowhere (Kumi's DEF down is already there); the twins still make no top team
   on that save. A team with the twins renders in about 1.6 s (three fights a lineup). lufel's rotations
   are written for the Strategist pair and are read with the same turns for the others.
+- **Shoki's Improv states** (Nov 2026): he switches state each turn, and his Skill 3 gives the main
+  target crit damage (Electrifying Performance, the only one entered before), pierce (Tempestuous
+  Drama) or damage over time (Blazing Passion); Chilling Intensity's Technical bonuses are not
+  modelled. They are `TC_PAIRS` options like the twins' masks, and the seat names the state
+  (`TC_PAIR_LABEL`). On the real save pierce wins for every damage dealer tried (Kira, Ann, Mitsuru,
+  Makoto Yuki), 4-11% above the crit-damage state. A scan of lufel's English and Korean kit text for
+  other set-up choices found none that changes a team's damage: Aran and Radiance Motoha choose
+  targets, Akechi's partner and Fuuka's backup are already modelled, Pioneer Shun's Presser mode is
+  in his rotation. `resDm` and `dotDm` are team-buff keys now (`TC_KEYS`); only Shoki's Blazing
+  Passion uses one so far, so other kits' Resonance and damage-over-time buffs in `TEAM_BUFF_SKIPS`
+  can be entered.
 - **Kira's Bleed counts its Almighty part** (Nov 2026): 1% of the target's max HP per stack a turn,
   capped at 60% of his ATK (×1.5 from A1), entered at the cap since a boss always reaches it. Only
   lufel's Korean and Chinese text print the cap; the English and Japanese do not, so Global having it
   is an assumption the `why` and the seat's notes say. It takes his damage over time from about a
   quarter of his damage to about 60% on the real save's numbers, and moves his best team. Almighty
-  takes no weakness bonus in the game, which the fight does not separate (a known gap); the same
+  takes no weakness bonus: a `DPS_KIT` component with `noWeak` and an Almighty skill or Highlight
+  (`SKILL_DMG` `alm`, from lufel's Korean element 만능: Akechi's Skill 3 and Highlight, Starlight
+  Ren's Skill 3, the twins' Highlight) skip the weakness factor in the fight; the same
   Korean text counts all his skill and Highlight damage as damage over time, which is not modelled.
 - **Not priced, and the page says so**: other extra actions (Narumi's for Wonder, Mayumi's own) and
   Wonder's own damage, weakness creation, Down/Technical, ailments other than the damage over time a

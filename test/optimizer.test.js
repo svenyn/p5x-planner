@@ -2948,7 +2948,22 @@ function awarenessOverrideDrift() {
     tcMemo.key = '';
     out.prosperity = tcSimPrep(ann, [null, null, null], false, true).gauge0;
     state.cards = keepC;
+    // an always-on debuff on one foe stays on the main target when there are more foes
+    const ddc = why => [{ k: 'defdown', v: 40, to: 'enemy', src: 'passive', why }];
+    setSel('#tmFoes', 3);
+    out.oneConst = [ryu(ddc('test: the target\'s DEF down')).mult, ryu(ddc('test: all foes\' DEF down')).mult];
+    setSel('#tmFoes', 1);
+    // Almighty (noWeak) takes no weakness bonus: a weakness-damage buff leaves that hit alone
+    const keepDK = DPS_KIT[ann.n];
+    setSel('#tmWeak', 'all');
+    const almRun = noWeak => { DPS_KIT[ann.n] = [{ kind: 'hit', v: 100, on: 'self', noWeak, why: 't' }]; return ryu([{ k: 'weak', v: 50, to: 'party', src: 'passive', why: 'test: weakness damage' }]); };
+    const aw1 = almRun(true), aw0 = almRun(false);
+    out.alm = { almighty: aw1.parts.hit / aw1.base.parts.hit, normal: aw0.parts.hit / aw0.base.parts.hit, skills: ['Goro Akechi', 'Ren Amamiya [Starlight]'].map(n => (SKILL_DMG[n].alm || []).join('')) };
+    DPS_KIT[ann.n] = keepDK; setSel('#tmWeak', 'boss');
     TEAMS['Ryuji Sakamoto'] = keepR; TEAM_BUFFS['Ryuji Sakamoto'] = keepRB2; tcMemo.key = '';
+    // Shoki's Improv states, chosen like the twins' masks
+    const sho = id => tcMemberCalc(ann, 'Shoki Ikenami', null, null, false, id).lines.filter(l => /Improvise \(Skill 3\) in/.test(l.why)).map(l => l.k).join(',');
+    out.shoki = { ids: TC_PAIRS['Shoki Ikenami'].map(o => o.id).join(','), E: sho('E'), T: sho('T'), B: sho('B') };
     // the damage dealer's own damage bonuses: on the hits they name, in their window, added or multiplied
     const keepKB = DPS_KIT_BONUS[ann.n], keepAR = TEAMS[ann.n], keepAS = SKILL_DMG[ann.n];
     SKILL_DMG[ann.n] = { hl: 'HL', cd: 4, d: [100, 100, 100, 200] };
@@ -3071,6 +3086,12 @@ function awarenessOverrideDrift() {
   check('the twins\' mask pairs: Strategist keeps its party ATK, Medic gets the party damage passive, Saboteur the DEF down and damage taken and no party ATK; the fight plays the best pair',
     th.pairs.ids === 'MA,MS,SL' && th.pairs.MA.includes('atkPct:30.0') && !th.pairs.MA.includes('dm:24.0') && th.pairs.MS.includes('dm:24.0') && !th.pairs.MS.includes('atkPct:30.0') &&
     th.pairs.SL.some(x => x.startsWith('defdown:')) && th.pairs.SL.includes('dm:24.0') && !th.pairs.SL.some(x => x.startsWith('atkPct')) && !!th.pairs.best, JSON.stringify(th.pairs));
+  check('with three foes an always-on debuff on one foe helps less than one on all foes',
+    th.oneConst[0] < th.oneConst[1] - 1e-6, JSON.stringify(th.oneConst));
+  check('Almighty damage takes no weakness bonus (a teammate\'s weakness-damage buff leaves it alone); SKILL_DMG marks Akechi\'s and Starlight Ren\'s Almighty skills',
+    Math.abs(th.alm.almighty - 1) < 1e-9 && th.alm.normal > 1.05 && th.alm.skills[0] === '0011' && th.alm.skills[1] === '0010', JSON.stringify(th.alm));
+  check('Shoki\'s Improv states give the main target crit damage, pierce or damage over time, one per state',
+    th.shoki.ids === 'E,T,B' && th.shoki.E === 'cm' && th.shoki.T === 'pierce' && th.shoki.B === 'dotDm', JSON.stringify(th.shoki));
   check('Kira\'s Bleed counts its Almighty part at the cap (60% of ATK a stack, no crit), so damage over time is most of his damage',
     th.kira.entry && th.kira.dot > 0.45, JSON.stringify(th.kira));
 

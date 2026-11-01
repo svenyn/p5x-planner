@@ -141,6 +141,9 @@ function main() {
     const krRec = o.kr && o.kr.skill1 ? o.kr : ((o.characterSkillsData || {})[kr] || Object.values(o.characterSkillsData || {})[0] || {});
     const aoe = SLOTS.map(k => /광역/.test(String((krRec[k] || {}).type || '') + String((krRec[k] || {}).element || '')) ? 1 : 0);
     if (aoe.some(Boolean)) bits.push(`aoe:[${aoe.join(',')}]`);
+    // Almighty damage (element 만능) never lands on a weakness
+    const alm = SLOTS.map(k => /만능/.test(String((krRec[k] || {}).element || '')) ? 1 : 0);
+    if (alm.some(Boolean)) bits.push(`alm:[${alm.join(',')}]`);
     if (hlCrit) bits.push('hlCrit:true');
     // skill cooldowns in turns (lufel's `cool`): a skill with cooldown c is cast at most once in c + 1 turns
     const sc = SLOTS.slice(0, 3).map(k => +((en[k] || {}).cool) || 0);
@@ -153,8 +156,9 @@ function main() {
     '/* Damage per use of skills 1-3 and the Highlight/Theurgy (`d`, % of the stat the kit scales with, base',
     '   skill level, hits added up; `dt` the same at each of the four skill-level tiers), whether the character',
     '   has a Highlight or a Theurgy (`hl`, `th` its gauge need), lufel\'s Highlight cooldown in turns (`cd`) and',
-    '   skill cooldowns (`cool`), and `hlCrit` for the few Highlights that can crit. The Teams tab\'s fight',
-    '   deals the damage dealer\'s damage from these. See tools/gen-skill-damage.js. */',
+    '   skill cooldowns (`cool`), `hlCrit` for the few Highlights that can crit, and which hit every foe',
+    '   (`aoe`) or are Almighty (`alm`, never on a weakness). The Teams tab\'s fight deals the damage',
+    '   dealer\'s damage from these. See tools/gen-skill-damage.js. */',
     'const SKILL_DMG = {', ...lines, '};', END].join('\n').replace(/\n/g, EOL);
 
   let out;
