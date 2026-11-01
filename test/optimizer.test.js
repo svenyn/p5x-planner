@@ -2921,7 +2921,7 @@ function awarenessOverrideDrift() {
     out.skillBad = Object.entries(SKILL_DMG).filter(([n, s]) => !charDef(n) || !['HL', 'TH'].includes(s.hl) || !Array.isArray(s.d) || s.d.length !== 4 || s.d.some(x => !(x >= 0)) || (s.hl === 'TH' && !(s.th > 0))).map(([n]) => n);
     out.skillN = Object.keys(SKILL_DMG).length;
     // 'wave': fired by Wavecatcher Miyu's Surf engine (TC_SURF), her character only
-    const ON = /^(self|self:[123]|tok:.+|selfHL|ally|allySkill|allyHL|anyHL|turnEnd|turnStart|round|wave)$/;
+    const ON = /^(self|self:[123]|tok:.+|selfHL|ally|allySkill|allyAtk|allyHL|anyHL|turnEnd|turnStart|round|wave)$/;
     out.kitBad = [];
     Object.entries(DPS_KIT).forEach(([n, list]) => { if (!charDef(n)) out.kitBad.push(n); list.forEach((c, i) => { if (!['res', 'fu', 'dot', 'hit'].includes(c.kind) || !ON.test(c.on) || !c.why || (c.v == null && !c.ladder)) out.kitBad.push(n + ' #' + i); }); });
     out.kitN = Object.keys(DPS_KIT).length;
@@ -3706,6 +3706,41 @@ function awarenessOverrideDrift() {
     jc.linesA0 === 0 && jc.linesA1 > 0 && jc.linesNoTeam === 0 && jc.linesOtherTeam === 0, JSON.stringify({ a0: jc.linesA0, a1: jc.linesA1, none: jc.linesNoTeam, other: jc.linesOtherTeam }));
   check('the twins\' automatic Two Masks as One sets off a second Glow in the fight at their Awareness 1, nothing at 0',
     jc.a1[0].total > jc.a1[1].total && jc.a1[0].fu > jc.a1[1].fu && Math.abs(jc.a0[0].total - jc.a0[1].total) < 1e-9, JSON.stringify({ a0: jc.a0, a1: jc.a1 }));
+
+  // "an ally's skill" lines: once per damaging skill (the twins' two-skill turn twice), none for a buff-only
+  // turn; "an ally's damage" lines on basic attacks too; an element-gated one only for that element
+  const ally = await p.evaluate(() => {
+    const JC = 'Justine & Caroline', out = {};
+    const buffOnly = Object.keys(SKILL_DMG).map(n => [n, SKILL_DMG[n].d.slice(0, 3).findIndex(v => !(v > 0))]).find(([, i]) => i >= 0);
+    out.helpers = {
+      twins: tcDmgSkills(JC, '3↺+1'), plain: tcDmgSkills(JC, '1'),
+      buffOnly: buffOnly ? tcDmgSkills(buffOnly[0], String(buffOnly[1] + 1)) : null,
+      wonderAtk: tcAtkCount('Wonder', '-'), wonderCast: tcAtkCount('Wonder', 'w0'), blank: tcAtkCount(null, '-'),
+      melee: tcAtkCount('Yaoling Li [Firecracker]', '3+Melee'), skill: tcAtkCount('Ann Takamaki', '1')
+    };
+    const D = charDef('YUI'), keep = DPS_KIT.YUI;
+    const probe = (entry, names) => {
+      DPS_KIT.YUI = [Object.assign({ kind: 'fu', v: 100, why: 'test' }, entry)];
+      tcMemo.key = '';
+      try { return tcHot(() => (tcSim(D, names, false).parts || {}).fu || 0); } finally { DPS_KIT.YUI = keep; tcMemo.key = ''; }
+    };
+    const blank = [null, null, null];
+    out.blankSkill = probe({ on: 'allySkill' }, blank);
+    out.blankAtk = probe({ on: 'allyAtk' }, blank);
+    out.windWithTwins = probe({ on: 'allySkill', allyElem: ['Wind'] }, [JC, null, null]);
+    // a Wind teammate whose rotation beside YUI deals skill damage
+    const wind = CHARACTERS.filter(c => c.e === 'Wind' && c.arch !== 'Navigator' && SKILL_DMG[c.n]).map(c => c.n)
+      .find(n => ((tmRotPick(n, tcTeamSet('YUI', [n, null, null])).pick[0] || {}).seq || []).some(st => tcDmgSkills(n, st) > 0));
+    out.wind = wind;
+    out.windWithMate = wind ? probe({ on: 'allySkill', allyElem: ['Wind'] }, [wind, null, null]) : 0;
+    out.anyWithTwins = probe({ on: 'allySkill' }, [JC, null, null]);
+    return out;
+  });
+  const ah = ally.helpers;
+  check('a teammate\'s turn sets off "an ally\'s skill" once per damaging skill: the twins\' "3↺+1" twice, a buff-only skill never; basic attacks are counted apart',
+    ah.twins === 2 && ah.plain === 1 && ah.buffOnly === 0 && ah.wonderAtk === 1 && ah.wonderCast === 0 && ah.blank === 1 && ah.melee === 1 && ah.skill === 0, JSON.stringify(ah));
+  check('in the fight, blank teammates set off "an ally\'s damage" but not "an ally\'s skill", and a Wind-only line needs a Wind teammate',
+    ally.blankSkill === 0 && ally.blankAtk > 0 && ally.windWithTwins === 0 && ally.windWithMate > 0 && ally.anyWithTwins > 0, JSON.stringify(ally));
 
   await p.evaluate(k => { state.chars = JSON.parse(k.chars); tmBusy = new Set(k.busy); tmPick = JSON.parse(k.pick); commit(); showTab('roster'); }, tmKeep);
 

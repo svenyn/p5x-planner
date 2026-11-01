@@ -9819,6 +9819,18 @@ function tcStepHits(n, step) {
   if (S && uses.some((u, i) => u && S.d[i] > 0)) return true;
   return String(step).split('+').some(t => /^(Gunshot|Gun|Melee|Punch|Special)/i.test(t.trim()));
 }
+/* What sets off a damage dealer's "an ally's skill" and "an ally's damage" lines (DPS_KIT `on: 'allySkill'`,
+   `'allyAtk'`): each skill use in a teammate's turn that deals damage by SKILL_DMG — the twins' "3↺+1" is
+   two — and each basic attack: Wonder's attack turn, a blank teammate's turn, a Gunshot or Melee token. A
+   turn that only buffs, heals or shields sets off neither. */
+function tcDmgSkills(n, step) {
+  const S = n && n !== 'Wonder' ? SKILL_DMG[n] : null;
+  return S ? tcSkillUses(step).reduce((t, u, i) => t + (u && S.d[i] > 0 ? u : 0), 0) : 0;
+}
+function tcAtkCount(n, step) {
+  if (!n || n === 'Wonder') return step === '-' ? 1 : 0;
+  return String(step).split('+').filter(t => /^(Gunshot|Gun|Melee|Punch)/i.test(t.trim())).length;
+}
 const tcHlEvery = () => 5;
 const tcThEvery = n => Math.ceil((((n && SKILL_DMG[n]) || {}).th || 70) / TC_TH_TURN);
 const tcFight = () => Math.max(1, tcSel('#tmFight', 12));
@@ -12082,12 +12094,14 @@ const DPS_KIT = {
   'Toshiya Sumi': [
     { kind: 'res', v: 9.29, n: 2, on: 'allySkill', why: 'Sonnet of Fate (Awareness 0): every damage instance by an ally gives 1 Verse (his own 3-hit Skill 1 gives 3 Verses, so it counts hits); 14 Verses fire a 130% ATK Resonance (Lv 70+). Priced per Verse (130/14 = 9.29% ATK); an ally\'s damaging skill judged at 2 hits' },
     { kind: 'res', v: 9.29, n: 2, on: 'allyHL', why: 'Sonnet of Fate: an ally\'s Highlight/Theurgy, judged at 2 hits = 2 Verses' },
+    { kind: 'res', v: 9.29, on: 'allyAtk', why: 'Sonnet of Fate: an ally\'s basic attack (Wonder\'s attack turns, Gunshot, Melee), judged at 1 hit = 1 Verse' },
     { kind: 'res', v: 9.29, n: 3, on: 'self:1', why: 'Sonnet of Fate: Unexpected Tragedy (3 hits) gains 3 Verses (of Hate)' },
     { kind: 'res', v: 9.29, n: 2, on: 'self:2', why: 'Sonnet of Fate: Absurd Comedy (2 hits) gains 2 Verses (of Healing)' },
     { kind: 'res', v: 9.29, n: 5, on: 'self:3', why: 'Sonnet of Fate: Tragicomedy of Love (5 hits) gains 5 Verses (of Passion)' },
     { kind: 'res', v: 9.29, n: 3, on: 'selfHL', why: 'Sonnet of Fate: his Highlight (3 hits) gains 3 Verses' },
     { kind: 'res', v: 3.57, n: 2, on: 'allySkill', aw: 2, why: 'Flight and Conflict (Awareness 2): Sonnet +50% ATK (Korean: multiplier up by 50% of his ATK), per Verse 3.57%; 2 Verses per ally skill as above' },
     { kind: 'res', v: 3.57, n: 2, on: 'allyHL', aw: 2, why: 'Flight and Conflict (Awareness 2): as above, per ally Highlight' },
+    { kind: 'res', v: 3.57, on: 'allyAtk', aw: 2, why: 'Flight and Conflict (Awareness 2): as above, per ally basic attack (1 Verse)' },
     { kind: 'res', v: 3.57, n: 3, on: 'self:1', aw: 2, why: 'Flight and Conflict (Awareness 2): 3 Verses from Skill 1' },
     { kind: 'res', v: 3.57, n: 2, on: 'self:2', aw: 2, why: 'Flight and Conflict (Awareness 2): 2 Verses from Skill 2' },
     { kind: 'res', v: 3.57, n: 5, on: 'self:3', aw: 2, why: 'Flight and Conflict (Awareness 2): 5 Verses from Skill 3' },
@@ -12173,10 +12187,10 @@ const DPS_KIT = {
     { kind: 'res', v: [36.4, 40.1, 38.6, 42.3], on: 'self:3', aw: 1, why: 'A1 Etched in Ice: 1 Vestige stack each time the Edge is activated.' },
     { kind: 'res', v: [36.4, 40.1, 38.6, 42.3], on: 'selfHL', after: '3', dur: 2, why: 'Highlight inside the Edge: 1 Vestige stack (may exceed the cap).' },
     { kind: 'res', v: [36.4, 40.1, 38.6, 42.3], on: 'selfHL', after: '3', dur: 2, aw: 4, why: 'A4: 1 more Vestige stack from a Highlight inside the Edge.' },
-    { kind: 'fu', v: 20, on: 'allySkill', after: '3', dur: 2, cond: 'the ally deals Wind damage (a Wind teammate, e.g. Tempest Riko)', why: 'Ailes au Vent: while Spring\'s Edge is up, each ally skill dealing Wind damage triggers a 20% Wind hit from her.' },
-    { kind: 'fu', v: 20, on: 'allyHL', after: '3', dur: 2, cond: 'the ally deals Wind damage', why: 'Same follow-up from an ally Highlight or Theurgy.' },
-    { kind: 'res', v: [36.4, 40.1, 38.6, 42.3], on: 'allySkill', after: '3', dur: 2, cond: 'the ally deals Wind damage', why: 'Each such ally action also gives 1 Vestige stack, worth 36.4% in the Edge\'s Resonance.' },
-    { kind: 'res', v: [36.4, 40.1, 38.6, 42.3], on: 'allyHL', after: '3', dur: 2, cond: 'the ally deals Wind damage', why: 'Vestige stack from an ally Wind Highlight or Theurgy.' },
+    { kind: 'fu', v: 20, on: 'allySkill', allyElem: ['Wind'], after: '3', dur: 2, cond: 'the ally deals Wind damage (a Wind teammate, e.g. Tempest Riko)', why: 'Ailes au Vent: while Spring\'s Edge is up, each ally skill dealing Wind damage triggers a 20% Wind hit from her.' },
+    { kind: 'fu', v: 20, on: 'allyHL', allyElem: ['Wind'], after: '3', dur: 2, cond: 'the ally deals Wind damage', why: 'Same follow-up from an ally Highlight or Theurgy.' },
+    { kind: 'res', v: [36.4, 40.1, 38.6, 42.3], on: 'allySkill', allyElem: ['Wind'], after: '3', dur: 2, cond: 'the ally deals Wind damage', why: 'Each such ally action also gives 1 Vestige stack, worth 36.4% in the Edge\'s Resonance.' },
+    { kind: 'res', v: [36.4, 40.1, 38.6, 42.3], on: 'allyHL', allyElem: ['Wind'], after: '3', dur: 2, cond: 'the ally deals Wind damage', why: 'Vestige stack from an ally Wind Highlight or Theurgy.' },
     { kind: 'res', v: [36.4, 40.1, 38.6, 42.3], on: 'self:3', stacks: 7, aw: 6, why: 'A6 Dance of Love: after the Resonance the Edge lasts 1 more turn, regains up to 2 spent stacks, and resonates again: (2 regained + 4) plus 1 from the Skill 1 lufel\'s A6 rotation (3,1,1) casts in the extra turn = 7 x 36.4%.' }
   ],
   'Runa Dogenzaka': [
@@ -13479,7 +13493,9 @@ function tcSimRun(P, order, hold) {
     };
     const kitFire = (on, X, opts) => {
       kit.forEach((c, i) => {
-        if (c.on !== on && !(on === 'ally' && c.on === 'allySkill')) return;
+        if (c.on !== on) return;
+        // `allyElem`: only a teammate of those elements sets it off ("an ally dealing Wind damage")
+        if (c.allyElem && !(opts && opts.by && opts.by.n && c.allyElem.includes((charDef(opts.by.n) || {}).e))) return;
         if (c.after != null && !(lastUse[c.after] != null && round - lastUse[c.after] < (c.dur || 1))) return;
         /* `byTok`: only when the `mate` acts with that token in their turn, on their `byTurn` [first, last]
            action since the damage dealer last used `byAfter` (Kasumi's Dance Partner turns after Invitation) */
@@ -13589,7 +13605,7 @@ function tcSimRun(P, order, hold) {
         lastUse.HL = round; lastUse.TH = round;
         kitFire('selfHL', X);
         trigger('dpsHL', a);
-      } else kitFire('allyHL', curX());
+      } else kitFire('allyHL', curX(), { by: a });
       inflict(a, tok);
       kitFire('anyHL', curX());
       trigger('anyHL', a);
@@ -13641,7 +13657,8 @@ function tcSimRun(P, order, hold) {
         castBy(elu, new Set(['shift']));
         BK.acts++;
         charge(!!BK.skill && tcStepHits(BK.n, BK.skill) && BK.weak);
-        kitFire('ally', curX());
+        kitFire('ally', curX(), { by: BK });
+        if (BK.skill) for (let i = tcDmgSkills(BK.n, BK.skill); i > 0; i--) kitFire('allySkill', curX(), { by: BK });
         surfCatch();
       }
       decide(a);
@@ -13702,7 +13719,12 @@ function tcSimRun(P, order, hold) {
         // Wonder's schedule tokens are his own; a teammate's skills and tokens inflict
         if (!a.wonder) { const t = tcAilToks(step); t.delete('HL'); t.delete('TH'); inflict(a, t); }
         // a teammate acting, kit or not (the reference fight's blank teammates act too)
-        kitFire('ally', curX(), { by: a, toks: String(step).split('+').map(t => t.trim()) });
+        const byA = { by: a, toks: String(step).split('+').map(t => t.trim()) };
+        kitFire('ally', curX(), byA);
+        // once per damaging skill the turn uses (the twins' automatic Two Masks as One is a second one),
+        // and once per basic attack (Wonder's and a blank teammate's turns, Gunshot and Melee tokens)
+        for (let i = tcDmgSkills(a.n, step); i > 0; i--) kitFire('allySkill', curX(), byA);
+        for (let i = tcAtkCount(a.n, step); i > 0; i--) kitFire('allyAtk', curX(), byA);
         Object.values(mateActs).forEach(m => { if (a.n) m.set(a.n, (m.get(a.n) || 0) + 1); });
         surfCatch();
       }

@@ -1198,6 +1198,19 @@ damage formula (`docs/DATA-SOURCES.md`, the damage-formula section):
   target uses a skill, once per Blossoming Season, and whether that falls in her Dance Partner turn is
   not settled), and the twins' Skill Amplification (Two Masks as One, 14.6-17% to other allies), still in
   `TEAM_BUFF_SKIPS`, which undercounts them in every team.
+- **"An ally's skill" is counted per damaging skill** (Nov 2026, the user asked, after the twins' two-skill
+  turn): a damage dealer's `DPS_KIT` line `on: 'allySkill'` fires once per skill use in a teammate's turn
+  that deals damage by `SKILL_DMG` (`tcDmgSkills`: the twins' "3↺+1" is two, a buff-, heal- or shield-only
+  skill none), `'allyAtk'` once per basic attack (`tcAtkCount`: Wonder's attack turn, a blank teammate's
+  turn, a Gunshot/Melee token), `'ally'` once per action as before. Until then every teammate action fired
+  `allySkill`, buff-only casts and the reference fight's blank teammates included. `allyElem` limits a line
+  to teammates of those elements (`opts.by`, also passed on an ally's Highlight); Frostgale Kotone's Wind
+  lines had it only in `cond` text. Toshiya's Sonnet of Fate ("every damage instance by an ally") gained
+  `allyAtk` lines at 1 Verse. On the real save (Nov 1 2026, twins at Awareness 1): YUI's best team 21.1×
+  to 59.3×, now led by the twins, and Mitsuru's 19.3× to 25.3× — mostly because the reference fight's
+  blank teammates no longer set off their follow-ups, so "alone" is lower, which is why a number is never
+  compared across damage dealers; Toshiya 28.0× to 29.2×; Frostgale Kotone 23.0× to 21.7× (non-Wind
+  allies no longer feed her Edge); Kasumi and YUI [Prism] unchanged.
 - **Shoki's Improv states** (Nov 2026): he switches state each turn, and his Skill 3 gives the main
   target crit damage (Electrifying Performance, the only one entered before), pierce (Tempestuous
   Drama), damage over time (Blazing Passion) or Technical Precision (Chilling Intensity, with its +20%
