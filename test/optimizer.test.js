@@ -2853,6 +2853,53 @@ function awarenessOverrideDrift() {
     };
     out.oracle = [shiftAt(0), shiftAt(2), shiftAt(6)];
     state.chars['Fuuka Yamagishi'].loadout = keepF; tcMemo.key = '';
+    // skill numbers at the tier the Setup reaches
+    const keepAnn = state.chars[ann.n].loadout;
+    state.chars[ann.n].loadout = Object.assign({}, DEFAULT_LOADOUT, { awareness: 0 });
+    const t0 = tcSkillD(ann.n)[0];
+    state.chars[ann.n].loadout = Object.assign({}, DEFAULT_LOADOUT, { awareness: 6, mind: true });
+    const t3 = tcSkillD(ann.n)[0];
+    state.chars[ann.n].loadout = keepAnn; tcMemo.key = '';
+    out.tiers = { t0, t3, base: SKILL_DMG[ann.n].d[0] };
+    // a Highlight cannot crit (except the kits whose text says it can): a crit buff leaves Ann's Highlight damage alone
+    const keepT2 = TEAMS['Ryuji Sakamoto'], keepB2 = TEAM_BUFFS['Ryuji Sakamoto'];
+    TEAMS['Ryuji Sakamoto'] = { rot: [{ aw: 0, label: 'Test', seq: ['1'] }] };
+    TEAM_BUFFS['Ryuji Sakamoto'] = [{ k: 'cm', v: 100, to: 'party', src: 'passive', why: 'test: crit damage, always on' }];
+    tcMemo.key = '';
+    const cs = tcSim(ann, ['Ryuji Sakamoto', null, null], false);
+    out.hlCrit = { hl: cs.parts.hl / cs.base.parts.hl, skill: cs.parts.skill / cs.base.parts.skill, flags: Object.keys(SKILL_DMG).filter(n => SKILL_DMG[n].hlCrit).sort() };
+    TEAMS['Ryuji Sakamoto'] = keepT2; TEAM_BUFFS['Ryuji Sakamoto'] = keepB2; tcMemo.key = '';
+    // the gauge: 21% for an action that hits, 17% for one that does not
+    out.hits = [tcStepHits('Ann Takamaki', '1'), tcStepHits('Ayaka Sakai', '2'), tcStepHits('Haru Okumura', 'Gunshot'), tcStepHits('Wonder', '-'), tcStepHits('Wonder', 'w0')];
+    // Wonder casts turn by turn: a 2-turn card he casts every other turn, attacks between
+    const real2 = WONDER_BUFFS, keepW2 = state.wonder;
+    Object.assign(WONDER_BUFFS, { personas: { P: [] }, cards: { A: [{ k: 'atk%', v: 30, to: 'party', src: 'card', dur: 2, why: 'a' }] }, weapons: {} });
+    const ws = tcWonder(ann, { personas: [{ name: 'P', cards: ['A', '', ''] }, { name: '', cards: ['', '', ''] }, { name: '', cards: ['', '', ''] }], weapon: '', refine: 1 });
+    Object.assign(WONDER_BUFFS, real2); state.wonder = keepW2; tcMemo.key = '';
+    out.wsched = { seq: ws.sim.cast.seq.join(' '), events: ws.sim.cast.events.length, constAtk: ws.sim.consts.atkPct };
+    // the damage dealer's own rotation is fitted in the fight: a faster teammate debuffs the boss every
+    // other round, so Ann's much stronger Skill 3 moves onto those rounds
+    const keepS = SKILL_DMG[ann.n], keepAT = TEAMS[ann.n], keepRT = TEAMS['Ryuji Sakamoto'], keepRB = TEAM_BUFFS['Ryuji Sakamoto'], keepSp = tmSpeed;
+    SKILL_DMG[ann.n] = { hl: 'HL', cd: 4, d: [50, 0, 200, 195.2] };
+    TEAMS[ann.n] = { rot: [{ aw: 0, label: 'Test', seq: ['1', '3', '1', '3', '1', '3'] }] };
+    TEAMS['Ryuji Sakamoto'] = { rot: [{ aw: 0, label: 'Test', seq: ['1', '2'] }] };
+    TEAM_BUFFS['Ryuji Sakamoto'] = [{ k: 'dmg', v: 100, to: 'enemy', src: '1', on: '1', dur: 1, why: 'test: a 1-turn debuff' }];
+    tmSpeed = n => n === 'Ryuji Sakamoto' ? 200 : n === ann.n ? 100 : 50;
+    tcMemo.key = '';
+    const on = tcSim(ann, ['Ryuji Sakamoto', null, null], true), offF = tcSim(ann, ['Ryuji Sakamoto', null, null], false);
+    out.dpsFit = { seq: on.dpsRot && on.dpsRot.seq.join(' '), gain: on.dpsRot && on.dpsRot.gain, changed: on.dpsRot && on.dpsRot.changed,
+      off: offF.dpsRot, better: on.total > offF.total, counts: on.dpsRot && ['1', '3'].map(t => on.dpsRot.seq.filter(x => x === t).length) };
+    // a teammate's rotation is fitted in the fight too: Ann's is pinned (one plain skill, bursts between),
+    // and Ryuji's lufel rotation puts his 1-turn debuff on the wrong rounds; the quick model sees the same
+    // uptime either way, the fight moves it onto Ann's Skill 3 rounds
+    TEAMS[ann.n] = { rot: [{ aw: 0, label: 'Test', seq: ['3', '1+1', '3', '1+1', '3', '1+1'] }] };
+    TEAMS['Ryuji Sakamoto'] = { rot: [{ aw: 0, label: 'Test', seq: ['2', '1', '2', '1', '2', '1'] }] };
+    tcMemo.key = '';
+    const quick = tcMember(ann, 'Ryuji Sakamoto', tcTeamSet(ann.n, ['Ryuji Sakamoto', null, null]), null, true).rot;
+    const full = tcSim(ann, ['Ryuji Sakamoto', null, null], 'full'), cheap = tcSim(ann, ['Ryuji Sakamoto', null, null], true);
+    out.mateFit = { quick: quick ? quick.seq.join(' ') : 'as written', full: full.fits['Ryuji Sakamoto'] && full.fits['Ryuji Sakamoto'].seq.join(' '),
+      gain: full.fits['Ryuji Sakamoto'] && full.fits['Ryuji Sakamoto'].gain, better: full.mult > cheap.mult * 1.001 };
+    SKILL_DMG[ann.n] = keepS; TEAMS[ann.n] = keepAT; TEAMS['Ryuji Sakamoto'] = keepRT; TEAM_BUFFS['Ryuji Sakamoto'] = keepRB; tmSpeed = keepSp; tcMemo.key = '';
     out.skillBad = Object.entries(SKILL_DMG).filter(([n, s]) => !charDef(n) || !['HL', 'TH'].includes(s.hl) || !Array.isArray(s.d) || s.d.length !== 4 || s.d.some(x => !(x >= 0)) || (s.hl === 'TH' && !(s.th > 0))).map(([n]) => n);
     out.skillN = Object.keys(SKILL_DMG).length;
     const ON = /^(self|self:[123]|tok:.+|selfHL|ally|allySkill|allyHL|anyHL|turnEnd|turnStart|round)$/;
@@ -2887,6 +2934,21 @@ function awarenessOverrideDrift() {
   check('Da Capo is extra actions over the fight; Wonder\'s Highlight is his best Persona\'s, fired from the gauge',
     near(th.dacapo[0], 2 / 12) && near(th.dacapo[1], 1 / 6) && JSON.stringify(th.wonder) === '{"lines":[30],"idle":1,"events":1}', JSON.stringify({ d: th.dacapo, w: th.wonder }));
   check('Fuuka\'s backup fires their Highlight on the swap from her Awareness 2', th.backup[0] === 0 && th.backup[1] > 0, JSON.stringify(th.backup));
+  check('skill numbers are read at the skill-level tier the Setup reaches',
+    th.tiers.t0 === th.tiers.base && th.tiers.t3 > th.tiers.t0, JSON.stringify(th.tiers));
+  check('a Highlight does not crit unless its kit says it can (J&C, Kasumi, Radiance Motoha): a crit buff raises the skills, not the Highlight',
+    Math.abs(th.hlCrit.hl - 1) < 1e-6 && th.hlCrit.skill > 1.01 &&
+    JSON.stringify(th.hlCrit.flags) === JSON.stringify(['Justine & Caroline', 'Kasumi Yoshizawa', 'Motoha Arai [Radiance]']), JSON.stringify(th.hlCrit));
+  check('the gauge fills 21% for an action that hits and 17% for one that does not (a buff skill, Wonder casting a card)',
+    JSON.stringify(th.hits) === '[true,false,true,true,false]', JSON.stringify(th.hits));
+  check('Wonder casts his skills turn by turn: a 2-turn card every other turn, attacks between, its line a cast in the fight',
+    th.wsched.seq === 'w0 - w0 - w0 -' && th.wsched.events === 1 && th.wsched.constAtk === 0, JSON.stringify(th.wsched));
+  check('the damage dealer\'s own rotation is fitted to the team in the fight: their strongest skill moves onto the rounds a teammate\'s debuff is up, with lufel\'s skill counts; off, it is lufel\'s',
+    th.dpsFit.seq === '3 1 3 1 3 1' && th.dpsFit.gain > 0.001 && th.dpsFit.better && th.dpsFit.off === null &&
+    JSON.stringify(th.dpsFit.counts) === '[3,3]', JSON.stringify(th.dpsFit));
+  check('a teammate\'s rotation is fitted in the fight: the quick model sees no difference, the fight moves a 1-turn debuff onto the damage dealer\'s strong rounds',
+    (th.mateFit.quick === 'as written' || th.mateFit.quick === '2 1 2 1 2 1') && th.mateFit.full === '1 2 1 2 1 2' && th.mateFit.gain > 0.001 && th.mateFit.better,
+    JSON.stringify(th.mateFit));
   const [o0, o2, o6] = th.oracle;
   check('the fight plays Oracle Shift: swaps when Fuuka\'s stacks reach the cost (rounds 2, 6, 11 at A0), more often from A6, the backup\'s Highlight with them from A2, Courtesy from the backup\'s stats, and the backup adds damage',
     JSON.stringify(o0.shifts) === '[2,6,11]' && o0.leoHl === 0 && o2.leoHl >= 2 && o6.shifts.length > o0.shifts.length &&

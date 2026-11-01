@@ -844,16 +844,53 @@ damage formula (`docs/DATA-SOURCES.md`, the damage-formula section):
   that cannot be priced, shown on the damage dealer's seat with the damage mix the fight gave them.
   Both came from four hand-checked research batches against one brief (Nov 2026); each `why` says
   where its number comes from and what was judged. Every hit is priced with what is up at that
-  moment (memoised per buff state). The team's number is that total over the same fight with
-  teammates who add nothing (they still act: the gauge fills the same and every Highlight is the
-  damage dealer's). A member's part is the fight without them; Wonder's, the fight with his setup
-  blank. Fuuka's backup is played out too (next bullet but one). A fresh render is 0.4-1.0 s on the
-  real save, a repeat 0.1-0.3 s.
+  moment (memoised per buff state), against the unbuffed hit with its crit, so a hit that cannot
+  crit (damage over time, a Highlight) is worth less by the crit factor. Skill numbers are read at
+  the skill-level tier the Setup reaches (`SKILL_DMG` `dt`, `tcSkillD`, the same tier rule as the kit
+  lines; a `FIXES` value scales by its text's own tier ratios). **A Highlight does not crit** (lufel's
+  guide) unless its text or an Awareness says it can (`hlCrit`: J&C, Kasumi, Radiance Motoha); a
+  Theurgy does. Wonder's skills are cast turn by turn too: `tcWonder` lays his cast skills on a
+  six-turn schedule (`sim.cast`: each every its longest duration, the turns left are attacks), so
+  only his passives, weapon and judged lines stay averaged. The team's number is that total over
+  the same fight with teammates who add nothing (they still act and attack: the gauge fills and
+  every Highlight is the damage dealer's). A member's part is the fight without them; Wonder's, the
+  fight with his setup blank. Fuuka's backup is played out too (next bullet but one). A fresh render
+  is 0.4-1.0 s on the real save, a repeat 0.1-0.3 s.
+- **The damage dealer's own rotation is fitted to the team in the fight** (`tcSimFitDps`, Nov 2026;
+  the user: adapting rotations to the team is the point of the tool). Same candidates as a
+  teammate's fit (`tcRotVariants`: lufel's options at their Awareness, plain turns re-chosen within
+  lufel's frequencies, no cooldown broken), but each is priced by the fight with this team, so turn
+  order, the gauge and what teammates set off decide it: every candidate under the spending order
+  lufel's as written did best with, the top `TC_DPS_FIT_TOP` (2) under every order, a change kept only
+  if it gains `TC_DPS_FIT_MIN` (0.1%). Every candidate is tried for every team: ranking a pool by the
+  fight alone and trying only its head missed the rotation a teammate's debuff rounds called for (a
+  test holds that case). The reference fight fits the damage dealer alone too, so the number is the
+  team's, not the fit's. `tcSim`'s `fit` is `true` (teammates and damage dealer) or `'mates'`
+  (teammates only): the search fights its 30 leaders with `'mates'` and re-fights the 10 it shows with
+  `true`. The Rotation panel shows the damage dealer's fitted rotation like a teammate's. On the
+  real save: Makoto Yuki +8.8%, Wavecatcher Miyu +8.5%, Frostgale Kotone +1.3%; Ann and Ren keep
+  lufel's.
+- **The teammates' rotations are fitted in the fight too** (`tcSimFitTeam`, `fit` `'full'`, Nov 2026):
+  after the damage dealer's, each teammate's and the Elucidator's candidates are played with the
+  others' rotations as they stand, the best kept (same 0.1% bar), pass after pass until none changes
+  (at most `TC_FIT_PASSES`, 3), starting from the quick fit (`tcRotFit`, which still screens the
+  sweep). One member's debuff rounds decide where another's buff or hit belongs, which the quick
+  model's share-of-turns cannot see (a test pins such a case). A teammate's candidates that cast the
+  same priced skills and hit the boss on the same turns are one candidate (Kumi's 90, Runa's 160
+  shrink a lot); an Elucidator's are all tried. `fits[name]` feeds the Rotation panel. Cost is held
+  by fitting fully only what is shown: the search re-fights its shown 10 with `true`, gives the
+  leading `TC_FULL_TOP` (3) the full fit and lets the best of those lead; the headline, its rotations
+  and line uptimes are the full fit; members' parts, the next teams, lufel's team, replacements and
+  Wonder's suggestion are priced with `true` and scaled to the headline (`Lref`), like for like. A
+  fresh render is 0.6-1.0 s on the real save. The damage-formula memo is per damage dealer for the
+  render (`tcMemo.dmg`).
 - **The Highlight gauge, as lufel's HIGHLIGHT guide measures it**: one gauge for the team, 17% per
-  thief action and 21% on a weakness hit (`TC_GAUGE_ACT`, the boss is hit on a weakness), capped at
+  thief action that does not hit (`TC_GAUGE_MISS`: a buff, a shield, Wonder casting a card) and 21%
+  for one that hits the boss's weakness (`TC_GAUGE_ACT`; `tcStepHits`: a skill with damage by
+  `SKILL_DMG`, or an attack token), capped at
   100%, empty at the start (so the first Highlight is in round 2), not charged by Highlights,
   All-Out Attacks or the Elucidator; a Highlight spends 100% and its user cannot use it again for 4
-  of their own actions (`TC_HL_COOL`). Four thieves charge 84% a round, fewer than four Highlights
+  of their own actions (`TC_HL_COOL`). Four thieves charge 68-84% a round, fewer than four Highlights
   every four rounds, so who gets them is a choice: `tcSimBest` plays the fight with the gauge spent
   in several orders (the damage dealer first; each teammate whose Highlight carries lines first,
   then the damage dealer; all those teammates first) and spent as soon as it fills or held for the

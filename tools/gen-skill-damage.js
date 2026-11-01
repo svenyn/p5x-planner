@@ -69,22 +69,24 @@ const FIXES = {
 const SLOTS = ['skill1', 'skill2', 'skill3', 'skill_highlight'];
 const STAT = /(Attack|Defense|max HP|Max HP)/;
 
+/* The damage of one skill at each of its four skill-level tiers ("94.8%/104.5%/100.6%/110.3%";
+   a single printed value is every tier's). */
 function damageOf(text) {
-  let total = 0;
+  const total = [0, 0, 0, 0];
   for (const sent of String(text || '').split(/(?<=\.)\s+|\n/)) {
     if (!/damage/i.test(sent)) continue;
     // a heal, shield or buff sentence that merely mentions damage elsewhere is not a hit
     if (!/\bdeal|\bdamage (?:equal|of)|damage to/i.test(sent)) continue;
-    const re = /equal (?:to|of) ([\d.]+)%(?:\/[\d.]+%)*\s+(?:of\s+)?([^.,(%]*?)(Attack|Defense|max HP|Max HP)/gi;
+    const re = /equal (?:to|of) ([\d.]+)%(?:\/([\d.]+)%)?(?:\/([\d.]+)%)?(?:\/([\d.]+)%)?(?:\/[\d.]+%)*\s+(?:of\s+)?([^.,(%]*?)(Attack|Defense|max HP|Max HP)/gi;
     let m;
     while ((m = re.exec(sent))) {
       const after = sent.slice(m.index + m[0].length, m.index + m[0].length + 40);
       const hit = after.match(/^\s*\((\d+) hits?\)/) || after.match(/^[^.]{0,20}?\b(\d+) times\b/);
       const n = hit && !/up to/i.test(after.slice(0, hit.index + hit[0].length)) ? +hit[1] : 1;
-      total += +m[1] * n;
+      for (let t = 0; t < 4; t++) total[t] += +(m[1 + t] || m[1]) * n;
     }
   }
-  return Math.round(total * 10) / 10;
+  return total.map(x => Math.round(x * 10) / 10);
 }
 
 function main() {
@@ -109,9 +111,24 @@ function main() {
     const en = o.en && o.en.skill1 ? o.en : ((o.enCharacterSkillsData || {})[kr] || Object.values(o.enCharacterSkillsData || {})[0]);
     if (!en) { warn.push(`no English skill text: ${c.n}`); continue; }
     const hlText = (en.skill_highlight || {}).description || '';
-    let dmg = SLOTS.map(k => damageOf((en[k] || {}).description));
-    if (FIXES[c.n]) { console.error(`  fix ${c.n}: ${JSON.stringify(dmg)} -> ${JSON.stringify(FIXES[c.n].d)} (${FIXES[c.n].why})`); dmg = FIXES[c.n].d; }
+    const tiers = SLOTS.map(k => damageOf((en[k] || {}).description));
+    let dmg = tiers.map(t => t[0]);
+    // the higher tiers: as printed, or a FIXES value scaled by the text's own ratio from tier to tier
+    let dt = tiers;
+    if (FIXES[c.n]) {
+      console.error(`  fix ${c.n}: ${JSON.stringify(dmg)} -> ${JSON.stringify(FIXES[c.n].d)} (${FIXES[c.n].why})`);
+      dmg = FIXES[c.n].d;
+      dt = dmg.map((v, i) => tiers[i].map(t => Math.round((tiers[i][0] > 0 ? v * t / tiers[i][0] : v) * 10) / 10));
+    }
     const kind = /Theurgy/i.test(hlText) ? 'TH' : 'HL';
+    /* A Highlight cannot crit (lufel's guides) unless its own text or an Awareness says it can:
+       "1 hit each, can inflict critical damage" (J&C), "Kasumi's Highlight ... can activate critical
+       hits", Radiance Motoha's special HIGHLIGHT "... can activate critical hits". A Theurgy is not a
+       Highlight and crits as a skill does. */
+    const rit = (((d.rituals || {})[kr] || {}).enCharacterRitualData || {})[kr] || {};
+    const ritText = [0, 1, 2, 3, 4, 5, 6].map(i => rit['r' + i + '_detail'] || '').join('\n');
+    const hlCrit = kind === 'HL' && (/can inflict critical/i.test(hlText) ||
+      ritText.split(/\n/).some(l => /HIGHLIGHT/i.test(l) && /can activate critical hits/i.test(l) && !/Lovesick/i.test(l)));
     const cool = +(en.skill_highlight || {}).cool || +((o.kr || {}).skill_highlight || {}).cool || 0;
     const bits = [`hl:${q(kind)}`];
     if (cool > 0) bits.push(`cd:${cool}`);
@@ -119,6 +136,8 @@ function main() {
     const need = hlText.match(/Theurgy gauge is at (\d+)|(\d+) Theurgy Energy/i);
     if (kind === 'TH' && need) bits.push(`th:${+(need[1] || need[2])}`);
     bits.push(`d:[${dmg.join(',')}]`);
+    if (dt.some((t, i) => t.some(x => x !== dmg[i]))) bits.push(`dt:[${dt.map(t => '[' + t.join(',') + ']').join(',')}]`);
+    if (hlCrit) bits.push('hlCrit:true');
     // skill cooldowns in turns (lufel's `cool`): a skill with cooldown c is cast at most once in c + 1 turns
     const sc = SLOTS.slice(0, 3).map(k => +((en[k] || {}).cool) || 0);
     if (sc.some(Boolean)) bits.push(`cool:[${sc.join(',')}]`);
@@ -128,9 +147,10 @@ function main() {
 
   const block = [BEGIN,
     '/* Damage per use of skills 1-3 and the Highlight/Theurgy (`d`, % of the stat the kit scales with, base',
-    '   skill level, hits added up), whether the character has a Highlight or a Theurgy (`hl`), and lufel\'s',
-    '   Highlight cooldown in turns (`cd`). The Teams tab reads only the ratio between them: the share of a',
-    '   damage dealer\'s own damage that lands on their Highlight. See tools/gen-skill-damage.js. */',
+    '   skill level, hits added up; `dt` the same at each of the four skill-level tiers), whether the character',
+    '   has a Highlight or a Theurgy (`hl`, `th` its gauge need), lufel\'s Highlight cooldown in turns (`cd`) and',
+    '   skill cooldowns (`cool`), and `hlCrit` for the few Highlights that can crit. The Teams tab\'s fight',
+    '   deals the damage dealer\'s damage from these. See tools/gen-skill-damage.js. */',
     'const SKILL_DMG = {', ...lines, '};', END].join('\n').replace(/\n/g, EOL);
 
   let out;

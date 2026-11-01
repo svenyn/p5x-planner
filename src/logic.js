@@ -9740,7 +9740,24 @@ const tcSel = (id, dflt) => { const el = $(id); const v = el ? +el.value : dflt;
    (lufel's Theurgy guide). The averaged pricing the sweep screens teams with stands those in by a
    cadence: four thieves charge 84% a round between them, about one Highlight each per 5 turns,
    and a Theurgy comes every requirement ÷ 35 turns. */
-const TC_GAUGE_ACT = 21, TC_HL_COOL = 4, TC_TH_TURN = 35;
+const TC_GAUGE_ACT = 21, TC_GAUGE_MISS = 17, TC_HL_COOL = 4, TC_TH_TURN = 35;
+/* A skill's damage numbers at the skill-level tier the character's Awareness and Mindscape reach
+   (SKILL_DMG `dt`, the same tier rule as the kit lines), or the base level where only that is known. */
+function tcSkillD(n) {
+  const S = SKILL_DMG[n];
+  if (!S) return null;
+  if (!S.dt) return S.d;
+  const c = charDef(n), ti = c ? kitTierIndex(c, charLoadout(n)) : 0;
+  return S.dt.map(t => t[ti]);
+}
+/* Whether a rotation step hits the boss (21% of the Highlight gauge) or not (17%): a skill with damage
+   by lufel's numbers, or a token that is an attack (Gunshot, Melee, Punch); Wonder, on his attack turns. */
+function tcStepHits(n, step) {
+  if (n === 'Wonder') return step === '-';
+  const S = SKILL_DMG[n], uses = tcSkillUses(step);
+  if (S && uses.some((u, i) => u && S.d[i] > 0)) return true;
+  return String(step).split('+').some(t => /^(Gunshot|Gun|Melee|Punch|Special)/i.test(t.trim()));
+}
 const tcHlEvery = () => 5;
 const tcThEvery = n => Math.ceil((((n && SKILL_DMG[n]) || {}).th || 70) / TC_TH_TURN);
 const tcFight = () => Math.max(1, tcSel('#tmFight', 12));
@@ -9826,8 +9843,9 @@ function tcSkillUses(step) {
    own damage. No skill numbers, or a Highlight that deals none: q is 0 and Highlight-only buffs add
    nothing. */
 function tcDpsHl(dps) {
-  const kind = tcHlKind(dps.n), S = SKILL_DMG[dps.n];
-  const out = { kind, q: 0, r0: 0, rot: 0, share: 0, known: !!S };
+  const kind = tcHlKind(dps.n), S0 = SKILL_DMG[dps.n], S = S0 && { d: tcSkillD(dps.n) };
+  // a Highlight cannot crit unless its text says so; a Theurgy can (`share` is set once the crit is known, tcEvalFor)
+  const out = { kind, q: 0, r0: 0, rot: 0, share: 0, known: !!S0, crit: kind === 'TH' || !!(S0 || {}).hlCrit };
   if (!kind || !S || !S.d[3]) return out;
   const rp = tmRotPick(dps.n, new Set([dps.n]));
   const seq = rp && rp.pick[0] ? rp.pick[0].seq : null;
@@ -9918,6 +9936,28 @@ function tcBreaksCooldown(seq, name) {
 }
 const tmFitOn = () => !!($('#tmRotFit') && $('#tmRotFit').checked);
 function tcRotCands(r, dep, name) {
+  const out = [], seen = new Map();
+  tcRotVariants(r, name).forEach(({ seq, bi, changed }) => {
+    // covers read with the member's Highlight cadence added (tcSeqHL); the candidate itself stays lufel's shape
+    const hseq = tcSeqHL(seq, name);
+    const covers = dep.map(u => { const c = tcCover(hseq, u.e.on, u.dur); return c == null ? 0 : c; });
+    const key = covers.map(c => c.toFixed(6)).join(',');
+    const prev = seen.get(key);
+    // one entry per distinct coverage: the one closest to lufel's first option, then the earliest option
+    if (!prev || changed.length < prev.changed.length || (changed.length === prev.changed.length && bi < prev.bi)) {
+      const c = { seq, bi, changed, covers, key };
+      if (prev) out[out.indexOf(prev)] = c; else out.push(c);
+      seen.set(key, c);
+    }
+  });
+  return out;
+}
+/* Every rotation the fit may choose for a character: each of lufel's options at their Awareness (`r`,
+   tmRotPick) with its plain skill turns re-chosen among the plain skills those options use, no skill
+   more or less often per turn than lufel's options use it, and no skill cast again inside its
+   cooldown (lufel's as written is always kept). One entry per distinct sequence, the one closest to
+   lufel's first option. */
+function tcRotVariants(r, name) {
   const bases = r.pick;
   const plain = [...new Set(bases.flatMap(b => b.seq.filter(t => TC_PLAIN.test(t))))].sort();
   if (!plain.length) return [];
@@ -9929,14 +9969,10 @@ function tcRotCands(r, dep, name) {
   const add = (seq, bi, changed) => {
     // a re-chosen rotation may not cast a skill again before its cooldown allows (lufel's as written is kept as written)
     if (changed.length && tcBreaksCooldown(seq, name)) return;
-    // covers read with the member's Highlight cadence added (tcSeqHL); the candidate itself stays lufel's shape
-    const hseq = tcSeqHL(seq, name);
-    const covers = dep.map(u => { const c = tcCover(hseq, u.e.on, u.dur); return c == null ? 0 : c; });
-    const key = covers.map(c => c.toFixed(6)).join(',');
+    const key = seq.join(' ');
     const prev = seen.get(key);
-    // one entry per distinct coverage: the one closest to lufel's first option, then the earliest option
     if (!prev || changed.length < prev.changed.length || (changed.length === prev.changed.length && bi < prev.bi)) {
-      const c = { seq, bi, changed, covers, key };
+      const c = { seq, bi, changed };
       if (prev) out[out.indexOf(prev)] = c; else out.push(c);
       seen.set(key, c);
     }
@@ -10243,16 +10279,36 @@ function tcWonder(dps, setup) {
   const asked = order.reduce((a, o) => a + o.acts, 0);
   const A = run(order), Bs = run(order.slice().sort((x, y) => x.s.slot - y.s.slot));
   const { given, top: best } = Bs.top.value > A.top.value ? Bs : A;
+  /* The fight (tcSim) casts his skills turn by turn: a six-turn schedule in which each skill he casts
+     gets its actions spaced its longest duration apart (the first free turn from there when two
+     collide), and the turns left over are attacks with a Persona (which hit the boss, for the gauge).
+     Their lines are cast events; passives, the weapon and judged lines stay on whatever happens,
+     passives at the share of turns their Persona is in use. */
+  const sched = Array(6).fill('-'), tokOf = new Map();
+  order.filter(o => given.get(o.s)).forEach((o, k) => {
+    const casts = Math.round(given.get(o.s) * 6 / need.get(o.s)), tok = 'w' + k;
+    tokOf.set(o.s, tok);
+    const start = sched.indexOf('-');
+    for (let c = 0; c < casts && start >= 0; c++) {
+      let at = (start + c * need.get(o.s)) % 6;
+      for (let g = 0; g < 6 && sched[at] !== '-'; g++) at = (at + 1) % 6;
+      if (sched[at] === '-') sched[at] = tok;
+    }
+  });
+  const wConst = {}, castEv = [];
+  TC_KEYS.forEach(k => { wConst[k] = 0; });
   best.ups.forEach(([i, up]) => {
     if (!up) return;
     vec[i.k] += i.v * up;
     const where = i.s.slot >= 0 ? `${i.s.card ? S.personas[i.s.slot].name + ' · ' : ''}` : '';
+    const ref = lines.length;
     lines.push({ k: i.k, v: i.v, up, why: `${where}${i.s.label}: ${i.e.why}` });
+    if (i.active && tokOf.has(i.s)) castEv.push({ e: { on: tokOf.get(i.s), to: i.e.to, dur: i.e.dur, cond: i.e.cond }, k: i.k, v: i.v * (i.e.up != null ? i.e.up : 1), dur: i.e.dur, ref });
+    else wConst[i.k] += i.v * up;
   });
-  /* His Highlight: one every N turns (the page's cadence), cast alongside his action, from whichever
-     of his Personas' Highlights does most for this damage dealer — he switches to it for the cast. */
-  // the fight (tcSim) fires his Highlight from the shared gauge: his other lines are on whatever happens
-  const noHl = Object.assign({}, vec), hlEv = [];
+  /* His Highlight, from whichever of his Personas' Highlights does most for this damage dealer — he
+     switches to it for the cast; the fight fires it from the shared gauge. */
+  const noHl = wConst, hlEv = [];
   if (hls.length) {
     const by = new Map();
     hls.forEach(h => { if (!by.has(h.s)) by.set(h.s, []); by.get(h.s).push(h); });
@@ -10274,7 +10330,7 @@ function tcWonder(dps, setup) {
     });
   }
   const uncast = order.filter(o => !given.get(o.s)).map(o => o.s.label);
-  return { vec, lines, idle, uncast, busy: asked > 6, inUse: best.inUse.map(x => x / 6), sim: { consts: noHl, events: hlEv } };
+  return { vec, lines, idle, uncast, busy: asked > 6, inUse: best.inUse.map(x => x / 6), sim: { consts: noHl, events: hlEv, cast: { seq: sched, events: castEv } } };
 }
 
 /* The setup that helps this team most, among everything WONDER_BUFFS knows — assuming the player
@@ -10329,10 +10385,10 @@ function tcDefence(pierce, defdown) {
    fingerprint costs a couple of milliseconds, so an entry point checks it once and marks the memo
    `hot` for the calls it makes (tcHot). On the real save a render went from 0.9 s to well under
    0.1 s, which is what makes "Use", "Busy elsewhere" and every commit() on this tab feel instant. */
-let tcMemo = { key: '', hot: false, eval: new Map(), member: new Map(), search: new Map(), rot: new Map(), hlw: new Map(), sim: new Map() };
+let tcMemo = { key: '', hot: false, eval: new Map(), member: new Map(), search: new Map(), rot: new Map(), hlw: new Map(), sim: new Map(), dmg: new Map() };
 function tcMemoFor() {
   const key = dataSignature() + '|' + [...tmBusy].sort().join(',') + '|' + tcAssumeKey();
-  if (key !== tcMemo.key) tcMemo = { key, hot: false, eval: new Map(), member: new Map(), search: new Map(), rot: new Map(), hlw: new Map(), sim: new Map() };
+  if (key !== tcMemo.key) tcMemo = { key, hot: false, eval: new Map(), member: new Map(), search: new Map(), rot: new Map(), hlw: new Map(), sim: new Map(), dmg: new Map() };
   return tcMemo;
 }
 function tcHot(fn) {
@@ -10355,7 +10411,11 @@ function tcEvalFor(dps) {
        members (tcStat). A flat term on both sides of a ratio does not cancel. */
     const den = { flat: denBonus(scaleStat(dps)), cr: denBonus('Crit Rate'), cm: denBonus('Crit Multiplier') };
     const f0 = damageFactors(worn, dps, t, lo, den);
-    E = { lo, t, worn, own, den, f0: f0.value, f0a: f0.atk, f0d: f0.dmg, c0: tcDefence(own, 0), hl: tcDpsHl(dps) };
+    E = { lo, t, worn, own, den, f0: f0.value, f0a: f0.atk, f0d: f0.dmg, f0c: f0.crit, c0: tcDefence(own, 0), hl: tcDpsHl(dps) };
+    // a Highlight that cannot crit is worth its damage without the crit factor next to the skills
+    const H = E.hl, hc = H.crit ? 1 : 1 / f0.crit;
+    H.hc0 = hc;
+    if (H.q) H.share = H.q * H.r0 * hc / (1 + H.q * H.r0 * hc);
   } finally { state.teamCrit = keep; }
   tcMemo.eval.set(dps.n, E);
   return E;
@@ -10391,13 +10451,13 @@ function tcMultiplier(dps, vecs) {
       const Mh = plus(X.hlDm, fin);
       const nx = Math.min(R, X.hlx);
       const Mx = nx > 0 && X.hlxDm ? plus(X.hlDm + X.hlxDm / X.hlx, fin) : Mh;
-      hl = H.q * ((R - nx) * Mh + nx * Mx);
+      hl = H.q * ((R - nx) * Mh + nx * Mx) * (H.crit ? 1 : 1 / f1.crit);
     }
     // an extra action's own ATK reaches ⓐ, so that one is evaluated whole
     const extra = X.xturns <= 0 ? 0 : X.xturns * (X.xAtkPct
       ? damageFactors(E.worn, dps, E.t, E.lo, Object.assign({}, X, { dm: X.dm + X.xDm, atkPct: X.atkPct + X.xAtkPct })).value / E.f0 * common * (1 + X.xFinal / 100)
       : plus(X.xDm, 1 + X.xFinal / 100));
-    return ((Ms + hl) * (1 + X.turns / 6) + extra) / (1 + H.q * H.r0);
+    return ((Ms + hl) * (1 + X.turns / 6) + extra) / (1 + H.q * H.r0 * (H.hc0 || 1));
   } finally { state.teamCrit = keep; }
 }
 
@@ -10875,7 +10935,9 @@ function tcSimPrep(D, names, fit, blank, opt) {
   const E = tcEvalFor(D), F = tcFight();
   const X0 = {}; TC_DMG_KEYS.forEach(k => { X0[k] = 0; });
   const addConst = c => { if (c) TC_DMG_KEYS.forEach(k => { X0[k] += c[k] || 0; }); };
-  const skill = SKILL_DMG[D.n] || null;
+  // the damage dealer's skill numbers at their skill-level tier; a Highlight crits only where its text says so
+  const skill = SKILL_DMG[D.n] ? Object.assign({}, SKILL_DMG[D.n], { d: tcSkillD(D.n) }) : null;
+  const hlCrit = tcHlKind(D.n) === 'TH' || !!(SKILL_DMG[D.n] || {}).hlCrit;
   const actor = (n, isDps) => {
     const kind = n ? tcHlKind(n) : null, S = n && n !== 'Wonder' ? SKILL_DMG[n] : null;
     const lo = n && n !== 'Wonder' ? charLoadout(n) : DEFAULT_LOADOUT, aw = +lo.awareness || 0;
@@ -10927,8 +10989,9 @@ function tcSimPrep(D, names, fit, blank, opt) {
     const w = actor('Wonder', false);
     if (!(opt && opt.noWonder)) {
       const W = tcWonder(D, opt && opt.wset);
-      // his Highlight's lines fire on his Highlight
-      w.events = W.sim.events.map(ev => Object.assign({}, ev, { e: Object.assign({}, ev.e, { on: 'HL' }) }));
+      // his skills on their schedule, and his Highlight's lines on his Highlight
+      w.events = W.sim.cast.events.concat(W.sim.events.map(ev => Object.assign({}, ev, { e: Object.assign({}, ev.e, { on: 'HL' }) })));
+      w.seq = W.sim.cast.seq;
       w.wonder = W; addConst(W.sim.consts);
     }
     thieves.push(w);
@@ -10945,7 +11008,7 @@ function tcSimPrep(D, names, fit, blank, opt) {
     if (st) { const lo = charLoadout(a.n); if (lo.weapon === st.weapon) gauge0 += st.ladder[Math.max(1, Math.min(7, +lo.refine || 1)) - 1]; }
   });
   const concerto = thieves.find(a => a.n === 'Ayaka Sakai [Summer]') || null;
-  return { D, E, F, X0, skill, dps, thieves, elu, concerto, gauge0, kit: tcKitFor(D), names, mems, blank, fuuka };
+  return { D, E, F, X0, skill, hlCrit, dps, thieves, elu, concerto, gauge0, kit: tcKitFor(D), names, mems, blank, fuuka };
 }
 
 /* One fight under one spending order: { total, hl: {name: Highlights}, cover: {actor: {ref: share}}, log }.
@@ -10969,7 +11032,10 @@ function tcSimRun(P, order, hold) {
   const cover = new Map();   // owner name -> Map(ref -> DPS actions it covered)
   const lastUse = {};        // the damage dealer's skills: round last used, for kit components gated on it
   const perRound = new Map();
-  const memo = new Map();
+  // one hit's multiplier per buff state, kept per damage dealer for the render (the same states recur across
+  // every fight the fit and the spending orders play)
+  if (!tcMemo.dmg.has(D.n)) tcMemo.dmg.set(D.n, new Map());
+  const memo = tcMemo.dmg.get(D.n);
   const keep = state.teamCrit; state.teamCrit = 0;
   try {
     const curX = () => {
@@ -10984,12 +11050,16 @@ function tcSimRun(P, order, hold) {
       if (m == null) {
         const Y = Object.assign({}, X, { dm: X.dm + dm, atkPct: X.atkPct + atkPct, flat: E.den.flat, cr: X.cr + E.den.cr, cm: X.cm + E.den.cm });
         const f = damageFactors(E.worn, D, E.t, E.lo, Y);
-        const body = dot ? f.atk * f.dmg / (E.f0a * E.f0d) : f.value / E.f0;
+        // against the unbuffed hit with its crit: a hit that cannot crit is worth that much less
+        const body = dot ? f.atk * f.dmg / E.f0 : f.value / E.f0;
         m = body * tcDefence(E.own + X.pierce, X.defdown) / E.c0 * (1 + X.weak / 100) * (1 + X.final / 100);
         memo.set(key, m);
       }
       return m * fin;
     };
+    // the shared gauge: 21% for a thief's action that hits the boss's weakness, 17% for one that does
+    // not hit (a buff, a shield); doubled during Virtual Concert from Miku's A1
+    const charge = hit => { gauge = Math.min(cap, gauge + (hit ? TC_GAUGE_ACT : TC_GAUGE_MISS) * (vc && P.mikuA1 ? 2 : 1)); };
     const kitFire = (on, X, opts) => {
       kit.forEach((c, i) => {
         if (c.on !== on && !(on === 'ally' && c.on === 'allySkill')) return;
@@ -11045,7 +11115,7 @@ function tcSimRun(P, order, hold) {
         const nx = pending.filter(p => TC_DMG_KEYS.includes(p.k));
         nx.forEach(p => { X[p.k] = (X[p.k] || 0) + p.v; });
         pending.length = 0;
-        if (skill && skill.d[3]) gain('hl', skill.d[3] * mult(X, X.hlDm + (opt.bonus || 0), 0, 1 + X.hlFinal / 100, false));
+        if (skill && skill.d[3]) gain('hl', skill.d[3] * mult(X, X.hlDm + (opt.bonus || 0), 0, 1 + X.hlFinal / 100, !P.hlCrit));
         lastUse.HL = round; lastUse.TH = round;
         kitFire('selfHL', X);
         trigger('dpsHL', a);
@@ -11096,13 +11166,14 @@ function tcSimRun(P, order, hold) {
         if (BK.skill) castBy(BK, new Set([BK.skill]));
         castBy(elu, new Set(['shift']));
         BK.acts++;
-        gauge = Math.min(cap, gauge + TC_GAUGE_ACT * (vc && P.mikuA1 ? 2 : 1));
+        charge(BK.skill ? tcStepHits(BK.n, BK.skill) : false);
         kitFire('ally', curX());
       }
       decide(a);
       const seq = a.seq && a.seq.length ? a.seq : null;
       const step = seq ? seq[a.acts % seq.length] : '-';
-      const toks = tcTurnSkills(step);
+      // Wonder's schedule names his casts ("w0"); everyone else's steps are skills and tokens
+      const toks = a.wonder ? new Set([step]) : tcTurnSkills(step);
       // a free Highlight lufel writes into the rotation (no gauge, no cooldown)
       if (a.freeHl) for (let i = tcKindCount(step, 'HL'); i > 0; i--) fireHl(a, { free: true, keepCool: true });
       // Kotone Shiomi's Echoing Strings (A1): entering Fortune (her burst turn) fires her Highlight free
@@ -11138,7 +11209,8 @@ function tcSimRun(P, order, hold) {
       }
       a.acts++;
       if (a.kind === 'HL') a.since++;
-      gauge = Math.min(cap, gauge + TC_GAUGE_ACT * (vc && P.mikuA1 ? 2 : 1));
+      // a teammate with no kit (the reference fight's) attacks; Wonder hits on his attack turns
+      charge(!a.n ? true : a.wonder ? step === '-' : tcStepHits(a.n, step));
       // buffs on the damage dealer count down after their own action (not after Da Capo's repeat)
       if (a.isDps && !extra) for (let i = buffs.length - 1; i >= 0; i--) { const b = buffs[i]; if (!b.enemy && (!b.vc || vc)) { b.left--; if (b.left <= 0) buffs.splice(i, 1); } }
     };
@@ -11209,17 +11281,125 @@ function tcSimBest(P) {
 
 /* The team's number from the fight: the damage dealer's total with this lineup over the same fight
    with teammates who add nothing. Memoised per lineup, fit and fight length (tcMemo.sim). */
+/* The damage dealer's own rotation, fitted to this team in the fight (with "Fit rotations to this
+   team" on). The candidates are the teammates' rule (tcRotVariants: lufel's options at their
+   Awareness, plain turns re-chosen within lufel's frequencies, no cooldown broken), but each is priced
+   by the fight itself, where turn order, the Highlight gauge and what teammates' actions set off all
+   count: every candidate is played under the spending order lufel's rotation as written did best
+   with, the leading three under every order, and the best kept — ties to lufel's as written, then to
+   the fewest turns changed. The reference fight fits the damage dealer alone the same way, so the
+   team's number is not the fit's gain. `dpsRot` says what was chosen, or is null. */
+/* Every candidate is tried with each team — a pool ranked by the fight alone missed the very
+   rotations a team calls for (its teammate's debuff rounds) — under one spending order, and the
+   leading TC_DPS_FIT_TOP under every order. A changed rotation must beat lufel's as written by
+   TC_DPS_FIT_MIN, not by a rounding error. */
+const TC_DPS_FIT_TOP = 2, TC_DPS_FIT_MIN = 1e-3;
+function tcSimFitDps(P, fit) {
+  const asWritten = tcSimBest(P);
+  asWritten.dpsRot = null;
+  const r = fit ? tmRotPick(P.D.n, tcTeamSet(P.D.n, P.names)) : null;
+  if (!r || !r.pick.length) return asWritten;
+  const vars = tcRotVariants(r, P.D.n);
+  if (vars.length < 2) return asWritten;
+  const withSeq = seq => Object.assign({}, P, { thieves: P.thieves.map(a => a.isDps ? Object.assign({}, a, { seq }) : a) });
+  const written = vars.find(v => v.bi === 0 && !v.changed.length);
+  const screened = vars.filter(v => v !== written)
+    .map(v => ({ v, total: tcSimRun(withSeq(v.seq), asWritten.spend, asWritten.hold).total }))
+    .sort((a, b) => b.total - a.total);
+  let best = { v: written || null, res: asWritten };
+  for (const { v } of screened.slice(0, TC_DPS_FIT_TOP)) {
+    const res = tcSimBest(withSeq(v.seq));
+    const better = res.total > best.res.total * (1 + (best.v === written ? TC_DPS_FIT_MIN : 1e-9)) ||
+      (Math.abs(res.total - best.res.total) <= best.res.total * 1e-9 && best.v && v.changed.length < best.v.changed.length);
+    if (better) best = { v, res };
+  }
+  if (!best.v) return asWritten;
+  const b = r.pick[best.v.bi];
+  best.res.dpsRot = { seq: best.v.seq, base: { label: b.label, seq: b.seq, index: best.v.bi, of: r.pick.length }, changed: best.v.changed,
+    gain: best.res.total / asWritten.total - 1, same: best.v === written, tried: vars.length };
+  return best.res;
+}
+
+/* Every member's rotation fitted to the team in the fight (`fit` 'full': the teams the page shows).
+   The damage dealer's first (tcSimFitDps), then each teammate's and the Elucidator's in turn: their
+   candidates (tcRotVariants) played with everyone else's rotation as it stands, the best kept if it
+   gains TC_DPS_FIT_MIN, pass after pass until one changes nothing (at most TC_FIT_PASSES) — one
+   member's debuff rounds decide where another's buff belongs. A teammate's candidates that cast the
+   same priced skills and hit the boss on the same turns play out alike, so one of each is tried (an
+   Elucidator's are all tried: Fuuka's stacks come from her skills). It starts from the quick fit
+   (tcRotFit). `fits[name]` is what each got: the rotation, lufel's option it came from, the turns
+   changed, its gain over that member's lufel first option as written with the others as fitted. */
+const TC_FIT_PASSES = 3;
+function tcSimFitTeam(P) {
+  const first = tcSimFitDps(P, true);
+  const inTeam = tcTeamSet(P.D.n, P.names);
+  const setSeq = (Q, m, seq) => m.elu ? Object.assign({}, Q, { elu: Object.assign({}, Q.elu, { seq }) })
+    : Object.assign({}, Q, { thieves: Q.thieves.map(x => (m.dps ? x.isDps : x.n === m.n && !x.isDps) ? Object.assign({}, x, { seq }) : x) });
+  const seqOf = (Q, m) => m.elu ? Q.elu.seq : Q.thieves.find(x => m.dps ? x.isDps : x.n === m.n && !x.isDps).seq;
+  const members = [{ n: P.D.n, dps: true }];
+  P.thieves.forEach(a => { if (a.n && !a.isDps && a.member) members.push({ n: a.n, actor: a }); });
+  if (P.elu && P.elu.seq && P.elu.seq.length) members.push({ n: P.elu.n, elu: true, actor: P.elu });
+  members.forEach(m => {
+    m.r = tmRotPick(m.n, inTeam);
+    let vars = m.r ? tcRotVariants(m.r, m.n) : [];
+    if (m.actor && !m.elu) {
+      // one candidate per way of casting the priced skills and hitting the boss
+      const evOn = new Set((m.actor.events || []).flatMap(ev => [].concat(ev.e.on || [])));
+      const sig = seq => seq.map(st => [...tcTurnSkills(st)].filter(t => evOn.has(t)).sort().join('') + (tcStepHits(m.n, st) ? 'h' : '') + (TC_PLAIN.test(st) ? '' : '#' + st)).join('|');
+      const by = new Map();
+      vars.forEach(v => { const k = sig(v.seq), p = by.get(k); if (!p || v.changed.length < p.changed.length) by.set(k, v); });
+      vars = [...by.values()];
+    }
+    m.vars = vars;
+  });
+  let Q = first.dpsRot && !first.dpsRot.same ? setSeq(P, members[0], first.dpsRot.seq) : P;
+  let cur = first;
+  for (let pass = 0; pass < TC_FIT_PASSES; pass++) {
+    let moved = false;
+    for (const m of members) {
+      if (m.vars.length < 2) continue;
+      const now = seqOf(Q, m).join(' ');
+      const here = tcSimRun(Q, cur.spend, cur.hold).total;
+      let top = null, tv = here * (1 + TC_DPS_FIT_MIN);
+      m.vars.forEach(v => {
+        if (v.seq.join(' ') === now) return;
+        const t = tcSimRun(setSeq(Q, m, v.seq), cur.spend, cur.hold).total;
+        if (t > tv) { tv = t; top = v; }
+      });
+      if (top) { Q = setSeq(Q, m, top.seq); moved = true; cur = tcSimBest(Q); }
+    }
+    if (!moved) break;
+  }
+  const res = tcSimBest(Q);
+  res.fits = {};
+  members.forEach(m => {
+    if (!m.r || !m.r.pick.length || m.vars.length < 2) return;
+    const seq = seqOf(Q, m), written = m.r.pick[0].seq;
+    const v = tcRotVariants(m.r, m.n).find(x => x.seq.join(' ') === seq.join(' ')) || { seq, bi: 0, changed: [] };
+    const b = m.r.pick[v.bi], same = seq.join(' ') === written.join(' ');
+    const asW = same ? res.total : tcSimRun(setSeq(Q, m, written), res.spend, res.hold).total;
+    res.fits[m.n] = { seq, base: { label: b.label, seq: b.seq, index: v.bi, of: m.r.pick.length }, changed: v.changed,
+      gain: res.total / asW - 1, same, tried: m.vars.length };
+  });
+  res.dpsRot = res.fits[P.D.n] || null;
+  return res;
+}
+
 /* `noWonder`: Wonder acts but brings nothing (his part on the page); `wset`: another Wonder setup
    (the best one the page suggests), in place of the user's. */
 function tcSim(D, names, fit, noWonder, wset) {
   if (!tcMemo.hot) tcMemoFor();
-  const key = D.n + '|' + names.map(n => n || '').join('|') + (fit ? '|fit' : '') + (noWonder ? '|noW' : '') + (wset ? '|w=' + JSON.stringify(wset) : '');
+  const key = D.n + '|' + names.map(n => n || '').join('|') + (fit ? '|fit=' + fit : '') + (noWonder ? '|noW' : '') + (wset ? '|w=' + JSON.stringify(wset) : '');
   let r = tcMemo.sim.get(key);
   if (r) return r;
-  let base = tcMemo.sim.get(D.n + '|blank');
-  if (!base) { base = tcSimBest(tcSimPrep(D, [null, null, null], false, true)); tcMemo.sim.set(D.n + '|blank', base); }
-  const P = tcSimPrep(D, names, fit, false, { noWonder, wset });
-  const best = tcSimBest(P);
+  // the damage dealer alone is fitted whenever their rotation is (fit true or 'full')
+  const dfit = fit === true || fit === 'full';
+  const bk = D.n + '|blank' + (dfit ? '|fit' : '');
+  let base = tcMemo.sim.get(bk);
+  if (!base) { base = tcSimFitDps(tcSimPrep(D, [null, null, null], false, true), dfit); tcMemo.sim.set(bk, base); }
+  // `fit`: true fits the teammates and the damage dealer; 'mates' only the teammates (the search's first pass)
+  const P = tcSimPrep(D, names, !!fit, false, { noWonder, wset });
+  const best = fit === 'full' ? tcSimFitTeam(P) : tcSimFitDps(P, dfit);
   r = Object.assign({}, best, { mult: base.total > 0 ? best.total / base.total : 1, base, prep: P });
   tcMemo.sim.set(key, r);
   return r;
@@ -11235,11 +11415,15 @@ function tcLineupCalc(dps, names) {
   const fit = tmFitOn();
   const ms0 = names.map((n, i) => n ? tcMember(dps, n, inTeam, i === 3 ? { swaps: TC_SWAPS() } : null, fit) : null);
   const W0 = tcWonder(dps);
-  // the number is the fight's (tcSim); a member's part is the fight without them
-  const S = tcSim(dps, names, fit);
+  /* The number is the fight's (tcSim), with every member's rotation fitted in it. A member's part is
+     the fight without them, both sides with the cheaper fit (the damage dealer's in the fight, the
+     teammates' quick), so the ratio is like for like and a render fights one full fit, not five. */
+  const lvl = fit ? 'full' : false;
+  const S = tcSim(dps, names, lvl);
   const mult = S.mult;
-  const without = i => { const alt = names.slice(); alt[i] = null; if (i === 2 && names[2] === TM_FUUKA) alt.length = 3; if (i === 3) alt.length = 3; return tcSim(dps, alt, fit).mult; };
-  const parts = ms0.map((m, i) => m ? mult / without(i) : null);
+  const Sp = fit ? tcSim(dps, names, true) : S;
+  const without = i => { const alt = names.slice(); alt[i] = null; if (i === 2 && names[2] === TM_FUUKA) alt.length = 3; if (i === 3) alt.length = 3; return tcSim(dps, alt, fit ? true : false).mult; };
+  const parts = ms0.map((m, i) => m ? Sp.mult / without(i) : null);
   /* The lines as the fight ran them: a line a cast or a Highlight sets off reads the share of the
      damage dealer's actions it was up for (copies: the members themselves are remembered). */
   const asRun = (m, n) => {
@@ -11259,7 +11443,7 @@ function tcLineupCalc(dps, names) {
     ms[3] = Object.assign({}, ms0[3], { lines: run.lines.filter((l, j) => used.has(j)), shifts: S.shifts, swapSkill: FU.backup.skill });
   }
   const W = asRun(W0, 'Wonder');
-  W.part = mult / tcSim(dps, names, fit, true).mult;
+  W.part = Sp.mult / tcSim(dps, names, fit ? true : false, true).mult;
   return { names, mult, members: ms, parts, wonder: W, fuuka: elu === TM_FUUKA, sim: S };
 }
 
@@ -11267,7 +11451,7 @@ function tcLineupCalc(dps, names) {
    (or no entry, priced at what an Elucidator-free thief brings: nothing) and every available
    Elucidator, plus Fuuka's best backup when she is the one. Members' vectors are worked out once
    each; a lineup is then a sum and one damage evaluation, about a millisecond for 30 thieves. */
-const TC_BACKUP_TOP = 40;
+const TC_BACKUP_TOP = 40, TC_FULL_TOP = 3;
 function tcSearch(dps, limit) {
   return tcHot(() => {
     const mk = dps.n + '|' + (limit || 8) + (tmFitOn() ? '|fit' : '');
@@ -11311,9 +11495,24 @@ function tcSearchCalc(dps, limit) {
      change with a teammate (Kotone has rotations "with Miku", and the fit re-chooses turns for the
      team), so the leaders are priced again as whole lineups, the way the page shows them, before
      the order is final. */
-  const exact = out.slice(0, Math.max(30, limit || 8)).map(t => ({ names: t.names, mult: tcSim(dps, t.names, tmFitOn()).mult }));
+  /* The leaders are fought out with the teammates' rotations fitted, and the ones shown fought again
+     with the damage dealer's own rotation fitted to each team as well (tcSimFitDps), which is the
+     dearer pass. */
+  const fit = tmFitOn();
+  const exact = out.slice(0, Math.max(30, limit || 8)).map(t => ({ names: t.names, mult: tcSim(dps, t.names, fit ? 'mates' : false).mult }));
   exact.sort((x, y) => y.mult - x.mult);
-  return exact.slice(0, limit || 8);
+  const shown = exact.slice(0, (limit || 8) + 2).map(t => ({ names: t.names, mult: tcSim(dps, t.names, fit).mult }));
+  shown.sort((x, y) => y.mult - x.mult);
+  /* The leading TC_FULL_TOP are fought again with every member's rotation fitted in the fight (the
+     dearest pass, tcSimFitTeam), and the best of them leads: a team whose members' rotations fit it
+     better can overtake. The list keeps the cheaper fit's numbers; the page scales them to the
+     headline. */
+  if (fit && shown.length > 1) {
+    const top = shown.slice(0, TC_FULL_TOP).map(t => ({ t, full: tcSim(dps, t.names, 'full').mult })).sort((a, b) => b.full - a.full);
+    const lead = top[0].t;
+    shown.splice(shown.indexOf(lead), 1); shown.unshift(lead);
+  }
+  return shown.slice(0, limit || 8);
 }
 
 /* Fuuka's best backup beside these three seats: the available thief with a kit entry whose single
@@ -11358,6 +11557,10 @@ function tcTeamsCalc(dps) {
     if (!names[3] || names.slice(0, 3).includes(names[3])) names[3] = tcBestBackup(D, names.slice(0, 3));
   } else names.length = 3;
   const L = tcLineup(D, names);
+  /* Replacements and Wonder's suggestion are fought with the cheaper fit (the damage dealer's in the
+     fight, the teammates' quick), so they are measured against this team priced that way and put on
+     the headline's scale. */
+  const Lref = tmFitOn() ? tcSim(D, names, true).mult : L.mult;
   const roles = ['Thief', 'Thief', 'Elucidator', 'Backup (Oracle Shift)'];
   const kinds = ['f', 'f', 'e', 'b'];
   const seats = [{ seat: 'f', role: TM_DPS.includes(D.arch) ? 'Damage dealer' : 'Built around', orig: dps, name: dps, fixed: true }];
@@ -11386,22 +11589,26 @@ function tcTeamsCalc(dps) {
     const quick = alt => tcMultiplier(D, alt.map((n, j) => n ? tcMember(D, n, null, j === 3 ? { swaps: TC_SWAPS() } : null).vec : null).filter(Boolean).concat(tcWonder(D).vec));
     s.alts = pool.map(c => ({ c, q: quick(lineupWith(c)) })).sort((a, b) => b.q - a.q).slice(0, 6).map(({ c }) => {
       const m = tcSim(D, lineupWith(c), tmFitOn()).mult;
-      return { n: c.n, mult: m, why: [`team ×${m.toFixed(2)} with them (${m >= L.mult ? '+' : ''}${(100 * (m / L.mult - 1)).toFixed(1)}%)`] };
+      // against this team priced the same way (the cheaper fit), and shown on the headline's scale
+      const rel = m / Lref, est = L.mult * rel;
+      return { n: c.n, mult: est, why: [`team ×${est.toFixed(2)} with them (${rel >= 1 ? '+' : ''}${(100 * (rel - 1)).toFixed(1)}%)`] };
     }).sort((a, b) => b.mult - a.mult).slice(0, 4);
   });
   // Wonder, in every party: what the setup above brings, and the setup that would bring most
   const others = L.members.filter(Boolean).map(m => m.vec);
   const best = tcWonderBest(D, others);
-  const bestMult = tcSim(D, names, tmFitOn(), false, best).mult;
+  const bestMult = tcSim(D, names, tmFitOn(), false, best).mult * L.mult / Lref;
   seats.push({ seat: 'w', role: 'Wonder', orig: null, name: 'Wonder', part: L.wonder.part, lines: L.wonder.lines,
     known: true, wonder: Object.assign({}, L.wonder, { setup: wonderSetup(), best, bestGain: bestMult / L.mult }) });
   // lufel's recommended team, priced the same way
   const lt = tmTeams(dps).team;
   const ln = lt.seats.filter(s => !s.fixed).map(s => s.name);
-  const lufel = lt.party ? { names: ln, mult: tcLineup(D, ln[2] === TM_FUUKA ? ln : ln.slice(0, 3)).mult } : null;
+  // lufel's team, the next teams and the replacements: the cheaper fit, on the headline's scale
+  const scale = L.mult / Lref;
+  const lufel = lt.party ? { names: ln, mult: tcSim(D, ln[2] === TM_FUUKA ? ln : ln.slice(0, 3), tmFitOn()).mult * scale } : null;
   const key = 'calc:' + names.map(n => n || '').join('|');
   return {
-    list: found.map(f => ({ party: null, calc: { key: 'calc:' + f.names.map(n => n || '').join('|'), names: f.names, mult: f.mult } })),
+    list: found.map(f => ({ party: null, calc: { key: 'calc:' + f.names.map(n => n || '').join('|'), names: f.names, mult: f.mult * scale } })),
     team: { party: null, seats, calc: { key, mult: L.mult, lufel, sim: L.sim } }
   };
 }
@@ -11750,7 +11957,7 @@ function tcFightNote(dps, S) {
   const sum = Object.values(S.parts || {}).reduce((a, b) => a + b, 0) || 1;
   const parts = Object.entries(S.parts || {}).filter(([, v]) => v / sum >= 0.005).sort((a, b) => b[1] - a[1]).map(([k, v]) => `${TC_PART_LABEL[k] || k} ${Math.round(100 * v / sum)}%`).join(' · ');
   const shift = S.shifts && S.shifts.length ? ` Oracle Shift swapped the backup in on round${S.shifts.length > 1 ? 's' : ''} ${S.shifts.join(', ')}.` : '';
-  return `A ${F}-round fight, turn by turn in Speed order (set at the top). Highlights and Theurgies used: ${used || 'none'} (the shared gauge fills 21% a thief action; ${dps} alone would use ${Object.values(S.base.hl).reduce((a, b) => a + b, 0)} ${word}).${spend}${shift}` +
+  return `A ${F}-round fight, turn by turn in Speed order (set at the top). Highlights and Theurgies used: ${used || 'none'} (the shared gauge fills 21% a thief action that hits, 17% one that does not; ${dps} alone would use ${Object.values(S.base.hl).reduce((a, b) => a + b, 0)} ${word}).${spend}${shift}` +
     (parts ? ` ${dps}'s own damage here: ${parts}.` : '');
 }
 /* The one line under "Wonder's setup" when it is folded: what is set, or that nothing is. */
@@ -11938,7 +12145,11 @@ function renderTeams() {
       const T = TEAMS[s.name] || {};
       const short = tmShortTargets(s.name);
       // the fit: this member's rotation re-chosen for the damage dealer (tcRotFit), never the damage dealer's own
-      const F = fitOn && !s.fixed && D && r ? tcMember(D, s.name, team4, null, true).rot : null;
+      // the fit: a teammate's rotation re-chosen for the damage dealer (tcRotFit), and the damage dealer's
+      // own re-chosen in the fight for this team (tcSimFitDps)
+      const fits = C && C.sim && C.sim.fits;
+      const F = !fitOn || !D || !r ? null : fits ? fits[s.name] || null
+        : s.fixed ? (C && C.sim && C.sim.dpsRot) || null : tcMember(D, s.name, team4, null, true).rot;
       const grid = (seq, hot) => `<div class="tmRot">${seq.map((x, i) => `<div class="t${x === '-' ? ' idle' : ''}${hot && hot.includes(i) ? ' fit' : ''}" title="${esc(tmTokenText(x))}${hot && hot.includes(i) ? ' (changed for this team)' : ''}"><small>Turn ${i + 1}</small><b>${esc(x === '-' ? '—' : x)}</b></div>`).join('')}</div>`;
       // the first option open, the rest folded: three six-turn grids per member made the panel a scroll
       const opt = (v, k) => `<div class="tiny"><b>${esc(v.label || 'Rotation')}</b>${r && r.pick.length > 1 ? ` <span class="muted">— option ${k + 1} of ${r.pick.length}</span>` : ''}</div>${grid(v.seq)}`;
@@ -11992,7 +12203,7 @@ function renderTeams() {
         <div class="tiny muted" style="margin-top:8px">Wonder joins every party${C ? '; what his Persona, skill cards and weapon add is in the last seat' : ''}.</div>
         ${C ? explainHtml('How the team is calculated', `<p class="tiny">Every pair of your available thieves and every available Elucidator (with Fuuka, also her best backup) is priced by how much stronger they make ${esc(dps)}'s hits, using lufel's damage formula: ATK, damage bonus, enemy defence (DEF down and Pierce), crit, weakness and final damage multiply, and values of one kind add up (so three ATK buffs are one bigger ATK buff). ${esc(dps)}'s own cards and Setup are the starting point, with no buffs at all, which is why the number is large: a boss with +158% DEF takes little from an unbuffed hit. Each member's buffs are read from their kit, unlocked by their Awareness and weapon and scaled by their own stats where the kit says so; the bold line under a member sums them per factor, each at the share of ${esc(dps)}'s actions it was up for in the fight, and the lines behind it are folded under "Where it comes from". A member's percentage is what the team loses without them, so the percentages do not add up to the total. An Elucidator adds 20% of her ATK, crit, damage and Pierce (15% at 4★). The boss is lufel's example, the Lv82 guild-boss Vishnu (DEF 820.7, +158.4% DEF), hit on a weakness.</p>
           <p class="tiny">The number comes from the fight played out round by round, for the length set at the top: the Elucidator acts at the start of each round, the four thieves (Wonder included) once each in Speed order, the enemy last. Each member follows their lufel rotation (or the fitted one); a buff on ${esc(dps)} counts down after ${esc(dps)}'s own action and a debuff on the enemy after the enemy's, so a buff cast after ${esc(dps)} has acted waits for the next round. ${esc(dps)}'s damage is their skills as lufel's skill numbers give them, their Highlight or Theurgy when it fires, and what their kit deals besides (Resonance, follow-ups, damage over time — much of it set off by teammates' actions or Highlights), each hit with whatever is up at that moment. The team's number is that total over the same fight with teammates who add nothing.</p>
-          <p class="tiny">Highlights come from one gauge the team shares: 21% for each thief's action (a weakness hit), never above 100%, and a Highlight spends it all and puts its user's own Highlight out of reach for their next 4 actions, so the first Highlight comes in round 2 and the gauge cannot give everyone theirs. The fight is played with the gauge spent in several orders (${esc(dps)} first, or a teammate whose Highlight buffs first) and spent as soon as it fills or held for just before ${esc(dps)} acts; the best is kept and named above. A Theurgy has its own gauge (+35 at its user's turn start) and fires as soon as it is full. Gauge and cooldown effects (Ayaka, Fuuka, Yukari, Miku's Virtual Concert), Summer Ayaka's Concerto of Time, free Highlights (Catchy Hook, Kotone Shiomi's Fortune, Kasumi's) and starting gauge are played out as their kits say. Manaka's Da Capo is an extra action for ${esc(dps)}, with what runs only on it. With Fuuka, Oracle Shift swaps her backup in for one action whenever her stacks allow, just before ${esc(dps)} acts, with her Awareness 2 Highlight from the backup; the backup's action is taken to fill the Highlight gauge like any thief's.</p>
+          <p class="tiny">Highlights come from one gauge the team shares: 21% for each thief's action that hits the boss's weakness and 17% for one that does not (a buff, a shield, Wonder casting a card), never above 100%, and a Highlight spends it all and puts its user's own Highlight out of reach for their next 4 actions, so the first Highlight comes in round 2 and the gauge cannot give everyone theirs. A Highlight cannot crit unless its kit says it can (J&C, Kasumi, Radiance Motoha); a Theurgy can. Wonder casts his skills on a six-turn schedule and attacks in between. The fight is played with the gauge spent in several orders (${esc(dps)} first, or a teammate whose Highlight buffs first) and spent as soon as it fills or held for just before ${esc(dps)} acts; the best is kept and named above. A Theurgy has its own gauge (+35 at its user's turn start) and fires as soon as it is full. Gauge and cooldown effects (Ayaka, Fuuka, Yukari, Miku's Virtual Concert), Summer Ayaka's Concerto of Time, free Highlights (Catchy Hook, Kotone Shiomi's Fortune, Kasumi's) and starting gauge are played out as their kits say. Manaka's Da Capo is an extra action for ${esc(dps)}, with what runs only on it. With Fuuka, Oracle Shift swaps her backup in for one action whenever her stacks allow, just before ${esc(dps)} acts, with her Awareness 2 Highlight from the backup; the backup's action is taken to fill the Highlight gauge like any thief's.</p>
           <p class="tiny">Not counted: weakness creation, Down and Technical, ailments other than damage over time a kit prices, healing and survival, buffs that copy other buffs, and what each kit's "Not priced" list names. Characters whose kit is not entered yet count as adding nothing. Treat the number as a ranking of teams for this damage dealer, not a damage forecast.</p>`) : ''}
         ${C ? '' : explainHtml('How the team is chosen', `<p class="tiny">Every team lufel recommends with ${esc(dps)} is filled from the characters you own and have not benched or marked busy. The team shown keeps the most of lufel's own picks; ties go to a team from ${esc(dps)}'s own page, then to the better-geared team. A seat whose pick you cannot field goes to whoever lufel links to ${esc(dps)} most — the same seat in another of their teams, a synergy partner lufel lists (with its reason), or the same role — and only then to your best-built character, marked "filler". Build scores only break ties.</p>`)}
       </div>
@@ -12006,7 +12217,7 @@ function renderTeams() {
         <h2>Rotation</h2>
         ${explainHtml(`lufel's skill order per turn, at each member's Awareness. 1-3 are skills, HL Highlight, TH Theurgy, ↺ used automatically, — no action yet; hover a turn for the words.${fitOn ? ' Green turns were re-chosen for this team.' : ' Rotations are lufel\'s as written.'}`,
           `<p>Rotations are lufel's, at each member's Awareness (from their Setup), preferring rotations written for a teammate in this team.${backup ? ` The backup, ${esc(backup.name)}, acts only when Fuuka swaps them in.` : ''}</p>` + (fitOn
-          ? `<p><b>Fitted to this team</b>: a member's plain skill turns (a bare 1, 2 or 3) are re-chosen for what they do for ${esc(dps)} in this team, within the skills and frequencies lufel's own rotations for them use, so no skill is cast more often than lufel ever writes it; bursts, Highlights, Transformations, items, Fatigue and idle turns stay where lufel put them, and ${esc(dps)}'s own rotation is lufel's. Highlighted turns are the ones changed; the gain is the team's damage as the calculated basis prices it, over lufel's first option as written.${fitAny ? '' : ' Here every member\'s rotation is already lufel\'s.'}</p>`
+          ? `<p><b>Fitted to this team</b>: a member's plain skill turns (a bare 1, 2 or 3) are re-chosen for what they do for ${esc(dps)} in this team, within the skills and frequencies lufel's own rotations for them use, so no skill is cast more often than lufel ever writes it; bursts, Highlights, Transformations, items, Fatigue and idle turns stay where lufel put them, and no skill is cast again inside its cooldown. Every rotation here, ${esc(dps)}'s own included, is chosen by playing the fight with this team, one member at a time until no change helps (turn order, the Highlight gauge and what the members set off for each other all count); a change has to gain at least 0.1%. Highlighted turns are the ones changed; the gain is the team's damage as the calculated basis prices it, over lufel's first option as written.${fitAny ? '' : ' Here every member\'s rotation is already lufel\'s.'}</p>`
           : '<p>Rotations are lufel\'s as written; tick "Fit rotations to this team" above to re-choose each member\'s plain skill turns for this team.</p>'))}
         <div class="tmMembers" style="margin-top:12px">${rot}</div>
       </div>
