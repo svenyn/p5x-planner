@@ -24,6 +24,7 @@ behind the pages is plain static JavaScript under `/data/`, and it fetches fine.
 | `/data/characters/<Korean name>/ritual.js` | The "Awareness" ladder — 7 named passives (levels 0-6). Lufel's own field name is `ritual`; the site's English UI calls it "Awareness". Unrelated to Ascension, Mindscape or the Awakening-7 bonus, despite the similar name |
 | `/data/characters/<Korean name>/party.js` | Recommended teams (3 thieves + Elucidator; Fuuka's carry a 5th, her Oracle Shift backup) and "friends": synergy partners, each with a one-line English reason and sometimes the Awareness it needs. Missing for a few characters, which lufel's own page treats as normal |
 | `/data/characters/<Korean name>/operation.js` | Skill rotations per Awareness level and situation ("with Miku", single target, 2-turn cycle), as a line or a turn grid, with English notes for 38 characters (the rest have none, in any language) |
+| `/data/characters/<Korean name>/skill.js` | Skills 1-3, Highlight (or Theurgy) and passives, in four languages: description with the four skill-level values, SP cost, and `cool` — the Highlight's cooldown is 4 turns for every thief; a Theurgy has none and needs 70 gauge. Source of `SKILL_DMG` |
 | `/data/persona/index.js`, `/data/persona/<Korean name>.js` | 155 Personas: unique skill, passives, innate skills, Highlight, each in English with rank values. Read once (Oct 2026) into `WONDER_BUFFS.personas` by hand-checked batches; not fetched by the tools |
 | `/data/kr/wonder/skills.js` | 459 skill cards (`personaSkillList`), English descriptions. Source of `WONDER_BUFFS.cards` |
 | `/data/kr/wonder/weapons.js` | Wonder's 18 weapons (`matchWeapons`), English effect text with 7 refinement steps. Source of `WONDER_BUFFS.weapons` |
@@ -39,7 +40,19 @@ node tools/audit-lufel.js lufel.json         # diff it against src/data.js, repo
 node tools/gen-data-from-lufel.js lufel.json # emit replacement SETS/SPACE_SETS/CHARACTERS
 node tools/gen-awareness.js lufel.json       # patch CHAR_STATS[*].awareness into src/data.js in place
 node tools/gen-teams.js lufel.json           # replace the TEAMS block (parties, partners, rotations) in place
+node tools/gen-skill-damage.js lufel.json    # replace the SKILL_DMG block (damage per skill and Highlight) in place
 ```
+
+`gen-skill-damage.js` reads each skill's English text for its damage — every "equal to X% of
+Attack/Defense/max HP" in a sentence that deals damage, at the base skill level, times its hits —
+for skills 1-3 and the Highlight or Theurgy. The Teams tab uses only the ratio: what share of a
+damage dealer's own damage lands on their Highlight. **Medium confidence, an estimate of one ratio
+per character.** Conditional clauses count in full on both sides; damage that is not a numbered
+skill (Resonance, follow-ups, summons, Gunshot/Melee turns, damage over time) is not counted at all,
+so for kits built on those — Wavecatcher Miyu's Resonance is about half her damage — the Highlight's
+share reads high. A text the parser gets wrong goes in its `FIXES` table with the reason (today: a
+Highlight with one version per Persona set or mode, J&C and Frostgale Kotone, and Makoto Niijima's
+Skill 1, whose later hits on the same target fall to 20%).
 
 `gen-teams.js` writes everything in English: lufel's English labels and notes where they exist,
 its own small tables for the Korean rotation labels and skill tokens otherwise ("의식 N" is

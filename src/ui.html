@@ -414,16 +414,60 @@ details.sect>.inner{margin-top:10px}
 .nowrap{white-space:nowrap}
 
 /* ---- narrow screens: a laptop tool first, but nothing should need sideways scrolling ---- */
-/* Teams tab */
-.tmSlots td{vertical-align:top}
-.tmSlots .role{font-size:11px;text-transform:uppercase;letter-spacing:.05em;color:var(--dim2);font-weight:600;white-space:nowrap}
+/* ---- Teams tab ---- */
+/* The answer first: the team's multiplier as one big number, lufel's team beside it for scale. */
+.tmHero{display:flex;align-items:stretch;gap:12px 24px;flex-wrap:wrap;margin-bottom:14px}
+.tmHero .num{font-family:ui-monospace,monospace;font-size:34px;font-weight:700;line-height:1;color:var(--ok)}
+.tmHero .num.plain{color:var(--ink)}
+.tmHero .num small{font-size:13px;font-weight:600;color:var(--dim);margin-left:6px;font-family:"Segoe UI",-apple-system,system-ui,sans-serif}
+.tmHero .lbl{font-size:12px;color:var(--dim);margin-top:5px;max-width:520px}
+.tmHero .cmp{border-left:1px solid var(--line);padding-left:20px;font-size:12.5px;color:var(--dim);max-width:420px;align-self:center}
+.tmHero .cmp b{color:var(--ink);font-family:ui-monospace,monospace;font-size:14px}
+.tmHero .acts{margin-left:auto;align-self:flex-start}
+/* One card per seat, striped in the member's element colour: who, what they add, and the
+   buttons, in three columns that stack on a phone (the table they replace scrolled sideways). */
+.tmSeats{display:flex;flex-direction:column;gap:8px}
+.tmSeat{display:grid;grid-template-columns:230px minmax(0,1fr) auto;gap:6px 18px;align-items:start;
+  background:var(--panel2);border:1px solid var(--line);border-left:4px solid var(--el,var(--line));border-radius:9px;padding:11px 14px 11px 13px}
+.tmSeats.calc .tmSeat{grid-template-columns:230px 118px minmax(0,1fr) auto}
+.tmSeat.fixed{background:linear-gradient(90deg,color-mix(in srgb,var(--el) 12%,var(--panel2)),var(--panel2) 60%)}
+.tmSeat.empty{border-style:dashed;border-left-style:solid;opacity:.7}
+.tmSeat .role{font-size:11px;text-transform:uppercase;letter-spacing:.05em;color:var(--dim2);font-weight:600}
+.tmSeat .nm{font-size:15px;font-weight:700;line-height:1.25;margin-top:1px}
+.tmSeat .nm .muted{font-weight:400;font-size:13px}
+.tmSeat .meta{font-size:12px;color:var(--dim);display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-top:2px}
+.tmSeat .tags{display:flex;gap:5px;flex-wrap:wrap;margin-top:7px}
+.tmSeat .tmWhat{font-size:12px;min-width:0;line-height:1.5}
+.tmSeat .tmWhat details{margin-top:3px}
+.tmSeat .tmWhat summary{cursor:pointer}
+.tmSeat .acts{text-align:right;white-space:nowrap}
+/* The member's share of the team: a number the eye can rank down the list, and a bar against
+   the largest share in the team. */
+.tmPart{text-align:right;padding-top:2px}
+.tmPart b{display:block;font-family:ui-monospace,monospace;font-size:22px;font-weight:700;line-height:1;color:var(--ok)}
+.tmPart.zero b{color:var(--dim2);font-size:18px}
+.tmPart small{display:block;font-size:10.5px;color:var(--dim2);text-transform:uppercase;letter-spacing:.05em;margin-top:4px}
+.tmPart .bar{margin-top:7px}
+.tmPart .bar>i{background:linear-gradient(90deg,#2e6b4c,var(--ok))}
+/* A member's buffs summed per factor: one pill each, read before the lines behind them. */
+.tcSum{display:flex;gap:5px;flex-wrap:wrap;margin:0 0 6px}
+.tcSum .st{display:inline-block;border:1px solid var(--line);background:#16161c;border-radius:6px;padding:2px 8px;font-size:12px;white-space:nowrap}
+.tcSum .st small{color:var(--dim2);font-size:11px}
+.tcSum .st b{font-family:ui-monospace,monospace;font-weight:700}
 .tmAlt{margin-top:8px;border-left:2px solid var(--line);padding-left:10px;display:flex;flex-direction:column;gap:6px}
 .tmAlt .alt{display:flex;gap:8px;align-items:baseline;flex-wrap:wrap}
-.tmWonder{display:grid;grid-template-columns:auto repeat(4,minmax(150px,1fr));gap:6px 8px;align-items:center;max-width:980px}
+.tmWonderSect{margin-top:12px}
+.tmWonder{display:grid;grid-template-columns:auto repeat(4,minmax(0,1fr));gap:6px 8px;align-items:center;max-width:980px}
+.tmWonder select{min-width:0;width:100%}
 .tmWonder .hd{font-size:11px;text-transform:uppercase;letter-spacing:.05em;color:var(--dim2);font-weight:600}
-.tmOrder{display:flex;gap:6px;flex-wrap:wrap;align-items:center}
-.tmOrder .tmStep{border:1px solid var(--line);border-radius:8px;padding:4px 9px;background:var(--panel2);font-size:12px}
+/* Turn order: numbered steps, the number drawn by CSS so the step's text stays the name and Speed. */
+.tmOrder{display:flex;gap:8px;flex-wrap:wrap;align-items:center;counter-reset:turn}
+/* inline-block, not inline-flex: a flex box reports its text one word per line (the test reads it) */
+.tmOrder .tmStep{display:inline-block;border:1px solid var(--line);border-radius:8px;padding:5px 11px 5px 6px;background:var(--panel2);font-size:13px}
+.tmOrder .tmStep::before{counter-increment:turn;content:counter(turn);display:inline-block;width:20px;height:20px;line-height:20px;text-align:center;
+  border-radius:50%;background:var(--red);color:#fff;font-size:11px;font-weight:800;margin-right:8px;vertical-align:1px}
 .tmOrder .tmStep b{font-family:ui-monospace,monospace}
+.tmOrder .sep{color:var(--dim2)}
 .tmRot{display:grid;grid-template-columns:repeat(auto-fill,minmax(84px,1fr));gap:4px;margin:6px 0 10px}
 .tmRot .t{border:1px solid var(--line);border-radius:6px;padding:4px 6px;background:#1a1a22;text-align:center}
 .tmRot .t small{display:block;color:var(--dim2);font-size:10px;text-transform:uppercase;letter-spacing:.05em}
@@ -431,12 +475,21 @@ details.sect>.inner{margin-top:10px}
 .tmRot .t.idle b{color:var(--dim2)}
 .tmRot .t.fit{border-color:#1d5c3d;background:#10241a}
 .tmRot .t.fit small{color:var(--ok)}
-.tmMember{border-top:1px solid var(--line);padding-top:12px;margin-top:12px}
-.tmMember:first-of-type{border-top:none;margin-top:0;padding-top:0}
+/* One card per member in the Rotation and "How this team works" panels. */
+.tmMembers{display:flex;flex-direction:column;gap:8px}
+.tmMember{background:var(--panel2);border:1px solid var(--line);border-left:4px solid var(--el,var(--line));border-radius:9px;padding:11px 14px 11px 13px}
+.tmMember .hd{display:flex;align-items:baseline;gap:8px;flex-wrap:wrap;margin-bottom:4px}
+.tmMember .hd .nm{font-size:14px;font-weight:700}
+.tmMember .hd a{margin-left:auto}
 .tmNote{margin:4px 0;color:var(--dim)}
-.tmParty{display:flex;gap:6px;flex-wrap:wrap;align-items:center}
-.tmParty .m{border:1px solid var(--line);border-radius:20px;padding:1px 8px;font-size:12px}
+.tmParties{display:flex;flex-direction:column}
+.tmParty{display:grid;grid-template-columns:auto minmax(0,1fr) auto;gap:6px 12px;align-items:center;padding:7px 0}
+.tmParty+.tmParty{border-top:1px solid #1e1e26}
+.tmParty .ms{display:flex;gap:6px;flex-wrap:wrap;align-items:center}
+.tmParty .m{border:1px solid var(--line);border-radius:20px;padding:1px 8px;font-size:12px;background:#16161c}
 .tmParty .m.no{color:#e87a5c;border-color:#6b3524;text-decoration:line-through}
+.tmParty .val{text-align:right;white-space:nowrap;font-size:12.5px}
+.tmParty .val b{font-family:ui-monospace,monospace;font-size:14px}
 @media (max-width:760px){
   header{position:static;padding:10px 12px;gap:8px 10px}
   header .logo{font-size:15px}
@@ -456,6 +509,14 @@ details.sect>.inner{margin-top:10px}
   .cc .nm{font-size:13px}
   .rechead .acts{margin-left:0}
   dialog{padding:14px;width:100%}
+  /* Teams: seat cards stack their columns, the hero loses its divider */
+  .tmSeat,.tmSeats.calc .tmSeat{grid-template-columns:minmax(0,1fr) auto}
+  .tmSeat .tmWhat,.tmSeat .acts{grid-column:1 / -1}
+  .tmSeat .acts{text-align:left}
+  .tmHero .cmp{border-left:none;padding-left:0}
+  .tmHero .acts{margin-left:0}
+  .tmParty{grid-template-columns:auto minmax(0,1fr)}
+  .tmParty .val{grid-column:2;text-align:left}
 }
 </style>
 
@@ -581,11 +642,53 @@ details.sect>.inner{margin-top:10px}
             title="The Speed on Wonder's character screen with the Persona you take along (without the Thieves Den, which is added). Saved in the save file; places him in the turn order.">
         </div>
       </div>
-      <div class="tmWonder" id="tmWonderSlots" style="margin-top:10px"></div>
-      <div class="row" style="margin-top:6px">
-        <div class="field"><label>Wonder's weapon</label><select id="tmWWeapon"></select></div>
-        <div class="field"><label>Refinement</label><select id="tmWRefine"></select></div>
+      <!-- How often Highlights and Theurgies come up, and how long a fight is: the calculated basis
+           prices Highlight buffs, extra Highlights and once-per-battle effects from these (prefs). -->
+      <div class="row" style="margin-top:8px">
+        <div class="field">
+          <label>Highlights</label>
+          <select id="tmHlEvery" title="How often each thief and Wonder use their Highlight where lufel's rotation does not write one in. A Highlight needs its 4-turn cooldown run down and its gauge full; 4 is as soon as the cooldown allows (the gauge keeps up, as lufel's own rotations show), a larger number is a gauge that fills slower. Gauge and cooldown effects from the team speed the damage dealer's up from there.">
+            <option value="4" selected>every 4 turns (the cooldown)</option>
+            <option value="5">every 5 turns</option>
+            <option value="6">every 6 turns</option>
+            <option value="8">every 8 turns</option>
+            <option value="0">only where lufel's rotation has one</option>
+          </select>
+        </div>
+        <div class="field">
+          <label>Theurgy (S.E.E.S.)</label>
+          <select id="tmThEvery" title="How often a S.E.E.S. member uses their Theurgy (it needs 70 gauge) where lufel's rotation does not write one in. lufel's own S.E.E.S. rotations cast it every other turn.">
+            <option value="2" selected>every 2 turns (lufel's rotations)</option>
+            <option value="3">every 3 turns</option>
+            <option value="4">every 4 turns</option>
+            <option value="0">only where lufel's rotation has one</option>
+          </select>
+        </div>
+        <div class="field">
+          <label>Fight length</label>
+          <select id="tmFight" title="Turns in the fight you are building for. Once-per-battle effects, such as Manaka's Da Capo, are spread over it: worth more in a short fight than a long one.">
+            <option value="6">6 turns</option>
+            <option value="9">9 turns</option>
+            <option value="12" selected>12 turns</option>
+            <option value="15">15 turns</option>
+            <option value="20">20 turns</option>
+            <option value="30">30 turns</option>
+          </select>
+        </div>
       </div>
+      <!-- Wonder's setup is set once and read on every visit, so it folds under one line that
+           says what is set; his Speed stays in the row above, since it places him in the turn order. -->
+      <details class="sect tmWonderSect">
+        <summary>Wonder's setup <span class="tiny muted" id="tmWonderSum"></span></summary>
+        <div class="inner">
+          <div class="tmWonder" id="tmWonderSlots"></div>
+          <div class="row" style="margin-top:8px">
+            <div class="field"><label>Wonder's weapon</label><select id="tmWWeapon"></select></div>
+            <div class="field"><label>Refinement</label><select id="tmWRefine"></select></div>
+          </div>
+          <div class="tiny muted" style="margin-top:6px">A Persona's passives count only while it is in use; the planner shares his six actions among the Personas and skill cards set here.</div>
+        </div>
+      </details>
       <div id="tmBusy" class="tiny" style="margin-top:10px"></div>
     </div>
     <div id="tmOut"></div>

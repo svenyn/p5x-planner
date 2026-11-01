@@ -69,6 +69,8 @@ async function dressSynthetic(p) {
   await p.screenshot({ path:path.join(DOCS,'shot-headroom.png') });
   await p.click('nav button[data-tab="roster"]'); await p.waitForTimeout(300);
   await p.screenshot({ path:path.join(DOCS,'shot-roster.png') });
+  await p.click('nav button[data-tab="teams"]'); await p.waitForTimeout(800);
+  await p.screenshot({ path:path.join(DOCS,'shot-teams.png') });
   await p.click('#rsGrid .cc[data-ch] >> nth=0', { position: { x: 100, y: 150 } });
   await p.waitForSelector('#dlg[open]'); await p.waitForTimeout(200);
   await p.screenshot({ path:path.join(DOCS,'shot-loadout.png') });

@@ -36,6 +36,7 @@ node tools/audit-lufel.js lufel.json         # diff against src/data.js, reports
 node tools/gen-data-from-lufel.js lufel.json # emit replacement SETS/SPACE_SETS/CHARACTERS
 node tools/gen-awareness.js lufel.json       # patch CHAR_STATS[*].awareness into src/data.js in place
 node tools/gen-teams.js lufel.json           # replace the TEAMS block (lufel's parties, partners, rotations)
+node tools/gen-skill-damage.js lufel.json    # replace the SKILL_DMG block (damage per skill and Highlight)
 ```
 
 Run the audit before changing anything in `src/data.js` by hand — it will usually tell you
@@ -821,9 +822,44 @@ damage formula (`docs/DATA-SOURCES.md`, the damage-formula section):
   uptimes. `tcTeamSet` builds the Set both the lineup and the panel key the memo on, with the 4th
   seat as `backup`. Off, everything is lufel's as written, as before.
 - **Uptime comes from the supporter's own rotation** at their Awareness (`tcCover`: the
-  share of turns `dur` covers over the rotation repeated). A skill missing from the rotation (a
-  Highlight lufel does not write in) counts nothing, and the row says so — no Highlight cadence
-  is assumed. Linear: a buff up half the time counts at half strength.
+  share of turns `dur` covers over the rotation repeated). A skill missing from the rotation
+  counts nothing, and the row says so. Linear: a buff up half the time counts at half strength.
+  A Highlight is the exception since Nov 2026 (next bullet).
+- **Highlights and Theurgies come on a cadence the page sets** (Nov 2026; the user asked for them
+  to be priced). lufel writes a Highlight into 16 of its 173 rotations, so before this the ~40
+  Highlight-cast buffs in `TEAM_BUFFS` counted for 10 characters only. Facts from lufel's
+  `skill.js`: a thief's Highlight has a 4-turn cooldown (`cool`, every one of them) and needs a full
+  gauge; a S.E.E.S. Theurgy needs 70 gauge and has no cooldown; both are cast in the same turn as a
+  skill ("HL+3"), never instead of one. So `tcSeqHL` adds one every `#tmHlEvery` turns (4, the
+  cooldown, by default — lufel's own Highlight rotations show the same spacing; 0 means only
+  lufel's) or `#tmThEvery` (2, as lufel's S.E.E.S. rotations write it) to a rotation that has none,
+  repeated to a whole number of both cycles. The fit re-chooses turns on the shape lufel wrote; only
+  the covers read the overlay. Elucidators have no Highlight of their own. Wonder's is the one of
+  his Personas' Highlights that does most for the damage dealer (memoised, `tcMemo.hlw`).
+  **The damage dealer's own Highlight is a share of their damage** (`tcDpsHl`): their Highlight's
+  damage per cast against their lufel rotation's skill damage per turn, both from `SKILL_DMG` in
+  `data.js` (`tools/gen-skill-damage.js`, lufel's English skill text; see `docs/DATA-SOURCES.md` for
+  what it misses — Resonance and follow-up kits read high). `tcMultiplier` prices skill turns and
+  Highlights apart: team buffs reach both; `hlDm`/`hlFinal` (Tailwind's Air, Tower Guide, Holy
+  Prayer, Sraosha) reach the Highlight part only, through ⓑ alone (`plus`, exact without a second
+  `damageFactors`). `tcDpsRate` is how often it comes: when the cooldown and the gauge both allow —
+  at a cadence equal to the cooldown the gauge keeps up, a slower one is a slow gauge — so the team
+  can cut the cooldown (`hlCdRate` Ayaka's Spotlight, `hlCd` + `hlFree` Summer Ayaka's A0), fill
+  the gauge (`hlGauge`, `thGauge` for Theurgy: Holy Prayer, Arrow of Life), or add Highlights
+  outside it (`hlx`, Catchy Hook with its own damage `hlxDm`; Miku's A1 cooldown reset). With
+  Highlights off and none in their rotation the damage dealer has no Highlight part, so none of it
+  counts (otherwise an extra Highlight read as their whole Highlight gained). A buff "when an ally
+  uses a Highlight" is `on: 'dpsHL'` (that ally: Tailwind's Air, Let's Sing Together, Bloody Mary,
+  Backing Track) or `on: 'anyHL'` (any ally: Benevolence), up at that rate times its duration;
+  `dur: 'next'` lasts until the damage dealer's next Highlight; `only: 'HL'|'TH'` keeps a line to
+  one kind of damage dealer; `durAw: [aw, dur]` lengthens a buff from an Awareness (Haruna,
+  Mayumi, Beachflower Minami's A4). Not modelled: a supporter's own Highlight sped up by the team,
+  and gauge that only matters past the cooldown at the default.
+- **The fight length** (`#tmFight`, 12 turns by default) prices once-per-battle effects: a `battle`
+  entry's uses (a number, or `TC_BATTLE`: Manaka's Da Capo is 1, +1 once Wonder has acted 7 times,
+  +1 at A6) over the fight. Da Capo is `xturns`, extra actions for the damage dealer, each one more
+  skill turn; `xDm` (Mayumi's Team Ambassador), `xFinal` (Fortissimo) and `xAtkPct` (Crescendo)
+  reach those actions only. The three settings are prefs and part of `tcMemo`'s key.
 - **Wonder** is a member like any other, priced from the setup the user enters on the tab — three
   Persona slots, each with the three skill cards that Persona has learned (a card is cast only
   while its Persona is in use), plus a weapon and refinement (`state.wonder`, saved as
@@ -833,7 +869,7 @@ damage formula (`docs/DATA-SOURCES.md`, the damage-formula section):
   (`/data/kr/wonder/skills.js`) and Wonder weapons (`/data/kr/wonder/weapons.js`), the DEF-down
   values cross-checked against lufel's defence calculator (`/data/kr/calc/defense-data.js`).
   His stats are not tracked, so a value that grows with them is taken at its cap, and his skills
-  at their top rank; his Highlight and own damage are not counted.
+  at their top rank; his own damage is not counted, his Highlight is on the cadence (above).
   **A Persona's passives work only while it is in use** — the user asked, and the Persona text
   settles it: the exceptions say so in their own words ("activate even in reserve": Sahimochi-no-
   Kami, Kohryu, Sraosha, Vasuki, Shiva; Sandalphon's "when not present"), and what they do in
@@ -849,7 +885,9 @@ damage formula (`docs/DATA-SOURCES.md`, the damage-formula section):
   actions, and the page says slots 2-3 add nothing then rather than inventing picks. A Persona's
   innate skills that also exist as cards are priced as the card the user picks, never both.
 - **Fuuka's backup** brings its best single skill, for as many turns as her swaps (2 in six
-  turns, 4 at Awareness 6) times its duration; its passives are off while it waits.
+  turns, 4 at Awareness 6) times its duration; its passives are off while it waits. From her
+  Awareness 2 (Pros and Cons) the swap also fires the backup's Highlight or Theurgy, at most once
+  every 3 rounds, so its Highlight lines count for up to 2 swaps in six turns as well.
 - **A render remembers what depends only on the save** (`tcMemo`, Oct 31 2026): the damage dealer's
   own side of every ratio (`tcEvalFor`), each member's vector (`tcMember`) and each search
   (`tcSearch`), keyed on `dataSignature()` plus the busy list, so a change made without `commit()`
@@ -860,6 +898,16 @@ damage formula (`docs/DATA-SOURCES.md`, the damage-formula section):
   about 0.1 s and a repeat (a pick, "Use") to 10 ms, with every team and part unchanged. The
   Thieves Den goes into both sides of the ratio (`damageFactors`' `extra.flat`, plus its crit);
   it was in the members' stats but not the damage dealer's.
+- **The page leads with the number** (Nov 2026 pass): the team's multiplier as the panel's headline
+  (`.tmHero`, lufel's team beside it for scale; on the lufel basis, how many of lufel's picks are
+  fielded), then one card per seat (`.tmSeat`, striped in the member's element colour) with the
+  member's share of the team as a number and a bar against the largest share (`.tmPart`), what they
+  add, and the buttons; the seats were a five-column table that scrolled sideways on a phone. The
+  rotation and "How this team works" members are cards too (`.tmMember`), the Rotation blurb is
+  folded with `explainHtml`, and Wonder's Persona/card/weapon grid folds under "Wonder's setup" with
+  a one-line summary of what is set (`tmWonderSumText`); his Speed stays in the top row. The turn
+  order's step numbers are CSS counters, so a step's text is still "Wonder 250 Speed" (a test reads
+  it), and the per-factor pills are inline-block for the same reason.
 - **The page reads a per-factor summary per member first** ("ATK +126% · crit multiplier +112% ·
   Pierce +38%", `tcSumHtml`, each line at its share of turns), with the kit lines folded under
   "Where it comes from"; a skill not in the member's rotation is named, not quoted. The next teams
@@ -871,10 +919,14 @@ damage formula (`docs/DATA-SOURCES.md`, the damage-formula section):
   multiply to the total. Replacements are priced as the whole team with them swapped in, and
   lufel's recommended team is priced the same way for comparison in the header.
 - **Extra turns for the whole party** (Miku's Virtual Concert: 2 every 6 Wonder actions) are a factor of their own, `turns`: 2 more actions in a six-turn cycle is ×8/6. Buffs that only run during those turns count as uptime.
-- **Not priced, and the page says so**: other extra actions (Manaka's once-a-battle Da Capo, Ayaka's extra Highlight) and action order, Wonder's Highlight and own damage, Highlight/Theurgy gauge,
-  weakness creation, Down/Technical, Resonance, ailments, healing and survival, Wonder's Persona
-  and weapon, buffs copied from other buffs. The number ranks teams for one damage dealer; it is
-  not a damage forecast and is never compared across damage dealers.
+- **Not priced, and the page says so**: other extra actions (Narumi's for Wonder, Mayumi's own) and
+  action order, Wonder's own damage, a supporter's Highlight sped up by the team, weakness creation,
+  Down/Technical, Resonance, ailments, healing and survival, buffs copied from other buffs. The
+  number ranks teams for one damage dealer; it is not a damage forecast and is never compared
+  across damage dealers. Counting Highlights (Nov 2026) raised every owned damage dealer's best
+  team on the real save, most for the S.E.E.S. ones whose Theurgy is about half their damage
+  (Makoto Yuki ×25.4 → ×33.6), and put Beachflower Minami, whose Highlight buffs had never
+  counted, in most teams; a fresh render costs about 100 ms more (0.36-0.47 s here).
 
 ### Lufel publishes an order, not magnitudes
 
