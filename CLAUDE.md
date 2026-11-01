@@ -848,8 +848,9 @@ damage formula (`docs/DATA-SOURCES.md`, the damage-formula section):
   turns for 32 kits, each with its trigger — their own actions or a skill, a token ("Gunshot",
   "Transform", a whole "1111"), their Highlight, **a teammate's action or Highlight**, the end of
   their turn, the enemy's turn — and gates (`after`/`dur` a skill or token, `max` a round, `chance`,
-  `stacks`, `aw`, `weapon`); damage over time does not crit. `DPS_KIT_SKIPS` is what those kits do
-  that cannot be priced, shown on the damage dealer's seat with the damage mix the fight gave them.
+  `stacks`, `aw`, `weapon`); damage over time does not crit. Their own damage bonuses on those hits
+  are `DPS_KIT_BONUS` (below). `DPS_KIT_SKIPS` is what those kits do that cannot be priced, shown on
+  the damage dealer's seat with the damage mix the fight gave them.
   Both came from four hand-checked research batches against one brief (Nov 2026); each `why` says
   where its number comes from and what was judged. Every hit is priced with what is up at that
   moment (memoised per buff state), against the unbuffed hit with its crit, so a hit that cannot
@@ -1033,11 +1034,46 @@ damage formula (`docs/DATA-SOURCES.md`, the damage-formula section):
     Aran's A4 Highlight regains 15, and Prosperity's 4-piece starts the gauge at 25 once whoever of
     the thieves wears it. Mitsuru's Assist is a support-slot skill her lufel rotation never casts,
     so it stays unpriced.
+- **The damage dealer's own damage bonuses** (`DPS_KIT_BONUS`, Nov 2026, the user asked): "+30%
+  Resonance damage", "Highlight +20% per stack", a weapon's "follow-up damage +26-50%", "Skill 3 +10%
+  per stack", an enemy's "damage taken" from their own skill. 222 entries for 29 damage dealers, from
+  three hand-checked batches against one brief, each `why` saying what was judged (stack counts,
+  chances, which turns of lufel's rotation a window covers). `to` names the hits (`'skill:N'`,
+  `'skill'`, `'hl'`, a `DPS_KIT` kind with an optional `match` on the component's `why`, `'all'`);
+  a bonus adds into ⓑ for those hits, or multiplies with `amp` ("amplification", "deals 120%"), with
+  `after`/`dur` windows on the damage dealer's own skills, tokens, Highlight or Theurgy, `stacks`,
+  `chance`, `aw`, `weapon`/`ladder`, and `fewer` (per foe fewer than N). `own()` in `tcSimRun` applies
+  them; `tcKitBonusFor` resolves them at the Setup; the seat lists them. A `'skill:N'`/`'hl'` bonus
+  does not reach a `DPS_KIT` `hit` of the same cast, so those carry their own `to: 'hit'` entry.
+  Because they share ⓑ with the team's damage buffs, they dilute them: on the real save (16 owned
+  damage dealers with entries) team multipliers fell 1-16% and the best team changed for Ryuji only.
+  Crit, ATK and pierce lines the batches found missing from `KIT_STAT_BUFFS` were reported, not
+  entered here. The batches also
+  found lufel's "1 / 2" turn (Akechi's Awareness 0 rotation: alternate Skill 1 and Skill 2) read as
+  Skill 1 every time; it is spelled out at load (the rotation doubled when needed).
+- **The damage dealer's own party and enemy lines reach them** (Nov 2026, the user asked): until then
+  only teammates', the Elucidator's and Wonder's `TEAM_BUFFS` lines did, so Mitsuru never had her own
+  Frozen Tempest damage taken nor Runa her own DEF down. `tcMemberCalc` with the damage dealer as the
+  member (`self`) returns only their `party` and `enemy` lines; `tcSimPrep` puts its events on the
+  damage dealer's actor and its constants and gated lines on the board, in the team fight and the
+  reference fight alike. Their buffs go on before their hit (like their timed `KIT_STAT_BUFFS`), their
+  debuffs on the enemy after it (`castBy`'s filter), so their own 1-turn debuff never meets their own
+  hit. `own: false` keeps a line from its own character: 25 that `KIT_STAT_BUFFS` already counts
+  (found by stat and skill name, the rest checked by hand) and 3 written for "the other allies"
+  (Koromaru's Loyal Dog, Starlight Ren's Upbeat, J&C's Execution of Rebirth); `ownAw: 6` holds Makoto
+  Yuki's Cadenza lines until Awareness 6, as the damage dealer casting Ardhanari. The `DPS_KIT_BONUS`
+  entries that had stood in for these lines went (Runa's Furrocious and A6, Akechi's Deduction,
+  Ichigo's Mine Alone, Makoto Yuki's Cadenza; Translucent Blade kept only his own half), and
+  Starlight Ren gained Rhythm's +12 for a Starlight character. The seat lists the lines. On the real
+  save (33 owned characters) the best team changed for 3 (Pioneer Shun, Chizuko, Mayumi), and
+  characters whose kits are mostly party buffs read much lower as damage dealers (Mayumi −36%, Yukari
+  −31%, J&C −27%): their own buffs are now in both fights, so a teammate's add less on top. A
+  once-per-battle own line (`battle`) is not fired for the damage dealer.
 - **Not priced, and the page says so**: other extra actions (Narumi's for Wonder, Mayumi's own) and
   Wonder's own damage, weakness creation, Down/Technical, ailments other than the damage over time a
-  `DPS_KIT` entry prices, damage-percentage bonuses on a kit's own components ("+X% Resonance
-  damage", in `DPS_KIT_SKIPS`), always-crit and DEF-ignoring components, healing and survival, buffs
-  copied from other buffs, and a supporter's Theurgy gauge from teammates. The number ranks teams
+  `DPS_KIT` entry prices, kit bonuses that hang on the boss's HP, the damage dealer's own HP, Down
+  or a specific teammate (what is left in `DPS_KIT_SKIPS`), always-crit and DEF-ignoring components,
+  healing and survival, buffs copied from other buffs, and a supporter's Theurgy gauge from teammates. The number ranks teams
   for one damage dealer; it is not a damage forecast and is never compared across damage dealers.
   Moving from averaged uptimes to the fight took most real-save numbers 5-15% down (the gauge cannot
   give every member a Highlight every 4 turns, and the first round has none) and moved a few teams

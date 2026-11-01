@@ -2949,6 +2949,33 @@ function awarenessOverrideDrift() {
     out.prosperity = tcSimPrep(ann, [null, null, null], false, true).gauge0;
     state.cards = keepC;
     TEAMS['Ryuji Sakamoto'] = keepR; TEAM_BUFFS['Ryuji Sakamoto'] = keepRB2; tcMemo.key = '';
+    // the damage dealer's own damage bonuses: on the hits they name, in their window, added or multiplied
+    const keepKB = DPS_KIT_BONUS[ann.n], keepAR = TEAMS[ann.n], keepAS = SKILL_DMG[ann.n];
+    SKILL_DMG[ann.n] = { hl: 'HL', cd: 4, d: [100, 100, 100, 200] };
+    TEAMS[ann.n] = { rot: [{ aw: 0, label: 'Test', seq: ['1', '3', '1', '3', '1', '3'] }] };
+    const solo = list => { DPS_KIT_BONUS[ann.n] = list; tcMemo.key = ''; const P = tcSimPrep(ann, [null, null, null], false, true); return tcSimRun(P, [ann.n], false).parts; };
+    const p0 = solo(undefined), p3 = solo([{ to: 'skill:3', v: 100, why: 't' }]), ph = solo([{ to: 'hl', v: 50, amp: true, why: 't' }]),
+      pw = solo([{ to: 'skill', v: 100, after: 'HL', dur: 1, why: 't' }]), pf = solo([{ to: 'skill:1', v: 10, fewer: 5, why: 't' }]);
+    out.ownBonus = { s3: p3.skill / p0.skill, hl: ph.hl / p0.hl, hlSkill: ph.skill / p0.skill, win: pw.skill / p0.skill, fewer: pf.skill / p0.skill,
+      bad: Object.entries(DPS_KIT_BONUS).filter(([n, l]) => !DPS_KIT[n] && !SKILL_DMG[n] || l.some(b => !b.why || !/^(res|fu|dot|hit|skill|skill:[123]|hl|all)$/.test(b.to) || (b.v == null && !b.ladder) || (b.ladder && !b.weapon))).map(([n]) => n) };
+    // the damage dealer's own party and enemy lines reach them: a buff before their hit, a debuff after it
+    const keepTB = TEAM_BUFFS[ann.n];
+    DPS_KIT_BONUS[ann.n] = undefined;
+    TEAMS[ann.n] = { rot: [{ aw: 0, label: 'Test', seq: ['1'] }] };
+    const selfRun = list => { TEAM_BUFFS[ann.n] = list; tcMemo.key = ''; const P = tcSimPrep(ann, [null, null, null], false, true); return tcSimRun(P, [ann.n], false).parts.skill; };
+    const s0 = selfRun([]);
+    out.selfLines = {
+      party: selfRun([{ k: 'dmg', v: 50, to: 'party', src: '1', on: '1', dur: 1, why: 't' }]) / s0,
+      notOwn: selfRun([{ k: 'dmg', v: 50, to: 'party', src: '1', on: '1', dur: 1, own: false, why: 't' }]) / s0,
+      ally: selfRun([{ k: 'dmg', v: 50, to: 'ally', src: '1', on: '1', dur: 1, why: 't' }]) / s0,
+      foe1: selfRun([{ k: 'dmg', v: 50, to: 'enemy', src: '1', on: '1', dur: 1, why: 't' }]) / s0,
+      foe2: selfRun([{ k: 'dmg', v: 50, to: 'enemy', src: '1', on: '1', dur: 2, why: 't' }]) / s0,
+      passive: selfRun([{ k: 'dmg', v: 50, to: 'party', src: 'passive', why: 't' }]) / s0
+    };
+    TEAM_BUFFS[ann.n] = keepTB;
+    DPS_KIT_BONUS[ann.n] = keepKB; TEAMS[ann.n] = keepAR; SKILL_DMG[ann.n] = keepAS; tcMemo.key = '';
+    // lufel's '1 / 2' turns alternate the two skills (Akechi's Awareness 0 rotation)
+    out.alt = { akechi: TEAMS['Goro Akechi'].rot[0].seq.join(' '), left: Object.values(TEAMS).some(t => (t.rot || []).some(r => r.seq.some(x => /\//.test(x)))) };
     return out;
   });
   const near = (a, b, e) => Math.abs(a - b) < (e || 1e-9);
@@ -3011,6 +3038,12 @@ function awarenessOverrideDrift() {
     th.timed.nt && !th.timed.kit && JSON.stringify(th.timed.events) === '["2/2"]' && th.timed.cast && th.timed.noCast, JSON.stringify(th.timed));
   check('gauge sources: a fill-to gives more Highlights; Spotlight and Aran\'s A4 are lines; Prosperity\'s 4-piece starts the gauge at 25',
     th.fill.with > th.fill.base && th.gaugeLines.every(Boolean) && th.prosperity === 25, JSON.stringify({ f: th.fill, l: th.gaugeLines, p: th.prosperity }));
+  check('a damage dealer\'s own damage bonus reaches only the hits it names: +100% on Skill 3 raises the skill damage by up to half, a Highlight amp leaves skills alone, a window after the Highlight counts only then, and a per-foe-fewer bonus counts the foes',
+    th.ownBonus.s3 > 1.2 && th.ownBonus.s3 < 1.5 + 1e-9 && near(th.ownBonus.hl, 1.5, 1e-6) && near(th.ownBonus.hlSkill, 1, 1e-9) && th.ownBonus.win > 1.01 && th.ownBonus.win < 1.6 && th.ownBonus.fewer > 1.05 && th.ownBonus.bad.length === 0, JSON.stringify(th.ownBonus));
+  check('lufel\'s "1 / 2" rotation turns alternate Skill 1 and Skill 2 instead of always reading Skill 1',
+    th.alt.akechi === '1 3 2 3 1 3 2 3 1 3 2 3' && !th.alt.left, JSON.stringify(th.alt));
+  check('the damage dealer\'s own party buff reaches them before their hit, a line marked own: false or cast on one ally does not, and their own 1-turn debuff lands after their hit (too late for it) while a 2-turn one meets the next',
+    th.selfLines.party > 1.1 && th.selfLines.passive > 1.1 && near(th.selfLines.notOwn, 1, 1e-9) && near(th.selfLines.ally, 1, 1e-9) && near(th.selfLines.foe1, 1, 1e-9) && th.selfLines.foe2 > 1.1, JSON.stringify(th.selfLines));
 
   // Wonder: one action a turn shared among his active skills; his setup is saved with the account
   const tw = await p.evaluate(() => {
