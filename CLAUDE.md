@@ -180,8 +180,8 @@ Everything routes through five functions in `src/logic.js`:
   (`pref` | `force4` | `any4` | `stats`) and returns the winner plus alternatives.
 - `buildScore(char, cards, p4value)` — 1-100 for how well a character is geared, or `null`
   if nothing is equipped. See below.
-- `damageFactors(cards, char, t, lo)` — lufel's ⓐ ATK, ⓑ damage bonus and ⓓ crit for a whole
-  loadout, and their product. The one place that knows those multiply rather than add, which
+- `damageFactors(cards, char, t, lo)` — lufel's ⓐ ATK, ⓑ damage bonus, ⓒ defence and ⓓ crit for a
+  whole loadout, and their product. The one place that knows those multiply rather than add, which
   is what makes stat *spread* count. See below.
 
 Those first four produce scores that are **ordinal, not cardinal**. They are only
@@ -242,7 +242,9 @@ magnitude lifted every score by about five points without changing the shape of 
 distribution (6/54/5 excellent/good/workable after, 7/54/4 before). Making the ideal card
 legal (Sep 2026 — its substats used to duplicate its own main, see below) lifted the mean
 by 0.4 and moved the bands to 11/49/5; the median did not move, so the bands were left
-alone (7/53/8 on today's 68 and pool, 10/53/5 on the pool before). If a scoring change moves these, either the change is wrong or `BUILD_BANDS` needs
+alone (7/53/8 on today's 68 and pool, 10/53/5 on the pool before). Reading each kit's own damage off its
+Teams fight and modelling ⓒ (Nov 2026, below) took the mean from 69.5 to 70.1 (the kit numbers 0.5, ⓒ 0.1),
+the range to 41-84 and the bands to 8/52/8; the median stayed 71. If a scoring change moves these, either the change is wrong or `BUILD_BANDS` needs
 re-cutting — check before shipping. The same block prints how many Moon/Star/Sky picks carry
 a main lufel does not recommend (31 of 204 on today's synthetic pool, 33 before the 28 Sep polish, and 26 on the one before
 it, down from 71 of 195 at three rolls a main; an open slot never counts, since any main is on
@@ -259,6 +261,7 @@ factors the cards move **multiply**:
 ```
 ⓐ (character ATK + weapon ATK) × ATK% + flat ATK
 ⓑ 100% + Damage Mult + elemental damage bonus + increased damage taken
+ⓒ 1 − E / (E + 1400), E = enemy DEF × max(0, (1 + coefficient) × (1 − Pierce) − DEF down)
 ⓓ 100% + Crit Rate × (Crit Mult − 100%)
 ```
 
@@ -276,8 +279,8 @@ rolls says. Two things handle this at different altitudes:
 `damageShare` is why this does not inflate tanks: it is the fraction of a character's weight
 budget sitting in the modelled stats — about 0.73 for a DPS and 0.03 for a shield Guardian —
 so the term is worth what damage is worth to them, with no archetype whitelist. It counts
-Resistance Pierce as *not* captured, because ⓒ is not modelled and a term must not claim
-credit for a factor it left out. Nor does it count a stat in **`BUFF_SOURCE_STATS`** — one a
+Resistance Pierce since ⓒ is modelled (Nov 2026); until then it did not, since a term must not
+claim credit for a factor it leaves out. Nor does it count a stat in **`BUFF_SOURCE_STATS`** — one a
 kit turns into an ally buff, for a character whose own damage is a side line. That stat is
 left out of the coupling too, because what it is worth is the buff (linear up to the cap
 lufel's target records), not what it adds to the character's own damage product. Only
@@ -312,8 +315,8 @@ listed. Lufel's target notes (`battle_plus_stats`) do the same arithmetic — Te
 "패시브(활기): 84%" is her Sun-kissed Blooms — which is also the confirmation that kit lines
 belong in the totals the stat targets are scored against.
 
-**`CRIT_PROFILE`** is for kits where some or all damage always crits, or cannot crit
-(`nocrit` — Kumi's Highlight is close to half her damage and cannot crit until Awareness 6): `locked` is that share,
+**`CRIT_PROFILE`** is for kits where some or all damage always crits (the share that cannot crit
+at all is measured, `kitMix` below; Kumi's was a hand-entered `nocrit: 0.45` until Nov 2026): `locked` is that share,
 ⓓ is a mixture of the locked share at 100% (at its `cmClamp`ed crit damage where the kit
 clamps it) and the rolled rest, and `lockedCritSupply` feeds the same split into the
 coupling so Crit Rate is priced for the rolled share only. Ryuji and Pioneer Shun are
@@ -350,6 +353,54 @@ party member's buff. Three memos read it and check it (`damageBase`'s key, `targ
 `prefSetLift`). Triage and the Vault keep their last run and mark it stale
 (`markStaleRuns`) rather than re-run a several-second sweep on each edit — on any change the
 run read, not only this one (see "The page's plumbing" above).
+
+**The team buffs** (Nov 2026, the same popover, `state.teamBuffs`, saved as `settings.teamBuffs`)
+are the rest of what those supports add, the same way: ATK %, damage %, crit multiplier % and
+enemy DEF down %, in points. `teamBuffsFor(char)` puts them with the crit rate into
+`damageBase` (ATK only for an ATK kit, nothing for an Elucidator), and `genericSupply` on the
+Vault's board; never into `totalStat`. Every memo and fingerprint that read the crit rate reads
+`teamSig()` (all five), and `damageBase` keys on `teamKey()`, rebuilt only when
+`state.teamCrit` or the `state.teamBuffs` object changes (every write assigns a fresh object) —
+building the key per call cost Triage's benchmark a fifth of its time. All 0 by default, so
+nothing moves until the user sets them. With a typical team (15 / +80 / +30 / +30) 6 of the 33
+Optimise picks on the real save change.
+
+**What a kit does to its own damage is read off its Teams fight** (`kitMix`, Nov 2026; the user
+asked which of the Teams calculations could make build scores more accurate). The damage model
+priced every hit as able to crit and the character's damage as their stats alone. But a
+Highlight cannot crit unless its text says so (`tcHlCrits`: a Theurgy, SKILL_DMG `hlCrit`, or
+`TC_HL_CRIT_AW` — Kumi's A6), damage over time never does, and a kit adds into the same factors
+the cards fill (DPS_KIT_BONUS, timed KIT_STAT_BUFFS, its own TEAM_BUFFS lines), so a Damage
+Multiplier roll is worth less beside a kit's own +60% damage. `kitMix(char, lo)` plays the
+character's fight alone once per Setup — the reference fight: lufel's rotation as written, blank
+teammates, no Wonder, at the page's defaults whatever its controls say (`tcKitRun` makes
+tcFight/tcBossNow/tcWeakMode/tcFoes/tcDownPts/tmFitOn read their defaults), with **no cards**
+(state swapped out and restored, a private `tcMemoNew` memo), so one number serves every
+loadout the optimiser tries. The fight books each hit when `P.track` is set (spread() notes it,
+gain() books it): damage before the crit factor, whether it could crit, what was added into each
+factor. `kitMix` returns `nc` (share of pre-crit damage that cannot crit) and `x` (damage-weighted
+mean ATK%, flat ATK, damage, crit rate and crit multiplier over critting hits, Pierce, DEF down).
+`damageBase` reads the base **without** the kit's timed lines (`noTimed`) and adds `x`, so a
+timed line counts at its rotation's uptime, not every turn; `damageFactors` deals `nc` at 1×.
+**The fight's own evaluation is `lo.bare`** (`tcEvalFor`): no kit numbers, no team buffs, no ⓒ in
+`damageFactors`, since the fight plays the kit and prices the team and ⓒ itself — keep every fight
+call on a bare setup or it counts them twice. `kitMixReady` (set just before the page's first
+render) keeps it from running while the file is still loading; `damageBase` does not remember a
+result taken while the kit could not be measured. Null, the model as before, for an Elucidator, a
+kit with no SKILL_DMG and one with no damage of its own (four support Highlights deal none: YUI,
+Ayaka, Mayumi, Beachflower Minami read 0% for that reason). All 68 fights take about 70 ms. On the
+real save: `nc` 25-31% for most, 40-53% for Yaoling, Shun Kano, Kiyoshi, Kumi, Wavecatcher Miyu;
+kit damage bonuses +4% (Firecracker Yaoling) to +113% (J&C); Mitsuru takes 88% of the foe's DEF
+on average. 3 of 33 Optimise picks changed (Yaoling, Mayumi's Space card, Mitsuru), build scores
+moved −1.3 to +2.7. A test holds it independent of worn cards and of the Teams controls.
+
+**ⓒ, the foe's defence, is in the build model** (`buildDefence`, Nov 2026): lufel's formula against
+the boss the Teams page's Auto picks for the character (`buildBoss`: area example DEF 821 for an
+AoE DPS, single boss DEF 1280 otherwise), Pierce from the character, the kit and the cards, DEF
+down from the kit and the team buffs. Because the formula subtracts DEF down after Pierce scales
+the DEF, DEF already taken off makes each Pierce point worth more, not less (a test pins the
+direction). The Damage factors panel (Optimise, Loadout popup) shows ⓒ and one line each for what
+the kit and the team buffs contribute.
 
 Measured on the default setups: at 10 the perfect Star follows lufel's first choice for
 20 of 32 (13 at 0); at 20, 24 of 32, and perfect is a ceiling for everyone, Wavecatcher
@@ -1666,9 +1717,9 @@ moves her ATK% substats from ×1.01 to ×1.08. It is large only where the game r
 lopsided — at the innate 5% crit rate a Crit Multiplier roll genuinely is worth a fraction
 of a Crit Rate roll.
 
-Resistance Pierce is its own factor but is deliberately absent: what a point is worth
-depends on the enemy's resistance, which nothing here models. Flat ATK feeds the ATK factor
-but is also absent — a max roll of it is worth well under half an ATK% roll, and how much
+Resistance Pierce is its own factor (ⓒ) and is absent from the coupling: what a point is worth
+depends on the boss's DEF, which only the spread term models (against one reference boss).
+Flat ATK feeds the ATK factor but is also absent — a max roll of it is worth well under half an ATK% roll, and how much
 depends on a base ATK `cardScore` is not given.
 
 One knock-on: `idealCard` has to take the **best-scoring** of a slot's allowed mains, not
@@ -1790,7 +1841,8 @@ single call. `npm run triage-perf` benchmarks the worst case (4000 cards, all 68
 in a real browser — check it after touching any of this. It read about 2.8 s after the
 Upgrades guard (1.6 s before it); on 28 Sep 2026 the same code measured 9.0 s on this machine,
 and 6.4 s after the optimiser's shortlist stopped iterating (see "One card price" above), so
-compare against a run of the old code on the same day rather than against these figures.
+compare against a run of the old code on the same day rather than against these figures. On 2 Nov
+2026 the kit fights and ⓒ took it from 2.14 s to 2.35 s, about a third of that the 68 fights themselves.
 
 ### Upgrades is two views of two different questions
 

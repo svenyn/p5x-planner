@@ -162,6 +162,15 @@ It never enters `totalStat`, so totals and stat targets are unchanged. `damageBa
 key, `targetMemo` and `prefSetLift` all check it, so a change reprices at once. At 0 it is
 the model without it.
 
+**So are the party's other buffs** (Nov 2026, `state.teamBuffs`, the header's "Team buffs",
+saved as `settings.teamBuffs`): ATK %, damage %, crit multiplier % and enemy DEF down %, in
+points. `teamBuffsFor(char)` adds them to `damageBase` beside the crit rate (ATK only for a
+kit that scales off ATK; nothing for an Elucidator), so they reach ⓐⓑⓒⓓ and both coupling
+baselines, and `genericSupply` adds them to the Vault's generic board. Every memo and
+fingerprint that read the crit rate reads `teamSig()`, which covers all five. All 0, the
+default, is the model without them. With a typical team (crit rate 15, ATK +80, damage +30,
+crit multiplier +30) 6 of the 33 Optimise picks on the real save change (Nov 2026).
+
 **A share of the damage can crit at a higher rate** (`CRIT_PROFILE.extraCr`). Wavecatcher
 Miyu's weapon adds 16.4-31.4% crit rate to her Resonance, about half her damage. A Crit
 Multiplier point is then worth `cr + share × extra` rather than `cr`, so `productSupply`
@@ -340,10 +349,10 @@ inventory it changed no recommendation and moved no build score by more than 0.3
 
 `damageShare(t, char)` is the fraction of the character's weight budget sitting in
 `modelledStats(char)` (the scaling stat's % and flat forms, `Damage Multiplier`, `Crit
-Rate`, `Crit Multiplier`) — about 0.73 for a DPS, 0.03 for a shield Guardian, 0.4 for an
-HP-scaling one — so the term is worth what damage is worth to them, with no archetype
-whitelist. Resistance Pierce counts as **not** captured, because ⓒ is not modelled and a
-term must not claim credit for a factor it left out. Neither does a stat in
+Rate`, `Crit Multiplier`, `Resistance Pierce`) — about 0.73 for a DPS, 0.03 for a shield
+Guardian, 0.4 for an HP-scaling one — so the term is worth what damage is worth to them, with
+no archetype whitelist. Resistance Pierce counts since ⓒ is modelled (Nov 2026, below); before,
+it was left out, since a term must not claim credit for a factor it leaves out. Nor does a stat in
 `BUFF_SOURCE_STATS` — one the kit turns into an ally buff, for a character whose own damage
 is a side line. It is left out of the coupling too, since its worth is the buff (up to the
 cap lufel's target records), not its effect on the character's own product. Only Beachflower
@@ -381,12 +390,49 @@ split through `lockedCritSupply`, which adds `locked / (1 − locked)` to the Cr
 so a Crit Rate roll is priced for the rolled share only — and adds nothing while the locked
 share's crit damage is below its floor, since a Crit Multiplier point cannot reach it
 there. Junpei is `locked: 0.35` (Sunder Strike and Power Swing against Blazing Strike and
-his Theurgy). `nocrit` is the opposite case: Kumi's Highlight cannot crit until Awareness 6
-grants it, and it is close to half her damage, so `nocrit: 0.45, nocritUntilAw: 6` deals that
-share at exactly 1× whatever the crit stats. Everyone's rolled crit rate is capped at 100%,
+his Theurgy). The share that cannot crit at all is not entered here any more: `kitMix` measures
+it for every kit (below; Kumi's was a hand-entered `nocrit: 0.45` until Nov 2026). Everyone's
+rolled crit rate is capped at 100%,
 and `computeCoupling` prices a Crit Rate roll at **zero** once what the board actually holds
 (baseline, team crit rate included, plus a Crit Rate main) reaches 100 points —
 `heldCritRate`, a hard zero rather than the clamp's floor, which `cf()` preserves.
+
+**What a kit does to its own damage is read off its Teams fight** (`kitMix`, Nov 2026). The
+damage model used to price every hit as able to crit and the character's damage as their stats
+and nothing else. A Highlight cannot crit unless its text says so (`hlCrit`, a Theurgy, or
+`TC_HL_CRIT_AW`: Kumi's Awareness 6), damage over time never does, and a kit adds into the same
+factors the cards fill: Resonance and Highlight damage bonuses (`DPS_KIT_BONUS`), timed ATK or
+crit buffs on the turns its rotation casts them (`KIT_STAT_BUFFS` with `on`), its own debuffs
+on the foe (its `TEAM_BUFFS` lines). `kitMix(char, lo)` plays the character's fight alone once
+per Setup — the Teams page's reference fight: lufel's rotation as written, three teammates who
+attack and add nothing, no Wonder, at the page's defaults whatever its controls say
+(`tcKitRun`: 12 rounds, the Auto boss and enemies, every hit on a weakness, no knockdowns) —
+with **no cards**, so the answer is the kit's and one number serves every loadout the optimiser
+tries. The fight books each hit (`P.track` in `tcSimRun`): its damage before the crit factor,
+whether it could crit, and what was added into each factor then. `kitMix` returns `nc`, the
+share of damage before crit that cannot crit, and `x`, the damage-weighted mean of what the kit
+added: ATK% and flat ATK, damage, crit rate and crit multiplier (over critting hits only), Pierce
+and DEF down. `damageBase` then reads the character's base **without** the kit's timed lines
+(`noTimed`) and adds `x`, so a timed line counts at the uptime its rotation gives it rather than
+every turn, and `damageFactors` deals `nc` of the damage at 1×. The fight's own evaluation passes
+`lo.bare` (`tcEvalFor`), which leaves out both the kit numbers and the team buffs, since the fight
+plays the kit and adds the team itself. Null — the model as before — for an Elucidator, a kit with
+no `SKILL_DMG`, and one that deals no damage of its own. All 68 fights take about 70 ms.
+
+On the real save (Nov 2026) `nc` is 25-31% for most damage dealers, 40-53% for Yaoling, Shun
+Kano, Kiyoshi, Kumi and Wavecatcher Miyu, and 0 where the Highlight crits or deals no damage; the
+kits' own damage bonuses run from +4% (Firecracker Yaoling) to +113% (Justine & Caroline), and
+Mitsuru takes 88% of the foe's DEF on average. 3 of 33 Optimise picks change and build scores move
+by −1.3 to +2.7.
+
+**ⓒ, the foe's defence, is modelled in the build score** (Nov 2026, `buildDefence`): lufel's
+formula, 1 − E/(E+1400) with E = DEF × max(0, (1 + coefficient) × (1 − Pierce) − DEF down),
+against the boss the Teams page's Auto picks for the character (`buildBoss`: the area example,
+DEF 821, for an AoE DPS; the single boss, DEF 1280, for everyone else). Pierce from the character
+(Mindscape, kit lines), the kit's measured `x` and the cards; DEF down from the kit and the team
+buffs setting. The fight prices ⓒ itself, so `damageFactors` skips it on a bare setup. Because the
+formula subtracts DEF down after Pierce has scaled the DEF, DEF already taken off the foe makes
+each Pierce point a larger share of what is left: worth more, not less, until E reaches 0.
 
 **`damageBase` reads `flat + pct`** for the three percentage-unit stats. `charBaseStat` files
 a weapon's "+18% critical rate" under `pct`, which is right for `totalStat`; reading `.flat`
@@ -760,7 +806,9 @@ the calibration in §9 before shipping.
 | `MAIN_ROLLS_FALLBACK` | `9` | Used only for a main missing from the table (none today) and to scale HP Recovery |
 | `DAMAGE_SCALE` | 8 characters | Kits whose ⓐ is DEF or max HP rather than ATK |
 | `BUFF_SOURCE_STATS` | Beachflower Minami (HP%, Crit Mult) | Stats a kit turns into an ally buff: left out of the coupling and of `damageShare` |
-| `CRIT_PROFILE` | Ryuji, Pioneer Shun (`locked: 1`); Akihiko (`0.3`, clamp 250-350); Junpei (`0.35`); Kumi (`nocrit: 0.45` until Awareness 6); Wavecatcher Miyu (`extraCr`: 0.5 at +16.4-31.4%, 5★ weapon) | Share of a kit's damage that always crits, cannot crit, or crits at a higher rate |
+| `CRIT_PROFILE` | Ryuji, Pioneer Shun (`locked: 1`); Akihiko (`0.3`, clamp 250-350); Junpei (`0.35`); Wavecatcher Miyu (`extraCr`: 0.5 at +16.4-31.4%, 5★ weapon) | Share of a kit's damage that always crits, or crits at a higher rate (the share that cannot crit is measured: `kitMix`) |
+| `kitMix` | measured per character and Setup | Share of damage that cannot crit, and the kit's own mean ATK, damage, crit, Pierce and DEF down, from its Teams fight alone |
+| `TC_HL_CRIT_AW` | Kumi: 6 | Awareness from which a Highlight can crit |
 | `KIT_STAT_BUFFS` | 47 characters, ~155 lines | Conditional lines judged always-on, gated on Awareness / weapon / stacks; skill-level `tiers` follow `kitTierIndex` |
 | `CONVERSIONS` | 16 characters | Always-on stat conversions fed into ⓐⓑⓓ and the coupling from in-battle source totals |
 | `MAIN_MATCH_BONUS` | `10` | Bump for a main the character actually wants |
@@ -775,10 +823,11 @@ the calibration in §9 before shipping.
 | `BREAKPOINT_VALUE` | `80` | Whole stat-target block, regardless of target count |
 | `SPREAD_VALUE` | `80` | Damage-spread budget, scaled by `damageShare(t)` |
 | `COUPLE_CLAMP` | `[0.4, 2.5]` | Guard on coupling multipliers — not a tuning knob |
-| `state.teamCrit` | `0` (Roster, saved as `settings.teamCritRate`) | Crit rate the user's supports add, in points, to every damage dealer's crit rate in the damage model and the coupling — never an Elucidator's, never a `totalStat` total or stat target |
+| `state.teamCrit` | `0` (header settings, saved as `settings.teamCritRate`) | Crit rate the user's supports add, in points, to every damage dealer's crit rate in the damage model and the coupling — never an Elucidator's, never a `totalStat` total or stat target |
+| `state.teamBuffs` | all `0` (header settings, saved as `settings.teamBuffs`) | ATK %, damage %, crit multiplier %, enemy DEF down % the user's supports add, the same way |
 | `p4value` default | `55` | 4-piece worth; UI slider. Preferred × 1 (+ `prefSetLift`), secondary × 0.72, other × 0.22 |
 | `SET_LIFT_PAIRS` | `8` | 2+2 splits `prefSetLift` searches, among the best 2-pieces for the character |
-| `MODELLED_STATS` | ATK%, ATK, Damage Mult, Crit Rate, Crit Mult | Stats appearing in ⓐⓑⓓ |
+| `MODELLED_STATS` | ATK%, ATK, Damage Mult, Crit Rate, Crit Mult, Resistance Pierce | Stats appearing in ⓐⓑⓒⓓ |
 | `AWARENESS_STAT_PCT` | `[0,2,5,7,10,12,15]` | Universal HP/ATK/DEF % per Awareness level |
 | `VAULT_LOCK` | `0.98` | Top 2% of a slot → lock |
 | `VAULT_WATCH` | `0.93` | Top 7% of a slot → hold |
@@ -838,7 +887,7 @@ the distribution of plan kinds stays sane. Calibration to hold to:
 
 | Metric | Expected |
 |---|---|
-| Build score, 4000 cards optimally equipped | **around 70** (mean 69.5, median 71, range 40-84) |
+| Build score, 4000 cards optimally equipped | **around 70** (mean 70.1, median 71, range 41-84; bands 8/52/8) |
 | Bands (excellent / good / workable) | about 7 / 53 / 8 of 68 |
 | Moon/Star/Sky picks with a non-recommended main | **33 of 204** (was 71 of 195 at `MAIN_ROLLS = 3`; an open slot never counts) |
 | `pref` plan kinds (2+2 / 2+free / 4pc) | about 17 / 49 / 2 |
@@ -955,7 +1004,8 @@ they read as 0% otherwise. Measured against the roster's top DPS at 100%:
 | **Party crit rate is a user setting, 0 by default** | Lufel's DPS builds put Crit Multiplier on the Star (35 of the 62 who weight both crit stats list it first, 9 list Crit Rate first) and Crit Rate in the substats. That is right in a party that supplies crit rate: an Elucidator's 20% share, Starlight Ren's, Summer Ichigo's or Beachflower Minami's buffs. On the character's own board crit rate is scarce, so at 0 the engine prefers a Crit Rate Star for most of them. It also recommends splitting the preferred 4-piece with Triumph's +7.5% crit-rate 2-piece for about 15 DPS on the real inventory; both predate Sep 2026 (14 splits in the Aug build). Wavecatcher Miyu, who lists only Crit Multiplier, is the one ceiling exception at 0: her Resonance crit rate (`extraCr`) narrows the gap from 2.6% to 1.7% of a perfect build, 0.5% on the real inventory's setup. The Roster's **team crit rate** is that party's crit rate, one number for the roster (§3). At 20 the perfect Star follows lufel's first choice for 24 of 32 (13 at 0), nothing breaks the ceiling, and the Triumph splits drop from 16 to 14 (5 at 40). It is not a kit fact, so it stays the user's to set. From 30 up, Summer Ichigo's HP% Star falls 0.2-0.7% behind a Crit Multiplier one, because her own party buff is counted once in her kit and again in the setting. |
 | **Weights run past a kit's cap** | A weight prices a stat linearly, so a buffer's ATK% past the target where their buffs stop growing, Kira's Ailment Accuracy past the 90% his Bleed passive reads, and a healer's SP Recovery past what her rotation spends all keep their full weight. The stat-target term values reaching a cap; nothing discounts running past it. For sets, `prefSetLift` stops this from overturning lufel's order. For mains and substats it remains, and it is why an Elucidator's ATK% Star ties lufel's crit Star (0.002% apart). |
 | **A healer's ATK% is coupled with her own Damage Multiplier** | The ATK% / Damage Multiplier product assumes ATK% buys damage. For an ATK-scaling healer it mostly buys healing, yet with any Damage Multiplier weight (the Healer archetype's 1 is enough) it is priced at its marginal against her own damage product — 0.76 of its weight for Lufel. `BUFF_SOURCE_STATS` is the mechanism for taking a stat out; no healer is listed, because none changes a ceiling today. |
-| **Resistance Pierce (factor c) is not modelled** | Deliberately excluded from `MODELLED_STATS` and from coupling — its value depends on enemy resistance. |
+| **ⓒ is against one reference boss** | Pierce is priced against the Teams page's Auto boss for the character, with no other defence cut than the kit's and the team buffs setting. A boss with higher DEF or a team cutting more DEF changes what a Pierce point is worth; the coupling does not price Pierce at all (its weight is lufel's). |
+| **The kit numbers are its fight alone** | `kitMix` plays lufel's rotation with teammates who add nothing, so the Highlight share is the solo cadence (a real team's shared gauge gives the damage dealer fewer Highlights: 6-24% of the damage instead of 15-35% on the real save), and lines a teammate sets off are not in it. Kits with no skill numbers, Elucidators and kits that deal no damage of their own keep the model as before. |
 | **Flat ATK is absent from coupling** | A max roll is worth well under half an ATK% roll, and how much depends on a base ATK `cardScore` is not given. |
 | **Conditional kit buffs and conversions are counted only where hand-listed** | `KIT_STAT_BUFFS` (47 characters) and `CONVERSIONS` (16) are judgement tables, not parses. Team- and HP-conditional lines are left out; a chained conversion is evaluated on pre-conversion totals. Lufel's `battle_plus_stats` notes confirm its targets assume the same kind of lines (Ashiya's passive DEF, Runa's weapon accuracy, Chizuko's Awareness-2 stacks, Tempest Riko's conversion). |
 | **`damageShare` classifies stats by name** | An ATK-scaling healer's ATK% is booked as damage though it is bought for healing, and an HP-scaling tank's HP% is booked as damage though it is also their tank stat. Harmless while the same weights build the ideal, but a share cannot be read as "how much of them is damage". |

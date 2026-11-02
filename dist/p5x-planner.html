@@ -556,6 +556,18 @@ details.sect>.inner{margin-top:10px}
           Lufel's Crit Multiplier picks assume a crit support, so at 0 the tool reads crit rate as scarce and favours
           Crit Rate instead. It changes every build score, recommendation and Triage score; stat totals and stat
           targets stay each character's own.</p>
+        <h3 class="sep">Team buffs <span class="tiny muted" style="font-weight:400">to a damage dealer</span></h3>
+        <div class="dengrid">
+          <label>ATK % <input class="teamIn" data-k="atkPct" type="number" min="0" max="500" step="1" value="0"></label>
+          <label>Damage % <input class="teamIn" data-k="dm" type="number" min="0" max="300" step="1" value="0"></label>
+          <label>Crit mult % <input class="teamIn" data-k="cm" type="number" min="0" max="500" step="1" value="0"></label>
+          <label>Enemy DEF down % <input class="teamIn" data-k="defdown" type="number" min="0" max="100" step="1" value="0"></label>
+        </div>
+        <p class="tiny muted" style="margin:8px 0 0">The rest of what your usual supports add, the same way: the more ATK
+          a team already gives, the less an ATK% roll adds and the more crit and damage rolls do. A Teams page team shows
+          what it adds per member; a strong team adds about +80% ATK, +30% damage and +30% crit multiplier.
+          All 0 counts only each character's own. Like the crit rate, it changes build scores and
+          recommendations, not stat totals.</p>
         <h3 class="sep">Thieves Den <span class="tiny muted" style="font-weight:400">in battle</span></h3>
         <div class="dengrid">
           <label>ATK <input class="denIn" data-stat="ATK" type="number" min="0" step="1" value="0"></label>
@@ -4331,7 +4343,7 @@ const WONDER_INNATE = {
 </script>
 <script>
 /* ============================ state ============================ */
-const state = { cards: [], chars: {}, nextId: 1, teamCrit: 0, den: {}, wonderSpd: 0, wonder: {} };
+const state = { cards: [], chars: {}, nextId: 1, teamCrit: 0, teamBuffs: {}, den: {}, wonderSpd: 0, wonder: {} };
 const $  = (s, r) => (r || document).querySelector(s);
 const $$ = (s, r) => Array.from((r || document).querySelectorAll(s));
 const esc = s => String(s == null ? '' : s).replace(/[&<>"]/g, c => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;' }[c]));
@@ -5124,9 +5136,9 @@ function prefSetLift(char, t, B) {
   if (setLiftsOff || !char || !t || !t.n || t.n !== char.n) return 0;
   /* Callers pass the character's own target(), which is a function of the data, the saved
      edits and nothing else — so those two identities (and the Setup's) are the version stamp,
-     with the team crit rate, which the damage-spread term reads. The preferred set is checked
+     with the team crit rate and buffs, which the damage-spread term reads. The preferred set is checked
      too, as a cheap guard against a caller handing in some other target with the same name. */
-  const who = state.chars[char.n] || {}, pref = (t.sets || [])[0], tc = teamCritRate(), den = denSig();
+  const who = state.chars[char.n] || {}, pref = (t.sets || [])[0], tc = teamSig(), den = denSig();
   let m = setLiftMemo[char.n];
   if (!m || m.lo !== who.loadout || m.saved !== who.targets || m.pref !== pref || m.tc !== tc || m.den !== den)
     m = setLiftMemo[char.n] = { lo: who.loadout, saved: who.targets, pref, tc, den, byBase: {} };
@@ -5266,11 +5278,11 @@ function idealCardScore(slot, t) {
    until the page was reloaded (6 of the 8 saved targets on the real inventory, up to 7% on
    a perfect card). Every write to a loadout assigns a fresh object and charLoadout never
    hands the saved one out, so that object's identity is a sufficient version stamp. The
-   Roster's team crit rate is the one input from outside the character, and is checked
+   team buffs settings are the one input from outside the character, and are checked
    beside it — for the Vault's archetype targets, which have no loadout, it is the only one. */
 function targetMemo(cache, t) {
   const who = t && t.n ? state.chars[t.n] : null;
-  const lo = who ? who.loadout : undefined, tc = teamCritRate();   // the coupling reads the party's crit rate too
+  const lo = who ? who.loadout : undefined, tc = teamSig();   // the coupling reads the party's buffs too
   let m = cache.get(t);
   if (!m || m.lo !== lo || m.tc !== tc) { m = { lo, tc, v: {} }; cache.set(t, m); }
   return m.v;
@@ -5437,7 +5449,7 @@ function seedBaseline(t) {
   if (!ch || !CHAR_STATS[ch.n] || !spreadApplies(ch)) return null;
   const B = damageBase(ch), cv = conversionBonus(ch, [], charLoadout(ch.n));
   const out = { 'Damage Multiplier': 100 + B.dm + cv['Damage Multiplier'], 'Crit Rate': B.cr, 'Crit Multiplier': Math.max(0, B.cm - 100 + cv['Crit Multiplier']) };
-  out[scalePctStat(ch)] = 100 + B.atkPct + (scaleStat(ch) === 'ATK' ? cv['ATK%'] + (B.atk > 0 ? 100 * cv.ATK / B.atk : 0) : 0);
+  out[scalePctStat(ch)] = 100 + B.atkPct + (scaleStat(ch) === 'ATK' ? cv['ATK%'] + (B.atk > 0 ? 100 * (cv.ATK + (B.atkFlat || 0)) / B.atk : 0) : 0);
   return out;
 }
 /* Per-stat weight multipliers for a card in `slot` whose main stat is `main`, against the
@@ -5494,8 +5506,10 @@ function heldCritRate(t, main) {
 /* STAT_PRODUCTS' fallback baseline for a target with no board of its own (no character, or
    one without CHAR_STATS) — the Vault's archetype targets among them — with the party's crit
    rate on top, as every character's own baseline carries it through damageBase. */
+const GENERIC_TEAM_K = { 'ATK%': 'atkPct', 'Damage Multiplier': 'dm', 'Crit Rate': 'cr', 'Crit Multiplier': 'cm' };
 function genericSupply(product, st, t) {
-  return product[st] + (st === 'Crit Rate' ? teamCritFor(t && t.n ? charDef(t.n) : null) : 0);
+  const T = teamBuffsFor(t && t.n ? charDef(t.n) : null);
+  return product[st] + (GENERIC_TEAM_K[st] ? T[GENERIC_TEAM_K[st]] || 0 : 0);
 }
 /* A coupling factor of 0 is a real answer (capped Crit Rate); only a missing one means "no coupling". */
 const cf = (f, stat) => (f[stat] != null ? f[stat] : 1);
@@ -6541,8 +6555,10 @@ function conversionSources(char) {
   return (CONVERSIONS[char && char.n] || []).filter(cv => cv.to !== 'HP').map(cv => CONV_SUB[cv.from] || cv.from);
 }
 
-/* Kits where some or all of the damage always crits — or cannot (`nocrit`), or crits at a
-   higher rate than the rest (`extraCr`). `locked` is the share of the kit's
+/* Kits where some or all of the damage always crits, or crits at a higher rate than the rest
+   (`extraCr`). The share that cannot crit at all — a Highlight, damage over time — is not
+   entered here: kitMix measures it in each kit's fight (Kumi's was a hand-entered 0.45 until
+   Nov 2026). `locked` is the share of the kit's
    damage that is a guaranteed critical; ⓓ is then a mixture — that share at 100% crit
    rate, the rest at the rolled rate — and the coupling values a Crit Rate roll only for
    the rolled share (see lockedCritSupply). `cmClamp` bounds the crit damage the locked
@@ -6574,10 +6590,6 @@ const CRIT_PROFILE = {
      damage over a three-turn window, more once Awareness 6 makes Power Swing his free
      melee every turn. */
   'Junpei Iori':         { locked: 0.35 },
-  /* Kumi: her Highlight (318% ATK, every four turns) cannot crit at all — Awareness 6 has
-     to grant "allow her Highlight to activate critical hits" — against three skills at
-     102-142% in between, so close to half her damage ignores crit stats until then. */
-  'Kumi Katayama':       { nocrit: 0.45, nocritUntilAw: 6 },
   /* Wavecatcher Miyu: Mermaid Dreamer's "Resonance critical rate +16.4-31.4%" crits only her
      Resonance — Catch a Wave, fired off her SP at the end of ally turns while she Surfs, and
      Aerial Tide, which cashes the Offshore stacks in. Over a representative Awareness-0 window
@@ -6596,8 +6608,6 @@ function extraCritFor(prof, lo) {
   if (!x || (x.weapon && (!lo || lo.weapon !== x.weapon))) return null;
   return { share: x.share, cr: x.ladder ? x.ladder[Math.max(1, Math.min(7, lo.refine)) - 1] : x.v };
 }
-/* The no-crit share for a setup: gone once the Awareness node that lifts it is unlocked. */
-const nocritShare = (prof, lo) => (prof && prof.nocrit && !(prof.nocritUntilAw != null && lo && (lo.awareness || 0) >= prof.nocritUntilAw)) ? prof.nocrit : 0;
 const critProfile = char => (char && CRIT_PROFILE[char.n]) || null;
 const critClamp = (prof, lo) => prof && prof.cmClamp
   ? ((lo && (lo.awareness || 0) >= 4 && prof.cmClampAw4) || prof.cmClamp) : null;
@@ -6618,16 +6628,16 @@ function lockedCritSupply(prof, cmTotal, lo) {
   return inRange ? 100 * prof.locked / (1 - prof.locked) : 0;
 }
 
-/* The card stats that appear in ⓐ, ⓑ or ⓓ for this character, and are therefore the ones
-   this model prices: the scaling stat's % and flat forms, then the two crit stats and
-   Damage Multiplier. */
-const MODELLED_STATS = ['ATK%', 'ATK', 'Damage Multiplier', 'Crit Rate', 'Crit Multiplier'];
+/* The card stats that appear in ⓐ, ⓑ, ⓒ or ⓓ for this character, and are therefore the ones
+   this model prices: the scaling stat's % and flat forms, then the two crit stats, Damage
+   Multiplier and Resistance Pierce. */
+const MODELLED_STATS = ['ATK%', 'ATK', 'Damage Multiplier', 'Crit Rate', 'Crit Multiplier', 'Resistance Pierce'];
 const modelledStatsCache = {};
 function modelledStats(char) {
   const k = char ? char.n : '';
   if (modelledStatsCache[k]) return modelledStatsCache[k];
   const S = scaleStat(char);
-  const base = S === 'ATK' ? MODELLED_STATS : [FLAT_TO_PERCENT[S], S, 'Damage Multiplier', 'Crit Rate', 'Crit Multiplier'];
+  const base = S === 'ATK' ? MODELLED_STATS : [FLAT_TO_PERCENT[S], S, 'Damage Multiplier', 'Crit Rate', 'Crit Multiplier', 'Resistance Pierce'];
   const conv = conversionSources(char).filter(s => base.indexOf(s) < 0 && SUBSTATS[s]);
   return (modelledStatsCache[k] = conv.length ? base.concat(conv) : base);
 }
@@ -6709,24 +6719,150 @@ function denFrom(o) {
 }
 function teamCritFor(char) { return char && !spreadApplies(char) ? 0 : teamCritRate(); }
 
+/* ---- the party's other buffs: a user assumption beside the team crit rate (Nov 2026) ----------
+   The same idea for the other factors the cards fill: the ATK, damage and crit multiplier the
+   user's usual supports add to a damage dealer, and the DEF they take off the foe. A real team
+   adds a lot — on the real save the Teams page's best teams add about +80% ATK, +30% damage and
+   +30% crit multiplier — and every point of it makes another card point of the same stat worth
+   less and the other factors' worth more. Like the crit rate they are in points, one set for the
+   roster, read wherever the damage model reads a base (damageBase, so ⓐⓑⓒⓓ and both coupling
+   baselines), never by totalStat, and not for an Elucidator. ATK reaches ⓐ only for a kit that
+   scales off ATK. All 0, the default, is the model without them, so nothing moves until they are
+   set. state.teamBuffs keeps them; the crit rate stays state.teamCrit, as saves always had it. */
+const TEAM_BUFF_KEYS = ['atkPct', 'dm', 'cm', 'defdown'];
+const TEAM_BUFF_MAX = { atkPct: 500, dm: 300, cm: 500, defdown: 100 };
+const TEAM_NONE = { atkPct: 0, dm: 0, cr: 0, cm: 0, defdown: 0 };
+function teamBuff(k) { const v = +((state.teamBuffs || {})[k]); return v > 0 && isFinite(v) ? Math.min(TEAM_BUFF_MAX[k], v) : 0; }
+function teamBuffsFor(char) {
+  if (char && !spreadApplies(char)) return TEAM_NONE;
+  const o = { cr: teamCritRate() };
+  TEAM_BUFF_KEYS.forEach(k => { o[k] = teamBuff(k); });
+  return o;
+}
+/* The team settings as damageBase keys them, rebuilt only when they change: damageBase runs for every loadout the
+   optimiser tries, and building the key from scratch each time cost Triage's benchmark a fifth of its time. Every write
+   assigns state.teamBuffs a fresh object, so identity is the version stamp, as for a saved loadout. */
+let teamKeyMemo = { tc: null, tb: null, key: '' };
+function teamKey() {
+  if (teamKeyMemo.tc !== state.teamCrit || teamKeyMemo.tb !== state.teamBuffs)
+    teamKeyMemo = { tc: state.teamCrit, tb: state.teamBuffs, key: teamSig() };
+  return teamKeyMemo.key;
+}
+// One string for every memo and fingerprint that reads the team settings (the crit rate first, as it always was)
+function teamSig() { return teamCritRate() + (TEAM_BUFF_KEYS.some(k => teamBuff(k)) ? '/' + TEAM_BUFF_KEYS.map(teamBuff).join('/') : ''); }
+// What the save file keeps (only the buffs with a value) and what a loaded one may set (numbers only)
+function teamBuffsSaved() { const o = {}; TEAM_BUFF_KEYS.forEach(k => { const v = teamBuff(k); if (v) o[k] = v; }); return o; }
+function teamBuffsFrom(o) {
+  const d = {};
+  TEAM_BUFF_KEYS.forEach(k => { const v = +((o || {})[k]); if (v > 0 && isFinite(v)) d[k] = Math.min(TEAM_BUFF_MAX[k], Math.round(v * 10) / 10); });
+  return d;
+}
+
+/* ---- what a kit does to its own damage, read off the Teams fight (Nov 2026) -------------------
+   damageFactors priced a loadout as if every hit could crit and as if the character's damage
+   were their stats and nothing else. Neither is true. A Highlight cannot crit unless its text
+   says so, and damage over time never does: on the real save that was 15-35% of most damage
+   dealers' damage in their fight alone, half of Shun Kano's and Kiyoshi's, and all of it was
+   priced at the full crit factor, so crit stats were worth more than they are against ATK% and
+   Damage Multiplier for nearly everyone (only Kumi had a hand-entered share). And a kit adds
+   into the same factors the cards fill — "+30% Resonance damage", a Highlight's damage per
+   stack, a timed ATK or crit buff on the turns lufel's rotation casts it, a debuff of their own
+   on the foe — so a Damage Multiplier roll is worth less beside a kit's own +60% damage.
+
+   kitMix plays the character's fight alone once per Setup — the Teams page's reference fight:
+   lufel's rotation as written, three teammates who attack and add nothing, no Wonder, at the
+   page's defaults (tcKitRun) — with no cards, so the answer is the kit's and the same whatever
+   is worn, and the optimiser can use one number for every loadout it tries. It reads off:
+   - `nc`: the share of their damage, before crit, that cannot crit. damageFactors deals that
+     share at exactly 1x.
+   - `x`: what the kit itself had added into each factor at each hit, averaged over the hits by
+     their damage: ATK% and flat ATK, damage, crit rate and crit multiplier (over the hits that
+     can crit), Pierce and the foe's DEF down. damageBase adds them to the character's base.
+   The kit's timed stat lines (KIT_STAT_BUFFS with `on` or `needAil`) then leave the base and
+   are in `x` at the uptime the fight gave them, as the fight itself does (`noTimed`); the build
+   score used to have them on every turn. A character with no skill numbers (SKILL_DMG), or
+   whose kit deals no damage of its own, gets null and the model as it was; an Elucidator,
+   whose own damage is not scored, never gets here. Remembered per Setup for the session. */
+const kitMixCache = {};
+let kitMixBusy = false, kitMixReady = false;
+const kitMixKey = (n, L) => `${n}|${L.weapon}|${L.refine}|${L.mindSkill ? 1 : 0}|${L.mind1 || 0}|${L.mind2 || 0}|${L.awareness || 0}`;
+function kitMix(char, lo) {
+  // not before the page has finished loading (the fight's tables are defined later in this file), and never inside itself
+  if (!kitMixReady || kitMixBusy || !char || !spreadApplies(char) || !SKILL_DMG[char.n] || !CHAR_STATS[char.n]) return null;
+  const L = lo || charLoadout(char.n), key = kitMixKey(char.n, L);
+  if (key in kitMixCache) return kitMixCache[key];
+  const who = state.chars[char.n], had = Object.prototype.hasOwnProperty.call(state.chars, char.n);
+  const keep = { cards: state.cards, tc: state.teamCrit, tb: state.teamBuffs, den: state.den, memo: tcMemo, focus: tcFocus, boss: Object.assign({}, TC_BOSS), pair: tcPairCtx };
+  kitMixBusy = true; tcKitRun = true;
+  let r = null;
+  try {
+    state.cards = []; state.teamCrit = 0; state.teamBuffs = {}; state.den = {};
+    // a Setup other than the saved one (a caller pricing another): the fight reads the saved one, so it stands in
+    if (lo && kitMixKey(char.n, charLoadout(char.n)) !== key) state.chars[char.n] = Object.assign({}, who, { loadout: lo });
+    tcMemo = tcMemoNew('kit'); tcMemo.hot = true;
+    tcFocus = char.n; tcPairCtx = null;
+    const b = tcBossNow();
+    if (b) Object.assign(TC_BOSS, { def: b.def, coef: b.coef });
+    const T = tcSimBest(Object.assign(tcSimPrep(char, [null, null, null], false, true), { track: true })).track;
+    if (T && T.u > 0 && T.w > 0) {
+      const m = k => T.sum[k] / T.w, mc = k => T.wc > 0 ? T.sum[k] / T.wc : 0;
+      r = { nc: Math.max(0, Math.min(1, T.nc / T.u)), x: { atkPct: m('atkPct'), atk: m('atk'), dm: m('dm'), cr: mc('cr'), cm: mc('cm'), pierce: m('pierce'), defdown: m('defdown') } };
+    }
+  } finally {
+    state.cards = keep.cards; state.teamCrit = keep.tc; state.teamBuffs = keep.tb; state.den = keep.den;
+    if (had) state.chars[char.n] = who; else delete state.chars[char.n];
+    tcMemo = keep.memo; tcFocus = keep.focus; Object.assign(TC_BOSS, keep.boss); tcPairCtx = keep.pair;
+    kitMixBusy = false; tcKitRun = false;
+  }
+  kitMixCache[key] = r;
+  return r;
+}
+
+/* ⓒ, the foe's defence (lufel's formula, as the Teams page's tcDefence): 1 − E / (E + 1400) with
+   E = DEF × max(0, (1 + coefficient) × (1 − Pierce) − DEF down), against the boss the Teams page's
+   Auto picks for this character (lufel's area example for an AoE DPS, the single-boss one for everyone
+   else). Only the build model reads this; the fight prices ⓒ itself. Resistance Pierce was left out of
+   the damage model until Nov 2026, so a Pierce roll was worth its weight and nothing more. */
+const buildBossMemo = {};
+function buildBoss(char) {
+  const id = char && char.arch === 'AoE DPS' ? TC_AUTO_BOSS.area : TC_AUTO_BOSS.single;
+  return buildBossMemo[id] || (buildBossMemo[id] = BOSSES.find(b => b.id === id) || BOSSES.find(b => b.id === TC_AUTO_BOSS.single) || TC_BOSS);
+}
+function buildDefence(char, pierce, defdown) {
+  const B = buildBoss(char);
+  const E = B.def * Math.max(0, (1 + B.coef) * (1 - Math.min(1, Math.max(0, pierce) / 100)) - Math.max(0, defdown) / 100);
+  return 1 - E / (E + 1400);
+}
+
 const damageBaseCache = {};
+/* `lo.bare` is the Teams fight's own evaluation (tcEvalFor): no team buffs setting and no kit
+   numbers, since the fight plays the kit out and adds the team member by member. Otherwise the base
+   carries the team buffs setting (teamBuffsFor) and, where the fight could measure it, the kit
+   (kitMix): its timed lines leave the base for their measured uptime, and `nc` is the share that
+   cannot crit. */
 function damageBase(char, lo) {
   const L = lo || charLoadout(char.n);
-  const tc = teamCritFor(char);
-  const key = `${char.n}|${L.level}|${L.asc}|${L.weapon}|${L.refine}|${L.mindSkill ? 1 : 0}|${L.mind1 || 0}|${L.mind2 || 0}|${L.awareness}|${tc}|${L.noTimed ? 1 : 0}`;
+  const bare = !!L.bare;
+  // an Elucidator carries no team buffs (teamBuffsFor), so her key does not move with them
+  const key = `${char.n}|${L.level}|${L.asc}|${L.weapon}|${L.refine}|${L.mindSkill ? 1 : 0}|${L.mind1 || 0}|${L.mind2 || 0}|${L.awareness}|${L.noTimed ? 1 : 0}|${bare ? 'b' : spreadApplies(char) ? teamKey() : '-'}`;
   if (damageBaseCache[key]) return damageBaseCache[key];
-  const b = charBaseStat(char, scaleStat(char), L);
+  const T = bare ? TEAM_NONE : teamBuffsFor(char), K = bare ? null : kitMix(char, L);
+  const Lb = K && !L.noTimed ? Object.assign({}, L, { noTimed: true }) : L;
+  const b = charBaseStat(char, scaleStat(char), Lb);
   /* Crit Rate, Crit Multiplier and Damage Multiplier are percentage-UNIT stats: a weapon's
      "+18% critical rate" is 18 points added, and charBaseStat files it under `pct` the way
      totalStat wants (which sums flat + pct for these). Reading `.flat` alone here dropped
      every crit/damage weapon ladder and Mindscape node from the damage model — Morgana was
      modelled at 22.4% crit with Golden Legacy's +18% equipped. */
-  const at = (s, dflt) => { const x = charBaseStat(char, s, L); return x ? x.flat + x.pct : dflt; };
+  const at = (s, dflt) => { const x = charBaseStat(char, s, Lb); return x ? x.flat + x.pct : dflt; };
+  const kx = K ? K.x : {}, atkKit = scaleStat(char) === 'ATK';
   const v = {
-    atk: b ? b.flat : 1000, atkPct: b ? b.pct : 0,
-    cr: at('Crit Rate', 5) + tc, cm: at('Crit Multiplier', 150), dm: at('Damage Multiplier', 0)
+    atk: b ? b.flat : 1000, atkPct: (b ? b.pct : 0) + (atkKit ? (kx.atkPct || 0) + T.atkPct : 0), atkFlat: atkKit ? kx.atk || 0 : 0,
+    cr: at('Crit Rate', 5) + T.cr + (kx.cr || 0), cm: at('Crit Multiplier', 150) + T.cm + (kx.cm || 0), dm: at('Damage Multiplier', 0) + T.dm + (kx.dm || 0),
+    pierce: at('Resistance Pierce', 0) + (kx.pierce || 0), defdown: T.defdown + (kx.defdown || 0), nc: K ? K.nc : 0
   };
-  damageBaseCache[key] = v;
+  // not remembered while the kit could not be measured yet (the page still loading, or inside a kit's own fight)
+  if (bare || K || (kitMixReady && !kitMixBusy)) damageBaseCache[key] = v;
   return v;
 }
 
@@ -6744,7 +6880,7 @@ function damageFactors(cards, char, t, lo, extra) {
      multiplier buffs reach everyone. */
   const X = extra || {}, xa = S === 'ATK';
   // X.flat is a flat amount of the kit's own scaling stat (the Thieves Den's, for the team ratio), so it reaches every kit
-  const atk = B.atk * (1 + (B.atkPct + p[pct] + (xa ? cv['ATK%'] + (X.atkPct || 0) : 0)) / 100) + p[S] + (X.flat || 0) + (xa ? cv.ATK + (X.atk || 0) : 0);
+  const atk = B.atk * (1 + (B.atkPct + p[pct] + (xa ? cv['ATK%'] + (X.atkPct || 0) : 0)) / 100) + p[S] + (X.flat || 0) + (B.atkFlat || 0) + (xa ? cv.ATK + (X.atk || 0) : 0);
   const dmg = 1 + (B.dm + p['Damage Multiplier'] + cv['Damage Multiplier'] + (X.dm || 0)) / 100;
   /* Crit rate caps at 100%: a roll past it does nothing in the game either. */
   const cr = Math.min(1, (B.cr + p['Crit Rate'] + (X.cr || 0)) / 100);
@@ -6776,17 +6912,21 @@ function damageFactors(cards, char, t, lo, extra) {
     const cmLocked = clamp ? Math.min(clamp[1], Math.max(clamp[0], cmTotal)) : cmTotal;
     crit = prof.locked * Math.max(1, cmLocked / 100) + (1 - prof.locked) * crit;
   }
-  // ...and a share that cannot crit at all is dealt at exactly 1x, whatever the crit stats.
-  const nc = nocritShare(prof, L2);
+  // ...and the share that cannot crit at all (kitMix: Highlights, damage over time) is dealt at exactly 1x.
+  const nc = B.nc || 0;
   if (nc > 0) crit = nc * 1 + (1 - nc) * crit;
-  return { atk, dmg, crit, value: atk * dmg * crit };
+  /* ⓒ, the foe's defence, in the build model only: the Teams fight prices it itself (tcDefence) and
+     passes a bare setup. Pierce from the character, the kit and the cards; DEF down from the kit and
+     the team buffs setting. */
+  const def = L2.bare ? 1 : buildDefence(char, B.pierce + (p['Resistance Pierce'] || 0) + (X.pierce || 0), B.defdown + (X.defdown || 0));
+  return { atk, dmg, crit, def, value: atk * dmg * crit * def };
 }
 
 /* How much of what this character wants the damage model actually captures. A DPS lands
    near 0.7, a tank near 0.05, so the term below is worth what damage is worth to them
-   without needing an archetype whitelist. Resistance Pierce is deliberately NOT counted
-   as captured — it is a damage stat, but ⓒ is not modelled, and a term should not claim
-   credit for a factor it left out. */
+   without needing an archetype whitelist. Resistance Pierce counts since ⓒ is modelled
+   (Nov 2026); before, it was left out, as a term should not claim credit for a factor it
+   leaves out. */
 function damageShare(t, char) {
   const who = char || (t && t.n ? charDef(t.n) : null);
   const modelled = modelledStats(who), buff = buffSourceStats(who);
@@ -6840,7 +6980,7 @@ function spreadRow(cards, idealCards, char, t, lo) {
   let i = idealDamageCache.get(idealCards);
   if (!i) { i = damageFactors(idealCards, char, t, lo); idealDamageCache.set(idealCards, i); }
   const ratio = i.value > 0 ? Math.min(1, a.value / i.value) : 1;
-  return { max, got: max * ratio, ratio, share, actual: a, ideal: i };
+  return { max, got: max * ratio, ratio, share, actual: a, ideal: i, name: char ? char.n : '', lo };
 }
 
 /* What four Heavens cards actually grant: four of one set gives that set's 2- and
@@ -7519,8 +7659,9 @@ function spreadHtml(b) {
   const rows = [
     ['ⓐ ATK', a.atk, i.atk, 'base and weapon ATK scaled by ATK%, plus flat ATK'],
     ['ⓑ Damage bonus', a.dmg, i.dmg, '100% + Damage Multiplier'],
+    ['ⓒ Defence', a.def, i.def, "the share of a hit the boss's DEF lets through, after Pierce"],
     ['ⓓ Crit', a.crit, i.crit, '100% + Crit Rate × (Crit Multiplier − 100%)']
-  ].map(([label, got, max, note]) => {
+  ].filter(r => r[1] != null).map(([label, got, max, note]) => {
     // A single factor can exceed the reference build's — the ideal spends its rolls on
     // the four best stats, and a real card can carry more of one than that. The raw
     // numbers still show it; the percentage caps so nothing reads as "over 100% geared".
@@ -7532,15 +7673,26 @@ function spreadHtml(b) {
       <td style="min-width:120px"><span class="tag ${buildBand(pct).cls}">${pct}%</span>
         <div class="bar"><i style="width:${Math.min(100, pct)}%"></i></div></td></tr>`;
   }).join('');
+  /* What the factors already hold besides the cards: the kit as its fight alone plays it (kitMix) and the team
+     buffs setting. Said in one line, since both change what a roll is worth. */
+  const ch = charDef(b.spread.name), K = ch ? kitMix(ch, b.spread.lo) : null, T = teamBuffsFor(ch), who = esc(b.spread.name || 'this character');
+  const n1 = v => (Math.round(v * 10) / 10).toString();
+  const adds = (o, keys) => keys.filter(([k]) => o[k] >= 0.5).map(([k, lab, sign]) => `${lab} ${sign || '+'}${n1(o[k])}%`).join(', ');
+  const KEYS = [['atkPct', 'ATK'], ['dm', 'damage'], ['cr', 'crit rate'], ['cm', 'crit multiplier'], ['pierce', 'Pierce'], ['defdown', 'enemy DEF', '−']];
+  const kitLine = K ? `<p class="tiny muted" style="margin:6px 0 0">From ${who}'s kit, played alone in the Teams fight:
+      ${K.nc >= 0.005 ? `<b>${Math.round(100 * K.nc)}%</b> of the damage cannot crit (Highlights, damage over time), so crit stats count for the rest only` : 'every hit can crit'}${adds(K.x, KEYS) ? `; the kit adds ${esc(adds(K.x, KEYS))} on average` : ''}.</p>` : '';
+  const teamLine = adds(T, KEYS) ? `<p class="tiny muted" style="margin:4px 0 0">Your team buffs setting adds ${esc(adds(T, KEYS))}.</p>` : '';
   return `<div class="targets">
     <h3>Damage factors <span class="tiny muted">— Lufelnet's damage formula</span></h3>
     <table><thead><tr><th>Factor</th><th class="right">Yours</th>
       <th class="right">Perfect build</th><th></th></tr></thead><tbody>${rows}</tbody></table>
+    ${kitLine}${teamLine}
     ${explainHtml('Damage is these <b>multiplied together</b>, so the lowest one is where your next good roll is worth the most.',
-      `That is also why stacking a stat you are already deep in scores worse than filling the gap. Only the three
-      factors your cards move are shown; enemy defence, skill, weakness and party buffs are the same whatever you
-      equip. A main stat counts at its real magnitude for the card's level (about nine maximum rolls at max level) —
-      these are ratios for comparing loadouts, not damage predictions.`)}
+      `That is also why stacking a stat you are already deep in scores worse than filling the gap. Only the factors your
+      cards move are shown; skill, weakness and party buffs beyond your team buffs setting are the same whatever you
+      equip. Defence is against the boss the Teams page's Auto picks for this character. A main stat counts at its real
+      magnitude for the card's level (about nine maximum rolls at max level) — these are ratios for comparing loadouts,
+      not damage predictions.`)}
   </div>`;
 }
 
@@ -8440,7 +8592,7 @@ function runTriage() {
     Always double-check before feeding: this only knows the characters you have marked as owned.</div>`;
   $('#trPanel').classList.remove('hide');
   // `sig` is what the run read (triageSig), so markStaleRuns can say when it no longer holds
-  trCache = { rated, tc: teamCritRate(), sig: triageSig() };
+  trCache = { rated, tc: teamSig(), sig: triageSig() };
   renderTriageTable();
 }
 // Filters and sorts trCache.rated and draws #trTable — the cheap part, split out of
@@ -8643,7 +8795,7 @@ function runVault() {
     Feeding those is the expensive kind of mistake, because Keep or feed will happily call them junk
     until the day you pull the character.</div>`;
   $('#vaPanel').classList.remove('hide');
-  vaCache = { rated, tc: teamCritRate(), sig: vaultSig() };
+  vaCache = { rated, tc: teamSig(), sig: vaultSig() };
   renderVaultTable();
 }
 
@@ -8718,14 +8870,14 @@ function vaultRate(cards) {
 function triageSig() {
   const detail = new Set(($('#trScope').value === 'owned' ? ownedChars() : CHARACTERS).map(c => c.n));
   state.cards.forEach(c => { if (c.equipped) detail.add(c.equipped); });
-  return cardsSig(true) + ':' + charsSig(detail) + ':' + teamCritRate() + ':' + denSig() + '|' + [$('#trScope').value, $('#trRar').value,
+  return cardsSig(true) + ':' + charsSig(detail) + ':' + teamSig() + ':' + denSig() + '|' + [$('#trScope').value, $('#trRar').value,
     $('#upRar').value, $('#upSameSet').checked, $('#upIgnoreEquipped').checked, $('#vaRar').value].join(',');
 }
 /* The Vault prices the cards' own contents against archetypes: not who wears them, not their
    locks, not targets or setups. Ownership only decides which roles it reports as unfielded.
    Hashing wearers flagged it stale after every equip, on the screen meant to stop a keeper
    being fed, until the warning meant nothing. */
-function vaultSig() { return cardsSig(false) + ':' + charsSig(null) + ':' + teamCritRate() + '|' + $('#vaRar').value; }
+function vaultSig() { return cardsSig(false) + ':' + charsSig(null) + ':' + teamSig() + '|' + $('#vaRar').value; }
 
 /* Triage and the Vault score on their Run buttons and keep the result; neither re-runs a sweep
    of a second or two on every edit. So each result says when what it read has changed since —
@@ -8741,9 +8893,9 @@ function markStaleRuns() {
     const old = box.querySelector('.stale-run');
     if (old) old.remove();
     if (cache.sig === sig()) return;
-    const tc = cache.tc !== teamCritRate();
+    const tc = cache.tc !== teamSig();
     box.insertAdjacentHTML('afterbegin', `<div class="notice stale-run${tc ? ' stale-tc' : ''}"><span>Scored before your latest
-      changes${tc ? `, with a team crit rate of ${esc(String(cache.tc))}% (now ${esc(String(teamCritRate()))}%)` : ''}. The verdicts
+      changes${tc ? `, with team buffs of ${esc(teamSigText(cache.tc))} (now ${esc(teamSigText(teamSig()))})` : ''}. The verdicts
       below may be out of date.</span><button class="sm" type="button">Re-run</button></div>`);
     box.querySelector('.stale-run button').onclick = () => $(btn).click();
   });
@@ -9623,7 +9775,7 @@ const ccScopeChars = o => o.scope === 'all' ? CHARACTERS.slice() : ownedChars();
    controls. The element and search filters only narrow the drawn table. */
 function ccSig() {
   const o = ccOpts();
-  return cardsSig(true) + ':' + charsSig(new Set(ccScopeChars(o).map(c => c.n))) + ':' + teamCritRate() + ':' + denSig() +
+  return cardsSig(true) + ':' + charsSig(new Set(ccScopeChars(o).map(c => c.n))) + ':' + teamSig() + ':' + denSig() +
     '|' + [o.scope, o.kind, o.mode, o.policy, o.free].join(',');
 }
 let ccCache = null, ccJob = 0;
@@ -9650,7 +9802,7 @@ function runCustomCard() {
       if (i < chars.length) { progress(); setTimeout(step, 0); return; }
       rows.sort((a, b) => b.gain - a.gain || a.ch.n.localeCompare(b.ch.n));
       rows.forEach((r, k) => { r.rank = k + 1; });
-      ccCache = { sig, o, rows, second: ccSecond(rows, o), tc: teamCritRate() };
+      ccCache = { sig, o, rows, second: ccSecond(rows, o), tc: teamSig() };
       renderCustomCard();
       ccFillCheckChars();
       if (!ccCheckFilled && rows[0] && rows[0].best) ccFillRecommended(rows[0].ch.n); else ccCheck();
@@ -10046,7 +10198,7 @@ function ikOpts() {
 // What a run read: the same as the Custom card view's, with its own controls.
 function ikSig() {
   const o = ikOpts();
-  return cardsSig(true) + ':' + charsSig(new Set(ccScopeChars(o).map(c => c.n))) + ':' + teamCritRate() + ':' + denSig() +
+  return cardsSig(true) + ':' + charsSig(new Set(ccScopeChars(o).map(c => c.n))) + ':' + teamSig() + ':' + denSig() +
     '|' + [o.scope, o.pick, o.policy, o.free].join(',');
 }
 let ikCache = null, ikJob = 0;
@@ -10073,7 +10225,7 @@ function runInkCard() {
       if (i < chars.length) { progress(); setTimeout(step, 0); return; }
       rows.sort((a, b) => b.gain - a.gain || a.ch.n.localeCompare(b.ch.n));
       rows.forEach((r, k) => { r.rank = k + 1; });
-      ikCache = { sig, o, rows, tc: teamCritRate() };
+      ikCache = { sig, o, rows, tc: teamSig() };
       renderInkCard();
       ikFillCheckChars();
       if (!ikCheckFilled && rows[0] && rows[0].best) ikFillRecommended(rows[0].ch.n); else ikCheck();
@@ -10544,7 +10696,7 @@ const rgCandidates = () => state.cards.filter(c => c.rarity === 5 && upgradesUse
    Den and its own controls. Show, slot, wearer and search only narrow the drawn table. */
 function rgSig() {
   const o = rgOpts();
-  return cardsSig(true) + ':' + charsSig(new Set(rgScopeChars(o).map(c => c.n))) + ':' + teamCritRate() + ':' + denSig() +
+  return cardsSig(true) + ':' + charsSig(new Set(rgScopeChars(o).map(c => c.n))) + ':' + teamSig() + ':' + denSig() +
     '|' + [o.scope, o.fourth].join(',');
 }
 /* One card's row: worn, it is priced for the wearer (if in scope); spare, for every character in
@@ -10601,7 +10753,7 @@ function runRetrograde() {
       if (i < cards.length || c < chars.length) { progress(); setTimeout(step, 0); return; }
       rows.sort((a, b) => b.p.mean - a.p.mean || a.ch.n.localeCompare(b.ch.n));
       rows.forEach((r, k) => { r.rank = k + 1; });
-      rgCache = { sig, o, rows, n: cards.length, tc: teamCritRate() };
+      rgCache = { sig, o, rows, n: cards.length, tc: teamSig() };
       renderRetrograde();
       markStaleRuns();
       resolve(true);
@@ -10888,7 +11040,7 @@ function frOpts() { return { kind: $('#frKind').value, policy: $('#frPolicy').va
 // What a run read: as the Custom card view's, for the characters counted, plus which ones they are.
 function frSig() {
   const o = frOpts(), names = frChars().map(c => c.n);
-  return cardsSig(true) + ':' + charsSig(new Set(names)) + ':' + teamCritRate() + ':' + denSig() +
+  return cardsSig(true) + ':' + charsSig(new Set(names)) + ':' + teamSig() + ':' + denSig() +
     '|' + [o.kind, o.policy, o.free].join(',') + '|' + (hashStr(2166136261, names.join('|')) >>> 0).toString(36);
 }
 let frCache = null, frJob = 0;
@@ -10921,7 +11073,7 @@ function runFortune() {
       if (j < sets.length) { progress(); setTimeout(step, 0); return; }
       rated.sort((a, b) => b.value - a.value || b.useful - a.useful || a.set.localeCompare(b.set));
       rated.forEach((r, k) => { r.rank = k + 1; r.close = k > 0 && frClose(rated[0], r); });
-      frCache = { sig, o, rated, chars, tc: teamCritRate() };
+      frCache = { sig, o, rated, chars, tc: teamSig() };
       renderFortune();
       markStaleRuns();
       resolve(true);
@@ -11818,7 +11970,7 @@ function charsSig(detail) {
   });
   return (h >>> 0).toString(36);
 }
-function dataSignature() { return cardsSig(true) + ':' + charsSig('all') + ':' + teamCritRate() + ':' + denSig() + ':' + (wonderSpeed() || '') + ':' + JSON.stringify(wonderSetup()); }
+function dataSignature() { return cardsSig(true) + ':' + charsSig('all') + ':' + teamSig() + ':' + denSig() + ':' + (wonderSpeed() || '') + ':' + JSON.stringify(wonderSetup()); }
 
 /* The save file is the only persistence (no browser storage — see CLAUDE.md), so the header
    says when there is something it does not have yet, and the page asks before it is closed on
@@ -11883,7 +12035,7 @@ function commit() {
    the card objects that survived, so anything still holding one points at the live card. */
 let undoSnap = null, toastTimer = 0;
 function snapshotState() {
-  return { cards: JSON.stringify(state.cards), chars: JSON.stringify(state.chars), nextId: state.nextId, teamCrit: state.teamCrit, den: JSON.stringify(state.den || {}), wonderSpd: state.wonderSpd, wonder: JSON.stringify(state.wonder || {}) };
+  return { cards: JSON.stringify(state.cards), chars: JSON.stringify(state.chars), nextId: state.nextId, teamCrit: state.teamCrit, teamBuffs: JSON.stringify(state.teamBuffs || {}), den: JSON.stringify(state.den || {}), wonderSpd: state.wonderSpd, wonder: JSON.stringify(state.wonder || {}) };
 }
 function showToast(text, button) {
   $('#toastMsg').textContent = text;
@@ -11930,6 +12082,7 @@ function undo() {
   CHARACTERS.forEach(c => { state.chars[c.n] = chars[c.n] || { owned: false, benched: false, targets: null, loadout: null }; });
   state.nextId = s.nextId;
   state.teamCrit = s.teamCrit;
+  state.teamBuffs = JSON.parse(s.teamBuffs || '{}');
   state.den = JSON.parse(s.den || '{}');
   state.wonderSpd = s.wonderSpd || 0;
   state.wonder = JSON.parse(s.wonder || '{}');
@@ -11945,12 +12098,18 @@ function undo() {
     else d.close();
   }
 }
-/* The team crit rate lives in the header's settings popover; its chip shows the value in use. */
+/* The team crit rate and buffs live in the header's settings popover; its chip shows what is in use. */
 function syncTeamCritField() {
   $('#rsTeamCrit').value = state.teamCrit;
+  $$('.teamIn').forEach(i => { i.value = teamBuff(i.dataset.k); });
   // the popover's other setting rides along, and the chip says when any of it is in use
   $$('.denIn').forEach(i => { i.value = denBonus(i.dataset.stat); });
-  $('#setTc').textContent = teamCritRate() + '%' + (denSig().split(',').some(v => +v > 0) ? ' · Den' : '');
+  $('#setTc').textContent = teamCritRate() + '%' + (TEAM_BUFF_KEYS.some(k => teamBuff(k)) ? ' · buffs' : '') + (denSig().split(',').some(v => +v > 0) ? ' · Den' : '');
+}
+// "crit rate 15%, ATK +80%, …" for a teamSig(): the stale banner names what a run was scored with
+function teamSigText(sig) {
+  const v = String(sig).split('/').map(Number), lab = ['ATK +', 'damage +', 'crit multiplier +', 'enemy DEF −'];
+  return 'crit rate ' + (v[0] || 0) + '%' + v.slice(1).map((x, i) => x ? ', ' + lab[i] + x + '%' : '').join('');
 }
 
 /* ------------------------------ data io ------------------------------ */
@@ -12037,7 +12196,7 @@ function applyPrefs(p) {
 // What save() writes — split out so the round trip in the tests reads the real shape.
 function savePayload() {
   return { version: 1, savedAt: new Date().toISOString(), nextId: state.nextId,
-    cards: state.cards, characters: state.chars, settings: { teamCritRate: state.teamCrit, thievesDen: denSaved(), wonderSpeed: wonderSpeed(), wonder: wonderSetup() }, prefs: collectPrefs() };
+    cards: state.cards, characters: state.chars, settings: { teamCritRate: state.teamCrit, teamBuffs: teamBuffsSaved(), thievesDen: denSaved(), wonderSpeed: wonderSpeed(), wonder: wonderSetup() }, prefs: collectPrefs() };
 }
 function save() {
   const payload = savePayload();
@@ -12077,6 +12236,7 @@ function applySave(text, from) {
     const dropped = migrateSavedTargets();
     const tc = +(d.settings && d.settings.teamCritRate);
     state.teamCrit = tc > 0 ? Math.min(100, tc) : 0;   // absent on files saved before it existed
+    state.teamBuffs = teamBuffsFrom(d.settings && d.settings.teamBuffs);   // likewise
     state.den = denFrom(d.settings && d.settings.thievesDen);   // likewise
     state.wonderSpd = wonderSpeedFrom(d.settings && d.settings.wonderSpeed);   // likewise
     state.wonder = wonderFrom(d.settings && d.settings.wonder);
@@ -14192,7 +14352,11 @@ function tcAtkCount(n, step) {
 }
 const tcHlEvery = () => 5;
 const tcThEvery = n => Math.ceil((((n && SKILL_DMG[n]) || {}).th || 70) / TC_TH_TURN);
-const tcFight = () => Math.max(1, tcSel('#tmFight', 12));
+/* The build model's own fight (kitMix) is played at the page's defaults whatever the Teams page is set to —
+   12 rounds, the Auto boss and enemies, every hit on a weakness, no knockdowns, lufel's rotations as written —
+   so a build score never moves because a Teams control did. */
+let tcKitRun = false;
+const tcFight = () => tcKitRun ? 12 : Math.max(1, tcSel('#tmFight', 12));
 /* The boss, from lufel's list (BOSSES), whether hits land on a weakness, and how many enemies there are.
    The boss's DEF goes into TC_BOSS when the memo turns over (tcMemoFor). A hit is on a weakness by the
    boss's resistances for that element (every hit, for a boss lufel lists none for), or by the page's
@@ -14209,7 +14373,7 @@ let tcFocus = null;
 const TC_AUTO_BOSS = { single: 220, area: 221 };
 const tcFocusArea = () => { const D = tcFocus && charDef(tcFocus); return !!D && D.arch === 'AoE DPS'; };
 const tcBossNow = () => {
-  const el = $('#tmBoss'), v = el ? el.value : 'auto';
+  const el = tcKitRun ? null : $('#tmBoss'), v = el ? el.value : 'auto';
   const id = v === 'auto' || !isFinite(+v) ? (tcFocusArea() ? TC_AUTO_BOSS.area : TC_AUTO_BOSS.single) : +v;
   return BOSSES.find(b => b.id === id) || BOSSES.find(b => b.id === TC_AUTO_BOSS.single) || null;
 };
@@ -14220,9 +14384,9 @@ const tcBossLabel = () => {
   return B.id === TC_AUTO_BOSS.single || B.id === TC_AUTO_BOSS.area
     ? `lufel's ${B.id === TC_AUTO_BOSS.area ? 'area' : 'single'}-boss example (DEF ${B.def})` : B.name;
 };
-const tcWeakMode = () => ($('#tmWeak') && $('#tmWeak').value) || 'all';
+const tcWeakMode = () => (!tcKitRun && $('#tmWeak') && $('#tmWeak').value) || 'all';
 const tcFoes = () => {
-  const el = $('#tmFoes');
+  const el = tcKitRun ? null : $('#tmFoes');
   if (!el || el.value === 'auto') return tcFocusArea() ? 5 : 1;
   return Math.max(1, Math.min(5, tcSel('#tmFoes', 1)));
 };
@@ -14234,8 +14398,14 @@ function tcWeakFor(elem) {
   return b && b.res ? (b.res[elem] || 'normal') : 'weak';
 }
 // the boss's Down Points (#tmDown, a pref): 0 is a boss that cannot be knocked down, the default
-const tcDownPts = () => Math.max(0, Math.min(30, Math.round(tcSel('#tmDown', 0))));
+const tcDownPts = () => tcKitRun ? 0 : Math.max(0, Math.min(30, Math.round(tcSel('#tmDown', 0))));
 const tcAssumeKey = () => [tcFight(), (tcBossNow() || {}).id, tcWeakMode(), tcFoes(), tcDownPts()].join(',');
+/* Whether a thief's Highlight can crit: a Theurgy can; a Highlight only where its text says so (SKILL_DMG
+   `hlCrit`) or from the Awareness that grants it (TC_HL_CRIT_AW: Kumi's A6, "allow her Highlight to activate
+   critical hits"). */
+const TC_HL_CRIT_AW = { 'Kumi Katayama': 6 };
+const tcHlCrits = n => tcHlKind(n) === 'TH' || !!(SKILL_DMG[n] || {}).hlCrit ||
+  (TC_HL_CRIT_AW[n] != null && (+charLoadout(n).awareness || 0) >= TC_HL_CRIT_AW[n]);
 /* 'HL' or 'TH' for a thief, Wonder included; null for an Elucidator, whose "Highlight" is her stat share. */
 function tcHlKind(n) {
   if (n === 'Wonder') return 'HL';
@@ -14319,7 +14489,7 @@ function tcSkillUses(step) {
 function tcDpsHl(dps) {
   const kind = tcHlKind(dps.n), S0 = SKILL_DMG[dps.n], S = S0 && { d: tcSkillD(dps.n) };
   // a Highlight cannot crit unless its text says so; a Theurgy can (`share` is set once the crit is known, tcEvalFor)
-  const out = { kind, q: 0, r0: 0, rot: 0, share: 0, known: !!S0, crit: kind === 'TH' || !!(S0 || {}).hlCrit };
+  const out = { kind, q: 0, r0: 0, rot: 0, share: 0, known: !!S0, crit: tcHlCrits(dps.n) };
   if (!kind || !S || !S.d[3]) return out;
   const rp = tmRotPick(dps.n, new Set([dps.n]));
   const seq = rp && rp.pick[0] ? rp.pick[0].seq : null;
@@ -14408,7 +14578,7 @@ function tcBreaksCooldown(seq, name) {
     return at.some((x, j) => ((j + 1 < at.length ? at[j + 1] : at[0] + n) - x) < c + 1);
   });
 }
-const tmFitOn = () => !!($('#tmRotFit') && $('#tmRotFit').checked);
+const tmFitOn = () => !tcKitRun && !!($('#tmRotFit') && $('#tmRotFit').checked);
 function tcRotCands(r, dep, name) {
   const out = [], seen = new Map();
   tcRotVariants(r, name).forEach(({ seq, bi, changed }) => {
@@ -16481,14 +16651,15 @@ function tcDefence(pierce, defdown) {
    fingerprint costs a couple of milliseconds, so an entry point checks it once and marks the memo
    `hot` for the calls it makes (tcHot). On the real save a render went from 0.9 s to well under
    0.1 s, which is what makes "Use", "Busy elsewhere" and every commit() on this tab feel instant. */
-let tcMemo = { key: '', hot: false, eval: new Map(), member: new Map(), search: new Map(), rot: new Map(), hlw: new Map(), sim: new Map(), dmg: new Map(), tech: new Map(), pool: new Map() };
+const tcMemoNew = key => ({ key, hot: false, eval: new Map(), member: new Map(), search: new Map(), rot: new Map(), hlw: new Map(), sim: new Map(), dmg: new Map(), tech: new Map(), pool: new Map() });
+let tcMemo = tcMemoNew('');
 function tcMemoFor(D) {
   // the "Auto" boss and enemies follow the damage dealer the fight is for; the key holds what they resolve to
   if (D) tcFocus = D.n || D;
   // composing or not changes every fitted rotation, so it turns the memo over like the fight's assumptions
   const key = dataSignature() + '|' + [...tmBusy].sort().join(',') + '|' + tcAssumeKey() + (tmComposeOn() ? '|compose' : '');
   if (key !== tcMemo.key) {
-    tcMemo = { key, hot: false, eval: new Map(), member: new Map(), search: new Map(), rot: new Map(), hlw: new Map(), sim: new Map(), dmg: new Map(), tech: new Map(), pool: new Map() };
+    tcMemo = tcMemoNew(key);
     // the fight is against the boss the page picks
     const b = tcBossNow();
     if (b) Object.assign(TC_BOSS, { def: b.def, coef: b.coef });
@@ -16511,7 +16682,8 @@ function tcEvalFor(dps, noTimed) {
   const keep = state.teamCrit;
   state.teamCrit = 0;
   try {
-    const lo = noTimed ? Object.assign({}, charLoadout(dps.n), { noTimed: true }) : charLoadout(dps.n), t = target(dps), worn = state.cards.filter(c => c.equipped === dps.n);
+    // `bare`: the damage model without the team buffs setting or the kit's measured numbers (damageBase), which the fight plays out itself
+    const lo = Object.assign({}, charLoadout(dps.n), noTimed ? { noTimed: true, bare: true } : { bare: true }), t = target(dps), worn = state.cards.filter(c => c.equipped === dps.n);
     const own = tcStat(dps.n, 'Resistance Pierce');
     /* The Thieves Den is in combat only, and a team fight is combat: its flat stat on the kit's own
        scaling stat and its crit go into both sides of the ratio, like every member's do for the
@@ -17922,7 +18094,7 @@ function tcSimPrep(D, names, fit, blank, opt) {
   const addSim = sm => { addConst(sm.consts); (sm.gated || []).forEach(g => gated.push(g)); Object.keys(sm.constsOne || {}).forEach(k => { X0one[k] = (X0one[k] || 0) + sm.constsOne[k]; }); (sm.constsMin || []).forEach(c => constsMin.push(c)); (sm.downConsts || []).forEach(c => downX.push(c)); };
   // the damage dealer's skill numbers at their skill-level tier; a Highlight crits only where its text says so
   const skill = SKILL_DMG[D.n] ? Object.assign({}, SKILL_DMG[D.n], { d: tcSkillD(D.n) }) : null;
-  const hlCrit = tcHlKind(D.n) === 'TH' || !!(SKILL_DMG[D.n] || {}).hlCrit;
+  const hlCrit = tcHlCrits(D.n);
   const actor = (n, isDps) => {
     const kind = n ? tcHlKind(n) : null, S = n && n !== 'Wonder' ? SKILL_DMG[n] : null;
     const lo = n && n !== 'Wonder' ? charLoadout(n) : DEFAULT_LOADOUT, aw = +lo.awareness || 0;
@@ -18042,7 +18214,24 @@ function tcSimRun(P, order, hold) {
   let gauge = P.gauge0, total = 0, dpsActs = 0, vc = false, round = 0;
   // the damage dealer's damage by where it came from: skills, Highlights, extra actions, kit components
   const parts = {};
-  const gain = (kind, x) => { total += x; parts[kind] = (parts[kind] || 0) + x; };
+  /* `P.track` (kitMix, the build model's fight): per hit, its damage before the crit factor (`u`), how much of
+     it could not crit (`nc`), and what the kit had added into each factor then, weighted by the hit's damage.
+     spread() notes the main target's hit, gain() books it. */
+  const TR = P.track ? { u: 0, nc: 0, w: 0, wc: 0, sum: { atkPct: 0, atk: 0, dm: 0, cr: 0, cm: 0, pierce: 0, defdown: 0 }, last: null, cf: new Map() } : null;
+  const gain = (kind, x) => {
+    total += x; parts[kind] = (parts[kind] || 0) + x;
+    if (!TR) return;
+    const h = TR.last;
+    TR.last = null;
+    if (!h || !(x > 0)) return;
+    const u = x / h.cf;
+    TR.u += u; if (h.dot) TR.nc += u;
+    TR.w += x;
+    TR.sum.atkPct += x * ((h.X.atkPct || 0) + h.atkPct); TR.sum.atk += x * (h.X.atk || 0); TR.sum.dm += x * ((h.X.dm || 0) + h.dm);
+    TR.sum.pierce += x * (h.X.pierce || 0); TR.sum.defdown += x * (h.X.defdown || 0);
+    // a crit buff reaches only the hits that can crit
+    if (!h.dot) { TR.wc += x; TR.sum.cr += x * (h.X.cr || 0); TR.sum.cm += x * (h.X.cm || 0); }
+  };
   // the damage their own bonuses on a Burning foe reach, Burning or not, for the quick screen (tcTechMix)
   const tech = { dmg: 0, tf: 0, pf: 0, ta: 0, pa: 0 };
   const techGain = (ob, x) => { if (ob.tf || ob.pf || ob.ta || ob.pa) { tech.dmg += x; ['tf', 'pf', 'ta', 'pa'].forEach(k => { tech[k] += x * ob[k]; }); } };
@@ -18128,6 +18317,13 @@ function tcSimRun(P, order, hold) {
        everything up, the others without the debuffs that sit on one foe. */
     const spread = (aoe, X, dm, atkPct, fin, dot, noWeak, hits) => {
       let v = mult(X, dm, atkPct, fin, dot, noWeak);
+      if (TR) {
+        // the crit factor this hit carried, so its damage can be read before crit
+        const ck = dot ? 'dot' : TC_DMG_KEYS.map(k => Math.round((X[k] || 0) * 100)).join(',') + '|' + Math.round(dm * 100) + '|' + Math.round(atkPct * 100);
+        let cf = TR.cf.get(ck);
+        if (cf == null) { cf = dot ? 1 : damageFactors(E.worn, D, E.t, E.lo, Object.assign({}, X, { dm: X.dm + dm, atkPct: X.atkPct + atkPct, flat: E.den.flat, cr: X.cr + E.den.cr, cm: X.cm + E.den.cm })).crit; TR.cf.set(ck, cf); }
+        TR.last = { X, dm, atkPct, dot: !!dot, cf: cf > 0 ? cf : 1 };
+      }
       if (aoe && P.foes > 1) v += (P.foes - 1) * mult(curX(true, hits), dm, atkPct, fin, dot, noWeak);
       return v;
     };
@@ -18593,7 +18789,7 @@ function tcSimRun(P, order, hold) {
   const hl = {}; T.forEach(a => { if (a.n) hl[a.n] = a.hlN; });
   if (BK && BK.hlN) hl[BK.n] = BK.hlN;
   // ailMean: the ailments the foe carried at the end of each round, on average (the seat reports it)
-  return { total, parts, hl, shifts, downs, cover: share, order: T.map(a => a.n || '—'), gaugeLeft: Math.round(gauge), ailMean: F ? ailSum / F : 0, tech, copy: copyLog,
+  return { total, parts, hl, shifts, downs, cover: share, order: T.map(a => a.n || '—'), gaugeLeft: Math.round(gauge), ailMean: F ? ailSum / F : 0, tech, copy: copyLog, track: TR,
     surf: SF ? { catches: SF.catches, inSurf: SF.inSurf, acts: dpsActs } : null };
 }
 
@@ -20149,6 +20345,16 @@ $('#rsTeamCrit').onchange = () => {
   syncTeamCritField();
   commit();
 };
+/* The team buffs fields (see teamBuffsFor): points, 0 or more, one per factor. */
+$$('.teamIn').forEach(inp => inp.onchange = () => {
+  const k = inp.dataset.k;
+  const v = Math.max(0, Math.min(TEAM_BUFF_MAX[k], Math.round((+inp.value || 0) * 10) / 10));
+  if (v === teamBuff(k)) { inp.value = v; return; }
+  state.teamBuffs = Object.assign({}, state.teamBuffs, { [k]: v });
+  if (!v) delete state.teamBuffs[k];
+  syncTeamCritField();
+  commit();
+});
 /* The Thieves Den fields (see denBonus): flat points, 0 or more, one per stat. */
 $$('.denIn').forEach(inp => inp.onchange = () => {
   const s = inp.dataset.stat;
@@ -20232,13 +20438,14 @@ document.addEventListener('drop', e => {
 
 $('#wipe').onclick = () => askToast('Clear every card and character setting? You can undo it for 15 seconds afterwards.', 'Clear everything', () => {
   const snap = snapshotState();
-  state.cards = []; state.nextId = 1; state.teamCrit = 0; state.den = {}; state.wonderSpd = 0; state.wonder = {}; syncTeamCritField();
+  state.cards = []; state.nextId = 1; state.teamCrit = 0; state.teamBuffs = {}; state.den = {}; state.wonderSpd = 0; state.wonder = {}; syncTeamCritField();
   CHARACTERS.forEach(c => state.chars[c.n] = { owned: false, benched: false, targets: null, loadout: null });
   commit();
   offerUndo('Cleared every card and character setting.', snap);
 });
 
 $('#stamp').textContent = `This build knows ${CHARACTERS.length} characters, ${Object.keys(SETS).length} sets and ${Object.keys(SPACE_SETS).length} Space cards.`;
+kitMixReady = true;
 fillSelects(); linkLabels(); syncTeamCritField(); renderInv(); renderRoster(); renderOpt();
 upViewsStale = true;   // nothing has run yet: the first visit to Upgrades runs its pass,
 optStale = true;       // and the first visit to Optimise its plan for the selected character

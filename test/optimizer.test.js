@@ -379,8 +379,8 @@ function awarenessOverrideDrift() {
     fail('CONVERSIONS names real characters, real source and destination stats, and a reason',
       Object.entries(CONVERSIONS).every(([n, list]) => charDef(n) && list.every(cv =>
         (SUBSTATS[cv.from] || cv.from === 'HP Recovery') && ['ATK%', 'ATK', 'Crit Multiplier', 'Damage Multiplier', 'HP'].includes(cv.to) && cv.rate > 0 && cv.why)));
-    fail('CRIT_PROFILE names real characters with a locked share in (0,1], a no-crit share, or an extra-crit share on a weapon ladder',
-      Object.entries(CRIT_PROFILE).every(([n, pr]) => charDef(n) && ((pr.locked > 0 && pr.locked <= 1) || (pr.nocrit > 0 && pr.nocrit < 1) ||
+    fail('CRIT_PROFILE names real characters with a locked share in (0,1] or an extra-crit share on a weapon ladder (the no-crit share is measured: kitMix)',
+      Object.entries(CRIT_PROFILE).every(([n, pr]) => charDef(n) && !('nocrit' in pr) && ((pr.locked > 0 && pr.locked <= 1) ||
         (pr.extraCr && pr.extraCr.share > 0 && pr.extraCr.share < 1 && (pr.extraCr.v > 0 || (Array.isArray(pr.extraCr.ladder) && pr.extraCr.ladder.length === 7))))) &&
       CRIT_PROFILE['Ryuji Sakamoto'].locked === 1 && CRIT_PROFILE['Shun Kano [Pioneer]'].locked === 1);
     fail('DAMAGE_SCALE names the eight DEF/HP-scaling kits, each weighting ATK% at zero',
@@ -777,6 +777,21 @@ function awarenessOverrideDrift() {
     const cBack = critAt();
     fail('the team crit rate adds to a damage dealer\'s crit rate in the damage model, never an Elucidator\'s or an on-screen total',
       state.teamCrit === 0 && near(c20.cr, c0.cr + 20) && near(c20.crF, c0.crF) && near(c20.tot, c0.tot), JSON.stringify({ c0: c0.cr, c20: c20.cr }));
+    /* The team buffs (ATK, damage, crit multiplier, enemy DEF down) go where the team crit rate goes: a damage dealer's
+       base, both coupling baselines, every memo that reads them; never an Elucidator's or an on-screen total. ATK only
+       for a kit that scales off ATK. */
+    const yuK = charDef('Yusuke Kitagawa');
+    const tbAt = () => ({ b: Object.assign({}, damageBase(annC)), y: damageBase(yuK).atkPct, f: damageBase(futabaC).dm,
+      tot: totalStat(annC, 'ATK', 'ATK', [], charLoadout(annC.n)).total, cp: Object.assign({}, couplingFactors(tAnn, 'Moon', 'ATK%')), sig: teamSig() });
+    const tb0 = tbAt();
+    state.teamBuffs = { atkPct: 80, dm: 30, cm: 30, defdown: 20 };
+    const tb1 = tbAt();
+    state.teamBuffs = {};
+    const tbBack = tbAt();
+    fail('the team buffs add to a damage dealer\'s base (ATK for an ATK kit only), never an Elucidator\'s or an on-screen total, and reprice the coupling',
+      near(tb1.b.atkPct, tb0.b.atkPct + 80) && near(tb1.b.dm, tb0.b.dm + 30) && near(tb1.b.cm, tb0.b.cm + 30) && near(tb1.b.defdown, tb0.b.defdown + 20) &&
+      near(tb1.y, tb0.y) && near(tb1.f, tb0.f) && near(tb1.tot, tb0.tot) && tb1.cp['ATK%'] < tb0.cp['ATK%'] && tb1.sig !== tb0.sig &&
+      near(tbBack.cp['ATK%'], tb0.cp['ATK%']) && tbBack.sig === tb0.sig, JSON.stringify({ tb0: tb0.b, tb1: tb1.b }));
     fail('a new team crit rate reprices the coupling at once — Crit Multiplier up, Crit Rate down, the Vault\'s generic board too — and 0 restores it exactly',
       c20.f['Crit Multiplier'] > c0.f['Crit Multiplier'] && c20.f['Crit Rate'] < c0.f['Crit Rate'] && c20.v['Crit Multiplier'] > c0.v['Crit Multiplier'] &&
       c20.ideal !== c0.ideal && near(cBack.f['Crit Multiplier'], c0.f['Crit Multiplier']) && near(cBack.f['Crit Rate'], c0.f['Crit Rate']) && near(cBack.ideal, c0.ideal));
@@ -791,7 +806,7 @@ function awarenessOverrideDrift() {
     fail('Beachflower Minami scales off HP, and her crit multiplier and HP buff allies: uncoupled, not booked as her damage, lufel\'s Crit Multiplier Star her ideal',
       scaleStat(bm) === 'HP' && tbm.w['ATK%'] === 0 && SLOT_INFO.Star.mains.every(m => Object.keys(couplingFactors(tbm, 'Star', m)).length === 0) &&
       idealCard('Star', tbm, '').main === 'Crit Multiplier' &&
-      near(damageShare(tbm, bm), wsum(tbm, ['HP', 'Damage Multiplier', 'Crit Rate']) / wsum(tbm, Object.keys(tbm.w))));
+      near(damageShare(tbm, bm), wsum(tbm, ['HP', 'Damage Multiplier', 'Crit Rate', 'Resistance Pierce']) / wsum(tbm, Object.keys(tbm.w))));
     const lufelC = charDef('Lufel'), tlu = target(lufelC);
     fail('Lufel\'s heal-scaling ATK% is her top weight, and lufel\'s ATK% Star and Sky are her ideal',
       tlu.w['ATK%'] === Math.max(...Object.values(tlu.w)) && idealCard('Star', tlu, '').main === 'ATK%' && idealCard('Sky', tlu, '').main === 'ATK%');
@@ -840,7 +855,8 @@ function awarenessOverrideDrift() {
        ================================================================================ */
     const dbBad = [];
     CHARACTERS.forEach(c => {
-      const lc = charLoadout(c.n), B = damageBase(c, lc);
+      // bare: the character alone, without the team buffs setting or the kit's measured numbers on top
+      const lc = charLoadout(c.n), B = damageBase(c, Object.assign({}, lc, { bare: true }));
       [['Crit Rate', B.cr], ['Crit Multiplier', B.cm], ['Damage Multiplier', B.dm]].forEach(([s, v]) => {
         const x = charBaseStat(c, s, lc); if (!near(x.flat + x.pct, v)) dbBad.push(`${c.n} ${s}: ${x.flat}+${x.pct} vs ${v}`);
       });
@@ -871,16 +887,49 @@ function awarenessOverrideDrift() {
     fail('lockedCritSupply adds nothing for a fully locked or unlocked kit and locked/(1-locked) otherwise',
       lockedCritSupply({ locked: 1 }, 150) === 0 && lockedCritSupply(null, 150) === 0 && near(lockedCritSupply({ locked: 0.3 }, 150), 100 * 0.3 / 0.7) &&
       lockedCritSupply({ locked: 0.3, cmClamp: [250, 350] }, 150) === 0 && near(lockedCritSupply({ locked: 0.3, cmClamp: [250, 350] }, 300), 100 * 0.3 / 0.7));
-    /* Kumi's Highlight cannot crit until Awareness 6, so a Crit Rate roll buys less before it. */
+    /* Kumi's Highlight cannot crit until Awareness 6, so a Crit Rate roll buys less before it: the share is
+       measured in her fight alone (kitMix), and her A6 Highlight crits (TC_HL_CRIT_AW). */
     const kumi = charDef('Kumi Katayama'), tk = target(kumi);
     fail('a no-crit share makes Crit Rate worth less until the Awareness node lifts it (Kumi)', (() => {
       const g = aw => damageFactors([crCard], kumi, tk, lo(aw)).value / damageFactors([], kumi, tk, lo(aw)).value;
-      return g(0) < g(6) && nocritShare(CRIT_PROFILE[kumi.n], lo(0)) === 0.45 && nocritShare(CRIT_PROFILE[kumi.n], lo(6)) === 0;
-    })());
+      const k0 = kitMix(kumi, lo(0)), k6 = kitMix(kumi, lo(6));
+      return g(0) < g(6) && k0 && k6 && k0.nc > 0.2 && k6.nc < k0.nc && damageBase(kumi, lo(0)).nc === k0.nc;
+    })(), JSON.stringify([kitMix(kumi, lo(0)), kitMix(kumi, lo(6))]));
     /* Stat conversions feed the damage model from the in-battle source total. */
     const runa = charDef('Runa Dogenzaka'), tr = target(runa), lr = charLoadout(runa.n);
     const aaCard = mk('Sun', 'Defeat', 'HP', [['Ailment Accuracy', 20]]);
     const r0 = damageFactors([], runa, tr, lr), r1 = damageFactors([aaCard], runa, tr, lr);
+    /* The kit, read off its fight alone (kitMix): the same whatever is worn and whatever the Teams page is set to, its
+       timed lines out of the base and in its numbers at their uptime, and nothing of it in the fight's own (bare) base. */
+    const annK = charDef('Ann Takamaki'), annLo = charLoadout(annK.n);
+    const kitFresh = () => { Object.keys(kitMixCache).forEach(k => delete kitMixCache[k]); Object.keys(damageBaseCache).forEach(k => delete damageBaseCache[k]); return kitMix(annK); };
+    const kA = kitFresh();
+    const keepWorn = state.cards.map(c => [c, c.equipped]);
+    state.cards.filter(c => c.equipped === annK.n).forEach(c => { c.equipped = null; });
+    const foesEl = document.getElementById('tmFoes'), fightEl = document.getElementById('tmFight'), keepFoes = foesEl.value, keepFight = fightEl.value;
+    foesEl.value = '3'; fightEl.value = '6';
+    const kB = kitFresh();
+    foesEl.value = keepFoes; fightEl.value = keepFight; keepWorn.forEach(([c, e]) => { c.equipped = e; });
+    kitFresh();
+    fail('kitMix is the kit alone: the same whatever the character wears and whatever the Teams page is set to',
+      !!kA && JSON.stringify(kA) === JSON.stringify(kB) && kA.nc > 0 && kA.nc < 1, JSON.stringify([kA, kB]));
+    const annBare = damageBase(annK, Object.assign({}, annLo, { bare: true })), annFull = damageBase(annK, annLo);
+    const annNt = n => { const x = charBaseStat(annK, n, Object.assign({}, annLo, { noTimed: true })); return x.flat + x.pct; };
+    fail('the build model\'s base is the base without the kit\'s timed lines plus what the kit adds; the fight\'s own base has neither',
+      near(annFull.dm, annNt('Damage Multiplier') + kA.x.dm) && near(annFull.atkPct - annBare.atkPct, kA.x.atkPct + (charBaseStat(annK, 'ATK', Object.assign({}, annLo, { noTimed: true })).pct - charBaseStat(annK, 'ATK', annLo).pct)) &&
+      annBare.nc === 0 && near(annFull.nc, kA.nc) && damageFactors([], annK, target(annK), Object.assign({}, annLo, { bare: true })).def === 1,
+      JSON.stringify({ annBare, annFull, kx: kA.x }));
+    fail('an Elucidator, and a kit with no skill numbers, get no kit numbers', kitMix(charDef('Futaba Sakura')) === null && CHARACTERS.filter(c => !SKILL_DMG[c.n]).every(c => kitMix(c) === null));
+    /* ⓒ: Pierce raises the damage model, and more once the team takes DEF off the foe — lufel's formula subtracts DEF down
+       after Pierce has scaled the DEF, so each Pierce point is a larger share of the DEF that is left */
+    const pierceCard = mk('Sun', 'Opulence', 'HP', [['Resistance Pierce', 10]]);
+    const pierceGain = () => damageFactors([pierceCard], joker, tj, lj).value / damageFactors([], joker, tj, lj).value;
+    const pg0 = pierceGain();
+    state.teamBuffs = { defdown: 40 }; const pg40 = pierceGain(); state.teamBuffs = {};
+    fail('a Pierce roll raises the damage model (ⓒ), and more once the team takes DEF off the foe', pg0 > 1.01 && pg40 > pg0, `${pg0} ${pg40}`);
+    fail('ⓒ is lufel\'s defence formula against the Auto boss: the single boss for a single-target kit, the area boss for an AoE DPS',
+      (() => { const st = CHARACTERS.find(c => c.arch === 'ST DPS'), E = 1280 * 2.584;
+        return !!st && buildBoss(st).def === 1280 && near(buildDefence(st, 0, 0), 1 - E / (E + 1400)); })() && joker.arch === 'AoE DPS' && buildBoss(joker).def === 821);
     fail('an accuracy roll raises Runa\'s ATK factor through her conversion',
       near(r1.atk / r0.atk, 1 + 0.6 * 20 / (100 + damageBase(runa, lr).atkPct + conversionBonus(runa, [], lr)['ATK%']), 1e-9), `${r0.atk.toFixed(0)} -> ${r1.atk.toFixed(0)}`);
     fail('a conversion source stat counts as modelled for its owner and nobody else',
@@ -894,7 +943,7 @@ function awarenessOverrideDrift() {
       damageShare(tj, joker) > 0.6 && damageShare(target(charDef('Yukimi Fujikawa')), charDef('Yukimi Fujikawa')) < 0.1 &&
       (() => { const s = damageShare(target(charDef('Junpei Iori')), charDef('Junpei Iori')); return s > 0.3 && s < 0.75; })(),
       `joker ${damageShare(tj, joker).toFixed(2)} fujikawa ${damageShare(target(charDef('Yukimi Fujikawa')), charDef('Yukimi Fujikawa')).toFixed(2)}`);
-    fail('Resistance Pierce is a damage stat by name but never counted as modelled', !MODELLED_STATS.includes('Resistance Pierce') && CHARACTERS.every(c => !modelledStats(c).includes('Resistance Pierce')));
+    fail('Resistance Pierce is modelled (ⓒ) for every character', MODELLED_STATS.includes('Resistance Pierce') && CHARACTERS.every(c => modelledStats(c).includes('Resistance Pierce')));
     fail('spreadApplies is false for every Elucidator and true for everyone else', CHARACTERS.every(c => spreadApplies(c) === (c.arch !== 'Navigator')));
     fail('an Elucidator\'s build score carries no Damage spread part', CHARACTERS.filter(c => c.arch === 'Navigator').every(c => {
       const t = target(c), idl = idealLoadout(c, t, 55); const bs = buildScore(c, idl.cards, 55, charLoadout(c.n), idl, t);
@@ -919,7 +968,7 @@ function awarenessOverrideDrift() {
       const sA = buildScore(joker, board.concat([A]), 55, lj, ij, tj).spread.got, sB = buildScore(joker, board.concat([B]), 55, lj, ij, tj).spread.got;
       return cardScore(A, tj) > cardScore(B, tj) && sB > sA;
     })());
-    fail('damageFactors exposes ⓐ, ⓑ, ⓓ and their product', (() => { const d = damageFactors(four, joker, tj, lj); return d.atk > 0 && d.dmg >= 1 && d.crit >= 1 && near(d.value, d.atk * d.dmg * d.crit, 1e-6); })());
+    fail('damageFactors exposes ⓐ, ⓑ, ⓓ and their product', (() => { const d = damageFactors(four, joker, tj, lj); return d.atk > 0 && d.dmg >= 1 && d.crit >= 1 && d.def > 0 && d.def < 1 && near(d.value, d.atk * d.dmg * d.crit * d.def, 1e-6); })());
     /* The fixed mains are flat stat added after the percentage, at their real magnitude for
        the card's level: a Space card's ATK + DEF for ATK and DEF kits, a Sun card's HP for HP
        kits. They used to be left out as "cancelling", which a flat term in a ratio does not. */
@@ -2030,6 +2079,22 @@ function awarenessOverrideDrift() {
   check('the Roster\'s team crit rate starts at 0, reprices a build when changed, clamps to 100 and flags a Triage run scored at the old value',
     teamCritUi.field === '0' && teamCritUi.state === 25 && Math.abs(teamCritUi.after - teamCritUi.before) > 1e-9 && teamCritUi.stale && teamCritUi.clamped === 100 && teamCritUi.backToZero,
     JSON.stringify(teamCritUi));
+  const teamBuffUi = await p.evaluate(() => {
+    const input = document.querySelector('.teamIn[data-k="atkPct"]'), ren = charDef('Ren Amamiya');
+    const r = { field: input.value, before: buildScoreOf(ren, state.cards.filter(c => c.equipped === ren.n)).raw, sig: dataSignature() };
+    runTriage();
+    input.value = '80'; input.dispatchEvent(new Event('change'));
+    r.state = state.teamBuffs.atkPct; r.after = buildScoreOf(ren, state.cards.filter(c => c.equipped === ren.n)).raw;
+    r.stale = (document.querySelector('#trSummary .stale-tc') || {}).textContent || '';
+    r.sigMoved = dataSignature() !== r.sig; r.chip = document.getElementById('setTc').textContent;
+    input.value = '9999'; input.dispatchEvent(new Event('change')); r.clamped = state.teamBuffs.atkPct;
+    input.value = '0'; input.dispatchEvent(new Event('change'));
+    r.backToZero = !('atkPct' in state.teamBuffs) && !document.querySelector('#trSummary .stale-tc') && dataSignature() === r.sig;
+    return r;
+  });
+  check('the team buffs start at 0, reprice a build when changed, clamp, show on the chip, flag a Triage run scored without them, and 0 restores the fingerprint',
+    teamBuffUi.field === '0' && teamBuffUi.state === 80 && Math.abs(teamBuffUi.after - teamBuffUi.before) > 1e-9 && /ATK \+80%/.test(teamBuffUi.stale) &&
+    teamBuffUi.sigMoved && /buffs/.test(teamBuffUi.chip) && teamBuffUi.clamped === 500 && teamBuffUi.backToZero, JSON.stringify(teamBuffUi));
   const anyMain = await p.evaluate(() => { editTargets('Chizuko Nagao'); const sel = document.getElementById('tMMoon0');
     const r = { v: sel.value, label: sel.options[sel.selectedIndex].text }; document.getElementById('tSave').click();
     return Object.assign(r, { saved: state.chars['Chizuko Nagao'].targets }); });
@@ -2511,28 +2576,29 @@ function awarenessOverrideDrift() {
   const roundTrip = await p.evaluate(() => new Promise(res => {
     const prefsBefore = collectPrefs();
     document.getElementById('trRar').value = '4';
-    state.teamCrit = 12.5; state.den = { ATK: 119, HP: 473 };
+    state.teamCrit = 12.5; state.teamBuffs = { atkPct: 80, defdown: 15.5 }; state.den = { ATK: 119, HP: 473 };
     trVerdictSel = [0, 2]; rosterView = 'list';
     const payload = savePayload();
     const json = JSON.stringify(payload);
     const n = state.cards.length, worn = state.cards.filter(c => c.equipped).length;
-    state.cards = []; state.chars['Ren Amamiya'].owned = false; document.getElementById('trRar').value = '2'; state.teamCrit = 0; state.den = {};
+    state.cards = []; state.chars['Ren Amamiya'].owned = false; document.getElementById('trRar').value = '2'; state.teamCrit = 0; state.teamBuffs = {}; state.den = {};
     trVerdictSel = []; rosterView = 'cards';
     load(new File([json], 'p5x-planner-save.json', { type: 'application/json' }));
     setTimeout(() => {
       res({ n, worn, after: state.cards.length, wornAfter: state.cards.filter(c => c.equipped).length, owned: state.chars['Ren Amamiya'].owned,
         trRar: document.getElementById('trRar').value, msg: document.getElementById('dataMsg').textContent, ids: new Set(state.cards.map(c => c.id)).size, saveShape: Object.keys(payload).join(','),
         teamCrit: state.teamCrit, teamCritField: document.getElementById('rsTeamCrit').value,
+        teamBuffs: JSON.stringify(state.teamBuffs), teamBuffField: document.querySelector('.teamIn[data-k="defdown"]').value,
         den: JSON.stringify(state.den), denField: document.querySelector('.denIn[data-stat="ATK"]').value,
         verdicts: trVerdictSel.join(','), view: rosterView, listShown: !document.getElementById('rsListPanel').classList.contains('hide') });
       document.getElementById('trRar').value = prefsBefore.trRar;
-      state.teamCrit = 0; document.getElementById('rsTeamCrit').value = 0; state.den = {}; syncTeamCritField();
+      state.teamCrit = 0; document.getElementById('rsTeamCrit').value = 0; state.teamBuffs = {}; state.den = {}; syncTeamCritField();
       trVerdictSel = []; rosterView = 'cards'; renderRoster();
     }, 400);
   }));
-  check('a save file round-trips through load(): cards, equips, ownership, the team crit rate, the Thieves Den and view prefs (verdict chips, roster view) all come back',
+  check('a save file round-trips through load(): cards, equips, ownership, the team crit rate and buffs, the Thieves Den and view prefs (verdict chips, roster view) all come back',
     roundTrip.after === roundTrip.n && roundTrip.wornAfter === roundTrip.worn && roundTrip.owned === true && roundTrip.trRar === '4' && /Loaded/.test(roundTrip.msg) && roundTrip.ids === roundTrip.after &&
-    roundTrip.teamCrit === 12.5 && roundTrip.teamCritField === '12.5' && roundTrip.den === JSON.stringify({ ATK: 119, HP: 473 }) && roundTrip.denField === '119' && roundTrip.verdicts === '0,2' && roundTrip.view === 'list' && roundTrip.listShown,
+    roundTrip.teamCrit === 12.5 && roundTrip.teamCritField === '12.5' && roundTrip.teamBuffs === JSON.stringify({ atkPct: 80, defdown: 15.5 }) && roundTrip.teamBuffField === '15.5' && roundTrip.den === JSON.stringify({ ATK: 119, HP: 473 }) && roundTrip.denField === '119' && roundTrip.verdicts === '0,2' && roundTrip.view === 'list' && roundTrip.listShown,
     JSON.stringify(roundTrip));
   check('the save payload has the documented shape', roundTrip.saveShape === 'version,savedAt,nextId,cards,characters,settings,prefs');
   const badLoad = await p.evaluate(() => new Promise(res => {

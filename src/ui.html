@@ -550,6 +550,18 @@ details.sect>.inner{margin-top:10px}
           Lufel's Crit Multiplier picks assume a crit support, so at 0 the tool reads crit rate as scarce and favours
           Crit Rate instead. It changes every build score, recommendation and Triage score; stat totals and stat
           targets stay each character's own.</p>
+        <h3 class="sep">Team buffs <span class="tiny muted" style="font-weight:400">to a damage dealer</span></h3>
+        <div class="dengrid">
+          <label>ATK % <input class="teamIn" data-k="atkPct" type="number" min="0" max="500" step="1" value="0"></label>
+          <label>Damage % <input class="teamIn" data-k="dm" type="number" min="0" max="300" step="1" value="0"></label>
+          <label>Crit mult % <input class="teamIn" data-k="cm" type="number" min="0" max="500" step="1" value="0"></label>
+          <label>Enemy DEF down % <input class="teamIn" data-k="defdown" type="number" min="0" max="100" step="1" value="0"></label>
+        </div>
+        <p class="tiny muted" style="margin:8px 0 0">The rest of what your usual supports add, the same way: the more ATK
+          a team already gives, the less an ATK% roll adds and the more crit and damage rolls do. A Teams page team shows
+          what it adds per member; a strong team adds about +80% ATK, +30% damage and +30% crit multiplier.
+          All 0 counts only each character's own. Like the crit rate, it changes build scores and
+          recommendations, not stat totals.</p>
         <h3 class="sep">Thieves Den <span class="tiny muted" style="font-weight:400">in battle</span></h3>
         <div class="dengrid">
           <label>ATK <input class="denIn" data-stat="ATK" type="number" min="0" step="1" value="0"></label>
