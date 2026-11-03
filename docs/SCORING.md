@@ -67,7 +67,7 @@ Everything starts from `target(charDef)`, which merges, in order:
 
 `charLoadout(name)` supplies the rest of the character — level, ascension, weapon and
 refinement, Mindscape nodes, Awareness level — merged over `DEFAULT_LOADOUT`
-(`level: 80, asc: 7, weapon: '5', refine: 1, mindSkill: false, mind1: 0, mind2: 0, awareness: 0`).
+(`level: 80, asc: 7, weapon: '5', refine: 1, mindSkill: false, mind1: 0, mind2: 0, awareness: 0`; a Setup saved since Nov 2026 also carries `ms1`/`ms2`, the two Mindscape skill path levels, which `mindSkill` stands in for when absent: CLAUDE.md, "Mindscape skill paths are two levels").
 Level and Ascension are forced, not user-editable.
 
 `t.main[slot]` is a **list, best first**, never a bare stat. Read it through `mainList(t, slot)`

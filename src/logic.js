@@ -1650,7 +1650,7 @@ function kitStatBuffs(char, lo, opts) {
   return (KIT_STAT_BUFFS[char.n] || []).map(b => b.on && b.alwaysAw != null && (L.awareness || 0) >= b.alwaysAw ? Object.assign({}, b, { on: undefined, dur: undefined }) : b).filter(b =>
     (b.aw == null || (L.awareness || 0) >= b.aw) && (!b.weapon || L.weapon === b.weapon) && !(L.noTimed && (b.on || b.needAil || b.needDown || b.needHp || b.needCol)) && (!b.fight || (opts && opts.fight))
   ).map(b => Object.assign({}, b, {
-    v: (b.ladder ? b.ladder[Math.max(1, Math.min(7, L.refine)) - 1] : b.tiers ? b.tiers[kitTierIndex(char, L)] : b.v) * (b.stacks || 1)
+    v: (b.ladder ? b.ladder[Math.max(1, Math.min(7, L.refine)) - 1] : b.tiers ? tierVal(b.tiers, char, L, b.src || b.on) : b.v) * (b.stacks || 1)
   }));
 }
 /* Which of a skill line's four printed values applies — lufel prints them LV10 / LV10+5 /
@@ -1660,8 +1660,44 @@ function kitStatBuffs(char, lo, opts) {
    variant when the Mindscape skill paths are done. */
 function kitTierIndex(char, lo) {
   const L = lo || charLoadout(char.n);
-  const high = (L.awareness || 0) >= (TARGET_TIER_AWARENESS_5.has(char.n) ? 5 : 3);
-  return (high ? 2 : 0) + (L.mindSkill ? 1 : 0);
+  return kitTierBase(char, L) + (msLv(L, 1) >= 5 && msLv(L, 2) >= 5 ? 1 : 0);
+}
+const kitTierBase = (char, L) => (L.awareness || 0) >= (TARGET_TIER_AWARENESS_5.has(char.n) ? 5 : 3) ? 2 : 0;
+/* The Mindscape skill paths (Nov 2026; the user read them in game): two paths, 0-5 levels each (`ms1`, `ms2`),
+   each raising the skills lufel lists for it (MIND_SKILL_PATHS in data.js, lufel's mind_skill1/2: Fuuka's
+   path 1 raises Skills 1 and 2, path 2 Skill 3). A level is one skill level on each, so a skill value moves a
+   fifth of the way from lufel's printed tier to its "+5" variant per level of its path: Fuuka's Luminous Force
+   is 12.0% at 0, 12.5% at 2 and 12.7% at 3 in game, lufel's +5 13.2%. Until then the two paths were one
+   switch, all five levels or none. A save from before carries only `mindSkill`: unlocked reads as 5 and 5.
+   A line whose skill is not known, or a character lufel gives no paths for, reads the mean of the two. */
+const msLv = (L, i) => { const v = L['ms' + i]; return Math.max(0, Math.min(5, v != null ? (+v || 0) : (L.mindSkill ? 5 : 0))); };
+// a line's skill as the paths name it: '1'-'3', 'HL' (a Theurgy too), or null
+function mindSkillKey(src) {
+  const first = src == null ? null : [].concat(src)[0];
+  const t = String(first == null ? '' : first).replace(/^(self|skill):/i, '').replace(/↺/g, '').trim();
+  if (/^[123]$/.test(t)) return t;
+  if (/^(hl|th)$/i.test(t)) return 'HL';
+  return null;
+}
+function mindFrac(char, L, src) {
+  const a = msLv(L, 1), b = msLv(L, 2), P = MIND_SKILL_PATHS[char.n], k = mindSkillKey(src);
+  if (P && k) { const i = P.findIndex(p => p.includes(k)); if (i >= 0) return (i ? b : a) / 5; }
+  return (a + b) / 10;
+}
+// one of a skill line's four printed values at this Setup (tierVal), or the index into them for a list whose
+// entries are not numbers
+// "Skills 1, 2", "Skill 3, Highlight": what a path raises, for the Setup's labels
+function mindPathName(char, i) {
+  const P = MIND_SKILL_PATHS[char.n];
+  if (!P || !P[i - 1] || !P[i - 1].length) return 'skill path ' + i;
+  const nm = { HL: (SKILL_DMG[char.n] || {}).hl === 'TH' ? 'Theurgy' : 'Highlight', fu: 'follow-up' };
+  const nums = P[i - 1].filter(k => /^[123]$/.test(k)), rest = P[i - 1].filter(k => !/^[123]$/.test(k)).map(k => nm[k] || k);
+  return [nums.length ? (nums.length > 1 ? 'Skills ' : 'Skill ') + nums.join(', ') : null, ...rest].filter(Boolean).join(', ');
+}
+function tierVal(arr, char, lo, src) {
+  const L = lo || charLoadout(char.n), b = kitTierBase(char, L), x = arr[b], y = arr[b + 1];
+  if (typeof x !== 'number' || typeof y !== 'number') return x;
+  return x + (y - x) * mindFrac(char, L, src);
 }
 
 /* Everything that is not a revelation card, split into a flat part and a percent part.
@@ -1674,7 +1710,7 @@ function charBaseStat(char, stat, lo) {
   /* Pure in (character, stat, setup), and now on the hot path: conversionBonus() asks for a
      source total inside damageFactors, which the optimiser and Triage call thousands of
      times per character. Memoised the same way damageBase is; callers only read the result. */
-  const key = `${char.n}|${stat}|${L.level}|${L.asc}|${L.weapon}|${L.refine}|${L.mindSkill ? 1 : 0}|${L.mind1 || 0}|${L.mind2 || 0}|${L.awareness || 0}|${L.noTimed ? 1 : 0}`;
+  const key = `${char.n}|${stat}|${L.level}|${L.asc}|${L.weapon}|${L.refine}|${msLv(L, 1)}${msLv(L, 2)}|${L.mind1 || 0}|${L.mind2 || 0}|${L.awareness || 0}|${L.noTimed ? 1 : 0}`;
   if (charBaseStatCache[key]) return charBaseStatCache[key];
   const r = charBaseStatUncached(char, cs, L, stat);
   charBaseStatCache[key] = r;
@@ -2000,7 +2036,12 @@ function pickTier(tiers, lo, awThreshold) {
   const families = [...new Set(keys.map(k => k.replace('+5', '')))]
     .sort((a, b) => parseInt(a.slice(2), 10) - parseInt(b.slice(2), 10));
   const family = (lo.awareness || 0) >= (awThreshold || 3) ? families[families.length - 1] : families[0];
-  const key = lo.mindSkill ? `${family}+5` : family;
+  const mf = (msLv(lo, 1) + msLv(lo, 2)) / 10, plus = `${family}+5`;
+  if (mf > 0 && tiers[family] != null && tiers[plus] != null) {
+    const key = mf >= 1 ? plus : `${family}+${Math.round(mf * 50) / 10}`;
+    return { key, value: tiers[family] + (tiers[plus] - tiers[family]) * mf };
+  }
+  const key = family;
   if (tiers[key] != null) return { key, value: tiers[key] };
   if (tiers[family] != null) return { key: family, value: tiers[family] };
   const fallback = keys.reduce((best, k) => tiers[k] > tiers[best] ? k : best, keys[0]);
@@ -2464,7 +2505,7 @@ function teamBuffsFrom(o) {
    whose own damage is not scored, never gets here. Remembered per Setup for the session. */
 const kitMixCache = {};
 let kitMixBusy = false, kitMixReady = false;
-const kitMixKey = (n, L) => `${n}|${L.weapon}|${L.refine}|${L.mindSkill ? 1 : 0}|${L.mind1 || 0}|${L.mind2 || 0}|${L.awareness || 0}`;
+const kitMixKey = (n, L) => `${n}|${L.weapon}|${L.refine}|${msLv(L, 1)}${msLv(L, 2)}|${L.mind1 || 0}|${L.mind2 || 0}|${L.awareness || 0}`;
 function kitMix(char, lo) {
   // not before the page has finished loading (the fight's tables are defined later in this file), and never inside itself
   if (!kitMixReady || kitMixBusy || !char || !spreadApplies(char) || !SKILL_DMG[char.n] || !CHAR_STATS[char.n]) return null;
@@ -2523,7 +2564,7 @@ function damageBase(char, lo) {
   const L = lo || charLoadout(char.n);
   const bare = !!L.bare;
   // an Elucidator carries no team buffs (teamBuffsFor), so her key does not move with them
-  const key = `${char.n}|${L.level}|${L.asc}|${L.weapon}|${L.refine}|${L.mindSkill ? 1 : 0}|${L.mind1 || 0}|${L.mind2 || 0}|${L.awareness}|${L.noTimed ? 1 : 0}|${bare ? 'b' : spreadApplies(char) ? teamKey() : '-'}`;
+  const key = `${char.n}|${L.level}|${L.asc}|${L.weapon}|${L.refine}|${msLv(L, 1)}${msLv(L, 2)}|${L.mind1 || 0}|${L.mind2 || 0}|${L.awareness}|${L.noTimed ? 1 : 0}|${bare ? 'b' : spreadApplies(char) ? teamKey() : '-'}`;
   if (damageBaseCache[key]) return damageBaseCache[key];
   const T = bare ? TEAM_NONE : teamBuffsFor(char), K = bare ? null : kitMix(char, L);
   const Lb = K && !L.noTimed ? Object.assign({}, L, { noTimed: true }) : L;
@@ -7187,8 +7228,8 @@ function loadoutFieldsHtml(c) {
         ${opt('', L.weapon, 'none')}${cs.w4 ? opt('4', L.weapon, wName('w4')) : ''}${cs.w5 ? opt('5', L.weapon, wName('w5')) : ''}</select></div>
       <div class="field"><label>Refinement</label><select id="lRefine">
         ${[1,2,3,4,5,6,7].map(a => opt(a, L.refine, refineLabel(a))).join('')}</select></div>
-      <div class="field"><label>Mindscape (skill paths)</label><select id="lMindSkill">
-        ${opt('no', L.mindSkill ? 'yes' : 'no', 'locked')}${opt('yes', L.mindSkill ? 'yes' : 'no', 'unlocked')}</select></div>
+      ${[1, 2].map(i => `<div class="field"><label title="Mindscape skill path ${i}: each level is one skill level on the skills it raises">Mindscape: ${esc(mindPathName(c, i))}</label><select id="lMs${i}">
+        ${[0,1,2,3,4,5].map(a => opt(a, msLv(L, i), 'Lv ' + a)).join('')}</select></div>`).join('')}
       ${cs.mind && cs.mind[0] ? `<div class="field"><label title="${esc(cs.mind[0].s)}">Mindscape: ${esc(cs.mind[0].s)}</label><select id="lMind1">
         ${[0,1,2,3,4,5].map(a => opt(a, L.mind1, 'Lv ' + a)).join('')}</select></div>` : ''}
       ${cs.mind && cs.mind[1] ? `<div class="field"><label title="${esc(cs.mind[1].s)}">Mindscape: ${esc(cs.mind[1].s)}</label><select id="lMind2">
@@ -7215,7 +7256,7 @@ function setupSummary(c, L) {
   const w = L.weapon === '4' ? cs.w4 : L.weapon === '5' ? cs.w5 : null;
   const mindStats = (cs.mind || []).length ? `, stat paths Lv${L.mind1 || 0}/${L.mind2 || 0}` : '';
   return [w ? `${L.weapon}★ ${w.n} ${refineLabel(L.refine)}` : 'no weapon',
-    `Mindscape ${L.mindSkill ? 'unlocked' : 'locked'}${mindStats}`,
+    `Mindscape skill paths Lv${msLv(L, 1)}/${msLv(L, 2)}${mindStats}`,
     `Awareness ${L.awareness || 0}`].join(' · ');
 }
 
@@ -7342,13 +7383,14 @@ function openLoadout(name, openKeys) {
     // longer a control for either.
     state.chars[name].loadout = {
       level: 80, asc: 7, weapon: $('#lWeapon').value,
-      refine: +$('#lRefine').value, mindSkill: $('#lMindSkill').value === 'yes',
+      refine: +$('#lRefine').value, ms1: +$('#lMs1').value, ms2: +$('#lMs2').value,
+      mindSkill: +$('#lMs1').value >= 5 && +$('#lMs2').value >= 5,
       mind1: $('#lMind1') ? +$('#lMind1').value : 0, mind2: $('#lMind2') ? +$('#lMind2').value : 0,
       awareness: $('#lAwareness') ? +$('#lAwareness').value : 0
     };
     commit(); openLoadout(name);
   };
-  ['#lWeapon', '#lRefine', '#lMindSkill', '#lMind1', '#lMind2', '#lAwareness']
+  ['#lWeapon', '#lRefine', '#lMs1', '#lMs2', '#lMind1', '#lMind2', '#lAwareness']
     .forEach(sel => { if ($(sel)) $(sel).onchange = applyLoadout; });
   const lockBtn = $('#loLock');
   if (lockBtn) lockBtn.onclick = () => { toggleLoadoutLock(name); openLoadout(name); };
@@ -8541,7 +8583,7 @@ const TEAM_BUFFS = {
   ],
   'Chizuko Nagao': [
     { k: 'defdown', v: 0, per: { s: 'Ailment Accuracy', rate: 22.5, cap: [165.8, 165.8, 172.4, 172.4] }, to: 'enemy', src: '1', on: '1', dur: 2, why: 'Diving Ray (Skill 1): target DEF down by 22.5% of her ailment accuracy, max 37.3/37.3/38.8/38.8%, 2 turns' },
-    { k: 'dmg', v: 0, per: { s: 'Ailment Accuracy', rate: 11.3, cap: [165.5, 183.2, 172.6, 189.4] }, to: 'enemy', src: '3', on: '3', dur: 2, cond: 'target has elemental ailments (her Skill 1 and A0 Radiation supply them)', why: 'Bullseye Bomber (Skill 3): target damage taken +11.3% of ailment accuracy, max 18.7/20.7/19.5/21.4%, 2 turns; text says it scales with the number of unique ailments, encoded once at its printed cap (conservative)' },
+    { k: 'dmg', v: 0, per: { s: 'Ailment Accuracy', rate: 11.3, cap: [165.5, 183.2, 172.6, 189.4] }, to: 'enemy', src: '3', on: '3', dur: 2, perAil: 3, cond: 'per unique elemental ailment on the target (her Skill 1 and A0 Radiation supply them)', why: 'Bullseye Bomber (Skill 3): target damage taken +11.3% of ailment accuracy, max 18.7/20.7/19.5/21.4%, 2 turns, once per unique elemental ailment the target has, up to 3 (Korean: 목표가 원소 이상을 1종 보유할 때마다 … 3회 중첩 가능; Nov 2026, it was once whatever the count)' },
     { k: 'dmg', v: 15, to: 'enemy', src: 'aw', ailMin: 1, why: 'A0 Veteran Technique: a foe with an elemental ailment gets Radiation for 2 turns, which raises damage taken by 15% - on while the fight\'s boss carries an ailment' },
     { k: 'dmg', v: 15, to: 'enemy', src: 'passive', ailMin: 1, elem: ['Nuclear'], why: 'Eagle Eye (passive): foes with Radiation take +15% Nuclear damage for 2 turns - Radiation follows the ailments (A0)' },
     { k: 'dmg', v: 35.2, to: 'enemy', src: 'HL', on: 'HL', dur: 2, aw: 4, elem: ['Nuclear'], why: 'A4 The Older, the Wiser: enhanced Highlight raises foes\' Nuclear damage taken by 35.2% for 2 turns' },
@@ -8727,7 +8769,7 @@ const TEAM_BUFFS = {
     { k: 'cm', v: 20, to: 'party', src: 'aw', aw: 2, why: 'High-Spec Engine (A2): Torque Boost level 1 adds party crit damage +20% (level 1 is reached in round 1)' },
     { k: 'dmg', v: 20, to: 'party', src: 'aw', fromAw: [[0, 4], [1, 3]], aw: 2, why: 'High-Spec Engine (A2): Torque Boost level 2 adds party damage +20%; same uptime judgement as level 2 above; the fight counts it from round 4 (3 at A1)' },
     { k: 'atk%', v: 30, to: 'party', src: 'aw', fromAw: [[0, 7], [1, 5]], aw: 2, why: 'High-Spec Engine (A2): Torque Boost level 3 adds party ATK +30%; same uptime judgement as level 3 above; the fight counts it from round 7 (5 at A1)' },
-    { k: 'dmg', ladder: [3.4, 4.4, 4.4, 5.4, 5.4, 6.4, 6.4], to: 'party', src: 'weapon', on: '1', dur: 2, weapon: '5', stacks: 3, why: 'Nebula Pennant (5-star weapon): after a skill, party damage + per 40 Velocity held, max 5; 3 assumed (she starts at 90 and spends above 120). Any skill refreshes it; she casts every turn' }
+    { k: 'dmg', ladder: [3.4, 4.4, 4.4, 5.4, 5.4, 6.4, 6.4], to: 'party', src: 'weapon', on: ['1', '2', '3'], dur: 2, weapon: '5', stacks: 3, why: 'Nebula Pennant (5-star weapon): after a skill, party damage + per 40 Velocity held, max 5; 3 assumed (she starts at 90 and spends above 120). Any skill refreshes it; she casts every turn' }
   ],
   'Goro Akechi': [
     { k: 'dmg', v: [19.5, 21.5, 20.7, 22.7], to: 'party', src: '1', on: '1', dur: 2, why: 'Flash of Intuition (Skill 1): Deduction gives the party +damage for 2 turns (4 turns from A1, which also starts the battle with it)' },
@@ -8814,7 +8856,7 @@ const TEAM_BUFFS = {
     { k: 'atk%', v: 25, to: 'ally', src: 'aw', on: 'dpsHL', dur: 2, aw: 4, why: 'Let\'s Sing Together (A4): an ally who uses a Highlight or Theurgy gets ATK +25% for 2 turns' }
   ],
   'Minami Miyashita [Beachflower]': [
-    { k: 'atk%', v: [9.8, 10.8, 10.4, 11.4], per: { s: 'HP', rate: 0.3333, cap: [11712, 12912, 12432, 13632] }, to: 'party', src: '1', on: '1', dur: 3, why: 'Beach Basket (Skill 1): Bewitching Blossoms on foes - any attack on them gets ATK +9.8-11.4% plus 4% per 1200 of Minami\'s max HP. A mark on the foe, so every attacker gains it' },
+    { k: 'atk%', v: [9.8, 10.8, 10.4, 11.4], per: { s: 'HP', rate: 0.3333, cap: [11712, 12912, 12432, 13632] }, to: 'party', src: '1', on: '1', dur: 3, noCopy: true, why: 'Beach Basket (Skill 1): Bewitching Blossoms on foes (a mark on the foe, so never copied) - any attack on them gets ATK +9.8-11.4% plus 4% per 1200 of Minami\'s max HP. A mark on the foe, so every attacker gains it' },
     { k: 'defdown', v: 30, to: 'enemy', src: 'aw', on: '1', dur: 3, aw: 2, why: 'Spellbinding Summer Scents (A2): Beach Basket\'s Perplexing Petals, DEF -30%' },
     { k: 'cm', v: 30, to: 'enemy', src: 'aw', on: '1', dur: 3, aw: 2, why: 'Spellbinding Summer Scents (A2): Perplexing Petals, crit damage taken +30%' },
     { k: 'dmg', v: [7.8, 8.6, 8.3, 9.1], per: { s: 'HP', rate: 0.2667, cap: [11712, 12912, 12432, 13632] }, to: 'party', src: '2', on: '2', dur: 3, why: 'Summer Garden (Skill 2): party damage +7.8-9.1% plus 3.2% per 1200 of Minami\'s max HP' },
@@ -8826,7 +8868,7 @@ const TEAM_BUFFS = {
     { k: 'dmg', v: 6, to: 'party', src: 'passive', on: ['2', '3'], dur: 99, stacks: 6, build: { '2': 2, '3': 1 }, why: 'Soothing Sunlight (passive 1): each skill she uses on allies gives its targets 1 Blessing stack, and while she is present an ally deals +6% damage per stack (max 36%). No duration is printed, so the stacks are taken as permanent (the user\'s reading, Nov 2026), built up over the fight to 6: Summer Garden gives all allies 2 (its own "grant all allies 1 Blessing stack" and this passive\'s one, the user\'s reading), Gentle Sea Breeze its target 1; the Highlight is not a Persona skill (Korean 페르소나 스킬) and gives none' },
     { k: 'atk%', v: 12, to: 'party', src: 'passive', why: 'Blossoms by the Beach (passive 2): allies\' ATK +12% while Minami is present' },
     { k: 'final', v: 15, to: 'ally', src: 'aw', on: TC_MED_ON, dur: 1, aw: 6, why: 'Angel in White (A6): medicine with Flower Basket Pharmacy grants Summertime Refresh, final damage +15% for 1 turn; every medicine turn in her rotations uses Pharmacy' },
-    { k: 'atk%', ladder: [10, 13, 13, 16, 16, 19, 19], to: 'ally', src: 'weapon', on: '3', dur: 3, weapon: '5', why: 'Everlasting Garden (5-star weapon): a skill on an ally gives its main target ATK +10-19% for 2 turns; Summer Garden refreshes it the turn after or before Gentle Sea Breeze in every lufel rotation, so encoded as covering the 3-turn skill-3 cycle' },
+    { k: 'atk%', ladder: [10, 13, 13, 16, 16, 19, 19], to: 'ally', src: 'weapon', on: ['2', '3'], dur: 2, weapon: '5', why: 'Everlasting Garden (5-star weapon): a skill on an ally (Summer Garden, Gentle Sea Breeze) gives its main target ATK +10-19% for 2 turns, as printed (Nov 2026; it was 3 turns on Skill 3 alone)' },
     { k: 'cm', ladder: [15.3, 19.9, 19.9, 24.5, 24.5, 29.1, 29.1], to: 'ally', src: 'weapon', on: TC_MED_ON, dur: 3, weapon: '5', why: 'Everlasting Garden (5-star weapon): medicine on an ally gives its main target crit damage +15.3-29.1% for 3 turns' }
   ],
   'Miyu Sahara [Wavecatcher]': [
@@ -8846,7 +8888,7 @@ const TEAM_BUFFS = {
     { k: 'downDm', v: 0, per: { s: 'Speed', rate: 5.6, cap: [175, 192.9, 185.7, 203.6] }, to: 'enemy', src: '3', on: '3', dur: 1, down: true, why: 'Detention from Lightning Legs (Skill 3): damage taken while knocked down +0.56% per 10 Speed, max 9.8/10.8/10.4/11.4% (no fixed part printed), 1 turn' },
     { k: 'dmg', v: [6.8, 7.5, 7.3, 8], per: { s: 'Speed', rate: 15.5, cap: [176.2, 194.2, 187.1, 205.1] }, to: 'enemy', src: '2', on: '2', dur: 1, state: 'LL', why: 'Thunderbolt Outrage (Skill 2) in Lightning Legs inflicts Detention: damage taken +6.8% +1.55% per 10 Speed, max 27.3/30.1/29.0/31.8% (the fixed part on top), 1 turn' },
     { k: 'downDm', v: 0, per: { s: 'Speed', rate: 5.6, cap: [175, 192.9, 185.7, 203.6] }, to: 'enemy', src: '2', on: '2', dur: 1, state: 'LL', down: true, why: 'Thunderbolt Outrage in Lightning Legs: Detention\'s damage taken while knocked down, as on Skill 3' },
-    { k: 'cm', v: 30, to: 'enemy', src: 'aw', on: '2', dur: 1, aw: 1, state: 'LL', why: 'Lightning Lecturer (A1): a foe given Detention takes +30% critical damage for 1 turn - the enhanced Skill 2\'s Detention' },
+    { k: 'cm', v: 30, to: 'enemy', src: 'aw', on: '2', dur: 1, aw: 1, state: 'LL', foes: 'all', why: 'Lightning Lecturer (A1, every foe the skill hits): a foe given Detention takes +30% critical damage for 1 turn - the enhanced Skill 2\'s Detention' },
     { k: 'downDm', v: 10, to: 'enemy', src: 'aw', on: 'knockSelf', dur: 1, aw: 2, down: true, why: 'Role Model (A2): when Katayama knocks a foe down with a skill, its damage taken while downed +10% for 1 turn' },
     { k: 'atk%', v: 10, to: 'party', src: 'aw', on: 'knockSelf', dur: 99, stackMax: 3, aw: 2, own: false, why: 'Role Model (A2): and party ATK +10% permanently per knockdown she makes, up to 3 stacks (not for herself: her own is KIT_STAT_BUFFS)' },
     { k: 'dmg', v: 20, to: 'enemy', src: 'aw', on: 'knockSelf', dur: 99, stackMax: 1, afterHl: true, aw: 4, why: 'Class in Session (A4): after her Highlight, her next knockdown makes the foe take +20% damage permanently; does not stack' },
@@ -8857,24 +8899,24 @@ const TEAM_BUFFS = {
     { k: 'dmg', v: [6.8, 7.5, 7.3, 8], per: { s: 'Speed', rate: 15.5, cap: [176.2, 194.2, 187.1, 205.1] }, to: 'enemy', src: '3', on: '3', dur: 1, why: 'Detention from Lightning Legs (Skill 3): damage taken +6.8% +1.55% per 10 Speed, max 27.3/30.1/29.0/31.8%, 1 turn (the printed maximum caps the scaled part; the fixed 6.8% comes on top); its damage taken while knocked down is its own line' },
     { k: 'defdown', v: [29.3, 32.3, 31.1, 34.1], to: 'enemy', src: 'HL', on: 'HL', dur: 99, why: 'Highlight: permanent DEF down (does not stack), from her first Highlight on' },
     { k: 'dmg', v: [19.5, 21.5, 20.7, 22.7], to: 'enemy', src: 'HL', on: 'HL', dur: 3, why: 'Highlight: all foes damage taken up for 3 turns' },
-    { k: 'cm', v: 30, to: 'enemy', src: 'aw', on: '3', dur: 1, aw: 1, why: 'A1 Lightning Lecturer: a foe given Detention takes +30% critical damage for 1 turn' },
+    { k: 'cm', v: 30, to: 'enemy', src: 'aw', on: '3', dur: 1, aw: 1, foes: 'all', why: 'A1 Lightning Lecturer (every foe the skill hits): a foe given Detention takes +30% critical damage for 1 turn' },
     { k: 'dmg', v: 30, to: 'enemy', src: 'aw', up: 0.5, aw: 6, cond: 'foe has Hard Knocks (always, from Skill 1)', why: 'A6 Unconditional Love: a Wings of Guidance turn makes Hard Knocks foes take +30% damage; 2 stacks at start, +1 per 2 skills, 1 spent per turn, so about every other turn long-run (up 0.5, judged)' }
   ],
   'YUI [Prism]': [
     { k: 'dmg', v: [19.5, 21.5, 20.7, 22.7], to: 'enemy', src: 'aw', aw: 6, why: 'Harvest Havoc in Mushroom Red (Skill 1): the target takes +19.5-22.7% damage for 2 turns. At A6 (Prismatic Vegetables) she holds every colour at once and Harvest Havoc fires after each ally\'s action, so the boss keeps it' }
   ],
   'Kotone Shiomi': [
-    { k: 'cm', v: 0, per: { s: 'ATK', rate: 0.4163, cap: [4684, 5164, 4972, 5452] }, to: 'ally', src: '1', on: '1', dur: 3, arch: ['AoE DPS', 'ST DPS'], stacks: 3, why: 'Lyre\'s Melody (Skill 1): one ally crit damage up to 19.5-22.7% at her ATK cap (linear in ATK) per stack, 3 stacks; she casts it on the Arcana Link ally nearly every turn' },
+    { k: 'cm', v: 0, per: { s: 'ATK', rate: 0.4163, cap: [4684, 5164, 4972, 5452] }, to: 'ally', src: '1', on: '1', dur: 3, arch: ['AoE DPS', 'ST DPS'], stacks: 3, build: true, why: 'Lyre\'s Melody (Skill 1): one stack a cast (`build`, Nov 2026; all three came with the first cast before); one ally crit damage up to 19.5-22.7% at her ATK cap (linear in ATK) per stack, 3 stacks; she casts it on the Arcana Link ally nearly every turn' },
     { k: 'atk%', v: [39, 43, 41.4, 45.4], to: 'ally', src: '1', on: '1', dur: 3, arch: ['AoE DPS', 'ST DPS'], cond: 'DPS holds Arcana Link (auto-given at battle start to the highest-ATK Sweeper/Assassin; she can reselect)', why: 'Lyre\'s Melody: Powerful Bond 1 stack - ATK +39-45.4%' },
-    { k: 'pierce', v: [14.6, 16.1, 15.5, 17], to: 'ally', src: '1', on: '1', dur: 3, arch: ['AoE DPS', 'ST DPS'], cond: 'DPS holds Arcana Link', why: 'Lyre\'s Melody: Powerful Bond 2 stacks - pierce +14.6-17% (stack effects read as cumulative)' },
-    { k: 'final', v: [4.9, 5.4, 5.2, 5.7], to: 'ally', src: '1', on: '1', dur: 3, arch: ['AoE DPS', 'ST DPS'], cond: 'DPS holds Arcana Link', why: 'Lyre\'s Melody: Powerful Bond 3 stacks - final damage amplification +4.9-5.7%' },
+    { k: 'pierce', v: [14.6, 16.1, 15.5, 17], to: 'ally', src: '1', on: '1', dur: 3, arch: ['AoE DPS', 'ST DPS'], pb: 2, cond: 'DPS holds Arcana Link', why: 'Lyre\'s Melody: Powerful Bond 2 stacks - pierce +14.6-17% (stack effects read as cumulative)' },
+    { k: 'final', v: [4.9, 5.4, 5.2, 5.7], to: 'ally', src: '1', on: '1', dur: 3, arch: ['AoE DPS', 'ST DPS'], pb: 3, cond: 'DPS holds Arcana Link', why: 'Lyre\'s Melody: Powerful Bond 3 stacks - final damage amplification +4.9-5.7%' },
     { k: 'pierce', v: 12, to: 'ally', src: 'passive', on: '1', dur: 2, arch: ['AoE DPS', 'ST DPS'], cond: 'DPS holds Arcana Link', why: 'Clean Sweep (passive 2): when Powerful Bond is granted, target pierce +12% for 2 turns' },
-    { k: 'dmg', v: 0, per: { s: 'ATK', rate: 0.6255, cap: [4684, 5164, 4972, 5452] }, to: 'enemy', src: '2', on: '2', dur: 1, cond: 'Arcana Link ally at 3 Powerful Bond stacks (her skill 1 casts before skill 2 keep it there)', why: 'Burning Moon\'s Cry (Skill 2): all foes\' damage taken up to 29.3-34.1% at her ATK cap (linear in ATK) for 1 turn; +2 turns in Fortune' },
+    { k: 'dmg', v: 0, per: { s: 'ATK', rate: 0.6255, cap: [4684, 5164, 4972, 5452] }, to: 'enemy', src: '2', on: '2', dur: 1, pb: 3, cond: 'Arcana Link ally at 3 Powerful Bond stacks (her skill 1 casts before skill 2 keep it there)', why: 'Burning Moon\'s Cry (Skill 2): all foes\' damage taken up to 29.3-34.1% at her ATK cap (linear in ATK) for 1 turn; +2 turns in Fortune' },
     { k: 'atk%', v: 0, per: { s: 'ATK', rate: 0.6255, cap: [4684, 5164, 4972, 5452] }, to: 'party', src: '3', on: '3', dur: 1, why: 'Lunar Phaseshift (Skill 3): party ATK up to 29.3-34.1% at her ATK cap (linear in ATK) for 1 turn; +1 turn in Fortune' },
     { k: 'cm', v: [19.5, 21.5, 20.7, 22.7], to: 'party', src: 'HL', on: 'HL', dur: 2, why: 'Highlight: party crit damage +19.5-22.7%' },
     { k: 'atk%', v: [24.4, 26.9, 25.9, 28.4], to: 'ally', src: 'HL', on: 'HL', dur: 2, arch: ['AoE DPS', 'ST DPS'], cond: 'DPS holds Arcana Link', why: 'Highlight: Arcana Link ally ATK +24.4-28.4%' },
     { k: 'dmg', v: 25, to: 'party', src: 'aw', on: 'HL', dur: 2, aw: 4, why: 'Eternal Bonds (A4): Highlight adds party damage +25% for 2 turns' },
-    { k: 'atk%', v: 9, to: 'ally', src: 'passive', on: '1', dur: 3, arch: ['AoE DPS', 'ST DPS'], stacks: 3, why: 'Leader\'s Guidance (passive 1): buffing an ally gives the main target ATK +9% for 3 turns, 3 stacks; she buffs the Arcana Link ally nearly every turn' },
+    { k: 'atk%', v: 9, to: 'ally', src: 'passive', on: '1', dur: 3, arch: ['AoE DPS', 'ST DPS'], stacks: 3, build: true, why: 'Leader\'s Guidance (passive 1, one stack a cast): buffing an ally gives the main target ATK +9% for 3 turns, 3 stacks; she buffs the Arcana Link ally nearly every turn' },
     { k: 'final', v: 1, to: 'party', src: 'aw', why: 'Moment of Truth (A0): party final damage +1% per Strategist present; encoded for Kotone herself only (others depend on the team)' },
     /* Moment of Truth's Lunar Bond (`lb`, the level a line needs): +1 each time the Arcana Link ally casts a
        Persona skill or she casts one on them (Korean: 페르소나 스킬, so not a Highlight), up to 10, 5 at once from A1.
@@ -8882,8 +8924,8 @@ const TEAM_BUFFS = {
     { k: 'atk%', v: 50, to: 'ally', src: 'aw', from: 1, lb: 1, arch: ['AoE DPS', 'ST DPS'], cond: 'DPS holds Arcana Link', why: 'Moment of Truth (A0): Lunar Bond 1 - Arcana Link ally ATK +50%; Lunar Bond rises with every skill by either of them and only resets on reselection; in the fight from the first such skill (at once from A1)' },
     { k: 'pierce', v: 15, to: 'ally', src: 'aw', fromAw: [[0, 3], [1, 1]], lb: 5, arch: ['AoE DPS', 'ST DPS'], cond: 'DPS holds Arcana Link', why: 'Moment of Truth (A0): Lunar Bond 5 - pierce +15%; the fight counts the level (immediately at A1); the quick screen takes it from round 3' },
     { k: 'cm', v: 50, to: 'ally', src: 'aw', fromAw: [[0, 6], [1, 4]], lb: 10, arch: ['AoE DPS', 'ST DPS'], cond: 'DPS holds Arcana Link', why: 'Moment of Truth (A0): Lunar Bond 10 - crit damage +50%; the fight counts the level; the quick screen takes it from round 6 (4 at A1), where the fight reaches it on the real save (Nov 2026: Highlight turns and her Skill 2 and 3 turns add none)' },
-    { k: 'cm', v: 30, to: 'ally', src: 'aw', on: '1', dur: 5, aw: 1, arch: ['AoE DPS', 'ST DPS'], cond: 'DPS holds Arcana Link at 3 Powerful Bond stacks', why: 'Echoing Strings (A1): Lyre\'s Melody on a target with 3 Powerful Bond stacks gives +30% crit damage more for 5 turns' },
-    { k: 'cm', ladder: [6, 7.8, 7.8, 9.6, 9.6, 11.4, 11.4], to: 'ally', src: 'weapon', on: '1', dur: 3, weapon: '5', arch: ['AoE DPS', 'ST DPS'], stacks: 3, cond: 'DPS holds Arcana Link', why: 'Vetri Vel Muruga (5-star weapon): crit damage +6-11.4% per Powerful Bond stack on the ally, 3 stacks held' }
+    { k: 'cm', v: 30, to: 'ally', src: 'aw', on: '1', dur: 5, aw: 1, arch: ['AoE DPS', 'ST DPS'], pb: 3, cond: 'DPS holds Arcana Link at 3 Powerful Bond stacks', why: 'Echoing Strings (A1): Lyre\'s Melody on a target with 3 Powerful Bond stacks gives +30% crit damage more for 5 turns' },
+    { k: 'cm', ladder: [6, 7.8, 7.8, 9.6, 9.6, 11.4, 11.4], to: 'ally', src: 'weapon', on: '1', dur: 3, weapon: '5', arch: ['AoE DPS', 'ST DPS'], stacks: 3, build: true, cond: 'DPS holds Arcana Link', why: '(one Powerful Bond a cast) Vetri Vel Muruga (5-star weapon): crit damage +6-11.4% per Powerful Bond stack on the ally, 3 stacks held' }
   ],
   'Mitsuru Kirijo': [
     { k: 'defdown', v: 0, per: { s: 'ATK', rate: 2, cap: [2928, 3228, 3108, 3408] }, to: 'enemy', src: '1', on: '1', dur: 2, why: 'Flower of Ice (Skill 1): foe\'s DEF -1.2% per Frostbound stack per 300 of Mitsuru\'s ATK (up to 2928 ATK), 2 turns; counted at 5 stacks, which her rotation holds from her second turn' },
@@ -8901,7 +8943,7 @@ const TEAM_BUFFS = {
   ],
   'Fuuka Yamagishi': [
     { k: 'atk%', v: [12, 13.2, 13.44, 14.64], per: { s: 'ATK', rate: 1.372, cap: [3500, 3850, 3920, 4270] }, to: 'party', src: '1', on: '1', dur: 2, why: 'Radiant Power (Skill 1): party ATK +10% plus 1.143% per 100 of Fuuka\'s ATK, 2 turns. Global 4.12 applied (x1.2, base and rate; the ATK cap is unchanged). The printed maximum caps the ATK-scaled part, reached at lufel\'s ATK target (3502); the fixed part comes on top.' },
-    { k: 'dmg', v: [9.6, 10.56, 10.8, 11.76], per: { s: 'ATK', rate: 1.097, cap: [3500, 3850, 3920, 4270] }, to: 'party', src: '1', on: '1', dur: 2, why: 'Radiant Power (Skill 1): party damage +8% plus 0.914% per 100 of Fuuka\'s ATK, up to 32/35.2/35.8/39%, 2 turns. Global 4.12 applied (x1.2, base and rate; the ATK cap is unchanged). The printed maximum caps the ATK-scaled part, reached at lufel\'s ATK target (3502); the fixed part comes on top.' },
+    { k: 'dmg', v: [12, 13.2, 13.44, 14.64], per: { s: 'ATK', rate: 1.372, cap: [3500, 3850, 3920, 4270] }, to: 'party', src: '1', on: '1', dur: 2, why: 'Radiant Power (Luminous Force on Global, Skill 1): party damage +12% plus 1.371% per 100 of Fuuka\'s ATK, up to 48/52.8/53.8/58.6%, 2 turns - the same numbers as its ATK half, as lufel\'s English text has it and the game shows (the user, 3 Nov 2026: 12% at skill level 10). It was lufel\'s Korean 8% / 0.914% x1.2 for Global 4.12 (9.6% / 1.097%) until then; the ATK cap is unchanged. The printed maximum caps the ATK-scaled part, reached at lufel\'s ATK target (3502); the fixed part comes on top.' },
     { k: 'atk%', v: [8, 8.8, 8.933, 9.733], per: { s: 'ATK', rate: 0.915, cap: [3500, 3850, 3920, 4270] }, to: 'party', src: '2', on: '2', dur: 3, why: 'Holy Prayer (Skill 2, own 16-action cooldown): party ATK +6% plus 0.686% per 100 of Fuuka\'s ATK, up to 24/26.4/26.9/29.3%, 3 turns. Global 4.12 applied (x4/3, base and rate; the ATK cap is unchanged). The printed maximum caps the ATK-scaled part, reached at lufel\'s ATK target (3502); the fixed part comes on top.' },
     { k: 'hlDm', v: [8, 8.8, 8.933, 9.733], per: { s: 'ATK', rate: 0.915, cap: [3500, 3850, 3920, 4270] }, to: 'ally', src: '2', on: '2', dur: 3, why: 'Holy Prayer (Skill 2): the main target\'s Highlight or Theurgy damage up by the same amount as its party ATK line, 3 turns. Global 4.12 applied' },
     { k: 'hlGauge', v: 35, to: 'ally', src: '2', on: '2', dur: 1, only: 'HL', why: 'Holy Prayer (Skill 2): the main target\'s Highlight gauge +35%' },
@@ -9192,7 +9234,6 @@ const TEAM_BUFF_SKIPS = {
     'Crash Out, Nuclear Finisher and Omega Knuckle effects are Makoto\'s own damage (Chief Strategist and her ailments are priced in the fight: TC_AIL_SELF, TC_AILMENTS)'
   ],
   'Chizuko Nagao': [
-    'Bullseye Bomber\'s damage taken grows with the unique ailments on the foe; entered once at its printed cap',
     'A3/A5 skill level increases: tier selection, handled by the calculator\'s tiers'
   ],
   'Yumi Shiina': [
@@ -10067,8 +10108,8 @@ function tcSkillD(n) {
   const S = SKILL_DMG[n];
   if (!S) return null;
   if (!S.dt) return S.d;
-  const c = charDef(n), ti = c ? kitTierIndex(c, charLoadout(n)) : 0;
-  return S.dt.map(t => t[ti]);
+  const c = charDef(n), lo = charLoadout(n);
+  return S.dt.map((t, i) => c ? tierVal(t, c, lo, ['1', '2', '3', 'HL'][i]) : t[0]);
 }
 /* Whether a rotation step hits the boss (21% of the Highlight gauge) or not (17%): a skill with damage
    by lufel's numbers, or a token that is an attack (Gunshot, Melee, Punch); Wonder, on his attack turns. */
@@ -10289,9 +10330,10 @@ function tcDpsRate(dps, H, X) {
 function tcLineValue(e, sup, lo) {
   if (e.aw != null && (+lo.awareness || 0) < e.aw) return null;
   if (e.weapon && lo.weapon !== e.weapon) return null;
-  const ti = kitTierIndex(sup, lo), ri = Math.max(1, Math.min(7, +lo.refine || 1)) - 1;
-  // four numbers are the skill-level tiers; seven are a weapon's refinement steps
-  const pick = x => Array.isArray(x) ? (x.length === 7 ? x[ri] : x[ti]) : x;
+  const ri = Math.max(1, Math.min(7, +lo.refine || 1)) - 1;
+  // four numbers are the skill-level tiers (at the Mindscape path level of the line's skill); seven are a weapon's
+  // refinement steps
+  const pick = x => Array.isArray(x) ? (x.length === 7 ? x[ri] : tierVal(x, sup, lo, e.src)) : x;
   let v = e.ladder ? e.ladder[ri] : (pick(e.v) || 0);
   if (e.per) v += (pick(e.per.rate) || 0) * Math.min(tcStat(sup.n, e.per.s), pick(e.per.cap) || Infinity) / 100;
   return v * (e.stacks || 1);
@@ -11825,7 +11867,7 @@ function tcMedBoost() {
    the first medicine after each of her Highlights (tcSimRun's `medNext`). */
 function tcMedHlBoost() {
   const lo = charLoadout(TC_MEDS_OF);
-  return [9.8, 10.8, 10.4, 11.4][kitTierIndex(charDef(TC_MEDS_OF), lo)] / 100 + ((+lo.awareness || 0) >= 4 ? 0.05 : 0);
+  return tierVal([9.8, 10.8, 10.4, 11.4], charDef(TC_MEDS_OF), lo, 'HL') / 100 + ((+lo.awareness || 0) >= 4 ? 0.05 : 0);
 }
 // "atk.dmg.hl": the medicines in ⓘA, ⓘB and ⓘC
 function tcMedInfo(id) {
@@ -11922,12 +11964,12 @@ const TC_SKILL_SRC = new Set(['1', '2', '3', 'card', 'unique']);
    skills give a Seal here. null when she is not in a thief seat (the backup never takes the helm). */
 function tcRamFor(D, names) {
   if (!names || ![0, 1].some(i => names[i] === TC_RAM.n)) return null;
-  const sup = charDef(TC_RAM.n), lo = charLoadout(TC_RAM.n), aw = +lo.awareness || 0, ti = kitTierIndex(sup, lo);
+  const sup = charDef(TC_RAM.n), lo = charLoadout(TC_RAM.n), aw = +lo.awareness || 0, tv = a => tierVal(a, sup, lo, '3');
   const crew = [D.n, names[0], names[1]].filter(Boolean);
   const hps = crew.map(n => tcStat(n, 'HP') || 0);
   const boat = (hps.reduce((a, b) => a + b, 0) + hps.reduce((a, b) => a + b, 0) / hps.length) * (aw >= 1 ? TC_RAM.boatA1 : 1);
   const other = crew.concat(names[2] ? [names[2]] : []).filter(n => n !== TC_RAM.n);
-  return { hp: TC_RAM.hp[ti] * boat / 100, boat, atk: TC_RAM.atk[ti], seal: TC_RAM.seal[ti], a6: aw >= 6,
+  return { hp: tv(TC_RAM.hp) * boat / 100, boat, atk: tv(TC_RAM.atk), seal: tv(TC_RAM.seal), a6: aw >= 6,
     sealOn: { 1: other.some(n => (charDef(n) || {}).e === 'Psychokinesis'), 2: other.some(tcIsSummer) },
     dm: TC_RAM.fewer * Math.max(0, 5 - tcFoes()) + (aw >= 6 ? TC_RAM.a6Dm : 0) };
 }
@@ -12239,7 +12281,7 @@ function tcMemberCalc(dps, name, inTeam, backup, fit, pair) {
      from her A6), with the Seal her rotation's Skill 1 or 2 gives in this lineup, and the Boat taken as the damage
      dealer's and her max HP twice over (the other seats are not known here); tcMultiplier prices it */
   if (name === TC_RAM.n && !backup && !self) {
-    const ti = kitTierIndex(sup, lo), s = seq.length ? seq : ['3'];
+    const tv = a => tierVal(a, sup, lo, '3'), s = seq.length ? seq : ['3'];
     const others = [...(inTeam || [dps.n])].filter(n => n !== name);
     const sealed = s.some(t => { const k = tcTurnSkills(t); return (k.has('1') && others.some(n => (charDef(n) || {}).e === 'Psychokinesis')) || (k.has('2') && others.some(tcIsSummer)); });
     // Rams a turn over the fight: one after each Heart's Desire in her first F turns, the last one landing after
@@ -12247,7 +12289,7 @@ function tcMemberCalc(dps, name, inTeam, backup, fit, pair) {
     const F = tcFight(), casts = [];
     for (let t = 0; t < F; t++) if (tcTurnSkills(s[t % s.length]).has('3')) casts.push(t);
     vec.ram = { rate: !casts.length ? 0 : Math.max(0, (aw >= 6 ? F - casts[0] : casts.length) - 0.5) / F,
-      coef: sealed ? TC_RAM.seal[ti] : TC_RAM.atk[ti], hp: TC_RAM.hp[ti] * 2 * ((tcStat(dps.n, 'HP') || 0) + (tcStat(name, 'HP') || 0)) * (aw >= 1 ? TC_RAM.boatA1 : 1) / 100,
+      coef: sealed ? tv(TC_RAM.seal) : tv(TC_RAM.atk), hp: tv(TC_RAM.hp) * 2 * ((tcStat(dps.n, 'HP') || 0) + (tcStat(name, 'HP') || 0)) * (aw >= 1 ? TC_RAM.boatA1 : 1) / 100,
       dm: TC_RAM.fewer * Math.max(0, 5 - tcFoes()) + (aw >= 6 ? TC_RAM.a6Dm : 0) };
   }
   // and the heals they give a damage dealer whose kit reads them (tcMultiplier prices the lines those heals keep up)
@@ -14025,11 +14067,11 @@ const TC_AIL_SELF = {
 const TC_AIL_STATE = { E: 'Shock', T: 'Windswept', B: 'Burn', C: 'Freeze' };   // Shoki's Improv states (TC_PAIRS ids)
 function tcAilSources(n) {
   if (!n || n === 'Wonder' || !TC_AILMENTS[n]) return [];
-  const lo = charLoadout(n), aw = +lo.awareness || 0, ti = kitTierIndex(charDef(n), lo), ri = Math.max(1, Math.min(7, +lo.refine || 1)) - 1;
+  const lo = charLoadout(n), aw = +lo.awareness || 0, cd = charDef(n), ri = Math.max(1, Math.min(7, +lo.refine || 1)) - 1;
   const pair = tcPairCtx && tcPairCtx[n];
   return TC_AILMENTS[n].filter(x => (x.aw == null || aw >= x.aw) && (x.awBelow == null || aw < x.awBelow) && (!x.weapon || lo.weapon === x.weapon) && (!x.pair || x.pair === pair)).map(x => {
     const y = Object.assign({}, x, { on: [].concat(x.on).map(String) });
-    if (x.tiers) y.chance = x.tiers[ti] / 100;
+    if (x.tiers) y.chance = tierVal(x.tiers, cd, lo, x.on) / 100;
     if (x.ladder) y.chance = x.ladder[ri] / 100;
     if (x.byState) y.type = TC_AIL_STATE[pair] || 'any';
     if (y.chance != null) y.chance = Math.min(1, y.chance);
@@ -14410,9 +14452,9 @@ function tcExclDrop(list) {
 const tcMateOk = (x, names) => !x.mate || (!!names && names.slice(0, 2).includes(x.mate.n) && tmAw(x.mate.n) >= (x.mate.aw || 0));
 /* The damage dealer's kit beyond SKILL_DMG, as the sim needs it: each component with its tier value. */
 function tcKitFor(D, names) {
-  const lo = charLoadout(D.n), aw = +lo.awareness || 0, ti = kitTierIndex(D, lo), ri = Math.max(1, Math.min(7, +lo.refine || 1)) - 1;
+  const lo = charLoadout(D.n), aw = +lo.awareness || 0, ri = Math.max(1, Math.min(7, +lo.refine || 1)) - 1;
   return (DPS_KIT[D.n] || []).filter(c => (c.aw == null || aw >= c.aw) && (!c.weapon || lo.weapon === c.weapon) && tcMateOk(c, names)).map(c => {
-    const v = c.ladder ? c.ladder[ri] : Array.isArray(c.v) ? c.v[ti] : c.v;
+    const v = c.ladder ? c.ladder[ri] : Array.isArray(c.v) ? tierVal(c.v, D, lo, c.src || c.on || c.after) : c.v;
     // a token written with its "automatic" mark ("tok:3↺") is the same token
     const strip = x => x == null ? x : String(x).replace(/↺/g, '');
     const always = c.alwaysAw != null && aw >= c.alwaysAw;
@@ -14424,9 +14466,9 @@ function tcKitFor(D, names) {
 // `mateElem`: only with a teammate thief of those elements ("if a Wind ally is in the party")
 const tcMateElemOk = (b, names) => !b.mateElem || (!!names && names.slice(0, 2).some(n => n && b.mateElem.includes((charDef(n) || {}).e)));
 function tcKitBonusFor(D, names) {
-  const lo = charLoadout(D.n), aw = +lo.awareness || 0, ti = kitTierIndex(D, lo), ri = Math.max(1, Math.min(7, +lo.refine || 1)) - 1;
+  const lo = charLoadout(D.n), aw = +lo.awareness || 0, ri = Math.max(1, Math.min(7, +lo.refine || 1)) - 1;
   return (DPS_KIT_BONUS[D.n] || []).filter(b => (b.aw == null || aw >= b.aw) && (b.awBelow == null || aw < b.awBelow) && (!b.weapon || lo.weapon === b.weapon) && tcMateOk(b, names) && tcMateElemOk(b, names)).map(b => {
-    const v = b.ladder ? b.ladder[ri] : Array.isArray(b.v) ? b.v[ti] : b.v;
+    const v = b.ladder ? b.ladder[ri] : Array.isArray(b.v) ? tierVal(b.v, D, lo, b.src || (/^(skill:|hl$)/i.test(String(b.to)) ? b.to : b.after)) : b.v;
     const val = (v || 0) * (b.stacks || 1) * (b.chance == null ? 1 : b.chance) * (b.fewer ? Math.max(0, b.fewer - tcFoes()) : 1);
     const always = b.alwaysAw != null && aw >= b.alwaysAw;
     return Object.assign({}, b, { after: b.after == null || always ? null : String(b.after).replace(/↺/g, ''), re: b.match ? new RegExp(b.match, 'i') : null, val });
@@ -14634,6 +14676,13 @@ const TC_WR = { n: 'Ren Amamiya', gain: [1, 2, 0], hl: 1, hlA4: 3, cap: 5, spend
    casts on them, at most 10, never reset (she never reselects). Her TEAM_BUFFS lines with `lb` and her weapon's
    Skill Amplification (TC_SELF_AMP `lb`) read it in the fight. */
 const TC_LB = { n: 'Kotone Shiomi', start: 0, startA1: 5, max: 10, arch: ['AoE DPS', 'ST DPS'] };
+/* Her Powerful Bond on the same ally (Nov 2026): +1 per Lyre's Melody she casts on them, each 3 turns (read as all
+   gone 3 rounds after her last one), at most 3, 1 for good from A1. TEAM_BUFFS `pb` lines need that many as she casts
+   them: Lyre's pierce at 2, its final damage and Burning Moon's Cry's damage taken at 3. Until then all came with the
+   first cast. Her Fortune burst (Go for Broke: a turn with two or more skills, once a battle, twice from A6) makes
+   what she casts in it last longer, as her skill text says: Skills 1 and 2 and the Highlight +2 turns, Skill 3 and its
+   copies +1, and every one +1 more from A2 (`fortune`). */
+const TC_PB = { max: 3, dur: 3, fortune: { '1': 2, '2': 2, 'HL': 2, '3': 1 } };
 function tcSelfHpF(sh, hp, bossHp, rebound) {
   if (sh.rebound) return rebound ? 1 : 0;
   if (sh.belowBoss) return bossHp > hp ? 1 : 0;
@@ -14656,7 +14705,7 @@ function tcSimRun(P, order, hold) {
   const barriers = [], hpLog = { min: 1, rebounds: 0 };
   const hpMax = HPON ? Math.max(1, tcStat(D.n, 'HP')) : 1, hpAtk = HPK && HPK.healAtk ? tcStat(D.n, 'ATK') : 0;
   const hpAw = HPK ? +charLoadout(D.n).awareness || 0 : 0;
-  const hpLeo = HPL ? (() => { const lo = charLoadout(HPL.n), ti = kitTierIndex(charDef(HPL.n), lo); return { atk: tcStat(HPL.n, 'ATK'), pct: HPL.atk[ti], flat: HPL.flat[ti] }; })() : null;
+  const hpLeo = HPL ? (() => { const lo = charLoadout(HPL.n), c = charDef(HPL.n); return { atk: tcStat(HPL.n, 'ATK'), pct: tierVal(HPL.atk, c, lo, '2'), flat: tierVal(HPL.flat, c, lo, '2') }; })() : null;
   const hpSet = h => { selfHp = Math.max(0.01, Math.min(1, h)); hpLog.min = Math.min(hpLog.min, selfHp); };
   // Ichigo's Lovesick on the boss (TC_LS): stacks, turns left, the snapshot it deals with, its crit window
   // Ann's Passion and La Vie en Rose (TC_LV): stacks, the 60% tally, in it now, Passion spent, her actions
@@ -14666,6 +14715,9 @@ function tcSimRun(P, order, hold) {
   // Kotone Shiomi's Lunar Bond on the damage dealer (TC_LB), and the level it reached
   const KO = T.find(a => a.n === TC_LB.n && !a.isDps);
   const LB = KO && TC_LB.arch.includes(D.arch) ? { lv: (KO.aw || 0) >= 1 ? TC_LB.startA1 : TC_LB.start, at5: null, at10: null } : null;
+  // her Powerful Bond on them (TC_PB): the count, its floor (A1), and the round of her last Lyre's Melody
+  const PB = LB ? { n: (KO.aw || 0) >= 1 ? 1 : 0, base: (KO.aw || 0) >= 1 ? 1 : 0, last: -9, peak: 0 } : null;
+  const pbNow = () => PB ? (round - PB.last < TC_PB.dur ? PB.n : PB.base) : 0;
   const lbUp = n => { if (!LB || !(n > 0)) return; LB.lv = Math.min(TC_LB.max, LB.lv + n); if (LB.at5 == null && LB.lv >= 5) LB.at5 = round; if (LB.at10 == null && LB.lv >= 10) LB.at10 = round; };
   const LS = D.n === TC_LS.n ? (() => { const aw = +charLoadout(D.n).awareness || 0; return { n: 0, left: 0, snap: null, critTo: -1, cap: aw >= 6 ? TC_LS.cap6 : TC_LS.cap, a1: aw >= 1, ticks: 0, peak: 0,
     col: aw >= 2 ? TC_LS.col.startA2 : 0, colCap: aw >= 2 ? TC_LS.col.capA2 : TC_LS.col.cap, vb: false, colAt: [] }; })() : null;
@@ -14928,9 +14980,14 @@ function tcSimRun(P, order, hold) {
       if (ev.e.ck && a === elu && ckNow) { v *= ckNow[ev.e.ck]; if (!v) return; }
       // Tempest Riko's Blossoming Season tiers at the strength the SP this cast spent gives (TC_RK)
       if (ev.e.spT && a.rkF) { v *= a.rkF[ev.e.spT] || 0; if (!v) return; }
-      if (ex) { ex.left = ev.dur; if (ev.gate || ev.ampAt || ev.e.fx != null || ev.e.ck || ev.e.spT ||(!ev.stackMax && (ampF !== 1 || ex.amped))) ex.v = v; ex.amped = ampF !== 1; if (ev.stackMax) ex.v = Math.min(ex.v + v, ev.full ? ev.full * ampF : v * ev.stackMax); return; }
+      // Kotone Shiomi's Powerful Bond tiers need that many stacks as she casts them (TC_PB)
+      if (ev.e.pb && !(pbNow() >= ev.e.pb)) return;
+      // what she casts in her Fortune burst lasts longer (TC_PB.fortune; +1 more from A2)
+      const fx = a.fortuneNow && typeof ev.dur === 'number' ? TC_PB.fortune[String(ev.e.src)] : 0;
+      const dur = fx ? ev.dur + fx + ((a.aw || 0) >= 2 ? 1 : 0) : ev.dur;
+      if (ex) { ex.left = dur; if (ev.gate || ev.ampAt || ev.e.fx != null || ev.e.ck || ev.e.spT ||(!ev.stackMax && (ampF !== 1 || ex.amped))) ex.v = v; ex.amped = ampF !== 1; if (ev.stackMax) ex.v = Math.min(ex.v + v, ev.full ? ev.full * ampF : v * ev.stackMax); return; }
       if (!v) return;
-      buffs.push({ k: ev.k, v, left: ev.dur, enemy, down: !!ev.e.down, one: enemy && tcOneFoe(ev.e), minHits: ev.e.minHits || 0, ailMin: ev.e.ailMin || 0, perAil: ev.e.perAil || 0, ailOfElem: !!ev.e.ailOfElem, tech: ev.e.tech || null, owner: a.n, ref: ev.ref, self: !!ev.self, vc: tcIsVc(ev.e), cp: !ev.self && tcCopyable(ev.e, ev.k),
+      buffs.push({ k: ev.k, v, left: dur, enemy, down: !!ev.e.down, one: enemy && tcOneFoe(ev.e), minHits: ev.e.minHits || 0, ailMin: ev.e.ailMin || 0, perAil: ev.e.perAil || 0, ailOfElem: !!ev.e.ailOfElem, tech: ev.e.tech || null, owner: a.n, ref: ev.ref, self: !!ev.self, vc: tcIsVc(ev.e), cp: !ev.self && tcCopyable(ev.e, ev.k),
         excl: ev.e.excl ? a.n + '|' + ev.e.excl + '|' + ev.k : null, xs: ev.e.src, full: ev.full || 0 });
     };
     /* Kotone Shiomi's Lunar Phaseshift (TC_COPY): the buffs its target has on the damage dealer now — their
@@ -14967,7 +15024,8 @@ function tcSimRun(P, order, hold) {
       best.forEach(c => { const key = c.k + '|' + (c.minHits || 0); agg.set(key, { k: c.k, minHits: c.minHits || 0, v: ((agg.get(key) || {}).v || 0) + c.v * CP.rate }); });
       agg.forEach(c => {
         copyLog.sum[c.k] = (copyLog.sum[c.k] || 0) + c.v;
-        buffs.push({ k: c.k, v: c.v, left: TC_COPY.dur, enemy: false, one: false, minHits: c.minHits, ailMin: 0, perAil: 0, ailOfElem: false, tech: null, owner: CP.by, ref: 'copy:' + c.k + (c.minHits ? ':' + c.minHits : ''), self: false, vc: false, copy: true, cp: false });
+        // Fortune's burst turn lengthens her buffs by a turn (TC_PB: copies are Skill 3's), one more from A2
+        buffs.push({ k: c.k, v: c.v, left: TC_COPY.dur + (KO && KO.fortuneNow ? 1 + ((KO.aw || 0) >= 2 ? 1 : 0) : 0), enemy: false, one: false, minHits: c.minHits, ailMin: 0, perAil: 0, ailOfElem: false, tech: null, owner: CP.by, ref: 'copy:' + c.k + (c.minHits ? ':' + c.minHits : ''), self: false, vc: false, copy: true, cp: false });
       });
     };
     // what a cast, a Highlight or a trigger sets off for one actor's lines
@@ -15215,6 +15273,8 @@ function tcSimRun(P, order, hold) {
       if (a.stateOn && sd && sd.use.some(k => u[+k - 1])) a.stLeft = 0; else a.stLeft--;
     };
     const act = (a, extra) => {
+      // Kotone Shiomi's Fortune lengthens only what she casts on her burst turn (set again below when it is one)
+      if (KO) KO.fortuneNow = false;
       if (SF && !a.isDps) { const g = SF.ally * SF.rec; surfGot(g); SF.sp = Math.max(SF.sp, Math.min(SF.spMax, SF.sp + g)); }
       // the start of the turn: Theurgy gauge, Summer Ayaka's Concerto of Time
       if (a.kind === 'TH') a.th = Math.max(a.th, Math.min(a.req, a.th + TC_TH_TURN * (a.rate || 1)));
@@ -15270,7 +15330,12 @@ function tcSimRun(P, order, hold) {
       if (a.rk) a.rkF = tcRkStep(a.rk, step);
       // a free Highlight lufel writes into the rotation (no gauge, no cooldown)
       if (a.freeHl) for (let i = tcKindCount(step, 'HL'); i > 0; i--) fireHl(a, { free: true, keepCool: true });
-      // Kotone Shiomi's Echoing Strings (A1): entering Fortune (her burst turn) fires her Highlight free
+      // Kotone Shiomi's Fortune (Go for Broke, her burst turn, once a battle, twice from A6): what she casts in it lasts
+      // longer (TC_PB.fortune); from A1 entering it fires her Highlight free (Echoing Strings)
+      if (KO && a === KO) {
+        a.fortuneNow = tcSkillUses(step).reduce((x, y) => x + y, 0) >= 2 && (a.fortuneDur || 0) < ((a.aw || 0) >= 6 ? 2 : 1);
+        if (a.fortuneNow) a.fortuneDur = (a.fortuneDur || 0) + 1;
+      }
       if (a.n === 'Kotone Shiomi' && a.aw >= 1 && a.fortune < (a.aw >= 6 ? 2 : 1) && tcSkillUses(step).reduce((x, y) => x + y, 0) >= 2) { a.fortune++; fireHl(a, { free: true, keepCool: true }); }
       ['HL', 'TH'].forEach(t => toks.delete(t));
       if (a.isDps) {
@@ -15394,6 +15459,8 @@ function tcSimRun(P, order, hold) {
       } else {
         // their skills, and the turn's other tokens ("Special", "Punch") for lines tied to one
         const mates = a.wonder ? toks : new Set([...toks, ...String(step).split('+').map(t => t.trim().replace(/↺/g, '')).filter(t => t && !/^[1-3]+$/.test(t))]);
+        // Kotone Shiomi's Lyre's Melody adds its Powerful Bond before her lines land (TC_PB: the tiers read it)
+        if (PB && a === KO) { const u1 = tcSkillUses(step)[0]; if (u1) { PB.n = Math.min(TC_PB.max, pbNow() + u1); PB.last = round; PB.peak = Math.max(PB.peak, PB.n); } }
         castBy(a, mates);
         // Kotone Shiomi's Lyre's Melody on the Arcana Link ally raises Lunar Bond (TC_LB)
         if (LB && a === KO) lbUp(tcSkillUses(step)[0]);
@@ -15530,6 +15597,8 @@ function tcSimRun(P, order, hold) {
     lovesick: LS ? { ticks: LS.ticks, peak: LS.peak, col: LS.col, colAt: LS.colAt.slice() } : null,
     // Kotone Shiomi's Lunar Bond (TC_LB): the level it ended on and the rounds it reached 5 and 10
     lunarBond: LB ? { lv: LB.lv, at5: LB.at5, at10: LB.at10 } : null,
+    // her Powerful Bond (TC_PB): the most stacks held, and how many burst turns Fortune lengthened
+    powerfulBond: PB ? { peak: PB.peak, fortune: KO.fortuneDur || 0 } : null,
     // Ann's La Vie en Rose (TC_LV): how many times she entered it, over how many of her actions
     laVie: LV ? { n: LV.n, acts: LV.acts } : null,
     // Ren's Will of Rebellion (TC_WR): its highest count and where it ended
@@ -16312,7 +16381,7 @@ Object.values(TEAMS).forEach(t => (t.rot || []).forEach(r => {
    Setup reaches (or lufel's lowest, flagged, when it reaches none). */
 /* Whether a character's Mindscape is complete (both stat paths and the skill paths): what lufel's options
    and KIT_ROT moves written for a "Mindscape Core" need, the Setup having no Core field of its own. */
-function tmMindDone(n) { const L = charLoadout(n); return !!L.mindSkill && +L.mind1 >= 5 && +L.mind2 >= 5; }
+function tmMindDone(n) { const L = charLoadout(n); return msLv(L, 1) >= 5 && msLv(L, 2) >= 5 && +L.mind1 >= 5 && +L.mind2 >= 5; }
 function tmRotPick(n, inTeam) {
   const R0 = (TEAMS[n] || {}).rot || [];
   if (!R0.length) return null;

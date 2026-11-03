@@ -42,6 +42,7 @@ node tools/gen-wonder-innate.js [folder]     # replace the WONDER_INNATE block (
                                              # WONDER_UNRELEASED: Personas not out on Global yet, and
                                              # WONDER_PERSONA: rarity, talent ranks, learn levels, rank values)
 node tools/gen-skill-damage.js lufel.json    # replace the SKILL_DMG block (damage per skill and Highlight)
+node tools/gen-mind-paths.js lufel.json      # replace the MIND_SKILL_PATHS block (which skills each Mindscape skill path raises)
 node tools/fetch-persona-art.js              # the Personas tab's pictures into dist/art/ (gitignored, like the portraits)
 ```
 
@@ -1549,6 +1550,45 @@ damage formula (`docs/DATA-SOURCES.md`, the damage-formula section):
   floor (CRIT_PROFILE mixes 30/70 on every hit), Wavecatcher Miyu's Surf extending allies' buffs, Haru's
   Target Audience stack lines, Tropical Motoha's Summer Hype lines on every hit, Makoto Yuki's Entrusted Hope and
   Melody of Flames multiplier, and the A1+/4-star-weapon items.
+- **The support audit** (Nov 2026; the user asked next, since the same supports sit in nearly every best team):
+  the kits of Kotone Shiomi, Beachflower Minami, Fuuka, Kumi, Mitsuru, Chizuko, Miku, the twins and Mayumi read
+  against their TEAM_BUFFS the same way. Entered: Kotone's stacking lines build one a cast (`build: true` on
+  Lyre's Melody's crit damage, Leader's Guidance's ATK, her weapon's crit damage; all three stacks came with the
+  first cast), her **Powerful Bond** is counted (`TC_PB`: +1 per Lyre's Melody, all gone 3 rounds after the last,
+  at most 3, 1 for good from A1; TEAM_BUFFS `pb` lines need that many as she casts them — Lyre's pierce at 2, its
+  final damage, Burning Moon's Cry's damage taken and A1 Echoing Strings at 3; before, all came with the first
+  cast), and her **Fortune** burst (a turn with two or more skills, once a battle, twice from A6) lengthens what
+  she casts in it as her skill text says — Skills 1, 2 and the Highlight +2 turns, Skill 3 and its copies +1, +1
+  more each from A2 (`fortuneNow`); Minami's Bewitching Blossoms is a mark on the foe, never copied (`noCopy`),
+  and Everlasting Garden's ATK follows each skill she casts on an ally, 2 turns as printed (it was 3 turns on
+  Skill 3 alone); Chizuko's Bullseye Bomber counts once per unique elemental ailment, up to 3 (`perAil: 3`, the
+  Korean text; it was once); Kumi's A1 Detention crit damage is on every foe the skill hits (`foes: 'all'`);
+  Mayumi's Nebula Pennant follows any skill (`on: ['1','2','3']`). On save (56), in absolute damage in each
+  owned damage dealer's best team: −8.9% (YUI, Mitsuru) to +4.2% (Makoto Niijima), nearly all Kotone's (−8.9% to
+  +4.8%: slower stacks against longer Fortune buffs), Minami's −2.3% to 0; Kasumi's best team became the twins /
+  Kotone / Fuuka / Kumi (27.7×). Chizuko's, Kumi's and Mayumi's moved nothing on the save: Chizuko sits in
+  Fuuka's backup seat, whose one action is her Skill 1 (its DEF down is worth more), Kumi is A0, Mayumi is in no
+  best team. Calibration unchanged. Left as judgment calls (on the list page): whether Lunar Phaseshift counts
+  toward Lunar Bond, Arcana Link moving, Kotone copying the twins' Skill Amplification, Miku's song and Track
+  stacks, the twins' Desire level and Facades, Mayumi's extra-action tokens, and that no team key carries a DEF
+  or HP buff yet. Settled since: Fuuka's Luminous Force damage half is 12% + 1.371% per 100 ATK like its ATK half
+  (the user read 12% in game; it was lufel's Korean 8% / 0.914 ×1.2 = 9.6 / 1.097), +2.4% to +3.8% on every
+  Fuuka team; and Mitsuru's text splits English + Japanese against Korean + Chinese (Blizzard Edge's damage
+  taken and Iceblade at 22.0%, Captain's Duty's +3 Frostbound on a repeated skill, Behind the Lies at 25%): a
+  newer version lufel's Korean and Chinese pages lack. The planner already uses the English numbers.
+- **Mindscape skill paths are two levels, not a switch** (`ms1`/`ms2`, `msLv`, `tierVal`, Nov 2026; the user read
+  Fuuka's Luminous Force in game: 12.0% at path level 0, 12.5% at 2, 12.7% at 3, lufel's "+5" 13.2%). Each of the
+  two paths raises the skills lufel lists for it (`MIND_SKILL_PATHS` in data.js, `tools/gen-mind-paths.js` from
+  lufel's `mind_skill1`/`mind_skill2`: Fuuka's raise Skills 1 and 2, then Skill 3; 60 of 68 characters, the 8
+  launch-era ones have none on lufel), and each level is one skill level on each, so a four-tier value moves a
+  fifth of the way from its family to the family's +5 per level of its own path. Every reader of a four-tier value
+  goes through `tierVal(arr, char, lo, src)` with the line's skill (`mindSkillKey`: '1'-'3', 'HL' for a Highlight
+  or Theurgy); a line whose skill is not known, or a character with no paths, reads the mean of the two. Stat
+  targets (`pickTier`) record no skill and take the mean too, keyed "LV10+2". `kitTierIndex` is kept for its
+  family and an all-or-nothing +5. An old save's `mindSkill` reads as 5 and 5 (or 0 and 0), so nothing moves
+  until a Setup is edited; the Setup writes both levels and `mindSkill` as both at 5. On save (56) with Fuuka's
+  paths at the 2 and 2 the user has: every Fuuka team −1.3% to −2.7% (she was counted at 5 and 5); no best team
+  changed; calibration unchanged.
 - **Ann's Passion and La Vie en Rose are counted** (`TC_LV`, Nov 2026). Each Fire skill gives 1 Passion per foe it
   hits (at most 4), from A6 a 60% chance of 1 more (a running tally); at 4+ as she acts she spends them all and is in
   La Vie en Rose for that action, never two running. Until then its rate was judged at every 4th action (3rd at

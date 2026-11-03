@@ -1119,6 +1119,14 @@ function awarenessOverrideDrift() {
     fail('kitTierIndex follows the target-tier rule (YUI: LV10 / LV12 / +5)',
       kitTierIndex(yui, lo(0)) === 0 && kitTierIndex(yui, lo(3)) === 2 && kitTierIndex(yui, Object.assign(lo(3), { mindSkill: true })) === 3 &&
       kitStatBuffs(yui, lo(0)).find(x => x.tiers).v === 39 && kitStatBuffs(yui, lo(3)).find(x => x.tiers).v === 41.4);
+    fail('each Mindscape skill path moves its own skills a fifth of the way to lufel\'s +5 per level (Fuuka\'s Luminous Force: 12.0 / 12.48 / 12.72 / 13.2 on path 1, Skills 1 and 2; path 2 leaves it); an old save\'s "unlocked" reads as 5 and 5; a stat target goes by the mean of the two', (() => {
+      const fu = charDef('Fuuka Yamagishi'), v = [12, 13.2, 13.44, 14.64], at = (a, b) => tierVal(v, fu, Object.assign({}, DEFAULT_LOADOUT, { ms1: a, ms2: b }), '1');
+      const tiers = { LV10: 3502, 'LV10+5': 3852 }, t22 = pickTier(tiers, Object.assign({}, DEFAULT_LOADOUT, { ms1: 2, ms2: 2 }), 3);
+      return JSON.stringify(MIND_SKILL_PATHS[fu.n]) === '[["1","2"],["3"]]' && near(at(0, 5), 12) && near(at(2, 2), 12.48) && near(at(3, 0), 12.72) && near(at(5, 0), 13.2) &&
+        near(tierVal(v, fu, Object.assign({}, DEFAULT_LOADOUT, { ms1: 0, ms2: 5 }), '3'), 13.2) && near(tierVal(v, fu, Object.assign({}, DEFAULT_LOADOUT, { mindSkill: true }), '1'), 13.2) &&
+        near(tierVal(v, fu, Object.assign({}, DEFAULT_LOADOUT, { ms1: 5, ms2: 0 }), 'passive'), 12.6) &&
+        t22.key === 'LV10+2' && near(t22.value, 3502 + 350 * 0.4) && pickTier(tiers, Object.assign({}, DEFAULT_LOADOUT, { ms1: 5, ms2: 5 }), 3).key === 'LV10+5';
+    })());
     fail('a weapon ladder is read at the refinement step held', (() => {
       const r1 = charBaseStat(morg, 'Crit Rate', Object.assign({}, DEFAULT_LOADOUT, { refine: 1 })).pct, r7 = charBaseStat(morg, 'Crit Rate', Object.assign({}, DEFAULT_LOADOUT, { refine: 7 })).pct;
       return near(r1, 18) && near(r7, 34.2);
@@ -3224,6 +3232,9 @@ function awarenessOverrideDrift() {
       const rot = seq => ({ rot: [{ aw: 0, label: 'Test', seq }] });
       const run = (aw, kseq) => { state.chars[ko].loadout = Object.assign({}, DEFAULT_LOADOUT, { awareness: aw }); TEAMS[ann.n] = Object.assign({}, keep.a, rot(['1'])); TEAMS[ko] = Object.assign({}, keep.k, rot(kseq)); tcMemo.key = ''; return tcSim(ann, [ko, null], false).lunarBond; };
       out.lunarBond = { a0: run(0, ['1']), a1: run(1, ['1']), noMelody: run(0, ['2']), none: (() => { tcMemo.key = ''; return tcSim(ann, [null, null], false).lunarBond; })() };
+      // her Powerful Bond (TC_PB): one a Lyre's Melody, gone 3 rounds after the last, at most 3; Fortune once (twice at A6)
+      const pb = (aw, kseq) => { state.chars[ko].loadout = Object.assign({}, DEFAULT_LOADOUT, { awareness: aw }); TEAMS[ann.n] = Object.assign({}, keep.a, rot(['1'])); TEAMS[ko] = Object.assign({}, keep.k, rot(kseq)); tcMemo.key = ''; return tcSim(ann, [ko, null], false).powerfulBond; };
+      out.powerfulBond = { every: pb(0, ['1']), sparse: pb(0, ['1', '2', '2']), none: pb(0, ['2']), a1: pb(1, ['2']), burst: pb(0, ['1+1+3']), burst6: pb(6, ['1+1+3']) };
       Object.assign(TEAMS, { [ann.n]: keep.a, [ko]: keep.k }); state.chars[ko].loadout = keep.lo; tcMemo.key = '';
     }
     // Ichigo's Lovesick (TC_LS): stacks from her skills, capped, ticking on the enemy's turn and on her Highlight
@@ -3835,6 +3846,9 @@ function awarenessOverrideDrift() {
     const b = th.lunarBond;
     check('Kotone Shiomi\'s Lunar Bond is counted: +1 per skill of the linked damage dealer and per Lyre\'s Melody on them (5 by round 3, 10 by round 5 when both cast every turn), 5 at once from A1, only the damage dealer\'s skills without Lyre\'s Melody, none without Kotone',
       b.a0 && b.a0.at5 === 3 && b.a0.at10 === 5 && b.a1 && b.a1.at10 != null && b.a1.at10 < b.a0.at10 && b.noMelody && b.noMelody.at10 > b.a0.at10 && b.none === null, JSON.stringify(b));
+    const p = th.powerfulBond;
+    check('Kotone Shiomi\'s Powerful Bond: one a Lyre\'s Melody up to 3, back to none 3 rounds after the last, 1 for good from A1; Fortune\'s longer buffs once a battle, twice from A6',
+      p.every.peak === 3 && p.sparse.peak === 1 && p.none.peak === 0 && p.a1.peak === 0 && p.burst.fortune === 1 && p.burst6.fortune === 2 && p.every.fortune === 0, JSON.stringify(p));
   }
   check('Ichigo\'s Lovesick: Obsessive Rose stacks it to the cap of 10, it ticks every enemy turn and adds damage; My Beloved Prince alone adds no stacks and nothing ticks',
     th.lovesick.two && th.lovesick.two.peak === 10 && th.lovesick.two.ticks >= th.lovesick.F && th.lovesick.gain > 1.05 &&
