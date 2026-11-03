@@ -3248,7 +3248,7 @@ function awarenessOverrideDrift() {
     {
       const ryu = 'Ryuji Sakamoto', R = charDef(ryu), keep = { lo: state.chars[ryu].loadout, kb: DPS_KIT_BONUS[ryu] };
       const at = (aw, lines) => { state.chars[ryu].loadout = Object.assign({}, DEFAULT_LOADOUT, { awareness: aw }); DPS_KIT_BONUS[ryu] = lines; tcMemo.key = ''; return tcSim(R, [null, null], false).total; };
-      const off = keep.kb.filter(b => b.k !== 'pierce');
+      const off = keep.kb.filter(b => b.k !== 'cpierce');
       out.ryuPie = { a0: at(0, keep.kb) / at(0, off), a2: at(2, keep.kb) / at(2, off) };
       state.chars[ryu].loadout = keep.lo; DPS_KIT_BONUS[ryu] = keep.kb; tcMemo.key = '';
     }
@@ -3324,6 +3324,14 @@ function awarenessOverrideDrift() {
       const tracks = seq => { TEAMS[ann.n] = Object.assign({}, keep.a, rot(['1'])); TEAMS[mk] = Object.assign({}, keepM, rot(seq)); tcMemo.key = ''; return tcSim(ann, [null, null, mk], false).mikuTracks; };
       out.miku = { F: tcFight(), cycle: tracks(['2 Fire', '1 Heaven', '2 Spring', '3', '2 Fire', '1 Heaven']), same: tracks(['2 Fire']), toks: ['2+3', '3+3', '1', '2 Fire', 'ⓘA+2', '1+1+3'].map(st => [...tcTurnSkills(st)].sort().join(',')) };
       TEAMS[mk] = keepM; TEAMS[ann.n] = keepAnn;
+      // kit counters played for one damage dealer (Nov 2026): Mitsuru's Frostbound, Tropical Motoha's Summer Hype, Haru's
+      // Rounds at each shot, Makoto Yuki's teammate buffs, the twins' True Desire
+      const kitRun = (n, seq, mates, lo) => { const c = charDef(n), kr = TEAMS[n], kl = state.chars[n].loadout; if (seq) TEAMS[n] = Object.assign({}, kr, rot(seq)); if (lo) state.chars[n].loadout = Object.assign({}, DEFAULT_LOADOUT, lo); tcMemo.key = ''; const k = tcSim(c, mates || [null, null], false).kit; TEAMS[n] = kr; state.chars[n].loadout = kl; tcMemo.key = ''; return k; };
+      const tw = 'Justine & Caroline', twLo = state.chars[tw].loadout, twAt = aw => { state.chars[tw].loadout = Object.assign({}, DEFAULT_LOADOUT, { awareness: aw }); tcMemo.key = ''; const k = tcSim(ann, [tw, null], false).kit.trueDesire; state.chars[tw].loadout = twLo; tcMemo.key = ''; return k; };
+      out.kitCounters = { F: tcFight(), fb: kitRun('Mitsuru Kirijo').fbPeak, hypeNone: kitRun('Motoha Arai [Tropical]', ['1']).hypeTurns, hypeAll: kitRun('Motoha Arai [Tropical]', ['3', '1']).hypeTurns,
+        shots2: kitRun('Haru Okumura', ['1', '3', 'Gunshot']).shots, shots1: kitRun('Haru Okumura', ['1', 'Gunshot']).shots,
+        buffedAlone: kitRun('Makoto Yuki').buffed, buffedKotone: kitRun('Makoto Yuki', null, ['Kotone Shiomi', null]).buffed,
+        tdA1: twAt(1), tdA6: twAt(6), pc: damageFactors([], ann, target(ann), Object.assign({}, DEFAULT_LOADOUT, { bare: true })).pc };
       // the twins' Desire Level: their lines entered at 100 scale with it
       const jc = 'Justine & Caroline', jcd = charDef(jc), D = tcDesire(jc), l1 = TEAM_BUFFS[jc].find(e => e.desire === 1), lh = TEAM_BUFFS[jc].find(e => e.desire === 0.5);
       const plain = e => tcLineValue(Object.assign({}, e, { desire: undefined }), jcd, charLoadout(jc));
@@ -3713,7 +3721,8 @@ function awarenessOverrideDrift() {
     const jcTeam = [JC, 'Ryuji Sakamoto', null];
     const forced = TC_PAIRS[JC].map(o => { tcPairCtx = { [JC]: o.id }; const m = tcSim(ann, jcTeam, false).mult; tcPairCtx = null; return m; });
     const free = tcSim(ann, jcTeam, false);
-    out.pairs = { ids: TC_PAIRS[JC].map(o => o.id).join(','), MA: lineKs('MA'), MS: lineKs('MS'), SL: lineKs('SL'),
+    out.pairs = { ids: TC_PAIRS[JC].map(o => o.id).join(','), MA: lineKs('MA'), MS: lineKs('MS'), SL: lineKs('SL'), SA: lineKs('SA'),
+      offered: ['Ann Takamaki', 'Yusuke Kitagawa', 'Junpei Iori'].map(n => tcPairOpts(charDef(n), JC).map(o => o.id).join(',')),
       best: Math.abs(free.mult - Math.max(...forced)) < 1e-9 && !!TC_PAIRS[JC].find(o => o.id === free.pairs[JC]) && Math.abs(forced[TC_PAIRS[JC].findIndex(o => o.id === free.pairs[JC])] - free.mult) < 1e-9 };
     // Beachflower Minami's medicines: her ⓘ turns, one medicine per slot, chosen for the team like the twins' masks
     const MIN = TC_MEDS_OF, miyuM = charDef('Miyu Sahara [Wavecatcher]'), ichM = charDef('Ichigo Shikano');
@@ -3944,7 +3953,10 @@ function awarenessOverrideDrift() {
     const b = th.lunarBond;
     check('Kotone Shiomi\'s Lunar Bond is counted: +1 per skill of the linked damage dealer and per Lyre\'s Melody on them (5 by round 3, 10 by round 5 when both cast every turn), 5 at once from A1, only the damage dealer\'s skills without Lyre\'s Melody, none without Kotone',
       b.a0 && b.a0.at5 === 3 && b.a0.at10 === 5 && b.a1 && b.a1.at10 != null && b.a1.at10 < b.a0.at10 && b.noMelody && b.noMelody.at10 > b.a0.at10 && b.none === null, JSON.stringify(b));
-    const mi = th.miku, de = th.desire, near6 = (x, y) => Math.abs(x - y) < 1e-6;
+    const mi = th.miku, de = th.desire, near6 = (x, y) => Math.abs(x - y) < 1e-6, kc = th.kitCounters;
+    check('kit counters are played: Mitsuru\'s Frostbound reaches its cap, Tropical Motoha is in Summer Hype only after Surf \'n\' Shine, Haru\'s shot holds the Rounds loaded since the last one, Makoto Yuki is buffed only by teammates, the twins\' True Desire only at A6, and a hit carries its crit chance',
+      kc.fb === 5 && kc.hypeNone === 0 && kc.hypeAll === kc.F && kc.shots2.length > 0 && kc.shots2.every(x => x >= 2) && kc.shots1.every(x => x >= 1 && x <= 2) && kc.shots1.includes(1) &&
+      kc.buffedAlone === 0 && kc.buffedKotone > 0 && kc.tdA1 === 0 && kc.tdA6 >= 1 && kc.pc > 0 && kc.pc < 1, JSON.stringify(kc));
     check('Miku gains a Track only for a song whose Track she does not hold, and Showstopper spends all three; a song turn and an extra-action skill are tokens of their own',
       mi.cycle === ({ 6: 5, 12: 8 })[mi.F] && mi.same === 1 && mi.toks.join(' | ') === '2,3,x3,y3 | 3,x3 | 1 | 2,2 Fire | 2,iA | 1,3,x1,x3,y3', JSON.stringify(mi));
     check('the twins\' Desire Level comes from their stats (at most 100 before A6) and their per-100 lines scale with it',
@@ -4124,8 +4136,8 @@ function awarenessOverrideDrift() {
     th.selfLines.party > 1.1 && th.selfLines.passive > 1.1 && near(th.selfLines.notOwn, 1, 1e-9) && near(th.selfLines.ally, 1, 1e-9) && near(th.selfLines.foe1, 1, 1e-9) && th.selfLines.foe2 > 1.1, JSON.stringify(th.selfLines));
   check('a fight-only stat line (set off by a Highlight or by another ally) stays out of stats and build scores and reaches the fight; a stacking one adds a permanent stack each time',
     !th.fightOnly.stats && th.fightOnly.fight && JSON.stringify(th.fightOnly.stack.ev) === '["Infinity/3"]' && th.fightOnly.stack.more, JSON.stringify(th.fightOnly));
-  check('the twins\' mask pairs: Strategist keeps its party ATK, Medic gets the party damage passive, Saboteur the DEF down and damage taken and no party ATK; the fight plays the best pair',
-    th.pairs.ids === 'MA,MS,SL' && th.pairs.MA.includes('atkPct:30.0') && !th.pairs.MA.includes('dm:24.0') && th.pairs.MS.includes('dm:24.0') && !th.pairs.MS.includes('atkPct:30.0') &&
+  check('the twins\' mask pairs: Strategist keeps its party ATK, Medic gets the party damage passive, Saboteur the DEF down and damage taken and no party ATK, Guardian (tried only for a DEF or HP kit) the party DEF; the fight plays the best pair',
+    th.pairs.ids === 'MA,MS,SL,SA' && th.pairs.offered.join(' | ') === 'MA,MS,SL | MA,MS,SL,SA | MA,MS,SL,SA' && th.pairs.SA.some(x => x.startsWith('defPct:')) && th.pairs.MA.includes('atkPct:30.0') && !th.pairs.MA.includes('dm:24.0') && th.pairs.MS.includes('dm:24.0') && !th.pairs.MS.includes('atkPct:30.0') &&
     th.pairs.SL.some(x => x.startsWith('defdown:')) && th.pairs.SL.includes('dm:24.0') && !th.pairs.SL.some(x => x.startsWith('atkPct')) && !!th.pairs.best, JSON.stringify(th.pairs));
   check('Beachflower Minami\'s medicines: her ⓘ turns cast them, each slot holds a different medicine at her medicine effect increase with Blossoms by the Beach\'s +15% ATK, Wavecatcher Miyu gets the Resonance one and Ichigo the damage-over-time one, the fight plays them, and the rotation names them',
     th.meds.toks === '2,iA|1,iC' && ['atkPct:36.0', 'dm:30.0', 'hlFinal:12.0'].every(x => th.meds.lines.includes(x)) && th.meds.lines.filter(x => x === 'atkPct:15.0').length === 3 &&

@@ -1411,12 +1411,12 @@ const KIT_STAT_BUFFS = {
     { s: 'ATK%', pct: true, weapon: '4', ladder: [28, 36, 36, 44, 44, 52, 52], why: "Rock 'n' Roller: +ATK for 2 turns after Catchy Hook, her every-turn skill" }
   ],
   'Motoha Arai [Tropical]': [
-    { s: 'Crit Rate', tiers: [9.8, 9.8, 10.4, 10.4], pct: true, why: "Surf 'n' Shine: Summer Hype +9.8% crit rate, the state her rotation keeps up" },
-    { s: 'Damage Multiplier', tiers: [29.3, 29.3, 31.1, 31.1], pct: true, why: "Surf 'n' Shine: Summer Hype +29.3% damage" },
-    { s: 'Crit Rate', v: 10, pct: true, aw: 1, why: 'Exciting Summer!: +10% crit rate while Summer Hype is active' },
-    { s: 'Crit Multiplier', v: 25, pct: true, aw: 1, why: 'Exciting Summer!: +25% crit damage while Summer Hype is active' },
+    { s: 'Crit Rate', tiers: [9.8, 9.8, 10.4, 10.4], pct: true, on: 'hype', hold: true, why: "Surf 'n' Shine: Summer Hype +9.8% crit rate, the state her rotation keeps up (in her stats; in the Teams fight only while Hype is on, TC_HYPE)" },
+    { s: 'Damage Multiplier', tiers: [29.3, 29.3, 31.1, 31.1], pct: true, on: 'hype', hold: true, why: "Surf 'n' Shine: Summer Hype +29.3% damage (as above)" },
+    { s: 'Crit Rate', v: 10, pct: true, aw: 1, on: 'hype', hold: true, why: 'Exciting Summer!: +10% crit rate while Summer Hype is active (as above)' },
+    { s: 'Crit Multiplier', v: 25, pct: true, aw: 1, on: 'hype', hold: true, why: 'Exciting Summer!: +25% crit damage while Summer Hype is active (as above)' },
     { s: 'HP', v: 1200, pct: false, aw: 2, why: 'Stay Cool!: +1200 max HP during battle' },
-    { s: 'Crit Multiplier', pct: true, weapon: '5', ladder: [26, 34, 34, 42, 42, 50, 50], why: 'Colorful Coast: +crit damage while Summer Hype is active' },
+    { s: 'Crit Multiplier', pct: true, weapon: '5', ladder: [26, 34, 34, 42, 42, 50, 50], on: 'hype', hold: true, why: 'Colorful Coast: +crit damage while Summer Hype is active (as above)' },
     /* What a heal sets off, in the Teams fight only: each heal that reaches her (TC_HEALS: her own Skill 2,
        Highlight and Awareness 1 Blessing, and the team's) turns these on for 2 of her turns, as a buff
        on her counts down after her own action. Out of her stats, since how often she is healed is the team's. */
@@ -1448,11 +1448,11 @@ const KIT_STAT_BUFFS = {
     { s: 'Ailment Accuracy', v: 18, pct: true, why: 'Helping Others: +18% ailment accuracy at 1 Area to Improve stack' },
     { s: 'ATK%', v: 18, pct: true, why: 'Helping Others: +18% ATK at 2 Area to Improve stacks' },
     { s: 'Crit Multiplier', v: 18, pct: true, why: 'Helping Others: +18% crit damage at 3 Area to Improve stacks' },
-    { s: 'ATK%', v: 25, pct: true, aw: 0, why: 'My Name Is Beauty Thief: +25% ATK at 2+ Thoughtful Round stacks' },
-    { s: 'ATK%', v: 24, pct: true, aw: 1, why: 'Expressing Emotions: +8% ATK per Target Audience stack, at 3' },
-    { s: 'Crit Rate', v: 18, pct: true, aw: 1, why: 'Expressing Emotions: +6% ranged crit rate per Target Audience stack, at 3; all her attacks are ranged' },
-    { s: 'Damage Multiplier', v: 60, pct: true, aw: 2, why: 'Unwavering Faith: +60% Psy damage at 3+ Target Audience stacks' },
-    { s: 'Damage Multiplier', pct: true, weapon: '5', ladder: [24, 31, 31, 38, 38, 45, 45], why: 'Last Quarter: +Psy damage while she has Target Audience' }
+    { s: 'ATK%', v: 25, pct: true, aw: 0, needTA: true, why: 'My Name Is Beauty Thief: +25% ATK on a ranged attack at 2+ Thoughtful Round stacks (in her stats; the Teams fight counts it on the shot only, TC_TA)' },
+    { s: 'ATK%', v: 24, pct: true, aw: 1, needTA: true, why: 'Expressing Emotions: +8% ATK per Target Audience stack, at 3 (the fight counts the stacks, TC_TA)' },
+    { s: 'Crit Rate', v: 18, pct: true, aw: 1, needTA: true, why: 'Expressing Emotions: +6% ranged crit rate per Target Audience stack, at 3 (the fight: ranged attacks only, TC_TA)' },
+    { s: 'Damage Multiplier', v: 60, pct: true, aw: 2, needTA: true, why: 'Unwavering Faith: +60% Psy damage at 3+ Target Audience stacks (the fight: only then, TC_TA)' },
+    { s: 'Damage Multiplier', pct: true, weapon: '5', ladder: [24, 31, 31, 38, 38, 45, 45], needTA: true, why: 'Last Quarter: +Psy damage while she has Target Audience (the fight: only then, TC_TA)' }
   ],
   'Kotone Montagne [Frostgale]': [
     { s: 'ATK%', v: 5, pct: true, stacks: 7, aw: 0, why: 'Swan on the Ice: permanent +5% ATK per Vestige stack gained, up to 7, reached in the first turns' }
@@ -1514,6 +1514,7 @@ const KIT_STAT_BUFFS = {
     { s: 'ATK%', tiers: [19.5, 21.5, 20.7, 22.7], pct: true, on: '2', dur: 2, why: 'Nocturne of Battle: +19.5% ATK for 2 turns, used every other turn' },
     { s: 'Resistance Pierce', v: 12, pct: true, aw: 0, why: 'Pathfinder: +12% pierce while he has Moon Phase (Lv70), which ally buffs grant every turn' },
     { s: 'ATK%', v: 30, pct: true, on: 'TH', dur: 2, fight: true, why: 'On-Site Leader (passive 1): after his Theurgy, S.E.E.S. members\' ATK +30% more for 2 turns, him included (the +40% party part is TEAM_BUFFS; this was missing until Nov 2026)' },
+    { s: 'Crit Multiplier', v: 7.2, pct: true, on: 'buffed', dur: 2, upTo: 3, fight: true, why: 'Entrusted Hope (passive 2): +7.2% crit damage for 2 turns each time an ally lands a buff on him, up to 3 stacks (the fight fires \'buffed\' once per teammate cast with a party or ally line; Korean has no foe-target exclusion; heals and shields alone are not counted; Nov 2026, priced nowhere before)' },
     { s: 'Crit Rate', pct: true, weapon: '5', ladder: [16.3, 21.2, 21.2, 26.1, 26.1, 31, 31], why: 'Deus Xiphos: +crit rate for 2 turns per 3 Moon Phase stacks gained; ally buffs feed a stack a turn' }
   ],
   'Akihiko Sanada': [
@@ -1568,7 +1569,7 @@ const KIT_STAT_BUFFS = {
     { s: 'ATK%', pct: true, weapon: '4', stacks: 3, ladder: [7.3, 9.6, 9.6, 11.9, 11.9, 14.2, 14.2], why: 'Ame-no-Nuboko: +ATK for 3 turns after granting a buff, held at 3; every skill she casts grants one' }
   ],
   'Mitsuru Kirijo': [
-    { s: 'ATK%', v: 7, pct: true, stacks: 5, aw: 0, why: "Captain's Duty: +7% ATK per Frostbound stack on the target when attacking it, at 5" },
+    { s: 'ATK%', v: 7, pct: true, stacks: 5, aw: 0, needFb: true, why: "Captain's Duty: +7% ATK per Frostbound stack on the target when attacking it, at 5 in her stats; the Teams fight counts the stacks (TC_FB, DPS_KIT_BONUS perFb)" },
     { s: 'Crit Multiplier', pct: true, weapon: '5', ladder: [14.7, 19.3, 19.3, 23.9, 23.9, 28.5, 28.5], on: 'TH', dur: 2, fight: true, why: 'Longinus (5-star weapon): after her Theurgy, her own crit damage +14.7-28.5% for 2 turns (the party part is TEAM_BUFFS; this was missing until Nov 2026)' }
   ],
   'Shoki Ikenami [Notte]': [
@@ -1649,7 +1650,7 @@ function kitStatBuffs(char, lo, opts) {
   const L = lo || charLoadout(char.n);
   // `alwaysAw`: a line tied to a cast (`on`) that is on for good from that Awareness
   return (KIT_STAT_BUFFS[char.n] || []).map(b => b.on && b.alwaysAw != null && (L.awareness || 0) >= b.alwaysAw ? Object.assign({}, b, { on: undefined, dur: undefined }) : b).filter(b =>
-    (b.aw == null || (L.awareness || 0) >= b.aw) && (!b.weapon || L.weapon === b.weapon) && !(L.noTimed && (b.on || b.needAil || b.needDown || b.needHp || b.needCol)) && (!b.fight || (opts && opts.fight))
+    (b.aw == null || (L.awareness || 0) >= b.aw) && (!b.weapon || L.weapon === b.weapon) && !(L.noTimed && (b.on || b.needAil || b.needDown || b.needHp || b.needCol || b.needFb || b.needTA)) && (!b.fight || (opts && opts.fight))
   ).map(b => Object.assign({}, b, {
     v: (b.ladder ? b.ladder[Math.max(1, Math.min(7, L.refine)) - 1] : b.tiers ? tierVal(b.tiers, char, L, b.src || b.on) : b.v) * (b.stacks || 1)
   }));
@@ -2648,7 +2649,9 @@ function damageFactors(cards, char, t, lo, extra) {
      passes a bare setup. Pierce from the character, the kit and the cards; DEF down from the kit and
      the team buffs setting. */
   const def = L2.bare ? 1 : buildDefence(char, B.pierce + (p['Resistance Pierce'] || 0) + (X.pierce || 0), B.defdown + (X.defdown || 0));
-  return { atk, dmg, crit, def, value: atk * dmg * crit * def };
+  // the chance the hit crits (the guaranteed share, then the rolled one), for an effect that comes with a crit only
+  const pc = (1 - nc) * (lk + (1 - lk) * Math.max(0, cr));
+  return { atk, dmg, crit, def, pc, value: atk * dmg * crit * def };
 }
 
 /* How much of what this character wants the damage model actually captures. A DPS lands
@@ -8708,18 +8711,27 @@ const TEAM_BUFFS = {
   'Justine & Caroline': [
     { k: 'atk%', v: 30, to: 'party', src: 'passive', pair: ['MA'], why: 'Oxymoron (passive), Strategist pair (Mischief & Innocence + Absurdity & Nonsense): party ATK +30% while on the field' },
     { k: 'atk%', v: [39, 43, 41.4, 45.4], to: 'party', src: '1', on: '1', dur: 3, pair: ['MA','MS'], desire: 1, why: 'Selected Skill 1 = Mask of Mischief & Innocence: party ATK +39-45.4% per 100 Desire Level, 3 turns; encoded at Desire 100' },
-    { k: 'pierce', v: [9.8, 10.8, 10.4, 11.4], to: 'ally', src: '2', on: '2', dur: 3, arch: ['AoE DPS', 'ST DPS'], pair: ['MA'], desire: 0.5, why: 'Selected Skill 2 = Mask of Absurdity & Nonsense: pierce for the highest-ATK Sweeper/Assassin, 4.9% + 4.9% per 100 Desire, 3 turns; encoded at Desire 100' },
+    { k: 'pierce', v: [9.8, 10.8, 10.4, 11.4], to: 'ally', src: '2', on: '2', dur: 3, arch: ['AoE DPS', 'ST DPS'], pair: ['MA', 'SA'], desire: 0.5, why: 'Selected Skill 2 = Mask of Absurdity & Nonsense: pierce for the highest-ATK Sweeper/Assassin, 4.9% + 4.9% per 100 Desire, 3 turns; encoded at Desire 100' },
     { k: 'cm', v: [19.5, 21.5, 20.7, 22.7], to: 'party', src: '3', on: '3', dur: 2, pair: ['MA'], desire: 1, why: 'Two Masks as One (Mischief + Absurdity Facades): party critical damage +19.5-22.7% per 100 Desire, duration taken as the same 2 turns; encoded at Desire 100' },
     { k: 'skillAmp', v: [14.6, 16.1, 15.5, 17.0], to: 'party', src: '3', on: '3', dur: 2, own: false, pair: ['MA'], why: 'Two Masks as One (Mischief + Absurdity Facades): other allies get Skill Amplification 14.6-17% for 2 turns: "increase the values of skills... calculated separately from other effects". The fight multiplies the damage dealer\'s skill hits (and a Ram, a Persona skill) by it, and raises the skill buffs the other allies cast while it is up (TC_SKILL_SRC); not Highlights, follow-ups, Resonance or damage over time' },
     { k: 'atk%', v: [24.4, 26.9, 25.9, 28.4], to: 'party', src: 'HL', on: 'HL', dur: 2, pair: ['MA','MS'], why: 'Highlight, Mischief & Innocence version: party ATK up for 2 turns' },
     { k: 'dmg', v: [34.2, 37.7, 36.3, 39.8], to: 'party', src: 'HL', on: 'HL', dur: 2, pair: ['MA','MS'], why: 'Highlight, Mischief & Innocence version: party damage up for 2 turns' },
     { k: 'atk%', v: 30, to: 'party', src: 'aw', on: '1', dur: 2, aw: 2, pair: ['MA','MS'], why: 'A2 Callous Kindness: gaining the Mischief & Innocence Facade (Selected Skill 1) gives party ATK +30% for 2 turns' },
-    { k: 'cm', v: 20, to: 'ally', src: 'aw', on: '2', dur: 2, aw: 2, arch: ['AoE DPS', 'ST DPS'], pair: ['MA'], why: 'A2 Callous Kindness: gaining the Absurdity & Nonsense Facade (Selected Skill 2) gives the highest-ATK Sweeper/Assassin critical damage +20% for 2 turns' },
+    { k: 'cm', v: 20, to: 'ally', src: 'aw', on: '2', dur: 2, aw: 2, arch: ['AoE DPS', 'ST DPS'], pair: ['MA', 'SA'], why: 'A2 Callous Kindness: gaining the Absurdity & Nonsense Facade (Selected Skill 2) gives the highest-ATK Sweeper/Assassin critical damage +20% for 2 turns' },
     { k: 'atk%', v: 20, to: 'party', src: 'aw', on: 'HL', dur: 2, aw: 4, own: false, why: 'A4 Execution of Rebirth: on Highlight, other allies get half of her ATK +40% for 2 turns (not for herself: the other allies only)' },
     { k: 'dmg', v: 10, to: 'party', src: 'aw', on: 'HL', dur: 2, aw: 4, own: false, why: 'A4 Execution of Rebirth: on Highlight, other allies get half of her damage +20% for 2 turns (not for herself: the other allies only)' },
     { k: 'dmg', v: 24, to: 'party', src: 'passive', pair: ['MS'], why: 'Oxymoron (passive), Medic pair (Mischief & Innocence + Service & Admonition): party damage +24% while on the field' },
     { k: 'dmg', v: [43.9, 48.4, 46.6, 51.1], to: 'party', src: '3', on: '3', dur: 2, pair: ['MS'], desire: 1, why: 'Two Masks as One (Mischief + Service Facades): party damage +43.9-51.1% per 100 Desire for 2 turns (and a heal); encoded at Desire 100' },
     { k: 'dmg', v: 24, to: 'enemy', src: 'passive', pair: ['SL'], why: 'Oxymoron (passive), Saboteur pair (Service & Admonition + Luck & Loss): all foes take +24% damage while she is on the field' },
+    { k: 'def%', v: [48.8, 53.8, 51.8, 56.8], to: 'party', src: '3', on: '3', dur: 2, pair: ['SA'], desire: 1, why: 'Two Masks as One (Service + Absurdity Facades, the Guardian masks): party DEF +48.8-56.8% per 100 Desire Level for 2 turns (Korean gives the 2 turns to the DEF; the shield and the 1 Down Point per ally are not priced; Nov 2026)' },
+    { k: 'hp%', v: [9.8, 10.8, 10.4, 11.4], to: 'party', src: 'HL', on: 'HL', dur: 2, pair: ['SA', 'SL'], why: 'Highlight, Service & Admonition version (the Guardian and Saboteur masks hold Service): party max HP +9.8-11.4% for 2 turns (Nov 2026)' },
+    // A6 Power to Resist Ruin: the True Desire Two Masks as One also sets off the other combinations (the fight plays it; the
+    // quick screen takes it once in the fight, 2 turns of 6)
+    { k: 'dmg', v: [43.9, 48.4, 46.6, 51.1], to: 'party', src: '3', on: 'td', dur: 2, upQ: 0.33, aw: 6, pair: ['MA', 'SL', 'SA'], desire: 1, why: 'Power to Resist Ruin (A6): the enhanced Two Masks as One also activates Mischief + Service: party damage per 100 Desire (Nov 2026)' },
+    { k: 'cm', v: [19.5, 21.5, 20.7, 22.7], to: 'party', src: '3', on: 'td', dur: 2, upQ: 0.33, aw: 6, pair: ['MS', 'SL', 'SA'], desire: 1, why: 'Power to Resist Ruin (A6): ... and Mischief + Absurdity: party crit damage per 100 Desire' },
+    { k: 'skillAmp', v: [14.6, 16.1, 15.5, 17.0], to: 'party', src: '3', on: 'td', dur: 2, upQ: 0.33, aw: 6, own: false, pair: ['MS', 'SL', 'SA'], why: 'Power to Resist Ruin (A6): ... and its Skill Amplification for the other allies' },
+    { k: 'defdown', v: [50.8, 56, 53.8, 59], to: 'enemy', src: '3', on: 'td', dur: 2, upQ: 0.33, aw: 6, pair: ['MA', 'MS', 'SA'], desire: 0.5, why: 'Power to Resist Ruin (A6): ... and Service + Luck: all foes DEF down' },
+    { k: 'def%', v: [48.8, 53.8, 51.8, 56.8], to: 'party', src: '3', on: 'td', dur: 2, upQ: 0.33, aw: 6, pair: ['MA', 'MS', 'SL'], desire: 1, why: 'Power to Resist Ruin (A6): ... and Service + Absurdity: party DEF' },
     { k: 'defdown', v: [50.8, 56, 53.8, 59], to: 'enemy', src: '3', on: '3', dur: 2, pair: ['SL'], desire: 0.5, why: 'Two Masks as One (Service + Luck Facades): all foes DEF -25.4% plus 25.4% per 100 Desire for 2 turns, encoded at Desire 100 (and Shock, Windswept and Curse on the main target, not priced). Her Skills 1 and 2 in this pair, Service (party damage taken down, a heal) and Luck (her own ATK, damage and crit), add nothing to the damage dealer\'s' },
     { k: 'cm', ladder: [13, 17, 17, 21, 21, 25, 25], to: 'party', src: 'weapon', on: '1', dur: 2, weapon: '5', why: 'Warden\'s Judgement: each Facade gained gives party critical damage for 2 turns, stacks to 2; this entry is the Facade from Selected Skill 1' },
     { k: 'cm', ladder: [13, 17, 17, 21, 21, 25, 25], to: 'party', src: 'weapon', on: '2', dur: 2, weapon: '5', why: 'Warden\'s Judgement: second stack, the Facade from Selected Skill 2' },
@@ -8941,7 +8953,7 @@ const TEAM_BUFFS = {
     { k: 'dmg', v: [19.5, 21.5, 20.7, 22.7], to: 'enemy', src: 'aw', aw: 6, why: 'Harvest Havoc in Mushroom Red (Skill 1): the target takes +19.5-22.7% damage for 2 turns. At A6 (Prismatic Vegetables) she holds every colour at once and Harvest Havoc fires after each ally\'s action, so the boss keeps it' }
   ],
   'Kotone Shiomi': [
-    { k: 'cm', v: 0, per: { s: 'ATK', rate: 0.4163, cap: [4684, 5164, 4972, 5452] }, to: 'ally', src: '1', on: '1', dur: 3, arch: ['AoE DPS', 'ST DPS'], stacks: 3, build: true, why: 'Lyre\'s Melody (Skill 1): one stack a cast (`build`, Nov 2026; all three came with the first cast before); one ally crit damage up to 19.5-22.7% at her ATK cap (linear in ATK) per stack, 3 stacks; she casts it on the Arcana Link ally nearly every turn' },
+    { k: 'cm', v: 0, per: { s: 'ATK', rate: 0.4163, cap: [4684, 5164, 4972, 5452] }, to: 'ally', src: '1', on: '1', dur: 3, stacks: 3, build: true, why: 'Lyre\'s Melody (Skill 1, any ally: no Arcana Link needed, Nov 2026): one stack a cast (`build`, Nov 2026; all three came with the first cast before); one ally crit damage up to 19.5-22.7% at her ATK cap (linear in ATK) per stack, 3 stacks; she casts it on the Arcana Link ally nearly every turn' },
     { k: 'atk%', v: [39, 43, 41.4, 45.4], to: 'ally', src: '1', on: '1', dur: 3, arch: ['AoE DPS', 'ST DPS'], cond: 'DPS holds Arcana Link (auto-given at battle start to the highest-ATK Sweeper/Assassin; she can reselect)', why: 'Lyre\'s Melody: Powerful Bond 1 stack - ATK +39-45.4%' },
     { k: 'pierce', v: [14.6, 16.1, 15.5, 17], to: 'ally', src: '1', on: '1', dur: 3, arch: ['AoE DPS', 'ST DPS'], pb: 2, cond: 'DPS holds Arcana Link', why: 'Lyre\'s Melody: Powerful Bond 2 stacks - pierce +14.6-17% (stack effects read as cumulative)' },
     { k: 'final', v: [4.9, 5.4, 5.2, 5.7], to: 'ally', src: '1', on: '1', dur: 3, arch: ['AoE DPS', 'ST DPS'], pb: 3, cond: 'DPS holds Arcana Link', why: 'Lyre\'s Melody: Powerful Bond 3 stacks - final damage amplification +4.9-5.7%' },
@@ -8951,7 +8963,7 @@ const TEAM_BUFFS = {
     { k: 'cm', v: [19.5, 21.5, 20.7, 22.7], to: 'party', src: 'HL', on: 'HL', dur: 2, why: 'Highlight: party crit damage +19.5-22.7%' },
     { k: 'atk%', v: [24.4, 26.9, 25.9, 28.4], to: 'ally', src: 'HL', on: 'HL', dur: 2, arch: ['AoE DPS', 'ST DPS'], cond: 'DPS holds Arcana Link', why: 'Highlight: Arcana Link ally ATK +24.4-28.4%' },
     { k: 'dmg', v: 25, to: 'party', src: 'aw', on: 'HL', dur: 2, aw: 4, why: 'Eternal Bonds (A4): Highlight adds party damage +25% for 2 turns' },
-    { k: 'atk%', v: 9, to: 'ally', src: 'passive', on: '1', dur: 3, arch: ['AoE DPS', 'ST DPS'], stacks: 3, build: true, why: 'Leader\'s Guidance (passive 1, one stack a cast): buffing an ally gives the main target ATK +9% for 3 turns, 3 stacks; she buffs the Arcana Link ally nearly every turn' },
+    { k: 'atk%', v: 9, to: 'ally', src: 'passive', on: '1', dur: 3, stacks: 3, build: true, why: 'Leader\'s Guidance (passive 1, the main target: no Arcana Link needed, Nov 2026; one stack a cast): buffing an ally gives the main target ATK +9% for 3 turns, 3 stacks; she buffs the Arcana Link ally nearly every turn' },
     { k: 'final', v: 1, to: 'party', src: 'aw', why: 'Moment of Truth (A0): party final damage +1% per Strategist present; encoded for Kotone herself only (others depend on the team)' },
     /* Moment of Truth's Lunar Bond (`lb`, the level a line needs): +1 each time the Arcana Link ally casts a
        Persona skill or she casts one on them (Korean: 페르소나 스킬, so not a Highlight), up to 10, 5 at once from A1.
@@ -9324,10 +9336,10 @@ const TEAM_BUFF_SKIPS = {
     'A6 Heroine of Justice: Focused Round lowers foe ailment resistance - ailment chance, not damage'
   ],
   'Justine & Caroline': [
-    'Persona pair: three pairs are entered and the fight plays the one that does most for each team, named on her seat (TC_PAIRS): Strategist (Mischief & Innocence + Absurdity & Nonsense), Medic (Mischief + Service & Admonition) and Saboteur (Service + Luck & Loss). Rotation slot 1 is the first mask, 2 the second, 3 Two Masks as One; lufel writes her rotations for the Strategist pair, and the others are read with the same turns. Sweeper and Assassin buff only her, Guardian only defends: not entered',
+    'Persona pair: three pairs are entered and the fight plays the one that does most for each team, named on her seat (TC_PAIRS): Strategist (Mischief & Innocence + Absurdity & Nonsense), Medic (Mischief + Service & Admonition) and Saboteur (Service + Luck & Loss). Rotation slot 1 is the first mask, 2 the second, 3 Two Masks as One; lufel writes her rotations for the Strategist pair, and the others are read with the same turns. Sweeper and Assassin buff only her: not entered. Guardian (Service + Absurdity) is a fourth pair since Nov 2026, tried only for a DEF or HP kit: its Two Masks party DEF and the Service Highlight\'s max HP',
     'Desire Level: computed from their stats since Nov 2026 (TC_DESIRE); A6\'s True Desire and Two Masks as One\'s Desire scaling of their own skill damage are not',
     'Highlight, Absurdity & Nonsense version: ATK +34.2-39.8% for the highest-ATK ally; Highlights share the gauge, so only the party Mischief version is encoded',
-    'A6 Power to Resist Ruin: True Desire every 8 actions activates all Facade effects at once; periodic, not encoded',
+    'A6 Power to Resist Ruin: True Desire is played (every Facade combination\'s party lines on that Two Masks as One, TEAM_BUFFS on: \'td\'); its 8 bonus hits are their own damage, and its ailments and heal are not entered',
     'A0/A6 Wonder skill level increases: not a team damage buff here',
     'A1 automatic Two Masks as One: extra action, reflected by the A1 rotation only',
     'Rebel Surveillance, Mask of Luck & Loss self buffs, Service & Admonition healing/damage reduction/shields: self-only or not damage'
@@ -9416,7 +9428,7 @@ const TEAM_BUFF_SKIPS = {
     'On-Site Leader (passive 1): S.E.E.S. members get ATK +30% more after a Theurgy - needs specific teammates',
     'Assist (support skill): one ally ATK +20% for 1 turn - a support-slot skill used at the player\'s timing, no rotation to price it from',
     'Burn My Dread (A6): either Theurgy also triggers the other one, so Cadenza\'s buffs come with Ardhanari too - the Theurgy entries already cover any Theurgy use',
-    'Pathfinder (A0) pierce with Moon Phase, Scarlet Hades pierce/damage, Entrusted Hope (passive 2), Deus Xiphos (5-star weapon) - self buffs',
+    'Pathfinder (A0) pierce with Moon Phase, Scarlet Hades pierce/damage, Deus Xiphos (5-star weapon) - self buffs',
     'Nocturne of Battle is not in lufel\'s Awareness 0 rotation (1-3); it enters with A2\'s automatic cast'
   ],
   'Yukari Takeba': [
@@ -11844,12 +11856,15 @@ function tcTeamSet(dps, names) {
    TEAM_BUFFS line with `pair` belongs to those pairs, one without to every pair. The fight prices a
    lineup under each pair and keeps the best (tcSim); the quick screen takes the pair whose lines
    alone add most for this damage dealer (tcPairFor). The other three pairs (Sweeper and Assassin
-   buff only the twins, Guardian only defends) add nothing to someone else's damage. */
+   buff only the twins) add nothing to someone else's damage; Guardian adds DEF and max HP, so only for a DEF or HP kit. */
 const TC_PAIRS = {
   'Justine & Caroline': [
     { id: 'MA', role: 'Strategist', masks: 'Mischief & Innocence + Absurdity & Nonsense' },
     { id: 'MS', role: 'Medic', masks: 'Mischief & Innocence + Service & Admonition' },
-    { id: 'SL', role: 'Saboteur', masks: 'Service & Admonition + Luck & Loss' }
+    { id: 'SL', role: 'Saboteur', masks: 'Service & Admonition + Luck & Loss' },
+    // Guardian (Nov 2026): its Two Masks DEF and the Service Highlight's max HP reach only a DEF or HP kit's hits, so it is
+    // offered only to one (tcPairOpts); Absurdity's pierce and A2 crit damage are the Strategist pair's too
+    { id: 'SA', role: 'Guardian', masks: 'Service & Admonition + Absurdity & Nonsense', scale: ['DEF', 'HP'] }
   ],
   // Shoki switches Improv state at the start of each turn; his Skill 3 gives the main target a different
   // buff in each, so he keeps the one that helps the damage dealer most
@@ -11864,7 +11879,7 @@ const TC_PAIRS = {
 };
 const TC_PAIR_LABEL = { 'Justine & Caroline': 'Masks', 'Shoki Ikenami': 'Improv state', [TC_MEDS_OF]: 'Medicines' };
 // a character's set-up options for this damage dealer: as listed, or Minami's medicines chosen for them
-const tcPairOpts = (dps, name) => name === TC_MEDS_OF ? tcMedOpts(dps) : (TC_PAIRS[name] || []);
+const tcPairOpts = (dps, name) => name === TC_MEDS_OF ? tcMedOpts(dps) : (TC_PAIRS[name] || []).filter(o => !o.scale || o.scale.includes(scaleStat(dps)));
 // the pairs forced while one is being priced (tcSim), by character
 let tcPairCtx = null;
 function tcPairFor(dps, name) {
@@ -12186,6 +12201,8 @@ function tcMemberCalc(dps, name, inTeam, backup, fit, pair) {
     if (e.minHits && !tcHits(dps.n).some(h => h >= e.minHits)) continue;   // no skill of theirs hits that often
     if (e.elem && !e.elem.includes(dps.e)) continue;
     if (e.arch && !e.arch.includes(dps.arch)) continue;
+    // Kotone Shiomi's Powerful Bond tiers (TC_PB) need Arcana Link, which only a Sweeper or Assassin holds
+    if (e.pb && name === TC_LB.n && !TC_LB.arch.includes(dps.arch)) continue;
     if (e.only && e.only !== dkind) continue;   // a Highlight-only line for a Theurgy user, or the reverse
     if (e.techUser && !TC_TECH_USERS.has(dps.n)) continue;   // "when activating a Technical": a kit that does
     const trig = e.on === 'dpsHL' || e.on === 'anyHL';
@@ -12194,7 +12211,8 @@ function tcMemberCalc(dps, name, inTeam, backup, fit, pair) {
     // Yumi's Cocktail lines (TC_CK) at a typical cast's Cocktails here; the fight's events get the line as written
     // and Tempest Riko's Blossoming Season tiers at the strength her SP gives on this rotation (TC_RK)
     const ckQ = (e.ck ? tcCkQuick(e.ck, aw) : 1) * (e.spT ? tcRkQuick(seq, e.spT) : 1);
-    const v = tcLineValue(e, sup, lo) * ckQ * tcSelfAmp(name, e, lo, aw);
+    const lbOff = name === TC_LB.n && !TC_LB.arch.includes(dps.arch) ? 0 : undefined;
+    const v = tcLineValue(e, sup, lo) * ckQ * tcSelfAmp(name, e, lo, aw, undefined, lbOff);
     if (v == null || !v || isNaN(v)) continue;
     const k = TC_FROM_K[e.k];
     if (!k) continue;
@@ -12307,7 +12325,7 @@ function tcMemberCalc(dps, name, inTeam, backup, fit, pair) {
   const consts = Object.assign({}, shareVec), events = [], gated = [], constsOne = {}, constsMin = [], ally = {}, downConsts = [];
   usable.forEach((u, i) => {
     // a Skill Amplification that comes on mid-fight (Kotone's Lunar Bond 5) is read at the cast's round
-    const sa = TC_SELF_AMP[name] && TC_SELF_AMP[name].lb ? tcSelfAmp(name, u.e, lo, aw) : 1;
+    const sa = TC_SELF_AMP[name] && TC_SELF_AMP[name].lb ? tcSelfAmp(name, u.e, lo, aw, undefined, name === TC_LB.n && !TC_LB.arch.includes(dps.arch) ? 0 : undefined) : 1;
     if (!backup && (u.e.battle != null || (u.e.on && u.e.up == null)))
       // a `build` line lands one stack a cast, up to the whole (`full`, which the page's uptime is a share of)
       events.push({ e: u.e, k: u.k, v: (u.e.build ? u.v / (u.e.stacks || 1) : u.v) / (u.e.ck ? tcCkQuick(u.e.ck, aw) : 1) / (u.e.spT ? tcRkQuick(seq, u.e.spT) : 1) / sa, dur: u.e.dur === 'next' ? 'next' : u.dur, ref: shareN + i, gate: u.gate,
@@ -13231,7 +13249,7 @@ const DPS_KIT = {
     { kind: 'hit', v: [-39, -43, -41.4, -45.4], ailNone: true, notAfter: 'Transform', notDur: 2, on: 'self:3', why: 'Nuclear Fury\'s Technical (39% of ATK, in Skill 3\'s number) needs an elemental ailment on the target: taken off a cast onto a foe with none' }
   ],
   'Motoha Arai [Tropical]': [
-    { kind: 'fu', v: [29.3, 32.3, 31.1, 34.1], n: 2, on: 'self:1', aw: 6, cond: 'Summer Blowout active - lufel\'s rotation (3,3,1) casts Skill 1 the turn after Surf \'n\' Shine, inside it', why: 'A6 Everlasting Summer: under Summer Blowout, Blue Sunrise\'s Summer Hype bonus hit (29.3%) activates 3 times; one is already in Skill 1\'s 117.1, so 2 more.' },
+    { kind: 'fu', v: [29.3, 32.3, 31.1, 34.1], n: 2, on: 'self:1', aw: 6, hype: true, cond: 'Summer Blowout active (Summer Hype, played: TC_HYPE) - lufel\'s rotation (3,3,1) casts Skill 1 the turn after Surf \'n\' Shine, inside it', why: 'A6 Everlasting Summer: under Summer Blowout, Blue Sunrise\'s Summer Hype bonus hit (29.3%) activates 3 times; one is already in Skill 1\'s 117.1, so 2 more.' },
     { kind: 'hit', v: [79.9, 88, 84.8, 92.9], on: 'self:3', aw: 6, why: 'A6 Everlasting Summer: Surf \'n\' Shine\'s skill multiplier +50%, i.e. half of 159.7% more on every cast.' }
   ],
   'Tomoko Noge [Seaside]': [
@@ -13260,8 +13278,8 @@ const DPS_KIT = {
   ],
   'Haru Okumura': [
     { kind: 'hit', v: 66, on: 'tok:Gunshot', why: 'A0 My Name Is Beauty Thief: Haru\'s ranged attacks (lufel\'s \'Gunshot\' token) deal Psychokinesis damage to all foes equal to 66% of ATK.' },
-    { kind: 'fu', v: [29.3, 32.3, 31.1, 34.1], on: 'tok:Gunshot', after: '3', dur: 2, why: 'Spillover Round (loaded by Skill 3 while she has Target Audience): her next ranged attack also deals 29.3%. lufel\'s rotations shoot the same turn (\'3+Gunshot\') or the next turn after Skill 3.' },
-    { kind: 'fu', v: [39, 43, 41.4, 45.4], on: 'tok:Gunshot', after: '2', dur: 2, why: 'Painpoint Round (loaded by Skill 2 while she has Target Audience): her next ranged attack also deals 39.0% to the main target. Skill 2 is not in lufel\'s rotations.' },
+    { kind: 'fu', v: [29.3, 32.3, 31.1, 34.1], on: 'tok:Gunshot', trHas: 'S', why: '(fires while the Spillover Round is held, TC_TA) Spillover Round (loaded by Skill 3 while she has Target Audience): her next ranged attack also deals 29.3%. lufel\'s rotations shoot the same turn (\'3+Gunshot\') or the next turn after Skill 3.' },
+    { kind: 'fu', v: [39, 43, 41.4, 45.4], on: 'tok:Gunshot', trHas: 'P', why: '(fires while the Painpoint Round is held, TC_TA) Painpoint Round (loaded by Skill 2 while she has Target Audience): her next ranged attack also deals 39.0% to the main target. Skill 2 is not in lufel\'s rotations.' },
     { kind: 'hit', v: 46.2, on: 'tok:Gunshot', aw: 6, cond: '2+ Thoughtful Round stacks when shooting - every Gunshot in lufel\'s rotations follows two or three loading skills', why: 'A6 Heroine of Justice: Resonating Shots add a ranged attack at 70% of the original: 0.7 x 66%.' },
     { kind: 'fu', v: [20.5, 22.6, 21.8, 23.9], on: 'tok:Gunshot', aw: 6, cond: '2+ Thoughtful Round stacks', why: 'A6: the extra attack \'activates all Thoughtful Round effects once\', read as Spillover Round firing again at 70% (0.7 x 29.3%), whether or not held.' },
     { kind: 'fu', v: [27.3, 30.1, 29, 31.8], on: 'tok:Gunshot', aw: 6, cond: '2+ Thoughtful Round stacks', why: 'A6: same reading for Painpoint Round at 70% (0.7 x 39.0%).' }
@@ -13311,6 +13329,7 @@ const DPS_KIT = {
     { kind: 'hit', v: [150.7, 166.2, 160, 175.5], on: 'self:3', after: 'TH', dur: 2, why: 'Full Moon: each Theurgy (Ardhanari or Cadenza; \'TH\' is his Theurgy token) gives 1 Full Moon stack for 2 turns, which the next Scarlet Hades spends for a 150.7% hit.' },
     { kind: 'hit', v: [150.7, 166.2, 160, 175.5], on: 'self:3', after: 'TH', dur: 2, aw: 6, why: 'A6 Burn My Dread: a Theurgy also fires the other one, so 2 Full Moon stacks per Theurgy.' },
     { kind: 'hit', v: [59.8, 66, 63.5, 69.6], on: 'self:1', aw: 1, why: 'A1 Result of Coincidence: Melody of Flames deals 1 more hit (59.8%).' },
+    { kind: 'hit', v: [32.5, 35.8, 34.5, 37.8], on: 'self:3', stacks: 4, after: '1', dur: 2, why: 'Melody of Flames (Skill 1), for 2 turns: the Moon Phase hits of Scarlet Hades (Pathfinder\'s and its own) each +32.5 skill multiplier (Japanese: the damage dealt by spending Moon Phase; Korean 스킬 배율, read as added to the coefficient, as Akihiko\'s Lightning Fist), 4 Moon Phase hits as SKILL_DMG\'s 2 and the Pathfinder hit\'s 2 (Nov 2026)' },
     { kind: 'hit', v: [147.5, 162.6, 156.5, 171.6], n: 2, on: 'selfHL', aw: 4, cond: 'Ardhanari is the Theurgy used (as in SKILL_DMG)', why: 'A4 Thorny Path: Ardhanari deals 2 more hits of 147.5%.' }
   ],
   'Akihiko Sanada': [
@@ -13335,8 +13354,8 @@ const DPS_KIT = {
     { kind: 'fu', v: [247.4, 272.7, 262.6, 287.9], on: 'self', chance: 0.5, aw: 6, why: 'A6: Havoc after every ally action in permanent Eggplant Purple adds ~1 Energy each, about 14 a two-turn cycle, so the automatic Veg-Out about once a turn (increment).' }
   ],
   'Mitsuru Kirijo': [
-    { kind: 'fu', v: [22, 24.2, 23.3, 25.6], on: 'allySkill', after: 'HL', dur: 2, stacks: 5, why: 'Blizzard Edge (Theurgy) / Captain\'s Duty (A0): for 2 turns Frostbound becomes Snowbound, and each ally skill attack on it activates Iceblade, 22.0% x Frostbound stacks. 5 stacks, which her rotation holds; her Theurgy every other turn keeps Snowbound up almost throughout (A1 makes it permanent).' },
-    { kind: 'fu', v: [22, 24.2, 23.3, 25.6], on: 'allySkill', after: 'HL', dur: 2, stacks: 1, aw: 6, why: 'Burning Spirit (A6): Frostbound cap 6, one more stack of Iceblade.' },
+    { kind: 'fu', v: [22, 24.2, 23.3, 25.6], on: 'allySkill', after: 'HL', dur: 2, stacks: 5, perFb: true, why: 'Blizzard Edge (Theurgy) / Captain\'s Duty (A0), per Frostbound stack the fight counts (TC_FB): for 2 turns Frostbound becomes Snowbound, and each ally skill attack on it activates Iceblade, 22.0% x Frostbound stacks. 5 stacks, which her rotation holds; her Theurgy every other turn keeps Snowbound up almost throughout (A1 makes it permanent).' },
+    { kind: 'fu', v: [22, 24.2, 23.3, 25.6], on: 'allySkill', after: 'HL', dur: 2, stacks: 1, aw: 6, fbA6: true, why: 'Burning Spirit (A6): Frostbound cap 6, one more stack of Iceblade (the fight counts it: TC_FB).' },
     { kind: 'fu', v: [44, 48.4, 46.6, 51.2], on: 'allySkill', after: 'HL', dur: 2, stacks: 6, aw: 6, why: 'Burning Spirit (A6): after her Theurgy the foe is Glacierbound for 2 turns, and each ally skill attack activates Iceblade once more at 200% (6 stacks).' }
   ],
   'Junpei Iori': [
@@ -13485,7 +13504,6 @@ const DPS_KIT_SKIPS = {
     'lufel\'s A0 rotation token \'1 / 2\' means Skill 1 or Skill 2 alternately.'
   ],
   'Makoto Yuki': [
-    'Skill 1: \'when spending Moon Phase to use Scarlet Hades, increase skill multiplier by 32.5% for 2 turns\' - unclear whether +32.5 points per hit or x1.325; not priced.',
     'Manaka\'s turn rewind giving another stacked Scarlet Hades (lufel\'s partner note) is teammate-specific; not entered.'
   ],
   'Akihiko Sanada': [
@@ -13670,11 +13688,27 @@ const DPS_KIT_BONUS = {
     { to: 'hl', v: 8, stacks: 3, aw: 6, why: 'Great Doctor (Awareness 6): Bleed cap 13 and about 9 held, so the Highlight sees about 12: 3 more' }
   ],
   'Haru Okumura': [
-    { to: 'skill:3', k: 'cr', v: [19.5, 19.5, 20.7, 20.7], after: '1', dur: 3, why: 'Skill 3: with Target Audience (from her Skill 1, 3 turns, removed by a Gunshot), this skill\'s crit rate +19.5-20.7%; every Skill 3 in lufel\'s rotations follows a Skill 1 (missing until Nov 2026)' },
-    { to: 'hit', v: [29.3, 32.3, 31.1, 34.1], why: 'Focused Round (from Extrasensory Aim, Skill 1): a ranged attack with Target Audience +29.3% skill damage. Every Gunshot in lufel\'s rotations follows a Skill 1 that gave her Target Audience (97.6%, 3 turns)' },
-    { to: 'fu', v: [29.3, 32.3, 31.1, 34.1], why: 'Focused Round: Painpoint and Spillover Round damage can take it (stated on both skills)' },
-    { to: 'hit', v: 40, why: 'My Name Is Beauty Thief (Awareness 0): a ranged attack +20/40/50% skill damage at 1/2/3 Thoughtful Rounds. Every Gunshot in lufel\'s rotations holds at least 2 (Skill 1 + Skill 3). Only the shot itself: the text does not extend it to the Round hits, as it does Focused Round' },
-    { to: 'hit', v: 10, chance: 0.5, why: 'My Name Is Beauty Thief: 3 Thoughtful Rounds (+50%) when a Highlight\'s Overload Round is also held - every Gunshot of lufel\'s A0 rotation, none of the Mindscape one: judged 0.5' }
+    { to: 'skill:2', k: 'pierce', v: [19.5, 19.5, 20.7, 20.7], ta: 1, why: 'Skill 2: with Target Audience, this skill\'s pierce +19.5-20.7% (Nov 2026)' },
+    { to: 'skill:3', k: 'cr', v: [19.5, 19.5, 20.7, 20.7], ta: 1, why: '(read off the fight\'s Target Audience, TC_TA) Skill 3: with Target Audience (from her Skill 1, 3 turns, removed by a Gunshot), this skill\'s crit rate +19.5-20.7%; every Skill 3 in lufel\'s rotations follows a Skill 1 (missing until Nov 2026)' },
+    { to: 'hit', v: [29.3, 32.3, 31.1, 34.1], tr: 'F', ta: 1, why: '(the Round and Target Audience read off the fight, TC_TA) Focused Round (from Extrasensory Aim, Skill 1): a ranged attack with Target Audience +29.3% skill damage. Every Gunshot in lufel\'s rotations follows a Skill 1 that gave her Target Audience (97.6%, 3 turns)' },
+    { to: 'fu', v: [29.3, 32.3, 31.1, 34.1], tr: 'F', ta: 1, why: 'Focused Round: Painpoint and Spillover Round damage can take it (stated on both skills)' },
+    { to: 'hit', v: 45, trCount: [0, 20, 40, 50], why: '(the fight reads the Rounds held, TC_TA; 45 is the old judged 40 + 10 x 0.5, kept for the page) My Name Is Beauty Thief (Awareness 0): a ranged attack +20/40/50% skill damage at 1/2/3 Thoughtful Rounds. Every Gunshot in lufel\'s rotations holds at least 2 (Skill 1 + Skill 3). Only the shot itself: the text does not extend it to the Round hits, as it does Focused Round' },
+    { to: 'hit', k: 'atkPct', v: 25, trN: 2, why: 'My Name Is Beauty Thief (A0): +25% ATK on a ranged attack at 2+ Thoughtful Rounds (the stat line, read off the fight\'s Rounds, TC_TA)' },
+    { to: 'fu', k: 'atkPct', v: 25, trN: 2, why: 'As above, on the Rounds\' own damage (part of the ranged attack)' },
+    { to: 'hit', k: 'cr', v: [14.6, 14.6, 15.5, 15.5], tr: 'O', why: 'Overload Round (her Highlight): the ranged attack\'s crit rate +14.6-15.5% (Nov 2026)' },
+    { to: 'hl', v: [14.6, 16.1, 15.5, 17], noO: true, why: 'Highlight: +14.6-17% skill damage when it gives no Overload Round (one held, or 3 Rounds already; Nov 2026)' },
+    { to: 'skill:1', ladder: [24, 31, 31, 38, 38, 45, 45], weapon: '5', ta: 1, why: 'Last Quarter (5-star weapon): +24-45% Psychokinesis damage while she has Target Audience (Skill 1\'s own hits come before its stacks)' },
+    { to: 'skill:3', ladder: [24, 31, 31, 38, 38, 45, 45], weapon: '5', ta: 1, why: 'Last Quarter, as above' },
+    { to: 'hl', ladder: [24, 31, 31, 38, 38, 45, 45], weapon: '5', ta: 1, why: 'Last Quarter, as above' },
+    { to: 'hit', ladder: [24, 31, 31, 38, 38, 45, 45], weapon: '5', ta: 1, why: 'Last Quarter, as above (the shot, before it clears Target Audience)' },
+    { to: 'fu', ladder: [24, 31, 31, 38, 38, 45, 45], weapon: '5', ta: 1, why: 'Last Quarter, as above' },
+    { to: 'all', k: 'atkPct', ladder: [34, 43, 43, 52, 52, 61, 61], weapon: '5', trGain: true, why: 'Last Quarter (5-star weapon): +34-61% ATK for 1 turn per Round gained, read as her hits after it until her action ends (Nov 2026)' },
+    { to: 'hit', k: 'atkPct', v: 8, stacks: 3, perTA: 3, aw: 1, why: 'Expressing Emotions (A1): +8% ATK per Target Audience stack on a ranged attack, at the mean count the fight keeps (TC_TA)' },
+    { to: 'hit', k: 'cr', v: 6, stacks: 3, perTA: 3, aw: 1, why: 'Expressing Emotions (A1): +6% ranged crit rate per Target Audience stack (as above)' },
+    { to: 'skill:1', v: 60, ta: 3, aw: 2, why: 'Unwavering Faith (A2; Korean A3): +60% Psychokinesis damage at 3+ Target Audience stacks' },
+    { to: 'skill:3', v: 60, ta: 3, aw: 2, why: 'Unwavering Faith, as above' },
+    { to: 'hl', v: 60, ta: 3, aw: 2, why: 'Unwavering Faith, as above' },
+    { to: 'hit', v: 60, ta: 3, aw: 2, why: 'Unwavering Faith, as above' }
   ],
   'Kotone Montagne [Frostgale]': [
     { to: 'res', v: 8, stacks: 2, aw: 1, why: 'Etched in Ice (A1): when Spring\'s Edge ends, Resonance damage +8% per Spring\'s Vestige stack (max 40%). Judged 2 stacks at the end of an Edge without Wind teammates: 1 from A1 on activation + 1 from the Skill 1 lufel casts inside it (more with a Wind ally or a Highlight inside the Edge)' },
@@ -13788,10 +13822,12 @@ const DPS_KIT_BONUS = {
     { to: 'fu', match: 'Veg-Out', v: 10, aw: 2, why: 'Seed Potato Knight (A2): the same +10 on the automatic Veg-Out.' }
   ],
   'Mitsuru Kirijo': [
-    { to: 'skill:3', v: 10, stacks: 5, why: 'Snowpierced Waltz (Skill 3): skill damage +10% per Frostbound stack on the target. 5 stacks (the cap), which her rotation holds from her second turn (the first Skill 3 sees about 4).' },
-    { to: 'skill:3', v: 10, stacks: 1, aw: 6, why: 'Burning Spirit (A6): Frostbound cap 6, one more stack.' },
-    { to: 'skill:3', v: 35, why: 'Snowpierced Waltz: +35% damage at 5+ Frostbound stacks (lufel\'s English/Global text; the Korean has only the +15% crit rate). Held from her second Skill 3.' },
-    { to: 'skill:3', k: 'cr', v: 15, why: 'Snowpierced Waltz: at 5+ Frostbound stacks, this skill\'s crit rate +15% (both texts), held as above (missing until Nov 2026)' },
+    { to: 'skill', k: 'atkPct', v: 7, stacks: 5, perFb: true, why: 'Captain\'s Duty (A0) in the fight: +7% ATK per Frostbound stack on the target, on her skill hits, at the count the fight keeps (TC_FB)' },
+    { to: 'hl', k: 'atkPct', v: 7, stacks: 5, perFb: true, why: 'Captain\'s Duty, as above, on her Theurgy' },
+    { to: 'skill:3', v: 10, stacks: 5, perFb: true, why: 'Snowpierced Waltz (Skill 3): skill damage +10% per Frostbound stack on the target, counted in the fight (TC_FB). 5 stacks (the cap), which her rotation holds from her second turn (the first Skill 3 sees about 4).' },
+    { to: 'skill:3', v: 10, stacks: 1, aw: 6, fbA6: true, why: 'Burning Spirit (A6): Frostbound cap 6, one more stack (the fight counts it: TC_FB).' },
+    { to: 'skill:3', v: 35, fbAt: 5, why: 'Snowpierced Waltz: +35% damage at 5+ Frostbound stacks (counted in the fight, TC_FB) (lufel\'s English/Global text; the Korean has only the +15% crit rate). Held from her second Skill 3.' },
+    { to: 'skill:3', k: 'cr', v: 15, fbAt: 5, why: 'Snowpierced Waltz: at 5+ Frostbound stacks (counted in the fight, TC_FB), this skill\'s crit rate +15% (both texts), held as above (missing until Nov 2026)' },
     { to: 'hl', v: 20, aw: 4, why: 'Behind the Lies (A4): Theurgy damage +20%.' },
     { to: 'all', v: 15, amp: true, after: 'TH', dur: 2, aw: 6, why: 'Burning Spirit (A6): her Theurgy turns Snowbound into Glacierbound for 2 turns, and she deals +15% final damage amplification (Korean: total damage amplified) to a Glacierbound foe. The fight fires her Theurgy before her action, so that round\'s skill and the next are covered; at A6 the gauge fills every turn.' },
     { to: 'all', ladder: [17.6, 23.2, 23.2, 28.8, 28.8, 34.4, 34.4], weapon: '4', chance: 0.5, why: 'Rose Flamberge (4-star weapon): +17.6-34.4% damage for 1 turn when she inflicts Frostbound. Her skills inflict it after their own hit, so the 1-turn buff reaches a hit only when the Theurgy inflicted it before her action: about every other turn at A0 (chance 0.5).' },
@@ -13885,7 +13921,7 @@ const DPS_KIT_BONUS = {
     { to: 'all', k: 'atkPct', v: 45, selfHp: { belowBoss: true }, why: 'Adrenaline (passive 1) in the fight: +45% ATK while the boss\'s HP share is above his (the boss falls evenly over the fight, tcBossHp; his own HP falls by Pirate Tactics and Leo\'s barrier, TC_HP)' },
     { to: 'all', k: 'atkPct', v: 30, selfHp: { missing: true, fullAt: 20 }, why: 'Wounded Glory (A0): ATK +10% at full HP rising to +40% at 20% or less; the +10% is in his stats, this is the rest, read as growing evenly' },
     { to: 'skill:3', v: 20, aw: 1, why: 'Under the Skull and Bones (A1): God Hand Burst damage +20%.' },
-    { to: 'skill', k: 'pierce', v: 35, aw: 2, why: 'Fearless Charge (A2; Korean A3, English and Japanese A2): a skill that crits ignores 35% of the foe\'s DEF, which lufel\'s defence calculator lists as Pierce 35 on a crit. Only a crit gets it, and his skills now roll (Nov 2026): counted at a judged 0.6 of each skill hit (+30% crit rate from Pirate Tactics or Rebound over his 5% and the team\'s, God Hand Burst in Rebound always); not his Highlight.', chance: 0.6 },
+    { to: 'skill', k: 'cpierce', v: 35, aw: 2, why: 'Fearless Charge (A2; Korean A3, English and Japanese A2): a skill that crits ignores 35% of the foe\'s DEF, which lufel\'s defence calculator lists as Pierce 35 on a crit. Priced on the crit branch of each skill hit only (`cpierce`, Nov 2026): God Hand Burst in Rebound always crits, his other hits at their own rate; it was 35 x a judged 0.6 on every hit.' },
     { to: 'skill:3', v: [58.6, 58.6, 62.2, 62.2], after: 'HL', dur: 2, why: 'Highlight: next skill damage +58.6%. The fight prices God Hand Burst as half a hit on each of the two "3" tokens (charge, release), so 2 rounds from the Highlight carry one whole hit.' },
     { to: 'skill:3', v: 30, after: 'HL', dur: 2, aw: 4, why: 'Riding the Storm (A4): enhanced Highlight, next skill damage +30% more; same 2-token window.' },
     { to: 'skill:3', v: 60, amp: true, chance: 0.67, aw: 6, why: 'Comeback Kid (A6): God Hand Burst inflicts Cower; his next skill on that foe deals +60% total damage (Korean: an independent bonus). Every God Hand Burst but the battle\'s first follows one: 2 of 3 in the default 6 rounds (5 of 6 in 12).' },
@@ -14434,7 +14470,7 @@ const TC_HEALS = {
   ],
   'Justine & Caroline': [
     { on: '2', to: 'party', pair: ['MS'], why: "Mask of Service & Admonition (Skill 2 in the Medic pair): restores the party's HP" },
-    { on: '1', to: 'party', pair: ['SL'], why: "Mask of Service & Admonition (Skill 1 in the Saboteur pair): restores the party's HP" },
+    { on: '1', to: 'party', pair: ['SL', 'SA'], why: "Mask of Service & Admonition (Skill 1 in the Saboteur and Guardian pairs): restores the party's HP" },
     { on: '3', to: 'party', pair: ['MS'], why: "Two Masks as One on the Mischief & Innocence + Service & Admonition Facades: restores the party's HP" }
   ],
   'Yukari Takeba': [
@@ -14568,7 +14604,7 @@ function tcSurfFor(D) {
   o.rec = (tcStat(D.n, 'SP Recovery') || 100) / 100;
   return o;
 }
-const TC_DMG_KEYS = ['defPct', 'def', 'hpPct', 'hp', 'atkPct', 'atk', 'dm', 'cr', 'cm', 'pierce', 'defdown', 'final', 'weak', 'hlDm', 'hlFinal', 'xDm', 'xFinal', 'xAtkPct', 'resDm', 'dotDm', 'dotFinal', 'resFinal', 'curse', 'tp', 'downDm', 'skillAmp'];
+const TC_DMG_KEYS = ['defPct', 'def', 'hpPct', 'hp', 'atkPct', 'atk', 'dm', 'cr', 'cm', 'pierce', 'cpierce', 'defdown', 'final', 'weak', 'hlDm', 'hlFinal', 'xDm', 'xFinal', 'xAtkPct', 'resDm', 'dotDm', 'dotFinal', 'resFinal', 'curse', 'tp', 'downDm', 'skillAmp'];
 const tcIsVc = e => /Virtual Concert/.test(e.cond || '');
 /* An enemy-side effect that lands on one foe ("the target", "a foe"), not on all of them; an entry can say
    so outright with `foes: 'one'` or `'all'`. Only matters when the page sets more than one enemy. */
@@ -14820,6 +14856,29 @@ const TC_LV = { n: 'Ann Takamaki', need: 4, perSkill: 4, a6: 0.6, spentCap: 10 }
    Highlight +1 (3 from A4), at most 5; a turn with an extra action (lufel's '1+3', 'HL+3+3') spends 3 at its end.
    Resistance (passive 1, +18% ATK per stack, DPS_KIT_BONUS `perWill`) reads the stacks as each skill hits, before
    that skill's own. Rebellion Resurgence's stacks from foes below 60% HP are not played. */
+/* Mitsuru Kirijo's Frostbound on the boss (Nov 2026; Captain's Duty, English and Japanese, newer than the Korean): each
+   of her damaging skills or her Theurgy adds 1 after its hit, Flower of Ice (Skill 1) 3 more, and repeating the skill she
+   used before (Skills 1 and 3 only; Frozen Tempest is not a normal skill, a Theurgy not a skill) 3 more; at most 5 (6
+   from A6), 2 turns, read as one timer every gain refreshes. Her ATK per stack, Snowpierced Waltz's per-stack and 5-stack
+   bonuses and Iceblade read the count at the hit (DPS_KIT_BONUS / DPS_KIT `perFb`, `fbAt`); they were all a judged 5,
+   which her rotation reaches from her second turn. Played only while she is the damage dealer. */
+/* Tropical Motoha's Summer Hype (Nov 2026): Surf 'n' Shine (Skill 3) enters it at once, so its own hit is in it, and it
+   lasts to the end of her next turn; a Surf in it renews it. Her Hype lines (KIT_STAT_BUFFS `on: 'hype'`, `hold`) are on
+   only then in the fight, and the bonus hits Skills 1 and 2 deal in it (Blue Sunrise 29.3 of SKILL_DMG's 117.1, Summer
+   'Splosion 34.2 of 170.8, the same share at every tier: `share`) only then; A6's extra hits too (DPS_KIT `hype`). lufel's
+   rotations never leave it, so they price as before; a composed rotation without Surf 'n' Shine gets none of it. */
+/* Haru Okumura's Target Audience and Thoughtful Rounds (Nov 2026), played while she is the damage dealer. Extrasensory Aim
+   (Skill 1), after its hits, puts a Target Audience stack on the main target at 97.6% (103.6% from tier 3, so certain) and
+   on each other foe at 53.7% and moves them onto her for 3 turns; the fight keeps the chance of each count (`d`), so a
+   reader takes P(at least k) or the mean count. A ranged attack (lufel's Gunshot) clears it after its hit. Rounds, at most
+   3 kinds: Focused (Skill 1), Painpoint (Skill 2), Spillover (Skill 3), Overload (Highlight, if not held and fewer than 3
+   are); the Gunshot fires and clears them. Readers in DPS_KIT_BONUS: `ta` (needs k stacks), `perTA` (per stack, mean
+   count), `tr` (that Round held), `trN` (that many held), `trCount` (the shot's +20/40/50% by Rounds held), `trGain`
+   (Rounds gained since her last action: Last Quarter's +ATK), `noO` (the Highlight's bonus when no Overload is gained);
+   DPS_KIT `trHas`. Helping Others' Area to Improve stays judged. */
+const TC_TA = { n: 'Haru Okumura', main: [97.6, 97.6, 103.6, 103.6], other: [53.7, 53.7, 57, 57], dur: 3, cap: 3 };
+const TC_HYPE = { n: 'Motoha Arai [Tropical]', dur: 2, share: { 0: 29.3 / 117.1, 1: 34.2 / 170.8 } };
+const TC_FB = { n: 'Mitsuru Kirijo', cap: 5, capA6: 6, dur: 2, gain: { '1': 4, '3': 1, TH: 1 }, same: 3 };
 const TC_WR = { n: 'Ren Amamiya', gain: [1, 2, 0], hl: 1, hlA4: 3, cap: 5, spend: 3 };
 /* Kotone Shiomi's Lunar Bond on the Arcana Link ally (Nov 2026): the damage dealer, when a Sweeper or Assassin
    (lufel's AoE / ST DPS). 0 at the start (5 from A1), +1 per Persona skill they cast and per Lyre's Melody or Lunar
@@ -14885,6 +14944,23 @@ function tcSimRun(P, order, hold) {
      spread() notes the main target's hit, gain() books it. */
   // a kit that marks its guaranteed crits (DPS_KIT_BONUS `lock`): every other hit of theirs rolls
   const LOCKP = (P.bonus || []).some(b => b.k === 'lock');
+  // Haru's Target Audience and Rounds (TC_TA)
+  const HT = D.n === TC_TA.n ? { d: [1], left: 0, tr: new Set(), gainT: 0, shots: [] } : null;
+  const taGe = k => HT ? HT.d.slice(k).reduce((x, y) => x + y, 0) : 1;
+  const taMean = c => HT ? HT.d.reduce((x, p, n) => x + p * Math.min(n, c), 0) : c;
+  const trAdd = r => { if (HT && !HT.tr.has(r) && HT.tr.size < TC_TA.cap) { HT.tr.add(r); HT.gainT++; } };
+  const taAdd = () => {
+    const ti = kitTierIndex(D, charLoadout(D.n)), chances = [Math.min(1, TC_TA.main[ti] / 100)].concat(Array(Math.max(0, P.foes - 1)).fill(Math.min(1, TC_TA.other[ti] / 100)));
+    chances.forEach(p => { const n = HT.d.map((x, k) => x * (1 - p)); HT.d.forEach((x, k) => { n[k + 1] = (n[k + 1] || 0) + x * p; }); HT.d = n.slice(0, 12); });
+    HT.left = TC_TA.dur;
+  };
+  // Tropical Motoha's Summer Hype (TC_HYPE), switched like Wavecatcher Miyu's Surf
+  const HY = D.n === TC_HYPE.n ? { on: false, left: 0 } : null;
+  // Mitsuru's Frostbound (TC_FB)
+  const FB = D.n === TC_FB.n ? { n: 0, left: 0, last: null, peak: 0, cap: (+charLoadout(D.n).awareness || 0) >= 6 ? TC_FB.capA6 : TC_FB.cap } : null;
+  const fbGain = k => { if (!FB) return; FB.n = Math.min(FB.cap, FB.n + TC_FB.gain[k] + (k !== 'TH' && FB.last === k ? TC_FB.same : 0)); if (k !== 'TH') FB.last = k; FB.left = TC_FB.dur; FB.peak = Math.max(FB.peak, FB.n); };
+  const BUFFP = (KIT_STAT_BUFFS[D.n] || []).some(b => b.on === 'buffed');
+  let buffedN = 0;
   const TR = P.track ? { u: 0, nc: 0, lk: 0, lp: LOCKP, w: 0, wc: 0, sum: { atkPct: 0, atk: 0, dm: 0, cr: 0, cm: 0, pierce: 0, defdown: 0 }, last: null, cf: new Map() } : null;
   const gain = (kind, x) => {
     total += x; parts[kind] = (parts[kind] || 0) + x;
@@ -14992,7 +15068,11 @@ function tcSimRun(P, order, hold) {
         // against the unbuffed hit with its crit: a hit that cannot crit is worth that much less
         const body = dot ? f.atk * f.dmg / E.f0 : f.value / E.f0;
         // damage taken while knocked down is a multiplier of its own (lufel's damage article, ⓗ)
-        m = body * tcDefence(E.own + X.pierce, X.defdown) / E.c0 * (P.dpsWeak && !noWeak ? (TC_WEAK + X.weak / 100) / TC_WEAK : 1) * (1 + X.final / 100) * (1 + (X.downDm || 0) / 100);
+        // Pierce that comes with a crit only (`cpierce`, Ryuji's Fearless Charge): the crit branch of the hit (its share of
+        // the crit factor) gets it, the rest does not; ⓒ is not linear in Pierce, so the two are priced apart
+        let defF = tcDefence(E.own + X.pierce, X.defdown);
+        if (!dot && X.cpierce && f.crit > 0) { const cp = Math.max(0, f.crit - (1 - f.pc)); defF = ((1 - f.pc) * defF + cp * tcDefence(E.own + X.pierce + X.cpierce, X.defdown)) / f.crit; }
+        m = body * defF / E.c0 * (P.dpsWeak && !noWeak ? (TC_WEAK + X.weak / 100) / TC_WEAK : 1) * (1 + X.final / 100) * (1 + (X.downDm || 0) / 100);
         memo.set(key, m);
       }
       return m * fin;
@@ -15046,6 +15126,10 @@ function tcSimRun(P, order, hold) {
         if (b.re && !(comp && b.re.test(comp.why || ''))) continue;
         // Ichigo's Chains of Love (TC_LS): a line that needs that many, or one per stack (`perCol`)
         if (b.col != null && !(LS && LS.col >= b.col)) continue;
+        // Mitsuru's Frostbound (TC_FB): a line that needs that many; an A6 one-more-stack line is the counter's in the fight
+        if (b.fbAt && !(FB ? FB.n >= b.fbAt : true)) continue;
+        if (b.fbA6 && FB) continue;
+        if (HT && ((b.tr && !HT.tr.has(b.tr)) || (b.trN && HT.tr.size < b.trN) || (b.noO && !(HT.tr.has('O') || HT.tr.size >= TC_TA.cap)))) continue;
         // Ann's La Vie en Rose (TC_LV): only in it
         if (b.lv && !(LV && LV.on)) continue;
         // `needDebuff`: the foe carries a debuff (a debuff line up on it, DEF down, or an elemental ailment)
@@ -15062,11 +15146,14 @@ function tcSimRun(P, order, hold) {
           // `selfHp`: by the damage dealer's own HP (TC_HP)
           (b.selfHp ? tcSelfHpF(b.selfHp, selfHp, tcBossHp(Math.max(1, round)), rebound) : 1) *
           (b.perCol ? (LS ? LS.col : 0) : 1) * (b.perLvSpent ? (LV ? Math.min(TC_LV.spentCap, LV.spent) : 0) : 1) *
-          (b.perWill ? (WR ? WR.will : 0) : 1);
+          (b.perWill ? (WR ? WR.will : 0) : 1) * (b.perFb && FB ? FB.n / (b.stacks || 1) : 1) *
+          (HT ? (b.ta ? taGe(b.ta) : 1) * (b.perTA ? taMean(b.perTA) / (b.stacks || 1) : 1) * (b.trGain ? HT.gainT : 1) : 1);
         if (!f) continue;
         // `k`: a stat on those hits, not damage (Ryuji's Pierce, Radiance Motoha's Highlight ATK and crit damage)
-        if (b.k) { xs = xs || {}; xs[b.k] = (xs[b.k] || 0) + b.val * f; }
-        else if (b.amp) amp *= 1 + b.val * f / 100; else add += b.val * f;
+        // the shot's bonus by Rounds held (Haru, TC_TA)
+        const bv = b.trCount && HT ? b.trCount[Math.min(3, HT.tr.size)] : b.val;
+        if (b.k) { xs = xs || {}; xs[b.k] = (xs[b.k] || 0) + bv * f; }
+        else if (b.amp) amp *= 1 + bv * f / 100; else add += bv * f;
       }
       return { add, amp, tf, pf, ta, pa, xs };
     };
@@ -15089,7 +15176,11 @@ function tcSimRun(P, order, hold) {
         if (c.notAfter != null && lastUse[c.notAfter] != null && round - lastUse[c.notAfter] < (c.notDur || 1)) return;
         if (c.ailNone && ailN()) return;
         // `ls` [from, to]: the Lovesick stacks on the boss in that range, of the range its value assumes (TC_LS)
-        const af = (c.perAil ? Math.min(c.perAil, ailN()) : 1) * (c.ls ? Math.max(0, Math.min(c.ls[1], LS ? LS.n : 0) - c.ls[0]) / (c.ls[1] - c.ls[0]) : 1);
+        if (c.fbA6 && FB) return;
+        if (c.hype && HY && !HY.on) return;
+        if (c.trHas && HT && !HT.tr.has(c.trHas)) return;
+        const af = (c.perAil ? Math.min(c.perAil, ailN()) : 1) * (c.ls ? Math.max(0, Math.min(c.ls[1], LS ? LS.n : 0) - c.ls[0]) / (c.ls[1] - c.ls[0]) : 1) *
+          (c.perFb && FB ? FB.n / (c.stacks || 1) : 1);
         if (!af) return;
         const dot = c.kind === 'dot' || c.crit === false;
         const add = c.kind === 'res' ? X.resDm || 0 : c.kind === 'dot' ? X.dotDm || 0 : 0;
@@ -15133,7 +15224,7 @@ function tcSimRun(P, order, hold) {
       const ampF = a !== elu && TC_SKILL_SRC.has(String(ev.e.src)) && ev.k !== 'skillAmp' ? 1 + buffs.reduce((s, b) => s + (b.k === 'skillAmp' && !b.enemy && b.owner !== a.n && (!b.copy || a.isDps) ? b.v : 0), 0) / 100 : 1;
       v *= ampF;
       // her own Skill Amplification as it stands this round (TC_SELF_AMP's Lunar Bond part)
-      if (ev.ampAt) v *= ev.ampAt(Math.max(1, round), LB ? LB.lv : null);
+      if (ev.ampAt) v *= ev.ampAt(Math.max(1, round), LB ? LB.lv : TC_LB.arch.includes(D.arch) ? null : 0);
       // Yumi's lines cast at what her Cocktails gave this cast (TC_CK; none spent: the line does not land)
       if (ev.e.ck && a === elu && ckNow) { v *= ckNow[ev.e.ck]; if (!v) return; }
       // Tempest Riko's Blossoming Season tiers at the strength the SP this cast spent gives (TC_RK)
@@ -15214,6 +15305,8 @@ function tcSimRun(P, order, hold) {
       if (a.n === TC_MEDS_OF && toks.has('HL')) a.medNext = tcMedHlBoost();
       // a `build` line lands as many stacks as this turn's skills give (Summer Garden 2, Gentle Sea Breeze 1)
       evs.forEach(ev => apply(a, ev.e.build ? Object.assign({}, ev, { v: ev.v * tcBuildGain(ev.e, toks) }) : ev, { hlxDm }));
+      // a teammate's buff on the damage dealer (Makoto Yuki's Entrusted Hope, KIT_STAT_BUFFS `on: 'buffed'`), once a cast
+      if (BUFFP && a !== dpsA && evs.some(ev => ev.e.to === 'party' || ev.e.to === 'ally')) { buffedN++; castBy(dpsA, new Set(['buffed'])); }
       if (a.medNext && evs.some(ev => ev.e.fx != null)) a.medNext = 0;
     };
     const trigger = (on, who) => T.concat(elu ? [elu] : []).forEach(a => (a.events || []).forEach(ev => {
@@ -15312,6 +15405,7 @@ function tcSimRun(P, order, hold) {
     /* Wavecatcher Miyu's Surf (TC_SURF): her Surf lines are on while Surf is, Surfing Mermaid's come as her SP
        recovered passes each mark, and Catch a Wave fires at the end of another ally's turn while she has the SP. */
     const surfRefs = SF ? new Set(dpsA.events.filter(ev => ev.e.on === 'surf').map(ev => ev.ref)) : null;
+    const hypeRefs = HY ? new Set(dpsA.events.filter(ev => ev.e.on === 'hype').map(ev => ev.ref)) : null;
     const surfGot = g => {
       SF.got += g;
       while (SF.mark < SF.marks.length && SF.got >= SF.marks[SF.mark] - 1e-9) castBy(dpsA, new Set(['sp' + SF.marks[SF.mark++]]));
@@ -15381,6 +15475,10 @@ function tcSimRun(P, order, hold) {
         if (LS) { LS.critTo = round + TC_LS.hlCrit - 1; lsTick(TC_LS.hlTicks); colUp(); }
         // Ren's Highlight gives Will of Rebellion (TC_WR)
         if (WR) { WR.will = Math.min(TC_WR.cap, WR.will + (WR.a4 ? TC_WR.hlA4 : TC_WR.hl)); WR.peak = Math.max(WR.peak, WR.will); }
+        // Mitsuru's Theurgy adds a Frostbound after its hit (TC_FB)
+        fbGain('TH');
+        // Haru's Highlight loads the Overload Round (TC_TA)
+        trAdd('O');
         // a Highlight that restores their own HP does so after its hit (Tropical Motoha's)
         if (HPK && HPK.gain && HPK.gain.HL) hpSet(selfHp + HPK.gain.HL / 100);
       } else {
@@ -15532,6 +15630,7 @@ function tcSimRun(P, order, hold) {
         }
         // the heals this turn sets off land after its hits (below); Summer Hype opens at once
         if (HR) { healToks = mine; usedSkill = uses.some(u => u > 0); if (TC_HEAL_HYPE[D.n] && uses[+TC_HEAL_HYPE[D.n] - 1]) HR.hype = 2; }
+        if (HY && uses[2]) { HY.left = TC_HYPE.dur; if (!HY.on) { HY.on = true; castBy(dpsA, new Set(['hype'])); } }
         if (raw.includes('Transform')) { heat = inflicted - heatAt; heatAt = inflicted; }
         inflict(a, new Set(raw.filter(m => !/^[1-3]$/.test(m) && m !== 'HL' && m !== 'TH')));
         if (a.events.length) castBy(a, mine, toAlly);
@@ -15549,12 +15648,18 @@ function tcSimRun(P, order, hold) {
           const asDm = as.dot * (Xi.dotDm || 0) + as.res * (Xi.resDm || 0) + (SF && i === 1 && SF.on ? SF.tide * SF.off : 0), asFin = (1 + as.dot * (Xi.dotFinal || 0) / 100) * (1 + as.res * (Xi.resFinal || 0) / 100);
           // Skill Amplification on them (the twins' Two Masks as One) is a multiplier of its own on a skill
           // Ichigo's My Beloved Prince deals its 10-stack bonus only with 10+ Lovesick on the boss (TC_LS)
-          const di = LS && i === 2 && LS.n < TC_LS.s3At ? skill.d[i] * (1 - TC_LS.s3Share) : skill.d[i];
+          const di = LS && i === 2 && LS.n < TC_LS.s3At ? skill.d[i] * (1 - TC_LS.s3Share) :
+            // Tropical Motoha's Skill 1 and 2 bonus hits land only in Summer Hype (TC_HYPE)
+            HY && !HY.on && TC_HYPE.share[i] ? skill.d[i] * (1 - TC_HYPE.share[i]) : skill.d[i];
           const x = u * di * ob.amp * asFin * (1 + (Xi.skillAmp || 0) / 100) * spread(P.aoe[i], Xi, xd + ob.add + asDm, xa, fin, false, !!P.alm[i], P.hits[i], ob.xs);
           gain(extra ? 'extra' : 'skill', x); techGain(ob, x);
           if (skill.d[i] > 0) for (let k = 0; k < u; k++) ckMix(D.e);
           // Ren: this skill's Will of Rebellion comes after its hit (TC_WR)
           if (WR) { WR.will = Math.min(TC_WR.cap, WR.will + u * TC_WR.gain[i]); WR.peak = Math.max(WR.peak, WR.will); }
+          // Mitsuru: Frostbound after this skill's hit (TC_FB)
+          if (FB && TC_FB.gain[String(i + 1)]) for (let k = 0; k < u; k++) fbGain(String(i + 1));
+          // Haru: Skill 1 gives Target Audience and the Focused Round, Skills 2 and 3 their Rounds, after the hit (TC_TA)
+          if (HT) { if (i === 0) for (let k = 0; k < u; k++) taAdd(); trAdd(['F', 'P', 'S'][i]); }
         });
         if (a.events.length) castBy(a, mine, toFoe);
         downAct(a, step);
@@ -15562,6 +15667,8 @@ function tcSimRun(P, order, hold) {
         kitFire('self', X, { xAtk: xa, fin });
         uses.forEach((u, i) => { if (u) kitFire('self:' + (i + 1), X, { xAtk: xa, fin }); });
         raw.forEach(m => kitFire('tok:' + m, X, { xAtk: xa, fin }));
+        // Haru's ranged attack spends her Rounds and clears Target Audience (TC_TA)
+        if (HT && raw.some(m => /^Gunshot/.test(m))) { HT.shots.push(HT.tr.size); HT.tr.clear(); HT.d = [1]; HT.left = 0; }
         kitFire('turnEnd', X, { xAtk: xa, fin });
         /* Summer Ichigo's Ram at the end of the Helmsman's turn (TC_RAM): a Persona skill of theirs on every foe,
            its HP part priced with everything but ATK; below her A6 the Helmsman then steps down */
@@ -15624,6 +15731,14 @@ function tcSimRun(P, order, hold) {
         // Kotone Shiomi's Lyre's Melody adds its Powerful Bond before her lines land (TC_PB: the tiers read it)
         if (PB && a === KO) { const u1 = tcSkillUses(step)[0]; if (u1) { PB.n = Math.min(TC_PB.max, pbNow() + u1); PB.until = Math.max(PB.until, round + TC_PB.dur + (a.fortuneNow ? TC_PB.fortune['1'] + ((a.aw || 0) >= 2 ? 1 : 0) : 0)); PB.peak = Math.max(PB.peak, PB.n); } }
         castBy(a, mates);
+        /* the twins' A6 Power to Resist Ruin: True Desire at the start of battle, again 8 of their own turns after it is
+           spent (Korean 8턴마다); it is spent on the next Two Masks as One, which then sets off every Facade combination's
+           effects (TEAM_BUFFS `on: 'td'`: the other pairs' Two Masks lines; the pair's own is its '3' line) */
+        if (a.n === TC_DESIRE.n && (a.aw || 0) >= 6) {
+          if (a.td == null) { a.td = 1; a.tdWait = 0; }
+          if (a.td && tcSkillUses(step)[2] > 0) { a.td = 0; a.tdWait = 8; a.tdN = (a.tdN || 0) + 1; castBy(a, new Set(['td'])); }
+          else if (!a.td && a.tdWait > 0 && --a.tdWait <= 0) a.td = 1;
+        }
         // the twins' 5-star weapon: Desire Level 10-19% higher once Two Masks as One has been cast (TC_DESIRE)
         if (a.n === TC_DESIRE.n && !a.dsw && tcSkillUses(step)[2] > 0) {
           const lw = charLoadout(a.n);
@@ -15683,6 +15798,12 @@ function tcSimRun(P, order, hold) {
         if (HR.hotE > 0) { HR.hotE--; healDps(HR.hotEBy); }
         if (!extra && HR.hype > 0) HR.hype--;
         healToks = null; usedSkill = false;
+      }
+      if (HT && a.isDps && !extra) { HT.gainT = 0; if (HT.left > 0 && --HT.left <= 0) HT.d = [1]; }
+      if (HY && a.isDps && !extra && HY.on) HY.turns = (HY.turns || 0) + 1;
+      if (HY && a.isDps && !extra && HY.left > 0 && --HY.left <= 0) {
+        HY.on = false;
+        for (let i = buffs.length - 1; i >= 0; i--) if (buffs[i].owner === D.n && hypeRefs.has(buffs[i].ref)) buffs.splice(i, 1);
       }
       if (HR) healAll('ally', a);
     };
@@ -15748,6 +15869,7 @@ function tcSimRun(P, order, hold) {
       // the enemy's turn: damage over time ticks, debuffs count down; a knocked-down boss gets up (it still acts)
       kitFire('round', curX());
       if (LS && LS.left > 0) { lsTick(1); if (--LS.left <= 0) LS.n = 0; }
+      if (FB && FB.left > 0 && --FB.left <= 0) FB.n = 0;
       if (downed) { downed = false; downPts = downMax; }
       for (let i = buffs.length - 1; i >= 0; i--) { const b = buffs[i]; if (b.enemy) { b.left--; if (b.left <= 0) buffs.splice(i, 1); } }
       ailSum += ailN();
@@ -15777,6 +15899,10 @@ function tcSimRun(P, order, hold) {
     powerfulBond: PB ? { peak: PB.peak, fortune: KO.fortuneDur || 0, rows: PB.rows } : null,
     // Miku's Tracks gained (Setlist and her weapon fire on each)
     mikuTracks: elu && elu.n === 'Hatsune Miku' ? elu.trackN || 0 : null,
+    // the kit counters played for one damage dealer: Mitsuru's Frostbound peak, Tropical Motoha's turns in Summer Hype,
+    // Haru's Rounds at each shot, Makoto Yuki's teammate buffs, the twins' True Desire casts
+    kit: { fbPeak: FB ? FB.peak : null, hypeTurns: HY ? HY.turns || 0 : null, shots: HT ? HT.shots : null, buffed: BUFFP ? buffedN : null,
+      trueDesire: T.filter(x => x.n === TC_DESIRE.n).map(x => x.tdN || 0)[0] },
     // Ann's La Vie en Rose (TC_LV): how many times she entered it, over how many of her actions
     laVie: LV ? { n: LV.n, acts: LV.acts } : null,
     // Ren's Will of Rebellion (TC_WR): its highest count and where it ended

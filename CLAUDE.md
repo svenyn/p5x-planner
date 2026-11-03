@@ -1413,6 +1413,32 @@ damage formula (`docs/DATA-SOURCES.md`, the damage-formula section):
   ATK per Highlight (`stack: 5`, permanent). Calibration: mean 69.5 (69.6 before), median 71, range
   42-84, bands 8/53/7 unchanged. On the real save no Optimise pick moved; Akihiko's build score fell
   0.4 (the crit damage sits in his perfect build too).
+- **Seven judged numbers settled from the kit text** (Nov 2026; the user asked for the list's "judgment calls"; three
+  read-only research passes, each finding checked against the text before entry). *Makoto Yuki*: Entrusted Hope (+7.2%
+  crit damage for 2 turns per buff an ally lands on him, up to 3) was priced nowhere; the fight fires `'buffed'` once
+  per teammate cast with a party or ally line (`castBy`, `BUFFP`) and KIT_STAT_BUFFS `on: 'buffed'`, `upTo` stacks it;
+  Melody of Flames' +32.5 skill multiplier on the Moon Phase hits of Scarlet Hades within 2 turns (Japanese: the
+  damage dealt by spending Moon Phase) is a DPS_KIT `hit` read as added coefficient, as Akihiko's Lightning Fist. His
+  team +17.6%, alone +11.8%. *Kotone*: Lyre's Melody's crit damage and Leader's Guidance need no Arcana Link and reach
+  any damage dealer; for one who is not a Sweeper or Assassin the quick screen no longer counts the Powerful Bond tiers
+  the fight never fires, and her weapon's Skill Amplification waits for a Lunar Bond 5 that never comes. Whether she can
+  move Arcana Link onto a non-Sweeper/Assassin ("she can reselect"; neither text limits it) is left for an in-game
+  check. *Mitsuru*: Frostbound counted (`TC_FB`: +1 per damaging skill or Theurgy after its hit, Flower of Ice 3 more,
+  a repeated skill 3 more, cap 5 / 6 at A6, 2 turns refreshed by each gain); her ATK per stack (KIT_STAT_BUFFS `needFb`,
+  DPS_KIT_BONUS `perFb`), Snowpierced Waltz's per-stack and 5-stack lines (`fbAt`) and Iceblade read it (−0.5%, the
+  first round). *Tropical Motoha*: Summer Hype is a state (`TC_HYPE`, `HY`): Surf 'n' Shine enters it at once, to the
+  end of her next turn; her Hype stat lines (`on: 'hype'`, `hold`), the bonus hits inside Skills 1 and 2 (`share`) and
+  A6's hits count only in it, so a composed rotation without Surf gets none (alone −2.1%). *Haru*: Target Audience and
+  Thoughtful Rounds played (`TC_TA`, `HT`): Skill 1's stacks as a distribution over foes (97.6% main, 53.7% others),
+  3 turns, Rounds F/P/S/O, the Gunshot firing and clearing both; Last Quarter, My Name Is Beauty Thief's +25% ATK and
+  its +20/40/50% by Rounds, Focused/Spillover/Painpoint, Overload's crit, A1/A2 read it (`ta`, `perTA`, `tr`, `trN`,
+  `trCount`, `trGain`, `noO`, DPS_KIT `trHas`; KIT_STAT_BUFFS `needTA`). Her team −11.7%: those had been on for every
+  hit. *Ryuji*: Fearless Charge's DEF ignore comes with a crit only: DPS_KIT_BONUS `k: 'cpierce'` is priced on the crit
+  branch of each hit (damageFactors returns `pc`, the hit's crit chance; the fight's `mult` splits ⓒ), not 35 × a judged
+  0.6 (nothing at his A0). *The twins*: the Guardian masks are a fourth pair (`SA`, offered only to a DEF or HP kit,
+  `scale`), with their Two Masks party DEF and the Service Highlight's max HP; A6's True Desire is played (`a.td`: at the
+  start, again 8 of their turns after it is spent, firing the other pairs' Two Masks lines, `on: 'td'`). No best team
+  changed on save (56); build scores moved 0.2 at most; calibration unchanged.
 - **Three support kits played from their text** (Nov 2026; the user's "do 1, 2, 3"). *The twins' Desire Level*
   (`TC_DESIRE`, `tcDesire`): 25 at the start of battle (A0) plus 1 per 100 ATK (at most 45), per 2% Damage Multiplier
   (15) and per 6% Crit Multiplier above 100% (15), so at most 100, and 20% more from A6; every "per 100 Desire" line
