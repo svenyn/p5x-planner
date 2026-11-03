@@ -9981,6 +9981,16 @@ function tcTurnSkills(step) {
    Awareness, `fromAw: [[aw, round], ...]`, the last pair the setup reaches), `until` the last, and
    `rampAt` the rounds its stacks arrive (the line's value is all of them). Returns the share of the
    line that is on in a round (1-based), or null for a line that is on throughout. */
+/* The boss's HP (Nov 2026). Nothing publishes how fast a boss falls, and the fight length (#tmFight) is how long
+   such a fight lasts, so it is taken to fall evenly from full to nothing over the fight, read at the middle of
+   each round: at 6 rounds 92, 75, 58, 42, 25 and 8%. A damage dealer's bonus with `hp` reads it (DPS_KIT_BONUS):
+   `above`/`below` a % of HP, or `missing`, growing with the HP lost and full at `fullAt` % (0 by default). */
+const tcBossHp = r => Math.max(0, Math.min(1, 1 - (r - 0.5) / tcFight()));
+function tcHpF(hp, r) {
+  const h = tcBossHp(r) * 100;
+  if (hp.missing) return Math.min(1, (100 - h) / (100 - (hp.fullAt || 0)));
+  return (hp.below != null ? h < hp.below : h > hp.above) ? 1 : 0;
+}
 function tcGate(e, aw) {
   if (e.from == null && !e.fromAw && e.until == null && !e.rampAt) return null;
   let from = e.from || 1;
@@ -13168,8 +13178,7 @@ const DPS_KIT = {
 /* What a damage dealer's own kit does that the fight cannot price (shown on their seat). */
 const DPS_KIT_SKIPS = {
   'Ann Takamaki': [
-    'Burn (Trifire 75%, Falling Sun 30%, Rosethorn on entering La Vie en Rose): lufel never states a Burn damage value, so the DoT is not priced.',
-    'Trifire bonus (+30% of the damage dealt when in La Vie en Rose and the foe is under 50% HP): depends on boss HP and Trifire is not in lufel\'s rotation; not priced.'
+    'Burn (Trifire 75%, Falling Sun 30%, Rosethorn on entering La Vie en Rose): lufel never states a Burn damage value, so the DoT is not priced.'
   ],
   'Ryuji Sakamoto': [
     'No damage outside his numbered skills and Highlight. Rebound\'s +30% on the next skill and Grand Presser depend on his own HP: not priced. His other damage bonuses are, and Fearless Charge (A2) as Pierce 35 on his skills.',
@@ -13180,10 +13189,9 @@ const DPS_KIT_SKIPS = {
   ],
   'Kotone Montagne': [
     'The Blade Dancer Resonance is a guaranteed critical hit (the format has no field for that).',
-    'Ice Princess (Awareness 2): Resonance damage up to +50% with the foe\'s missing HP - depends on boss HP, not priced.',
     'Queen of Winter (5-star weapon): Blade Dancer usable at 8+ Crystals - the text does not say whether 8 or 10 are spent, so the rate change is not priced (its damage increase is).',
     'Opening Ceremony (Awareness 6): +4 Crystals once at battle start (0.4 of a Resonance per battle), not expressible per trigger.',
-    'Durandal of Ice / Highlight / Parhelion: damage up with foe\'s missing HP, not priced.'
+    'Her missing-HP bonuses read the boss\'s HP as falling evenly over the fight (tcBossHp); how fast a real boss falls is not known.'
   ],
   'Seiji Shiratori': [
     'Clumsy Swordwielder (Awareness 6): at 5 Right to Strike (max) Skills 1-3 deal 1 more hit. The same simulation reached 5 stacks on only 1-2% of casts, so not priced; the +20% stack chance also raises the 3+ share (simulated 36-99%), not added.',
@@ -13286,7 +13294,7 @@ const DPS_KIT_SKIPS = {
   ],
   'Ichigo Shikano': [
     'Lovesick ticks: lufel never prints what one Lovesick stack deals (no English, Korean or other definition in the dump), so the DoT, the Highlight\'s "activate all continuous damage once" and its "Lovesick 2 more times" cannot be priced.',
-    'Vorpal Butterfly\'s +200% skill damage while the foe is above 70% HP is a damage increase on the opening Skill 1, not priced here.',
+    'Vorpal Butterfly\'s +200% above 70% HP reads the boss\'s HP as falling evenly over the fight (tcBossHp): rounds 1-2 of 6.',
     'A6\'s once-a-battle repeat casts and free Highlight are already written into lufel\'s A6 rotation (2+2, HL+1+1, 3+3, 3+HL+HL).'
   ],
   'YUI [Prism]': [
@@ -13357,7 +13365,9 @@ const DPS_KIT_BONUS = {
     { to: 'skill', v: 30, needAil: 'Burn', why: 'Passive 1: every skill and Highlight activates a Fire Technical; when Fireburn activates (a Burning foe) that skill deals 30% more. lufel\'s Technical guide says her Technicals bring no additional effect, so Technical Precision is not read into it; the Bahamut damage study names this passive (熱忱) as adding into the damage sum, not a multiplier of its own' },
     { to: 'hl', v: 30, needAil: 'Burn', why: 'Passive 1, as above, on her Highlight' },
     { to: 'skill', v: 2, needAil: 'Burn', tech: 'fire', amp: true, why: 'Fireburn\'s own skill damage +2% on a Burning foe, +10% of itself per 100 Technical Precision; a multiplier of its own, like every Technical\'s damage increase (her +30% above is not)' },
-    { to: 'hl', v: 2, needAil: 'Burn', tech: 'fire', amp: true, why: 'Fireburn\'s own +2%, as above, on her Highlight' }
+    { to: 'hl', v: 2, needAil: 'Burn', tech: 'fire', amp: true, why: 'Fireburn\'s own +2%, as above, on her Highlight' },
+    { to: 'skill:2', v: 30, amp: true, chance: 0.25, awBelow: 6, hp: { below: 50 }, why: 'Trifire (Skill 2): in La Vie en Rose, on a foe below 50% HP, bonus damage of 30% of what the skill dealt. La Vie en Rose about every 4th action on one boss, as her other lines judge it' },
+    { to: 'skill:2', v: 30, amp: true, chance: 0.33, aw: 6, hp: { below: 50 }, why: 'Trifire\'s bonus, as above, with La Vie en Rose about every 3rd action from Time for Punishment (A6)' }
   ],
   'Kiyoshi Kurotani': [
     { to: 'skill:2', v: 2, needAil: 'Burn', tech: 'fire', amp: true, why: 'Crimson Summon (Skill 2) activates a Fire Technical: Fireburn on a Burning foe, skill damage +2%, +10% of itself per 100 Technical Precision' },
@@ -13365,6 +13375,10 @@ const DPS_KIT_BONUS = {
   ],
   'Kotone Montagne': [
     { to: 'res', ladder: [46, 68, 68, 90, 90, 112, 112], weapon: '5', why: 'Queen of Winter (5-star weapon): Blade Dancer damage +46/68/68/90/90/112/112%. Every res component is Blade Dancer. Its other line (Blade Dancer usable at 8+ Crystals) changes the rate and is not priced here' },
+    { to: 'skill:3', v: [29.3, 29.3, 30.5, 30.5], hp: { missing: true }, why: 'Durandal of Ice (Skill 3): with Parhelion or 10+ Ice Crystals, damage up with the foe\'s missing HP, at most 29.3-30.5% (read as growing evenly to nothing left). Judged always met: her rotations set up Parhelion or Crystals before it' },
+    { to: 'res', v: [29.3, 29.3, 30.5, 30.5], hp: { missing: true }, why: 'Durandal of Ice\'s passive part: Blade Dancer damage up with the foe\'s missing HP, at most 29.3-30.5%' },
+    { to: 'hl', v: 30, hp: { missing: true, fullAt: 20 }, why: 'Highlight: damage up with the foe\'s missing HP, the full 30% once it is below 20%' },
+    { to: 'res', v: 50, aw: 2, hp: { missing: true }, why: 'Ice Princess (A2, English text; lufel\'s Korean A2 is a skill-level node): Resonance damage up with the foe\'s missing HP, at most 50%' },
     { to: 'all', ladder: [2.4, 3.1, 3.1, 3.8, 3.8, 4.5, 4.5], weapon: '4', stacks: 3, why: 'Edelweiss (4-star weapon): each time she gains Ice Crystals, Ice damage +2.4-4.5% for 1 turn, up to 10 stacks; all her damage is Ice. Judged 3 held at her hits: one gain per other thief\'s action since her last turn (the 1-turn stacks gained before that have run out). Could equally be a timed Damage Multiplier line in KIT_STAT_BUFFS' }
   ],
   'Seiji Shiratori': [
@@ -13518,6 +13532,7 @@ const DPS_KIT_BONUS = {
     { to: 'skill:2', v: 30, after: 'HL', dur: 2, aw: 4, why: 'Refreshing Beach Resort (A4): Aerial Tide is counted as a Resonance, so it takes the same +30%' }
   ],
   'Ichigo Shikano': [
+    { to: 'skill:1', v: 200, hp: { above: 70 }, why: 'Vorpal Butterfly (Skill 1): +200% skill damage while the target has over 70% HP' },
     { to: 'skill', v: 15, chance: 0.83, why: 'Melting Ichi-Go Butter (passive 2): party continuous damage +15%; from 2 Chains of Love (Mine Alone) all her skill damage counts as continuous damage. 2 Chains from her first Highlight (round 2), so rounds 2-6 of the default 6: 0.83 of the fight (about 0.9 over 12 rounds)' },
     { to: 'hit', v: 15, chance: 0.83, why: 'As above, on the Lovesick-stack part of My Beloved Prince (same cast)' },
     { to: 'skill', v: 25, chance: 0.17, why: 'Mine Alone (A0) 3 Chains of Love: continuous damage +25%, her skills counting as continuous. 3 Chains from her second Highlight (about round 6): the last of the default 6 rounds, 0.17 of the fight (judged 0.6 over 12 rounds)' },
@@ -14685,8 +14700,9 @@ function tcSimRun(P, order, hold) {
           if (!(ail.get(b.needAil) > 0)) continue;
         }
         // stacks read off the foe's ailments, or the team's ailments between two Transform turns (Heat)
+        // `hp`: by the boss's HP this round (tcBossHp)
         const f = (b.perAil ? Math.max(0, Math.min(b.perAil[1], ailN()) - b.perAil[0]) : b.perHeat ? Math.min(b.perHeat, heat) : 1) *
-          (1 + tcTechScale(b.tech, X && X.tp));
+          (1 + tcTechScale(b.tech, X && X.tp)) * (b.hp ? tcHpF(b.hp, Math.max(1, round)) : 1);
         if (!f) continue;
         // `k`: a stat on those hits, not damage (Ryuji's Pierce, Radiance Motoha's Highlight ATK and crit damage)
         if (b.k) { xs = xs || {}; xs[b.k] = (xs[b.k] || 0) + b.val * f; }

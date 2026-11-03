@@ -250,7 +250,7 @@ alone (7/53/8 on today's 68 and pool, 10/53/5 on the pool before). Reading each 
 Teams fight and modelling ⓒ (Nov 2026, below) took the mean from 69.5 to 70.1 (the kit numbers 0.5, ⓒ 0.1),
 the range to 41-84 and the bands to 8/52/8; the median stayed 71. If a scoring change moves these, either the change is wrong or `BUILD_BANDS` needs
 re-cutting — check before shipping. The same block prints how many Moon/Star/Sky picks carry
-a main lufel does not recommend (31 of 204 on today's synthetic pool, 33 before the 28 Sep polish, and 26 on the one before
+a main lufel does not recommend (32 of 204 on today's synthetic pool as of 3 Nov 2026, 31 earlier, 33 before the 28 Sep polish, and 26 on the one before
 it, down from 71 of 195 at three rolls a main; an open slot never counts, since any main is on
 target there): a rise there on an unchanged pool means the optimiser is trading the main away
 for substats again.
@@ -1491,6 +1491,22 @@ damage formula (`docs/DATA-SOURCES.md`, the damage-formula section):
   the two-foe ×1.15 is not priced) and A4's +10% per Flowing Light; marked owned with no cards, her damage
   alone +28% (A4 +36%), her best team's +13% (+17%). An earlier rough test as a ×1.61 multiplier read +36%
   in her team: as a stat, her ATK adds to the team's ATK buffs.
+- **The boss's HP** (`tcBossHp`, `tcHpF`, Nov 2026; the user chose it as the largest gap left). Nothing
+  publishes how fast a boss falls and the fight length is how long such a fight lasts, so its HP falls evenly
+  from full to nothing over the fight, read at the middle of each round (92, 75, 58, 42, 25, 8% at 6). A
+  DPS_KIT_BONUS entry with `hp` reads it at the hit's round (`own()`): `{ above: 70 }`, `{ below: 50 }`, or
+  `{ missing: true, fullAt }` growing with the HP lost. Entered from a scan of lufel's English text for foe-HP
+  conditions: Ichigo's Vorpal Butterfly +200% above 70% (rounds 1-2 of 6), Ann's Trifire bonus hit (30% of its
+  damage in La Vie en Rose below 50%, at her La Vie en Rose rate), and Kotone Montagne's missing-HP bonuses
+  (Durandal of Ice and Blade Dancer up to 29.3-30.5%, the Highlight's 30% full below 20%, A2's Resonance up to
+  50%; "based on missing HP" read as growing evenly). On save (56): Ichigo alone +4.8%, her best team +1.6%;
+  Kotone Montagne (marked owned, no cards) alone +10.2%, team +2.4%, her rotation moving Durandal of Ice to the
+  last rounds; Ann unchanged (her best rotation never casts Trifire); no best team changed; Ichigo's build
+  score +0.05; calibration unchanged. Not entered: lines that depend on the damage dealer's own or an ally's
+  HP (Ryuji, Shoki, Leo, Tropical Motoha), Ren's Will of Rebellion stacks per foe below 60% (they feed his
+  extra actions, a KIT_ROT counter) and Merciless Pursuit (A6), Yaoling's Up to Chance (her own hit), and
+  Belphegor's 40% below 50% (a Wonder on-cast line, which carries no round gate). Cutting the HP faster or
+  slower than the fight is not a setting.
 - **Miku's own Skill Amplification** (`TC_SELF_AMP`, `tcSelfAmp`, Nov 2026): Hologram Screen (A1) gives her 15%,
   her 5★ weapon 10-19% while Virtual Concert is active. It raises the values her own skills grant (Korean 스킬
   효과 증폭), so `tcMemberCalc` multiplies each of her skill lines (TC_SKILL_SRC; caps included, as the twins'
@@ -1655,7 +1671,9 @@ damage formula (`docs/DATA-SOURCES.md`, the damage-formula section):
   one brief, hand-reviewed); All-Out Attacks, Dizzy and Wonder's Personas are not entered.
 - **Not priced, and the page says so**: other extra actions (Narumi's for Wonder, Mayumi's own) and
   Wonder's own damage, weakness creation, All-Out Attacks and Dizzy, Technicals (beyond the ailment readers and the Technicals above), Wonder's own
-  ailments, the boss's ailment resistance, kit bonuses that hang on the boss's HP, the damage dealer's own HP
+  ailments, the boss's ailment resistance, team and Persona lines that hang on the boss's HP (Ren's Will of
+  Rebellion below 60%, Yaoling's Up to Chance, Belphegor's 40% below 50%; the damage dealer's own are priced, see
+  "The boss's HP" below), the damage dealer's own HP
   or a specific teammate (what is left in `DPS_KIT_SKIPS`), always-crit and DEF-ignoring components,
   healing and survival, buffs copied from other buffs (other than Kotone Shiomi's Lunar Phaseshift), and a supporter's Theurgy gauge from teammates. The number ranks teams
   for one damage dealer; it is not a damage forecast and is never compared across damage dealers.

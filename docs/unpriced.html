@@ -178,7 +178,7 @@ var GLOBAL = [
   ["M","+","Party HP and DEF buffs for HP- and DEF-scaling damage dealers","The team model has no HP or DEF key. Yukimi, Ashiya and Miyu raise DEF; Shun Kano, Minami and Seaside Tomoko raise max HP. Their partners Yusuke, Ashiya, Junpei, both Shuns, Kiyoshi, Summer Ichigo and Beachflower Minami are rated without it, so their best partner may be wrong."],
   ["M","+","Damage over time with no published value","Burn ticks (Ann, Starlight Ann, Runa, Firecracker Yaoling) and Lovesick (Ichigo) deal nothing in the fight because lufel prints no number. For Ichigo it is most of her kit."],
   ["M","+","Spiritual ailments","Sleep, Forget, Despair, Brainwash and Curse (beyond Pazuzu's) are not tracked. Matters for Tomoko's +36% party damage, Yaoling, Toshiya, and several Wonder Personas."],
-  ["M","±","Boss HP thresholds","The fight has no boss HP, so \"below 50% HP\" and \"above 70% HP\" lines count never. Ann's Trifire, Kotone Montagne's missing-HP bonuses, Ichigo's opening Vorpal Butterfly, Belphegor, Jikokuten."],
+  ["M","±","Boss HP thresholds","Since 3 Nov the boss's HP falls evenly over the fight, and the damage dealers' own HP-gated bonuses read it (Ann's Trifire, Kotone Montagne's missing-HP bonuses, Ichigo's Vorpal Butterfly). Still not read: Ren's Will of Rebellion below 60%, Yaoling's Up to Chance, Belphegor. How fast a real boss falls is not known; an even fall is the assumption."],
   ["M","+","The damage dealer's own HP","Ryuji, Yusuke, Shoki [Notte], Tropical Motoha and Leo's partners have lines that hang on the user's HP. Ryuji's are the largest, and are why lufel pairs him with Leo."],
   ["M","+","Effects that lengthen other buffs","Wavecatcher Miyu's Surf (+1 turn to buffs and debuffs applied), Kotone Shiomi's Fortune, Frostgale Kotone's A6, Mio's A4. If Surf reaches allies' buffs, it is large."],
   ["M","+","Extra actions","Mayumi's Velocity turns, Narumi's for Wonder, Junpei's free Power Swing at A6, the Yggdrasil Evolution card. Miku's and Manaka's are played; these are not."],
@@ -191,7 +191,7 @@ var GLOBAL = [
 
 var D = [
 ["Ann Takamaki","dd","M","+","Burn damage over time","Trifire (75%), Falling Sun (30%) and Rosethorn inflict Burn, but lufel gives Burn no damage value, so the ticks deal nothing."],
-["Ann Takamaki","dd","M","+","Trifire's +30% below 50% boss HP","On one boss the composer puts Trifire on every turn; with no boss HP the extra 30% never applies, though it would for about half a real fight."],
+["Ann Takamaki","dd","M","+","Trifire's +30% below 50% boss HP","Priced in the fight since 3 Nov, from round 4 of 6, at her La Vie en Rose rate.","On your save 0%: her best rotation never casts Trifire."],
 ["Ann Takamaki","tm","S","+","A6 Time for Punishment","Extra Passion chance means more La Vie en Rose time than the single uptime used."],
 
 ["Ryuji Sakamoto","dd","L","+","Fearless Charge (A2): skill crits ignore 35% DEF","Ryuji always crits, so it covers all his skill hits from A2.","Priced in the fight since 2 Nov, as Pierce 35 on his skill hits from Awareness 2 (lufel's defence calculator lists it as Pierce; the Korean text puts it at A3). At A2 his damage alone +30%, his best team's +33%; nothing moves at your A0."],
@@ -216,7 +216,7 @@ var D = [
 ["Motoha Arai","rot","S","-","Electroshark without Shock","Priced with its Technical bonus (needs a Shocked foe); a composed rotation that casts it on an unshocked boss is overpriced."],
 
 ["Kotone Montagne","dd","M","+","Blade Dancer Resonance always crits","The format cannot mark it, so it is priced at her crit rate. Worth roughly a quarter more on that share of her damage."],
-["Kotone Montagne","dd","M","+","Missing-HP bonuses","Ice Princess (A2, Resonance up to +50%), Durandal of Ice, her Highlight and Parhelion all grow as the boss loses HP."],
+["Kotone Montagne","dd","M","+","Missing-HP bonuses","Priced in the fight since 3 Nov: Durandal of Ice and Blade Dancer up to 29.3%, the Highlight's 30% (full below 20%), A2's Resonance up to 50%, each growing as the boss loses HP.","Not owned; tested with no cards: alone +10%, her best team +2.4%."],
 ["Kotone Montagne","dd","S","+","Queen of Winter rate, A6 Opening Ceremony","Blade Dancer at 8+ Crystals; +4 Crystals once at battle start."],
 
 ["Shun Kano","tm","M","+","Daunting Firepower: 10% chance per shot, foe DEF −35%","A large DEF cut at a low chance; how many shots a Gun action fires is not known."],
@@ -383,7 +383,7 @@ var D = [
 ["Miyu Sahara [Wavecatcher]","rot","S","+","Paddle Out inside Surf","Not offered as a move."],
 
 ["Ichigo Shikano","dd","L","+","Lovesick ticks","lufel never prints what a stack deals, so the damage over time, the Highlight's \"activate all continuous damage once\" and its 2 more Lovesick deal nothing. Most of her kit.","Not measurable: there is no number to enter."],
-["Ichigo Shikano","dd","M","+","Vorpal Butterfly: +200% skill damage while the foe is above 70% HP","Her opening Skill 1s; needs boss HP."],
+["Ichigo Shikano","dd","M","+","Vorpal Butterfly: +200% skill damage while the foe is above 70% HP","Priced in the fight since 3 Nov, in rounds 1–2 of 6.","Alone +4.8%, her best team +1.6%."],
 ["Ichigo Shikano","tm","M","+","Melting Ichi-Go Butter: party damage over time +15%","The key exists now (dotDm); not entered. Matters for Kira and Firecracker Yaoling."],
 
 ["Kumi Katayama","tm","M","±","Tenacious Teacher: Hard Knocks' DEF down \"+10%, up to 40%\"","Points or relative is unclear; it is on the biggest DEF cut in the game."],

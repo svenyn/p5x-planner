@@ -3185,6 +3185,16 @@ function awarenessOverrideDrift() {
         return { aw, w, beat: pick(r, /^Feel the Beat \(Skill 1\)/), show: pick(r, /^Showstopper \(Skill 3\): party crit/), turns: pick(r, /^Showstopper \(Skill 3\): Virtual Concert stops/), weapon: pick(r, /^Light Up Your World \(5-star weapon\): party crit damage up, u/) }; });
       state.chars[mk].loadout = keep.lo; tcMemo.key = '';
     }
+    // the boss's HP falls evenly over the fight; a damage dealer's bonus can read it (DPS_KIT_BONUS `hp`)
+    {
+      const F = tcFight(), km = 'Kotone Montagne', K = charDef(km), keepKb = DPS_KIT_BONUS[km];
+      const run = lines => { DPS_KIT_BONUS[km] = lines; tcMemo.key = ''; return tcSim(K, [null, null], false).total; };
+      out.bossHp = { F, hp: [1, 2, 3, F].map(r => Math.round(tcBossHp(r) * 1000) / 1000),
+        above70: [1, 2, 3].map(r => tcHpF({ above: 70 }, r)), below50: [3, 4].map(r => tcHpF({ below: 50 }, r)),
+        missing: tcHpF({ missing: true }, F), fullAt20: tcHpF({ missing: true, fullAt: 20 }, F),
+        gain: run(keepKb) / run(keepKb.filter(b => !b.hp)) };
+      DPS_KIT_BONUS[km] = keepKb; tcMemo.key = '';
+    }
     // Kotone Shiomi's weapon Skill Amplification from Lunar Bond 5 (round 3 at A0, round 1 from A1)
     {
       const ko = 'Kotone Shiomi', s1 = TEAM_BUFFS[ko].find(e => String(e.src) === '1'), hl = TEAM_BUFFS[ko].find(e => e.src === 'HL');
@@ -3744,6 +3754,12 @@ function awarenessOverrideDrift() {
     check('Miku\'s Skill Amplification: 15% on her skills from Awareness 1, her 5-star weapon\'s 10% (R1) on what she casts in Virtual Concert, and never on a count or her weapon',
       near(m[0].beat, 1) && near(m[0].show, 1.1) && near(m[1].beat, 1.15) && near(m[1].show, 1.25) && near(m[2].show, 1.15) &&
       near(m[1].turns, 1) && near(m[0].turns, 1) && near(m[1].weapon, 1), JSON.stringify(m));
+  }
+  {
+    const b = th.bossHp, near = (x, y) => Math.abs(x - y) < 1e-6;
+    check('the boss\'s HP falls evenly over the fight (mid-round), and HP-gated kit bonuses read it: above 70% in rounds 1-2 of 6, below 50% from round 4, missing HP growing to the end',
+      b.F !== 6 || (near(b.hp[0], 11 / 12) && near(b.hp[1], 0.75) && near(b.hp[3], 1 / 12) && b.above70.join() === '1,1,0' && b.below50.join() === '0,1' &&
+      near(b.missing, 11 / 12) && b.fullAt20 === 1 && b.gain > 1), JSON.stringify(b));
   }
   {
     const k = th.kotoneAmp, near = (x, y) => Math.abs(x - y) < 1e-6;
