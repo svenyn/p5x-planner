@@ -1523,6 +1523,20 @@ damage formula (`docs/DATA-SOURCES.md`, the damage-formula section):
   Tropical Motoha alone +2%; build scores Ryuji 77.3 to 77.1, Motoha 80.13 to 80.15; calibration unchanged.
   Not played: Leo's Power of Friendship and A6 lines (still judged), Grand Presser's low-HP growth, Shoki's
   Highlight (not owned), and any HP lost to the boss.
+- **Ichigo's Lovesick is played** (`TC_LS`, `lsTick` in `tcSimRun`, Nov 2026). lufel's data never defines the
+  status; the in-game tooltip does (the Mega Ten wiki's copy, which the user pasted): "Each turn, take Curse
+  damage equal to 6%/12%/18% of Ichigo's Attack (at level 1/50/70). This effect lasts 4 turns, and stacks up to
+  10 times." So 18% of her ATK per stack on each enemy turn. Vorpal Butterfly adds 2, Obsessive Rose 4, every
+  skill 1 more from A1, cap 15 from A6. From Prydwen's guide: each skill that inflicts or refreshes it (My Beloved
+  Prince resets its duration) takes a snapshot of her buffs and the foe's debuffs, all but her crit, dealt for
+  the next 4 turns; it ignores her Pierce and counts DEF down; it crits only in the 3 turns after her Highlight,
+  which sets it off 3 times at once (continuous damage once, Lovesick 2 more). Continuous-damage buffs reach it
+  (DPS_KIT_BONUS `to: 'dot', match: 'Lovesick'`: her Melting Ichi-Go Butter and A0's 3 Chains of Love; the
+  team's `dotDm`). Melting Ichi-Go Butter now also gives teammates +15% `dotDm` (`own: false`). On save (56):
+  her damage alone +57%, Lovesick 37% of it (21% in her best team, whose Pierce it ignores), 12 ticks in 6
+  rounds at the 10-stack cap; her best team unchanged (Beachflower Minami / Kotone / Fuuka / Kumi), its damage
+  +18% though its multiplier falls 25.1× to 18.8× (her alone rises more); build score 83.08 to 83.05;
+  calibration unchanged. My Beloved Prince's per-stack hit still assumes 10 stacks.
 - **Makoto Niijima's Nuclear Finisher ATK** (Nov 2026): her 5★ weapon's +30-57% ATK "when attacking a foe with
   an elemental ailment" is a KIT_STAT_BUFFS line with `needAil: 'any'` (any elemental ailment, `ailOn` in
   `tcSimRun`): always on in her stats and build score, like Firecracker Rin's Burn lines, since her own skills

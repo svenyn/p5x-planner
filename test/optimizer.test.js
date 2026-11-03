@@ -3195,6 +3195,16 @@ function awarenessOverrideDrift() {
         gain: run(keepKb) / run(keepKb.filter(b => !b.hp)) };
       DPS_KIT_BONUS[km] = keepKb; tcMemo.key = '';
     }
+    // Ichigo's Lovesick (TC_LS): stacks from her skills, capped, ticking on the enemy's turn and on her Highlight
+    {
+      const ich = 'Ichigo Shikano', I = charDef(ich), keep = { r: TEAMS[ich], lo: state.chars[ich].loadout, v: TC_LS.v };
+      state.chars[ich].loadout = Object.assign({}, DEFAULT_LOADOUT, { awareness: 0 });
+      const run = seq => { TEAMS[ich] = Object.assign({}, keep.r, { rot: [{ aw: 0, label: 'Test', seq }] }); tcMemo.key = ''; return tcSim(I, [null, null], false); };
+      const two = run(['2']), three = run(['3']);
+      TC_LS.v = 0; const off = run(['2']); TC_LS.v = keep.v;
+      out.lovesick = { two: two.lovesick, three: three.lovesick, gain: two.total / off.total, F: tcFight() };
+      TEAMS[ich] = keep.r; state.chars[ich].loadout = keep.lo; tcMemo.key = '';
+    }
     // the damage dealer's own HP (TC_HP): Ryuji's Pirate Tactics spends it, Leo's barrier too, and Rebound reads it
     {
       const ryu = 'Ryuji Sakamoto', leo = 'Leo Kamiyama', R = charDef(ryu), keep = { r: TEAMS[ryu], l: TEAMS[leo], lo: state.chars[ryu].loadout };
@@ -3775,6 +3785,9 @@ function awarenessOverrideDrift() {
       near(m[0].beat, 1) && near(m[0].show, 1.1) && near(m[1].beat, 1.15) && near(m[1].show, 1.25) && near(m[2].show, 1.15) &&
       near(m[1].turns, 1) && near(m[0].turns, 1) && near(m[1].weapon, 1), JSON.stringify(m));
   }
+  check('Ichigo\'s Lovesick: Obsessive Rose stacks it to the cap of 10, it ticks every enemy turn and adds damage; My Beloved Prince alone adds no stacks and nothing ticks',
+    th.lovesick.two && th.lovesick.two.peak === 10 && th.lovesick.two.ticks >= th.lovesick.F && th.lovesick.gain > 1.05 &&
+    th.lovesick.three && th.lovesick.three.peak === 0 && th.lovesick.three.ticks === 0, JSON.stringify(th.lovesick));
   {
     const s = th.selfHp, near = (x, y) => Math.abs(x - y) < 1e-6;
     check('the damage dealer\'s own HP: Pirate Tactics spends 20% (Rebound once below 75%), a Skill 2 rotation spends nothing, and Leo\'s Justice Barrier brings Rebound on its own',

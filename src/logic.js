@@ -8822,7 +8822,8 @@ const TEAM_BUFFS = {
     { k: 'dmg', v: 4, to: 'enemy', src: 'aw', aw: 0, stacks: 10, why: 'Mine Alone (A0, 1 Chains of Love stack from her first Vorpal Butterfly): the foe takes +4% damage per Lovesick stack; her rotation reaches the 10-stack cap by her third turn and Skill 3 refreshes them' },
     { k: 'dmg', v: 4, to: 'enemy', src: 'aw', aw: 6, stacks: 5, why: 'A World of Our Own (A6): Lovesick cap raised to 15, 5 more stacks of Mine Alone\'s damage taken' },
     { k: 'defdown', v: 3, to: 'enemy', src: 'aw', aw: 1, stacks: 10, why: 'Pounding Heartbeat (A1): the foe\'s DEF -3% per Lovesick stack, held at the 10-stack cap' },
-    { k: 'defdown', v: 3, to: 'enemy', src: 'aw', aw: 6, stacks: 5, why: 'A World of Our Own (A6): Lovesick cap raised to 15, 5 more stacks of Pounding Heartbeat\'s DEF decrease' }
+    { k: 'defdown', v: 3, to: 'enemy', src: 'aw', aw: 6, stacks: 5, why: 'A World of Our Own (A6): Lovesick cap raised to 15, 5 more stacks of Pounding Heartbeat\'s DEF decrease' },
+    { k: 'dotDm', v: 15, to: 'party', src: 'passive', own: false, why: 'Melting Ichi-Go Butter (passive 2): while Ichigo is present, the party\'s continuous damage +15% (her own is in DPS_KIT_BONUS)' }
   ],
   'Kumi Katayama': [
     { k: 'atk%', v: 36, to: 'party', src: 'passive', down: true, why: 'Answer the Call (passive 1): "when an ally attacks a knocked down foe, increase Attack by 36.0%" (Korean the same), every ally, Kumi included' },
@@ -9359,7 +9360,6 @@ const TEAM_BUFF_SKIPS = {
     'Hang Ten!, Ride it Out!, Surfing Mermaid (A0) SP thresholds, A2/A4/A6 and both weapons - self buffs'
   ],
   'Ichigo Shikano': [
-    'Melting Ichi-Go Butter (passive): party continuous damage +15% - only damage-over-time, not modelled',
     'Highlight: triggers continuous damage and Lovesick on the target - her own damage',
     'Overflowing Love, Mine Alone crit rate/continuous damage, Power of Love crit damage, Maiden\'s True Strength, both weapons: self only',
     'A World of Our Own (A6) repeat activations: her own extra actions'
@@ -13295,7 +13295,7 @@ const DPS_KIT_SKIPS = {
     'Surf\'s "extend the duration of buffs and debuffs applied by 1 turn" (and Offshore Paradise\'s on entering Surf) is not priced.'
   ],
   'Ichigo Shikano': [
-    'Lovesick ticks: lufel never prints what one Lovesick stack deals (no English, Korean or other definition in the dump), so the DoT, the Highlight\'s "activate all continuous damage once" and its "Lovesick 2 more times" cannot be priced.',
+    'Lovesick is played on the boss (TC_LS): 18% ATK per stack each enemy turn, from the in-game tooltip (lufel\'s data leaves it out). The snapshot holds the foe\'s debuffs and her buffs as of her last skill, as Prydwen describes; My Beloved Prince\'s per-stack hit still counts 10 stacks, and a foe defeated passing its stacks on does not arise on one boss.',
     'Vorpal Butterfly\'s +200% above 70% HP reads the boss\'s HP as falling evenly over the fight (tcBossHp): rounds 1-2 of 6.',
     'A6\'s once-a-battle repeat casts and free Highlight are already written into lufel\'s A6 rotation (2+2, HL+1+1, 3+3, 3+HL+HL).'
   ],
@@ -13536,6 +13536,9 @@ const DPS_KIT_BONUS = {
   ],
   'Ichigo Shikano': [
     { to: 'skill:1', v: 200, hp: { above: 70 }, why: 'Vorpal Butterfly (Skill 1): +200% skill damage while the target has over 70% HP' },
+    { to: 'dot', match: 'Lovesick', v: 15, why: 'Melting Ichi-Go Butter (passive 2): party continuous damage +15%, on her Lovesick ticks (TC_LS)' },
+    { to: 'dot', match: 'Lovesick', v: 25, chance: 0.17, why: 'Mine Alone (A0) 3 Chains of Love: continuous damage +25% on Lovesick, judged as on her skills (her second Highlight, about round 6)' },
+    { to: 'dot', match: 'Lovesick', v: 25, chance: 0.67, aw: 2, why: 'Power of Love (A2): 3 Chains of Love from her first Highlight, as on her skills' },
     { to: 'skill', v: 15, chance: 0.83, why: 'Melting Ichi-Go Butter (passive 2): party continuous damage +15%; from 2 Chains of Love (Mine Alone) all her skill damage counts as continuous damage. 2 Chains from her first Highlight (round 2), so rounds 2-6 of the default 6: 0.83 of the fight (about 0.9 over 12 rounds)' },
     { to: 'hit', v: 15, chance: 0.83, why: 'As above, on the Lovesick-stack part of My Beloved Prince (same cast)' },
     { to: 'skill', v: 25, chance: 0.17, why: 'Mine Alone (A0) 3 Chains of Love: continuous damage +25%, her skills counting as continuous. 3 Chains from her second Highlight (about round 6): the last of the default 6 rounds, 0.17 of the fight (judged 0.6 over 12 rounds)' },
@@ -14549,6 +14552,16 @@ const TC_HP = {
    31.6-32.9% of his ATK + 900-1230 for 2 turns; Energy Recharge returns what is left of the shield as HP when it
    ends — all of it, with no boss damage played. His Highlight lifts them back to 60% (at most 200% of his ATK). */
 const TC_HP_LEO = { n: 'Leo Kamiyama', spend: 30, keep: 80, atk: [31.6, 31.6, 32.9, 32.9], flat: [900, 1095, 1035, 1230], dur: 2, hlTo: 60, hlCap: 200 };
+/* Ichigo's Lovesick (Nov 2026). The status text, which lufel's data leaves out (the Mega Ten wiki's copy of the
+   in-game tooltip, read by the user): "Each turn, take Curse damage equal to 6%/12%/18% of Ichigo's Attack (at
+   level 1/50/70). This effect lasts 4 turns, and stacks up to 10 times" — 18% at her level 80, per stack, on
+   the enemy's turn. Vorpal Butterfly adds 2, Obsessive Rose 4, and from A1 every skill 1 more; the cap is 15
+   from A6. Prydwen's guide gives the rest: each skill that inflicts it or refreshes it (My Beloved Prince resets
+   its duration) takes a snapshot of her buffs and the foe's debuffs, all but her crit, which ticks deal for the
+   next 4 turns; it ignores her Pierce and counts DEF down; it cannot crit except in the 3 turns after her
+   Highlight. Her Highlight sets all continuous damage off once and Lovesick 2 more times: 3 ticks at once.
+   It is continuous damage, so damage-over-time buffs reach it (her Melting Ichi-Go Butter, the team's). */
+const TC_LS = { n: 'Ichigo Shikano', v: 18, add: [2, 4, 0], dur: 4, cap: 10, cap6: 15, hlTicks: 3, hlCrit: 3, comp: { kind: 'dot', why: 'Lovesick' } };
 function tcSelfHpF(sh, hp, bossHp, rebound) {
   if (sh.rebound) return rebound ? 1 : 0;
   if (sh.belowBoss) return bossHp > hp ? 1 : 0;
@@ -14573,6 +14586,8 @@ function tcSimRun(P, order, hold) {
   const hpAw = HPK ? +charLoadout(D.n).awareness || 0 : 0;
   const hpLeo = HPL ? (() => { const lo = charLoadout(HPL.n), ti = kitTierIndex(charDef(HPL.n), lo); return { atk: tcStat(HPL.n, 'ATK'), pct: HPL.atk[ti], flat: HPL.flat[ti] }; })() : null;
   const hpSet = h => { selfHp = Math.max(0.01, Math.min(1, h)); hpLog.min = Math.min(hpLog.min, selfHp); };
+  // Ichigo's Lovesick on the boss (TC_LS): stacks, turns left, the snapshot it deals with, its crit window
+  const LS = D.n === TC_LS.n ? (() => { const aw = +charLoadout(D.n).awareness || 0; return { n: 0, left: 0, snap: null, critTo: -1, cap: aw >= 6 ? TC_LS.cap6 : TC_LS.cap, a1: aw >= 1, ticks: 0, peak: 0 }; })() : null;
   const buffs = [];        // { k, v, left, enemy, owner, ref, vc }
   const pending = [];      // lines that wait for the damage dealer's next Highlight
   let gauge = P.gauge0, total = 0, dpsActs = 0, vc = false, round = 0;
@@ -14781,6 +14796,15 @@ function tcSimRun(P, order, hold) {
         gain(c.kind, x); techGain(ob, x);
         if (c.kind === 'res') ckMix(D.e);
       });
+    };
+    /* Lovesick's ticks (TC_LS): `n` of them now, each 18% of her ATK per stack, on the snapshot without her
+       Pierce and with her crit as it is now; a crit only in the window her Highlight opens */
+    const lsTick = n => {
+      if (!LS || !LS.snap || LS.n <= 0) return;
+      const live = curX(), Xt = Object.assign({}, LS.snap, { pierce: 0, cr: live.cr, cm: live.cm });
+      const ob = own('dot', TC_LS.comp, Xt);
+      const x = n * LS.n * TC_LS.v * ob.amp * (1 + (Xt.dotFinal || 0) / 100) * spread(false, Xt, (Xt.dotDm || 0) + ob.add, 0, 1, round > LS.critTo, false, undefined, ob.xs);
+      gain('dot', x); techGain(ob, x); LS.ticks += n;
     };
     const markCover = () => {
       dpsActs++;
@@ -15041,6 +15065,8 @@ function tcSimRun(P, order, hold) {
         lastUse.HL = round; lastUse.TH = round;
         kitFire('selfHL', X);
         trigger('dpsHL', a);
+        // Ichigo's Highlight lets Lovesick crit for 3 turns and sets it off 3 times at once (TC_LS)
+        if (LS) { LS.critTo = round + TC_LS.hlCrit - 1; lsTick(TC_LS.hlTicks); }
         // a Highlight that restores their own HP does so after its hit (Tropical Motoha's)
         if (HPK && HPK.gain && HPK.gain.HL) hpSet(selfHp + HPK.gain.HL / 100);
       } else {
@@ -15219,6 +15245,12 @@ function tcSimRun(P, order, hold) {
           }
         }
         inflict(a, new Set(uses.map((u, i) => u ? String(i + 1) : null).filter(Boolean)));
+        // Lovesick: the turn's skills add their stacks, and any skill takes a new snapshot for 4 more turns
+        if (LS && uses.some(u => u)) {
+          uses.forEach((u, i) => { if (u) LS.n = Math.min(LS.cap, LS.n + u * (TC_LS.add[i] + (LS.a1 ? 1 : 0))); });
+          LS.peak = Math.max(LS.peak, LS.n);
+          if (LS.n > 0) { LS.left = TC_LS.dur; LS.snap = Object.assign({}, X); }
+        }
         // what their skills restore lands after the hits; Summer Hype runs to the end of her turn after Skill 3;
         // Leo's barriers on them count down after their action and give back what is left of the shield
         if (HPON) {
@@ -15344,6 +15376,7 @@ function tcSimRun(P, order, hold) {
       }
       // the enemy's turn: damage over time ticks, debuffs count down; a knocked-down boss gets up (it still acts)
       kitFire('round', curX());
+      if (LS && LS.left > 0) { lsTick(1); if (--LS.left <= 0) LS.n = 0; }
       if (downed) { downed = false; downPts = downMax; }
       for (let i = buffs.length - 1; i >= 0; i--) { const b = buffs[i]; if (b.enemy) { b.left--; if (b.left <= 0) buffs.splice(i, 1); } }
       ailSum += ailN();
@@ -15362,7 +15395,9 @@ function tcSimRun(P, order, hold) {
     cocktails: CK ? { casts: CK.casts, sum: CK.sum, std2: CK.std2, one: CK.one, oneSum: CK.oneSum, lost: CK.lost, spent: CK.spent } : null,
     rikoSp: (T.find(x => x.rk) || {}).rk || null,
     // the damage dealer's own HP where it is played (TC_HP): its lowest share, Rebounds, and where it ended
-    selfHp: HPON ? { min: hpLog.min, rebounds: hpLog.rebounds, end: selfHp } : null };
+    selfHp: HPON ? { min: hpLog.min, rebounds: hpLog.rebounds, end: selfHp } : null,
+    // Ichigo's Lovesick (TC_LS): how many times it ticked and its highest stack count
+    lovesick: LS ? { ticks: LS.ticks, peak: LS.peak } : null };
 }
 
 /* The fight under the spending orders worth trying, the best kept. */
