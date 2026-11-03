@@ -1536,7 +1536,11 @@ damage formula (`docs/DATA-SOURCES.md`, the damage-formula section):
   her damage alone +57%, Lovesick 37% of it (21% in her best team, whose Pierce it ignores), 12 ticks in 6
   rounds at the 10-stack cap; her best team unchanged (Beachflower Minami / Kotone / Fuuka / Kumi), its damage
   +18% though its multiplier falls 25.1× to 18.8× (her alone rises more); build score 83.08 to 83.05;
-  calibration unchanged. My Beloved Prince's per-stack hit still assumes 10 stacks.
+  calibration unchanged. My Beloved Prince reads the stacks on the boss as she casts it (the user asked): its
+  per-stack part through DPS_KIT `ls` ([from, to]: the stacks counted in that range, the quick screen taking the
+  cap), its bonus hit only at 10+ (`s3At`; it is 118.7 of SKILL_DMG's 373.5, the same share at every tier,
+  `s3Share`). Her damage alone did not move (her rotation reaches 10 first), but her best team's fitted rotation
+  had cast it at 8 stacks with the full bonus; it now waits for 10, and that team reads 18.1× (was 18.8×).
 - **Makoto Niijima's Nuclear Finisher ATK** (Nov 2026): her 5★ weapon's +30-57% ATK "when attacking a foe with
   an elemental ailment" is a KIT_STAT_BUFFS line with `needAil: 'any'` (any elemental ailment, `ailOn` in
   `tcSimRun`): always on in her stats and build score, like Firecracker Rin's Burn lines, since her own skills

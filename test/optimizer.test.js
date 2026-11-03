@@ -3202,7 +3202,10 @@ function awarenessOverrideDrift() {
       const run = seq => { TEAMS[ich] = Object.assign({}, keep.r, { rot: [{ aw: 0, label: 'Test', seq }] }); tcMemo.key = ''; return tcSim(I, [null, null], false); };
       const two = run(['2']), three = run(['3']);
       TC_LS.v = 0; const off = run(['2']); TC_LS.v = keep.v;
-      out.lovesick = { two: two.lovesick, three: three.lovesick, gain: two.total / off.total, F: tcFight() };
+      // My Beloved Prince on the stacks there: none with no stacks, and its bonus hit only from 10
+      const early = run(['2', '2', '3']); TC_LS.s3At = 0; const always = run(['2', '2', '3']); TC_LS.s3At = 10;
+      out.lovesick = { two: two.lovesick, three: three.lovesick, gain: two.total / off.total, F: tcFight(),
+        hitNone: (three.parts || {}).hit || 0, earlyVsAlways: early.total / always.total };
       TEAMS[ich] = keep.r; state.chars[ich].loadout = keep.lo; tcMemo.key = '';
     }
     // the damage dealer's own HP (TC_HP): Ryuji's Pirate Tactics spends it, Leo's barrier too, and Rebound reads it
@@ -3787,7 +3790,8 @@ function awarenessOverrideDrift() {
   }
   check('Ichigo\'s Lovesick: Obsessive Rose stacks it to the cap of 10, it ticks every enemy turn and adds damage; My Beloved Prince alone adds no stacks and nothing ticks',
     th.lovesick.two && th.lovesick.two.peak === 10 && th.lovesick.two.ticks >= th.lovesick.F && th.lovesick.gain > 1.05 &&
-    th.lovesick.three && th.lovesick.three.peak === 0 && th.lovesick.three.ticks === 0, JSON.stringify(th.lovesick));
+    th.lovesick.three && th.lovesick.three.peak === 0 && th.lovesick.three.ticks === 0 &&
+    th.lovesick.hitNone === 0 && th.lovesick.earlyVsAlways < 0.999, JSON.stringify(th.lovesick));
   {
     const s = th.selfHp, near = (x, y) => Math.abs(x - y) < 1e-6;
     check('the damage dealer\'s own HP: Pirate Tactics spends 20% (Rebound once below 75%), a Skill 2 rotation spends nothing, and Leo\'s Justice Barrier brings Rebound on its own',
