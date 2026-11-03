@@ -13416,9 +13416,12 @@ const TEAM_BUFFS = {
     { k: 'dmg', v: 25, to: 'party', src: 'aw', on: 'HL', dur: 2, aw: 4, why: 'Eternal Bonds (A4): Highlight adds party damage +25% for 2 turns' },
     { k: 'atk%', v: 9, to: 'ally', src: 'passive', on: '1', dur: 3, arch: ['AoE DPS', 'ST DPS'], stacks: 3, why: 'Leader\'s Guidance (passive 1): buffing an ally gives the main target ATK +9% for 3 turns, 3 stacks; she buffs the Arcana Link ally nearly every turn' },
     { k: 'final', v: 1, to: 'party', src: 'aw', why: 'Moment of Truth (A0): party final damage +1% per Strategist present; encoded for Kotone herself only (others depend on the team)' },
-    { k: 'atk%', v: 50, to: 'ally', src: 'aw', arch: ['AoE DPS', 'ST DPS'], cond: 'DPS holds Arcana Link', why: 'Moment of Truth (A0): Lunar Bond 1 - Arcana Link ally ATK +50%; Lunar Bond rises with every skill by either of them and only resets on reselection' },
-    { k: 'pierce', v: 15, to: 'ally', src: 'aw', fromAw: [[0, 3], [1, 1]], arch: ['AoE DPS', 'ST DPS'], cond: 'DPS holds Arcana Link', why: 'Moment of Truth (A0): Lunar Bond 5 - pierce +15%; reached in about 2-3 turns (immediately at A1), uptime judged; the fight counts it from round 3 (round 1 at A1)' },
-    { k: 'cm', v: 50, to: 'ally', src: 'aw', fromAw: [[0, 5], [1, 3]], arch: ['AoE DPS', 'ST DPS'], cond: 'DPS holds Arcana Link', why: 'Moment of Truth (A0): Lunar Bond 10 - crit damage +50%; about +2 Lunar Bond per turn, reached around turn 5 (turn 3 at A1), uptime judged over a ~10-turn fight; the fight counts it from round 5 (3 at A1)' },
+    /* Moment of Truth's Lunar Bond (`lb`, the level a line needs): +1 each time the Arcana Link ally casts a
+       Persona skill or she casts one on them (Korean: 페르소나 스킬, so not a Highlight), up to 10, 5 at once from A1.
+       The fight counts it (tcSimRun, TC_LB); the quick screen keeps the rounds judged from about 2 a round. */
+    { k: 'atk%', v: 50, to: 'ally', src: 'aw', from: 1, lb: 1, arch: ['AoE DPS', 'ST DPS'], cond: 'DPS holds Arcana Link', why: 'Moment of Truth (A0): Lunar Bond 1 - Arcana Link ally ATK +50%; Lunar Bond rises with every skill by either of them and only resets on reselection; in the fight from the first such skill (at once from A1)' },
+    { k: 'pierce', v: 15, to: 'ally', src: 'aw', fromAw: [[0, 3], [1, 1]], lb: 5, arch: ['AoE DPS', 'ST DPS'], cond: 'DPS holds Arcana Link', why: 'Moment of Truth (A0): Lunar Bond 5 - pierce +15%; the fight counts the level (immediately at A1); the quick screen takes it from round 3' },
+    { k: 'cm', v: 50, to: 'ally', src: 'aw', fromAw: [[0, 6], [1, 4]], lb: 10, arch: ['AoE DPS', 'ST DPS'], cond: 'DPS holds Arcana Link', why: 'Moment of Truth (A0): Lunar Bond 10 - crit damage +50%; the fight counts the level; the quick screen takes it from round 6 (4 at A1), where the fight reaches it on the real save (Nov 2026: Highlight turns and her Skill 2 and 3 turns add none)' },
     { k: 'cm', v: 30, to: 'ally', src: 'aw', on: '1', dur: 5, aw: 1, arch: ['AoE DPS', 'ST DPS'], cond: 'DPS holds Arcana Link at 3 Powerful Bond stacks', why: 'Echoing Strings (A1): Lyre\'s Melody on a target with 3 Powerful Bond stacks gives +30% crit damage more for 5 turns' },
     { k: 'cm', ladder: [6, 7.8, 7.8, 9.6, 9.6, 11.4, 11.4], to: 'ally', src: 'weapon', on: '1', dur: 3, weapon: '5', arch: ['AoE DPS', 'ST DPS'], stacks: 3, cond: 'DPS holds Arcana Link', why: 'Vetri Vel Muruga (5-star weapon): crit damage +6-11.4% per Powerful Bond stack on the ally, 3 stacks held' }
   ],
@@ -16572,7 +16575,8 @@ const TC_SELF_AMP = {
   'Hatsune Miku': { aw: 1, v: 15, vc: { weapon: '5', ladder: [10, 13, 13, 16, 16, 19, 19] } },
   'Kotone Shiomi': { lb: { weapon: '5', ladder: [10, 13, 13, 16, 16, 19, 19], fromAw: [[0, 3], [1, 1]] } }
 };
-function tcSelfAmp(name, e, lo, aw, round) {
+// `lb`: the Lunar Bond the fight has counted (TC_LB), read in place of the judged rounds when given
+function tcSelfAmp(name, e, lo, aw, round, lb) {
   const A = TC_SELF_AMP[name];
   // a count is not a value (Showstopper's 2 extra turns)
   if (!A || !TC_SKILL_SRC.has(String(e.src)) || /^(turns|xturns|hlx|hlGauge|thGauge|hlCd|hlCdRate|hlFree)$/.test(e.k)) return 1;
@@ -16581,7 +16585,7 @@ function tcSelfAmp(name, e, lo, aw, round) {
   if (A.vc && tcIsVc(e) && lo.weapon === A.vc.weapon) p += A.vc.ladder[ri];
   if (A.lb && lo.weapon === A.lb.weapon) {
     const g = tcGate({ fromAw: A.lb.fromAw }, aw);
-    p += A.lb.ladder[ri] * (round != null ? g(round) : tcGateMean(g, tcFight()));
+    p += A.lb.ladder[ri] * (lb != null ? (lb >= 5 ? 1 : 0) : round != null ? g(round) : tcGateMean(g, tcFight()));
   }
   return 1 + p / 100;
 }
@@ -16750,12 +16754,12 @@ function tcMemberCalc(dps, name, inTeam, backup, fit, pair) {
     if (!backup && (u.e.battle != null || (u.e.on && u.e.up == null)))
       // a `build` line lands one stack a cast, up to the whole (`full`, which the page's uptime is a share of)
       events.push({ e: u.e, k: u.k, v: (u.e.build ? u.v / (u.e.stacks || 1) : u.v) / (u.e.ck ? tcCkQuick(u.e.ck, aw) : 1) / (u.e.spT ? tcRkQuick(seq, u.e.spT) : 1) / sa, dur: u.e.dur === 'next' ? 'next' : u.dur, ref: shareN + i, gate: u.gate,
-        stackMax: u.e.stackMax || (u.e.build ? u.e.stacks || 1 : 0), full: u.e.build ? u.v : 0, ampAt: sa !== 1 ? r => tcSelfAmp(name, u.e, lo, aw, r) : null });
+        stackMax: u.e.stackMax || (u.e.build ? u.e.stacks || 1 : 0), full: u.e.build ? u.v : 0, ampAt: sa !== 1 ? (r, lb) => tcSelfAmp(name, u.e, lo, aw, r, lb) : null });
     // always on, but only while the boss is knocked down
     else if (!backup && u.down) downConsts.push({ k: u.k, v: u.v * (u.e.up != null ? u.e.up : 1), one: u.e.to === 'enemy' && tcOneFoe(u.e) });
     // the fight switches a gated line on round by round; any judged uptime it also carries stays
     else if (!backup && (u.e.minHits || u.e.ailMin || u.e.perAil || u.e.ailOfElem || u.e.needAil)) constsMin.push({ k: u.k, v: u.v * u.up, minHits: u.e.minHits || 0, ailMin: u.e.ailMin || 0, perAil: u.e.perAil || 0, ailOfElem: !!u.e.ailOfElem, needAil: u.e.needAil || null, one: u.e.to === 'enemy' && tcOneFoe(u.e) });
-    else if (!backup && u.gate) gated.push({ k: u.k, v: u.v * (u.e.up != null ? u.e.up : 1), gate: u.gate, one: u.e.to === 'enemy' && tcOneFoe(u.e), ally: copySrc && tcCopyable(u.e, u.k) });
+    else if (!backup && u.gate) gated.push({ k: u.k, v: u.v * (u.e.up != null ? u.e.up : 1), gate: u.gate, lb: u.e.lb, one: u.e.to === 'enemy' && tcOneFoe(u.e), ally: copySrc && tcCopyable(u.e, u.k) });
     else {
       if (copySrc && tcCopyable(u.e, u.k)) ally[u.k] = (ally[u.k] || 0) + u.v * u.up;
       consts[u.k] += u.v * u.up * (backup ? tcAilQuick(u.e) * u.cov : 1);
@@ -19121,6 +19125,11 @@ const TC_HP_LEO = { n: 'Leo Kamiyama', spend: 30, keep: 80, atk: [31.6, 31.6, 32
    (stacks counted in that range), and its bonus hit at 10+ stacks (118.7 of SKILL_DMG's 373.5 = 254.8 + 118.7,
    the same share at every tier) lands only at `s3At` or more. */
 const TC_LS = { n: 'Ichigo Shikano', v: 18, add: [2, 4, 0], dur: 4, cap: 10, cap6: 15, hlTicks: 3, hlCrit: 3, s3At: 10, s3Share: 118.7 / 373.5, comp: { kind: 'dot', why: 'Lovesick' } };
+/* Kotone Shiomi's Lunar Bond on the Arcana Link ally (Nov 2026): the damage dealer, when a Sweeper or Assassin
+   (lufel's AoE / ST DPS). 0 at the start (5 from A1), +1 per Persona skill they cast and per Lyre's Melody she
+   casts on them, at most 10, never reset (she never reselects). Her TEAM_BUFFS lines with `lb` and her weapon's
+   Skill Amplification (TC_SELF_AMP `lb`) read it in the fight. */
+const TC_LB = { n: 'Kotone Shiomi', start: 0, startA1: 5, max: 10, arch: ['AoE DPS', 'ST DPS'] };
 function tcSelfHpF(sh, hp, bossHp, rebound) {
   if (sh.rebound) return rebound ? 1 : 0;
   if (sh.belowBoss) return bossHp > hp ? 1 : 0;
@@ -19146,6 +19155,10 @@ function tcSimRun(P, order, hold) {
   const hpLeo = HPL ? (() => { const lo = charLoadout(HPL.n), ti = kitTierIndex(charDef(HPL.n), lo); return { atk: tcStat(HPL.n, 'ATK'), pct: HPL.atk[ti], flat: HPL.flat[ti] }; })() : null;
   const hpSet = h => { selfHp = Math.max(0.01, Math.min(1, h)); hpLog.min = Math.min(hpLog.min, selfHp); };
   // Ichigo's Lovesick on the boss (TC_LS): stacks, turns left, the snapshot it deals with, its crit window
+  // Kotone Shiomi's Lunar Bond on the damage dealer (TC_LB), and the level it reached
+  const KO = T.find(a => a.n === TC_LB.n && !a.isDps);
+  const LB = KO && TC_LB.arch.includes(D.arch) ? { lv: (KO.aw || 0) >= 1 ? TC_LB.startA1 : TC_LB.start, at5: null, at10: null } : null;
+  const lbUp = n => { if (!LB || !(n > 0)) return; LB.lv = Math.min(TC_LB.max, LB.lv + n); if (LB.at5 == null && LB.lv >= 5) LB.at5 = round; if (LB.at10 == null && LB.lv >= 10) LB.at10 = round; };
   const LS = D.n === TC_LS.n ? (() => { const aw = +charLoadout(D.n).awareness || 0; return { n: 0, left: 0, snap: null, critTo: -1, cap: aw >= 6 ? TC_LS.cap6 : TC_LS.cap, a1: aw >= 1, ticks: 0, peak: 0 }; })() : null;
   const buffs = [];        // { k, v, left, enemy, owner, ref, vc }
   const pending = [];      // lines that wait for the damage dealer's next Highlight
@@ -19244,7 +19257,8 @@ function tcSimRun(P, order, hold) {
       // the damage dealer's own lines that read the foe's ailments (Queen's Chief Strategist)
       (P.ailSelf || []).forEach(c => { if (c.after == null || (lastUse[c.after] != null && round - lastUse[c.after] < (c.dur || 1))) X[c.k] = (X[c.k] || 0) + c.v * ailF(c); });
       // lines on for part of the fight only, at their share in this round
-      (P.gated || []).forEach(g => { if (!(others && g.one)) { const f = g.gate(Math.max(1, round)); if (f) X[g.k] = (X[g.k] || 0) + g.v * f; } });
+      // (Kotone Shiomi's Lunar Bond lines, `lb`, at the level the fight has counted instead: TC_LB)
+      (P.gated || []).forEach(g => { if (!(others && g.one)) { const f = g.lb != null && LB ? (LB.lv >= g.lb ? 1 : 0) : g.gate(Math.max(1, round)); if (f) X[g.k] = (X[g.k] || 0) + g.v * f; } });
       // a Technical's effect grows with the Technical Precision up now (Cold Flames, Iceburn)
       if (X.tp) buffs.forEach(b => { if (b.tech && (!b.vc || vc) && !(others && b.one)) X[b.k] += b.v * ailF(b) * tcTechScale(b.tech, X.tp); });
       return X;
@@ -19390,7 +19404,7 @@ function tcSimRun(P, order, hold) {
       const ampF = a !== elu && TC_SKILL_SRC.has(String(ev.e.src)) && ev.k !== 'skillAmp' ? 1 + buffs.reduce((s, b) => s + (b.k === 'skillAmp' && !b.enemy && b.owner !== a.n ? b.v : 0), 0) / 100 : 1;
       v *= ampF;
       // her own Skill Amplification as it stands this round (TC_SELF_AMP's Lunar Bond part)
-      if (ev.ampAt) v *= ev.ampAt(Math.max(1, round));
+      if (ev.ampAt) v *= ev.ampAt(Math.max(1, round), LB ? LB.lv : null);
       // Yumi's lines cast at what her Cocktails gave this cast (TC_CK; none spent: the line does not land)
       if (ev.e.ck && a === elu && ckNow) { v *= ckNow[ev.e.ck]; if (!v) return; }
       // Tempest Riko's Blossoming Season tiers at the strength the SP this cast spent gives (TC_RK)
@@ -19807,6 +19821,8 @@ function tcSimRun(P, order, hold) {
           }
         }
         inflict(a, new Set(uses.map((u, i) => u ? String(i + 1) : null).filter(Boolean)));
+        // Kotone Shiomi's Lunar Bond rises after each Persona skill they cast (TC_LB)
+        lbUp(uses.reduce((x, y) => x + y, 0));
         // Lovesick: the turn's skills add their stacks, and any skill takes a new snapshot for 4 more turns
         if (LS && uses.some(u => u)) {
           uses.forEach((u, i) => { if (u) LS.n = Math.min(LS.cap, LS.n + u * (TC_LS.add[i] + (LS.a1 ? 1 : 0))); });
@@ -19829,6 +19845,8 @@ function tcSimRun(P, order, hold) {
         // their skills, and the turn's other tokens ("Special", "Punch") for lines tied to one
         const mates = a.wonder ? toks : new Set([...toks, ...String(step).split('+').map(t => t.trim().replace(/↺/g, '')).filter(t => t && !/^[1-3]+$/.test(t))]);
         castBy(a, mates);
+        // Kotone Shiomi's Lyre's Melody on the Arcana Link ally raises Lunar Bond (TC_LB)
+        if (LB && a === KO) lbUp(tcSkillUses(step)[0]);
         // Leo's Justice Barrier on the damage dealer (TC_HP_LEO): 30% of their remaining HP spent and shielded
         if (HPL && a.n === HPL.n && toks.has('2')) {
           const spent = selfHp * HPL.spend / 100;
@@ -19959,7 +19977,9 @@ function tcSimRun(P, order, hold) {
     // the damage dealer's own HP where it is played (TC_HP): its lowest share, Rebounds, and where it ended
     selfHp: HPON ? { min: hpLog.min, rebounds: hpLog.rebounds, end: selfHp } : null,
     // Ichigo's Lovesick (TC_LS): how many times it ticked and its highest stack count
-    lovesick: LS ? { ticks: LS.ticks, peak: LS.peak } : null };
+    lovesick: LS ? { ticks: LS.ticks, peak: LS.peak } : null,
+    // Kotone Shiomi's Lunar Bond (TC_LB): the level it ended on and the rounds it reached 5 and 10
+    lunarBond: LB ? { lv: LB.lv, at5: LB.at5, at10: LB.at10 } : null };
 }
 
 /* The fight under the spending orders worth trying, the best kept. */
@@ -20172,6 +20192,11 @@ function tcSim(D, names, fit, noWonder, wset) {
      So even the cheaper passes fit her rotation in the fight (one pass, her alone), and the damage dealer's,
      who may have to put the Burn on (Rin's Skill 2, TC_ROT_ADD). */
   const timed = new Set(P.thieves.concat(P.elu ? [P.elu] : []).filter(a => a.n && !a.isDps && (a.events || []).some(ev => ev.e.needAil)).map(a => a.n));
+  /* So is Kotone Shiomi when the fight counts her Lunar Bond (TC_LB): how often she casts Lyre's Melody sets when
+     it reaches 5 and 10, which only the fight sees; fitted only in the full pass, her team for Kasumi ranked 7th
+     on the list's fit (22.4×) and best fully fitted (29.0×). Only at the list's fit (`true`, the teams the search
+     shows): in its first pass too, over its 30 leaders, it doubled the search's time for the same leads. */
+  if (fit === true && names.includes(TC_LB.n) && TC_LB.arch.includes(D.arch)) timed.add(TC_LB.n);
   // the damage dealer alone is fitted whenever their rotation is (fit true or 'full', or for such a teammate)
   // and a damage dealer whose rotation hangs on the team's heals (KIT_ROT `allyHeal`), so a team that cannot
   // heal enough for lufel's rotation is never priced on it
@@ -20271,18 +20296,22 @@ function tcLineupAt(dps, names) {
    (or no entry, priced at what an Elucidator-free thief brings: nothing) and every available
    Elucidator, plus Fuuka's best backup when she is the one. Members' vectors are worked out once
    each; a lineup is then a sum and one damage evaluation, about a millisecond for 30 thieves. */
-const TC_BACKUP_TOP = 40, TC_FULL_TOP = 3, TC_BACKUP_SHORT = 6, TC_BACKUP_FIGHT = 4;
+const TC_BACKUP_TOP = 40, TC_FULL_TOP = 3, TC_BACKUP_SHORT = 6, TC_BACKUP_FIGHT = 4, TC_BACKUP_ALT = 0.03;
 /* Fuuka's backup for this lineup chosen by the fight among `cands` (the screen's best few) and the one it
    has; the lineup unchanged when Fuuka is not its Elucidator. */
+// The lineup it returns carries the runner-up as `alt`, for the full fit to weigh too (tcSearchCalc).
 function tcFightBackup(D, names, cands, fit) {
   if (names[2] !== TM_FUUKA || !cands || !cands.length) return names;
-  let best = names, bm = names[3] ? tcSim(D, names, fit).mult : -1;
+  let best = names, bm = names[3] ? tcSim(D, names, fit).mult : -1, second = null, sm = -1;
   cands.forEach(c => {
     if (c === names[3] || names.slice(0, 3).includes(c)) return;
     const alt = names.slice(0, 3).concat([c]), m = tcSim(D, alt, fit).mult;
-    if (m > bm) { bm = m; best = alt; }
+    if (m > bm) { if (best[3]) { second = best; sm = bm; } bm = m; best = alt; } else if (m > sm) { sm = m; second = alt; }
   });
-  return best;
+  const out = best.slice();
+  // only a close runner-up (within TC_BACKUP_ALT of the best at this fit) is worth a full fit's time
+  out.alt = second && sm >= bm * (1 - TC_BACKUP_ALT) ? second : null;
+  return out;
 }
 /* "Include a medic" (#tmMedic, a pref): one of the two thief seats goes to a medic — lufel's Healer
    role — unless the damage dealer is one. Healing is not priced, so the medic is whichever adds most
@@ -20376,13 +20405,18 @@ function tcSearchCalc(dps, limit) {
      dearest pass, tcSimFitTeam), and the best of them leads: a team whose members' rotations fit it
      better can overtake. So is the best shown team of each other Elucidator, since the full fit is the
      only one that fits hers, and what it gains depends most on her: Miku's team for Akihiko (her at A1)
-     was 4th at 20.7× and 27.0× fully fitted, above the 25.6× that led. The list keeps the cheaper fit's
-     numbers; the page scales them to the headline. */
+     was 4th at 20.7× and 27.0× fully fitted, above the 25.6× that led. A Fuuka team's runner-up backup
+     (tcFightBackup's `alt`) is fought fully too, and takes the team's place if it wins: chosen on the list's
+     fit, Tempest Riko beat Kumi as Haru's backup where the full fit gives Kumi 7% more. The list keeps the
+     cheaper fit's numbers; the page scales them to the headline. */
   if (fit && shown.length > 1) {
     const cand = shown.slice(0, TC_FULL_TOP);
     shown.forEach(t => { if (!cand.some(c => c.names[2] === t.names[2])) cand.push(t); });
-    const top = cand.map(t => ({ t, full: tcSim(dps, t.names, 'full').mult })).sort((a, b) => b.full - a.full);
+    const tries = [];
+    cand.forEach(t => { tries.push({ t, names: t.names }); if (t.names.alt) tries.push({ t, names: t.names.alt }); });
+    const top = tries.map(x => Object.assign(x, { full: tcSim(dps, x.names, 'full').mult })).sort((a, b) => b.full - a.full);
     const lead = top[0].t;
+    if (top[0].names !== lead.names) Object.assign(lead, { names: top[0].names, mult: tcSim(dps, top[0].names, fit).mult });
     shown.splice(shown.indexOf(lead), 1); shown.unshift(lead);
   }
   return shown.slice(0, limit || 8);

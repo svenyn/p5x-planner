@@ -1304,7 +1304,7 @@ damage formula (`docs/DATA-SOURCES.md`, the damage-formula section):
   - *Round gates* on a `TEAM_BUFFS`/`WONDER_BUFFS` line (`tcGate`): `from` a round, or by Awareness
     `fromAw: [[aw, round], ...]`; `until` a round; `rampAt` the rounds its stacks arrive. They replace
     the judged `up` that stood for a ramp or a battle-start window (Mayumi's Torque Boost, Kotone
-    Shiomi's Lunar Bond, Junpei's Competitive Heart — whose A1 delta lines went, A1 now moving the
+    Shiomi's Lunar Bond — counted in the fight since, `TC_LB` — Junpei's Competitive Heart — whose A1 delta lines went, A1 now moving the
     thresholds — Seaside Tomoko's Resonance stacks, Ayaka's Spirit of Rock, Leo's stacks, Wonder's
     Auto-Mataru, Koumokuten and Kushinada). The fight switches them on round by round
     (`sim.gated`); the quick screen and the page's uptime read their share of the fight's rounds,
@@ -1523,6 +1523,20 @@ damage formula (`docs/DATA-SOURCES.md`, the damage-formula section):
   Tropical Motoha alone +2%; build scores Ryuji 77.3 to 77.1, Motoha 80.13 to 80.15; calibration unchanged.
   Not played: Leo's Power of Friendship and A6 lines (still judged), Grand Presser's low-HP growth, Shoki's
   Highlight (not owned), and any HP lost to the boss.
+- **Kotone Shiomi's Lunar Bond is counted** (`TC_LB`, Nov 2026; the user asked which judged numbers the fight
+  could count, and she is in all 16 best teams on the real save). On the Arcana Link ally (the damage dealer, when
+  a Sweeper or Assassin): 0 at the start, 5 from A1, +1 per Persona skill they cast and per Lyre's Melody she casts
+  on them (Korean 페르소나 스킬: Highlights, her Skill 2 and Skill 3 add none), at most 10. Her TEAM_BUFFS lines
+  carry `lb` (the level they need: ATK +50% at 1, Pierce +15% at 5, crit damage +50% at 10) and read it in `curX`
+  instead of their round gate; her weapon's amplification (TC_SELF_AMP `lb`) reads it through `ampAt`. The quick
+  screen keeps round estimates, Lunar Bond 10 moved from round 5 to 6 (4 at A1) to match what the fight reaches.
+  On save (56) it reaches 5 in round 2-4 and 10 in round 5-6 (never for Haru and Makoto Yuki), so every Kotone team
+  fell 1-11% (Ren and Kasumi most). Two search changes came with it: the list's fit (`true`) fits Kotone's rotation
+  in the fight (`timed`, one pass, as for Mio), since how often she casts Lyre's Melody now decides the team (her
+  team for Kasumi was 7th on the list's fit and best fully fitted, 29.0×; in the first pass too it doubled the
+  search's time for the same leads); and a Fuuka team's close runner-up backup (`alt`, within `TC_BACKUP_ALT` 3% on
+  the list's fit) is fought fully too and takes the team's place if it wins (Kumi over Tempest Riko for Haru). Best
+  teams unchanged for all 16; the search about 23% slower (2.0 to 2.4 s a damage dealer); calibration unchanged.
 - **Ichigo's Lovesick is played** (`TC_LS`, `lsTick` in `tcSimRun`, Nov 2026). lufel's data never defines the
   status; the in-game tooltip does (the Mega Ten wiki's copy, which the user pasted): "Each turn, take Curse
   damage equal to 6%/12%/18% of Ichigo's Attack (at level 1/50/70). This effect lasts 4 turns, and stacks up to

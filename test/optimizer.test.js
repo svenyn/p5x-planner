@@ -3195,6 +3195,14 @@ function awarenessOverrideDrift() {
         gain: run(keepKb) / run(keepKb.filter(b => !b.hp)) };
       DPS_KIT_BONUS[km] = keepKb; tcMemo.key = '';
     }
+    // Kotone Shiomi's Lunar Bond (TC_LB): +1 per skill the Arcana Link ally casts and per Lyre's Melody on them
+    {
+      const ko = 'Kotone Shiomi', keep = { a: TEAMS[ann.n], k: TEAMS[ko], lo: state.chars[ko].loadout };
+      const rot = seq => ({ rot: [{ aw: 0, label: 'Test', seq }] });
+      const run = (aw, kseq) => { state.chars[ko].loadout = Object.assign({}, DEFAULT_LOADOUT, { awareness: aw }); TEAMS[ann.n] = Object.assign({}, keep.a, rot(['1'])); TEAMS[ko] = Object.assign({}, keep.k, rot(kseq)); tcMemo.key = ''; return tcSim(ann, [ko, null], false).lunarBond; };
+      out.lunarBond = { a0: run(0, ['1']), a1: run(1, ['1']), noMelody: run(0, ['2']), none: (() => { tcMemo.key = ''; return tcSim(ann, [null, null], false).lunarBond; })() };
+      Object.assign(TEAMS, { [ann.n]: keep.a, [ko]: keep.k }); state.chars[ko].loadout = keep.lo; tcMemo.key = '';
+    }
     // Ichigo's Lovesick (TC_LS): stacks from her skills, capped, ticking on the enemy's turn and on her Highlight
     {
       const ich = 'Ichigo Shikano', I = charDef(ich), keep = { r: TEAMS[ich], lo: state.chars[ich].loadout, v: TC_LS.v };
@@ -3787,6 +3795,11 @@ function awarenessOverrideDrift() {
     check('Miku\'s Skill Amplification: 15% on her skills from Awareness 1, her 5-star weapon\'s 10% (R1) on what she casts in Virtual Concert, and never on a count or her weapon',
       near(m[0].beat, 1) && near(m[0].show, 1.1) && near(m[1].beat, 1.15) && near(m[1].show, 1.25) && near(m[2].show, 1.15) &&
       near(m[1].turns, 1) && near(m[0].turns, 1) && near(m[1].weapon, 1), JSON.stringify(m));
+  }
+  {
+    const b = th.lunarBond;
+    check('Kotone Shiomi\'s Lunar Bond is counted: +1 per skill of the linked damage dealer and per Lyre\'s Melody on them (5 by round 3, 10 by round 5 when both cast every turn), 5 at once from A1, only the damage dealer\'s skills without Lyre\'s Melody, none without Kotone',
+      b.a0 && b.a0.at5 === 3 && b.a0.at10 === 5 && b.a1 && b.a1.at10 != null && b.a1.at10 < b.a0.at10 && b.noMelody && b.noMelody.at10 > b.a0.at10 && b.none === null, JSON.stringify(b));
   }
   check('Ichigo\'s Lovesick: Obsessive Rose stacks it to the cap of 10, it ticks every enemy turn and adds damage; My Beloved Prince alone adds no stacks and nothing ticks',
     th.lovesick.two && th.lovesick.two.peak === 10 && th.lovesick.two.ticks >= th.lovesick.F && th.lovesick.gain > 1.05 &&
