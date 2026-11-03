@@ -3212,8 +3212,10 @@ function awarenessOverrideDrift() {
       TC_LS.v = 0; const off = run(['2']); TC_LS.v = keep.v;
       // My Beloved Prince on the stacks there: none with no stacks, and its bonus hit only from 10
       const early = run(['2', '2', '3']); TC_LS.s3At = 0; const always = run(['2', '2', '3']); TC_LS.s3At = 10;
+      // Chains of Love: +1 on her first Vorpal Butterfly (and each Highlight), none from Obsessive Rose alone
+      const vb = run(['1', '2']);
       out.lovesick = { two: two.lovesick, three: three.lovesick, gain: two.total / off.total, F: tcFight(),
-        hitNone: (three.parts || {}).hit || 0, earlyVsAlways: early.total / always.total };
+        hitNone: (three.parts || {}).hit || 0, earlyVsAlways: early.total / always.total, vb: vb.lovesick };
       TEAMS[ich] = keep.r; state.chars[ich].loadout = keep.lo; tcMemo.key = '';
     }
     // the damage dealer's own HP (TC_HP): Ryuji's Pirate Tactics spends it, Leo's barrier too, and Rebound reads it
@@ -3805,6 +3807,9 @@ function awarenessOverrideDrift() {
     th.lovesick.two && th.lovesick.two.peak === 10 && th.lovesick.two.ticks >= th.lovesick.F && th.lovesick.gain > 1.05 &&
     th.lovesick.three && th.lovesick.three.peak === 0 && th.lovesick.three.ticks === 0 &&
     th.lovesick.hitNone === 0 && th.lovesick.earlyVsAlways < 0.999, JSON.stringify(th.lovesick));
+  check('Ichigo\'s Chains of Love are counted: her first Vorpal Butterfly gives one (once), each Highlight one; Obsessive Rose alone gives none from skills',
+    th.lovesick.vb && th.lovesick.vb.colAt[0] === 1 && th.lovesick.vb.col === 1 + th.lovesick.vb.colAt.length - 1 &&
+    th.lovesick.two.col === th.lovesick.two.colAt.length && !th.lovesick.two.colAt.includes(1), JSON.stringify({ vb: th.lovesick.vb, two: th.lovesick.two }));
   {
     const s = th.selfHp, near = (x, y) => Math.abs(x - y) < 1e-6;
     check('the damage dealer\'s own HP: Pirate Tactics spends 20% (Rebound once below 75%), a Skill 2 rotation spends nothing, and Leo\'s Justice Barrier brings Rebound on its own',

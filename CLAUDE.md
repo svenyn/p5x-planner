@@ -1517,12 +1517,32 @@ damage formula (`docs/DATA-SOURCES.md`, the damage-formula section):
   DPS_KIT_BONUS `selfHp` reads it at the hit: Ryuji's Rebound (+30% on Skills 2 and 3 when he began the action
   below 75%), Wounded Glory's +30% beyond its stats +10% (full at 20% HP), Adrenaline's +45% ATK while the
   boss's HP share is above his (KIT_STAT_BUFFS `needHp`: always on in stats, out of the fight's baseline),
-  and Tropical Motoha's Highlight +25% above 50%. On save (56): Ryuji alone +21% (HP down to 57%, 2
-  Rebounds), his best team unchanged (Kotone / Mitsuru / Fuuka / Kumi, 26.3×), Leo's teams for him +5%
-  (4 Rebounds) and still far behind, since the quick screen prices no HP and Leo's value is mostly that;
+  and Tropical Motoha's Highlight +25% above 50%. On save (56): Ryuji's damage alone −2% in absolute terms
+  (HP down to 57%, 2 Rebounds; Adrenaline, always on before, now stops late, and Rebound and Wounded Glory about
+  make it up — the fight total read +21%, which was the base hit shrinking, see "Fight totals are in units of
+  the base hit" below), his best team unchanged in team and damage (Kotone / Mitsuru / Fuuka / Kumi, 26.3×),
+  Leo's teams for him +3% in damage (4 Rebounds) and still far behind, since the quick screen prices no HP and
+  Leo's value is mostly that;
   Tropical Motoha alone +2%; build scores Ryuji 77.3 to 77.1, Motoha 80.13 to 80.15; calibration unchanged.
   Not played: Leo's Power of Friendship and A6 lines (still judged), Grand Presser's low-HP growth, Shoki's
   Highlight (not owned), and any HP lost to the boss.
+- **Ichigo's Chains of Love are counted** (`TC_LS.col`, `colUp`, Nov 2026): +1 the first time she casts Vorpal
+  Butterfly and +1 per Highlight, at most 3 (5 from A2, which starts her on 1). What they give follows the count in
+  the fight instead of judged shares: Overflowing Love's +15% ATK each (DPS_KIT_BONUS `perCol`), crit rate +15% and
+  her skills counting as continuous damage from 2 (the DPS_COUNTS_AS share becomes all or nothing), +25%
+  continuous damage and her 5-star weapon's damage at 3, A2's crit damage at 4 (`col`); the stat lines carry
+  `needCol` (in her stats as held, out of the fight's baseline). Mine Alone's damage taken (needs 1) and A1's DEF
+  down read the live Lovesick stacks (TEAM_BUFFS `ls`/`col`, routed through `gated` with `from: 1`; as a teammate's
+  lines they stay at the cap, since her Lovesick is played only when she is the damage dealer). On save (56) the
+  Chains arrive in rounds 2, 2 and 6, so her damage alone fell 21% and her best team's 8% in absolute terms; the
+  team (Beachflower Minami / Kotone / Fuuka / Kumi) is unchanged and its multiplier rose 17.6× to 20.6× (her solo
+  damage fell more); build score 83.05 to 82.94.
+- **Fight totals are in units of the damage dealer's own base hit** (`E.f0`, their stats without the lines the
+  fight times itself). A change that takes a stat out of that baseline (`noTimed`: `on`, `needAil`, `needHp`,
+  `needCol` lines) shrinks the unit, so `total`, `base.total` and part sizes all read higher across the change
+  while the damage may have fallen; the multiplier (team ÷ alone, one unit) is unaffected. Compare damage across
+  versions as `total × tcEvalFor(D, true).f0`. Ryuji's HP model first read "+21% alone" this way (really −2%), and
+  Ichigo's Chains of Love "+31%" (really −21%).
 - **Kotone Shiomi's Lunar Bond is counted** (`TC_LB`, Nov 2026; the user asked which judged numbers the fight
   could count, and she is in all 16 best teams on the real save). On the Arcana Link ally (the damage dealer, when
   a Sweeper or Assassin): 0 at the start, 5 from A1, +1 per Persona skill they cast and per Lyre's Melody she casts
