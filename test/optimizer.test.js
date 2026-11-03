@@ -3195,6 +3195,21 @@ function awarenessOverrideDrift() {
         gain: run(keepKb) / run(keepKb.filter(b => !b.hp)) };
       DPS_KIT_BONUS[km] = keepKb; tcMemo.key = '';
     }
+    // the kit-audit conditions (Nov 2026): Ren's Will of Rebellion count, a debuffed foe, a Wind teammate
+    {
+      const ren = 'Ren Amamiya', R = charDef(ren), keep = { r: TEAMS[ren], lo: state.chars[ren].loadout };
+      state.chars[ren].loadout = Object.assign({}, DEFAULT_LOADOUT, { awareness: 0 });
+      TEAMS[ren] = Object.assign({}, keep.r, { rot: [{ aw: 0, label: 'Test', seq: ['1', '1', '1+3'] }] }); tcMemo.key = '';
+      const w = tcSim(R, [null, null], false).will;
+      const keepKb = DPS_KIT_BONUS[ren];
+      DPS_KIT_BONUS[ren] = keepKb.filter(b => !b.perWill); tcMemo.key = ''; const noRes = tcSim(R, [null, null], false).total;
+      DPS_KIT_BONUS[ren] = keepKb; tcMemo.key = ''; const res = tcSim(R, [null, null], false).total;
+      TEAMS[ren] = keep.r; state.chars[ren].loadout = keep.lo; tcMemo.key = '';
+      const fk = charDef('Kotone Montagne [Frostgale]'), wind = CHARACTERS.find(c => c.e === 'Wind' && c.n !== fk.n && c.arch !== 'Navigator'),
+        other = CHARACTERS.find(c => c.e !== 'Wind' && c.arch !== 'Navigator' && c.n !== fk.n);
+      const has = names => tcKitBonusFor(fk, names).some(b => b.mateElem);
+      out.audit = { will: w, resistance: res / noRes, windMate: has([wind.n, null]), noWind: has([other.n, null]), none: has(null) };
+    }
     // Ann's Passion (TC_LV): Trifire gives 1 a cast (one foe), so La Vie en Rose comes on her 5th action at A0;
     // A6's 60% tally brings it sooner, and its end sets off Marriage of Flames (A2)
     {
@@ -3807,6 +3822,11 @@ function awarenessOverrideDrift() {
       near(m[1].turns, 1) && near(m[0].turns, 1) && near(m[1].weapon, 1), JSON.stringify(m));
   }
   {
+    const a = th.audit;
+    check('kit audit: Ren\'s Will of Rebellion reaches 3 on his extra action and is spent (Resistance adds ATK); Frostgale Kotone\'s Wind-teammate bonus needs a Wind thief beside her',
+      a.will && a.will.peak >= 3 && a.will.peak <= 5 && a.will.end < a.will.peak && a.resistance > 1.02 && a.windMate && !a.noWind && !a.none, JSON.stringify(a));
+  }
+  {
     const v = th.laVie;
     check('Ann\'s La Vie en Rose follows her Passion: with Trifire alone (1 a cast) on every 5th action at A0, more often with A6\'s extra Passion, and Marriage of Flames fires as it ends from A2',
       v.a0.lv && v.a0.lv.n === Math.floor(v.a0.lv.acts / 5) && v.a0.fu === 0 && v.a2.lv.n === v.a0.lv.n && v.a2.fu > 0 && v.a6.lv.n > v.a0.lv.n, JSON.stringify(v));
@@ -3971,7 +3991,7 @@ function awarenessOverrideDrift() {
     JSON.stringify(th.gate) === '{"g":[0,1],"g1":1,"ramp":[0,0.3333333333333333,1],"until":[1,0],"none":null}' &&
     near(th.gateFight[0], 1, 1e-9) && th.gateFight[1] > 1.05 && near(th.gateFight[2], 0.5, 1e-9), JSON.stringify({ g: th.gate, f: th.gateFight }));
   check('the damage dealer\'s own timed buff leaves the fight\'s baseline and counts only on the turns the rotation casts its skill',
-    th.timed.nt && !th.timed.kit && JSON.stringify(th.timed.events) === '["2/2"]' && th.timed.cast && th.timed.noCast, JSON.stringify(th.timed));
+    th.timed.nt && !th.timed.kit && JSON.stringify(th.timed.events) === '["2/2","Transform/2"]' && th.timed.cast && th.timed.noCast, JSON.stringify(th.timed));
   check('gauge sources: a fill-to gives more Highlights; Spotlight and Aran\'s A4 are lines; Prosperity\'s 4-piece starts the gauge at 25',
     th.fill.with > th.fill.base && th.gaugeLines.every(Boolean) && th.prosperity === 25, JSON.stringify({ f: th.fill, l: th.gaugeLines, p: th.prosperity }));
   check('a damage dealer\'s own damage bonus reaches only the hits it names: +100% on Skill 3 raises the skill damage by up to half, a Highlight amp leaves skills alone, a window after the Highlight counts only then, and a per-foe-fewer bonus counts the foes',

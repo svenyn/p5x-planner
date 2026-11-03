@@ -1526,6 +1526,29 @@ damage formula (`docs/DATA-SOURCES.md`, the damage-formula section):
   Tropical Motoha alone +2%; build scores Ryuji 77.3 to 77.1, Motoha 80.13 to 80.15; calibration unchanged.
   Not played: Leo's Power of Friendship and A6 lines (still judged), Grand Presser's low-HP growth, Shoki's
   Highlight (not owned), and any HP lost to the boss.
+- **The kit audit** (Nov 2026; the user asked, after Ann's case turned up five unpriced own bonuses): 14 owned damage
+  dealers' lufel text was read against every planner entry for them by four parallel checks, and each finding was
+  re-read against the text before entry. Entered (clear, and live at the real save's setups): Kasumi's Midnight
+  Magic crit damage in Masquerade and her Highlight's Follow Step crit (her Masked Ball ATK / crit now timed to
+  Masquerade, `on: 'Transform'`, dur 2); Frostgale Kotone's Spiral Sequence crit damage after a Skill 1 and
+  Performance Scoring's +33% with another Wind thief (DPS_KIT_BONUS `mateElem`); YUI's Highlight ATK and Skill 1's
+  +30% on a Shocked foe, Virtual Landowner reading Shock instead of a judged 0.45 (`needAil: 'Shock'`; the quick
+  screen's ailment mix, `tcTechMix`, now takes Burn bonuses only, as it always assumed); Makoto Yuki's Scarlet
+  Hades pierce and On-Site Leader's own +30% after his Theurgy; Mitsuru's Snowpierced Waltz crit rate and her
+  Longinus crit damage after her Theurgy; Ren's Resistance (+18% ATK per Will of Rebellion, `TC_WR`, the stacks his
+  KIT_ROT rules give, counted in the fight: `perWill`) and Arsène's Chains' +25% on a debuffed foe (`needDebuff`:
+  a debuff line, DEF down or an ailment on the boss); Makoto Niijima's Crash Out +40% ATK (her A1 lines timed to
+  Crash Out, `alwaysAw: 6` since lufel's A6 rotation writes no Transform); Haru's Skill 3 crit rate with Target
+  Audience; Firecracker Yaoling's Flaming Sword Dance and New Year's Light crit rate timed to the dance (`on: '3'`,
+  dur 1, 2 from A1, for good from A6). On save (56), in absolute damage alone / in the best team: Ren +16% / +11%,
+  YUI +18% / +3%, Makoto Yuki +14% / +10%, Mitsuru +11% / +10%, Haru +5% / +10%, Frostgale +6% / +3%, Makoto
+  Niijima +4% / −4%, Kasumi −4% / −1%, Firecracker Yaoling −14% / −8%; best teams changed for Makoto Niijima
+  (Minami / Kotone / Fuuka / Chizuko) and Makoto Yuki (Minami / Kotone / Fuuka / Kumi); build scores moved 0.7 at
+  most; calibration mean 70.1 to 70.2, bands unchanged. Left as judgment calls (on the list page): Ryuji's
+  CRIT_PROFILE `locked: 1` (only God Hand Burst with Rebound is guaranteed), Akihiko's Theurgy lock and 250%
+  floor (CRIT_PROFILE mixes 30/70 on every hit), Wavecatcher Miyu's Surf extending allies' buffs, Haru's
+  Target Audience stack lines, Tropical Motoha's Summer Hype lines on every hit, Makoto Yuki's Entrusted Hope and
+  Melody of Flames multiplier, and the A1+/4-star-weapon items.
 - **Ann's Passion and La Vie en Rose are counted** (`TC_LV`, Nov 2026). Each Fire skill gives 1 Passion per foe it
   hits (at most 4), from A6 a 60% chance of 1 more (a running tally); at 4+ as she acts she spends them all and is in
   La Vie en Rose for that action, never two running. Until then its rate was judged at every 4th action (3rd at
