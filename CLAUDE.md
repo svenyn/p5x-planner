@@ -1507,6 +1507,22 @@ damage formula (`docs/DATA-SOURCES.md`, the damage-formula section):
   extra actions, a KIT_ROT counter) and Merciless Pursuit (A6), Yaoling's Up to Chance (her own hit), and
   Belphegor's 40% below 50% (a Wonder on-cast line, which carries no round gate). Cutting the HP faster or
   slower than the fight is not a setting.
+- **The damage dealer's own HP** (`TC_HP`, `TC_HP_LEO`, `tcSelfHpF`, Nov 2026; the user chose it next). Played
+  only from what the kit text gives as numbers: HP their own skills spend or restore (Ryuji's Pirate Tactics 20%
+  unless he has Rebound, Rebellious Spirit's 30% of his ATK with Rebound; Tropical Motoha's Skill 3 15%, Skill 1
+  in Summer Hype 10%, Skill 2 and Highlight +20%, +40% Skill 2 at A6), and Leo's Justice Barrier on them (30% of
+  their remaining HP spent, the shield — 80% of it plus his ATK part — returned as HP when it ends after 2 of
+  their actions, whole, since boss damage is not played) and Highlight (back to 60%, at most 200% of his ATK).
+  The boss's damage and other healers' amounts are published nowhere, so HP falls only by the kits' own costs.
+  DPS_KIT_BONUS `selfHp` reads it at the hit: Ryuji's Rebound (+30% on Skills 2 and 3 when he began the action
+  below 75%), Wounded Glory's +30% beyond its stats +10% (full at 20% HP), Adrenaline's +45% ATK while the
+  boss's HP share is above his (KIT_STAT_BUFFS `needHp`: always on in stats, out of the fight's baseline),
+  and Tropical Motoha's Highlight +25% above 50%. On save (56): Ryuji alone +21% (HP down to 57%, 2
+  Rebounds), his best team unchanged (Kotone / Mitsuru / Fuuka / Kumi, 26.3×), Leo's teams for him +5%
+  (4 Rebounds) and still far behind, since the quick screen prices no HP and Leo's value is mostly that;
+  Tropical Motoha alone +2%; build scores Ryuji 77.3 to 77.1, Motoha 80.13 to 80.15; calibration unchanged.
+  Not played: Leo's Power of Friendship and A6 lines (still judged), Grand Presser's low-HP growth, Shoki's
+  Highlight (not owned), and any HP lost to the boss.
 - **Makoto Niijima's Nuclear Finisher ATK** (Nov 2026): her 5★ weapon's +30-57% ATK "when attacking a foe with
   an elemental ailment" is a KIT_STAT_BUFFS line with `needAil: 'any'` (any elemental ailment, `ailOn` in
   `tcSimRun`): always on in her stats and build score, like Firecracker Rin's Burn lines, since her own skills
@@ -1680,7 +1696,8 @@ damage formula (`docs/DATA-SOURCES.md`, the damage-formula section):
   Wonder's own damage, weakness creation, All-Out Attacks and Dizzy, Technicals (beyond the ailment readers and the Technicals above), Wonder's own
   ailments, the boss's ailment resistance, team and Persona lines that hang on the boss's HP (Ren's Will of
   Rebellion below 60%, Yaoling's Up to Chance, Belphegor's 40% below 50%; the damage dealer's own are priced, see
-  "The boss's HP" below), the damage dealer's own HP
+  "The boss's HP" below), HP lost to the boss and healers' amounts (the damage dealer's own HP is played from
+  their kit's costs, "The damage dealer's own HP" below)
   or a specific teammate (what is left in `DPS_KIT_SKIPS`), always-crit and DEF-ignoring components,
   healing and survival, buffs copied from other buffs (other than Kotone Shiomi's Lunar Phaseshift), and a supporter's Theurgy gauge from teammates. The number ranks teams
   for one damage dealer; it is not a damage forecast and is never compared across damage dealers.

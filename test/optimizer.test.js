@@ -3195,6 +3195,16 @@ function awarenessOverrideDrift() {
         gain: run(keepKb) / run(keepKb.filter(b => !b.hp)) };
       DPS_KIT_BONUS[km] = keepKb; tcMemo.key = '';
     }
+    // the damage dealer's own HP (TC_HP): Ryuji's Pirate Tactics spends it, Leo's barrier too, and Rebound reads it
+    {
+      const ryu = 'Ryuji Sakamoto', leo = 'Leo Kamiyama', R = charDef(ryu), keep = { r: TEAMS[ryu], l: TEAMS[leo], lo: state.chars[ryu].loadout };
+      state.chars[ryu].loadout = Object.assign({}, DEFAULT_LOADOUT, { awareness: 0 });
+      const rot = seq => ({ rot: [{ aw: 0, label: 'Test', seq }] });
+      const hp = (rseq, mates) => { TEAMS[ryu] = Object.assign({}, keep.r, rot(rseq)); TEAMS[leo] = Object.assign({}, keep.l, rot(['2'])); tcMemo.key = ''; return tcSim(R, mates, false).selfHp; };
+      out.selfHp = { f: [tcSelfHpF({ below: 75 }, 0.7), tcSelfHpF({ above: 50 }, 0.4), tcSelfHpF({ missing: true, fullAt: 20 }, 0.6), tcSelfHpF({ belowBoss: true }, 0.5, 0.6), tcSelfHpF({ rebound: true }, 1, 1, true)],
+        skill1: hp(['1', '2'], [null, null]), plain: hp(['2'], [null, null]), leo: hp(['2'], [leo, null]) };
+      Object.assign(TEAMS, { [ryu]: keep.r, [leo]: keep.l }); state.chars[ryu].loadout = keep.lo; tcMemo.key = '';
+    }
     // Makoto Niijima's Nuclear Finisher: ATK on a foe with any elemental ailment (KIT_STAT_BUFFS needAil 'any')
     {
       const mn = 'Makoto Niijima', M = charDef(mn), keepK = KIT_STAT_BUFFS[mn], keepLo = state.chars[mn].loadout;
@@ -3764,6 +3774,12 @@ function awarenessOverrideDrift() {
     check('Miku\'s Skill Amplification: 15% on her skills from Awareness 1, her 5-star weapon\'s 10% (R1) on what she casts in Virtual Concert, and never on a count or her weapon',
       near(m[0].beat, 1) && near(m[0].show, 1.1) && near(m[1].beat, 1.15) && near(m[1].show, 1.25) && near(m[2].show, 1.15) &&
       near(m[1].turns, 1) && near(m[0].turns, 1) && near(m[1].weapon, 1), JSON.stringify(m));
+  }
+  {
+    const s = th.selfHp, near = (x, y) => Math.abs(x - y) < 1e-6;
+    check('the damage dealer\'s own HP: Pirate Tactics spends 20% (Rebound once below 75%), a Skill 2 rotation spends nothing, and Leo\'s Justice Barrier brings Rebound on its own',
+      s.f.join() === '1,0,' + s.f[2] + ',1,1' && near(s.f[2], 0.5) && s.skill1 && s.skill1.min < 0.75 && s.skill1.rebounds > 0 &&
+      s.plain && near(s.plain.min, 1) && s.plain.rebounds === 0 && s.leo && s.leo.min < 0.75 && s.leo.rebounds > 0, JSON.stringify(s));
   }
   check('Makoto Niijima\'s Nuclear Finisher: +30% ATK counted in her stats, and in the fight while the boss carries an elemental ailment',
     th.nuclearFinisher.stat && th.nuclearFinisher.gain > 1.01, JSON.stringify(th.nuclearFinisher));

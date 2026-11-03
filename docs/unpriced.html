@@ -179,7 +179,7 @@ var GLOBAL = [
   ["M","+","Damage over time with no published value","Burn ticks (Ann, Starlight Ann, Runa, Firecracker Yaoling) and Lovesick (Ichigo) deal nothing in the fight because lufel prints no number. For Ichigo it is most of her kit."],
   ["M","+","Spiritual ailments","Sleep, Forget, Despair, Brainwash and Curse (beyond Pazuzu's) are not tracked. Matters for Tomoko's +36% party damage, Yaoling, Toshiya, and several Wonder Personas."],
   ["M","±","Boss HP thresholds","Since 3 Nov the boss's HP falls evenly over the fight, and the damage dealers' own HP-gated bonuses read it (Ann's Trifire, Kotone Montagne's missing-HP bonuses, Ichigo's Vorpal Butterfly). Still not read: Ren's Will of Rebellion below 60%, Yaoling's Up to Chance, Belphegor. How fast a real boss falls is not known; an even fall is the assumption."],
-  ["M","+","The damage dealer's own HP","Ryuji, Yusuke, Shoki [Notte], Tropical Motoha and Leo's partners have lines that hang on the user's HP. Ryuji's are the largest, and are why lufel pairs him with Leo."],
+  ["M","+","The damage dealer's own HP","Since 3 Nov the fight plays the damage dealer's HP from what their kit spends and restores, and Leo's barrier and Highlight on them: Ryuji's Rebound, Wounded Glory and Adrenaline, and Tropical Motoha's Highlight follow it. Damage from the boss and healers' amounts are not published, so HP falls only by the kits' own costs. Still not played: Yusuke's A2 (HP above 70%), Shoki [Notte], Grand Presser."],
   ["M","+","Effects that lengthen other buffs","Wavecatcher Miyu's Surf (+1 turn to buffs and debuffs applied), Kotone Shiomi's Fortune, Frostgale Kotone's A6, Mio's A4. If Surf reaches allies' buffs, it is large."],
   ["M","+","Extra actions","Mayumi's Velocity turns, Narumi's for Wonder, Junpei's free Power Swing at A6, the Yggdrasil Evolution card. Miku's and Manaka's are played; these are not."],
   ["M","↓","Boss ailment resistance","Every ailment lands at its stated chance. Teams built on ailments (Queen's Chief Strategist, Rin and Mio's Burn) are rated a little high."],
@@ -195,7 +195,7 @@ var D = [
 ["Ann Takamaki","tm","S","+","A6 Time for Punishment","Extra Passion chance means more La Vie en Rose time than the single uptime used."],
 
 ["Ryuji Sakamoto","dd","L","+","Fearless Charge (A2): skill crits ignore 35% DEF","Ryuji always crits, so it covers all his skill hits from A2.","Priced in the fight since 2 Nov, as Pierce 35 on his skill hits from Awareness 2 (lufel's defence calculator lists it as Pierce; the Korean text puts it at A3). At A2 his damage alone +30%, his best team's +33%; nothing moves at your A0."],
-["Ryuji Sakamoto","dd","M","+","Rebound and Grand Presser at low HP","Both grow as his own HP drops; the fight has no HP. This is the reason lufel pairs him with Leo."],
+["Ryuji Sakamoto","dd","M","+","Rebound and Grand Presser at low HP","Rebound, Wounded Glory and Adrenaline follow his HP since 3 Nov (Pirate Tactics and Leo's barrier spend it). Grand Presser's growth is still not priced, and the boss's hits on him are not played.","Alone +21%; his best team unchanged."],
 ["Ryuji Sakamoto","rot","S","-","Lone charge on the last turn","Skill 3 is half a hit on each 3; a charge on the final turn is credited half a hit that never lands."],
 
 ["Yaoling Li","tm","M","+","Highlight: foes take +48.8–56.8% damage (+20% more at A4)","No duration is printed. If it lasts a turn it is large; if it only covers the Highlight's own hit, nothing."],
@@ -209,7 +209,7 @@ var D = [
 ["Lufel","tm","S","+","A6 Starfire III","8% of Lufel's ATK and +20% Fire damage, if III is ever reached; Skill 1 keeps handing out a fresh Starfire."],
 ["Lufel","tm","S","+","A1 Owl Eyes ailment accuracy","Only matters for a damage dealer that converts ailment accuracy into damage (Runa)."],
 
-["Leo Kamiyama","tm","M","+","Lowering Ryuji's HP","His HP-cost skills drive Ryuji's low-HP bonuses (see Ryuji). Without HP in the fight Leo is undervalued for him."],
+["Leo Kamiyama","tm","M","+","Lowering Ryuji's HP","Played in the fight since 3 Nov: Justice Barrier spends 30% of Ryuji's HP (twice as many Rebounds) and gives it back when the shield ends. The quick screen still has no HP, so the search does not shortlist Leo for it.","Leo's teams for Ryuji +5%, still far below his best."],
 ["Leo Kamiyama","tm","C","+","Turning the Tables and Justice Lance","Crit damage +25% for an ally under 60% HP; ATK per 20% HP lost. Both need HP states."],
 ["Leo Kamiyama","tm","C","+","Intense Link (A1) DEF +10%","Only for a DEF-scaling damage dealer; no DEF key."],
 
@@ -280,7 +280,7 @@ var D = [
 ["Riko Tanemura","tm","C","+","Plum Blossom Glory: 1 More and All-Out Attack damage +60%","All-Out Attacks are not played."],
 ["Riko Tanemura","tm","S","+","Fair Winds growth, Sky's Edge, Red Plum Blossom","Growth per Intel spent, damage per 2 Insight, a random party buff."],
 
-["Motoha Arai [Tropical]","dd","S","+","Highlight +25% above 50% HP; healing-triggered bonuses below A1","Own HP, and a healer in the team."],
+["Motoha Arai [Tropical]","dd","S","+","Highlight +25% above 50% HP; healing-triggered bonuses below A1","The Highlight bonus follows her HP since 3 Nov (her skills spend and restore it). Teammates' heals restore an unknown amount, so they don't raise it.","Alone +2%."],
 ["Motoha Arai [Tropical]","rot","S","-","Skill 3 twice without a Heart","The cooldown's recharge can stand in for a Heart."],
 
 ["Tomoko Noge [Seaside]","tm","M","+","Hale Summer Days: ATK +25% of the target's ailment accuracy (up to 22.5%)","Depends on the damage dealer's ailment accuracy; large for Runa, small for most."],

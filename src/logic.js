@@ -1358,7 +1358,7 @@ const KIT_STAT_BUFFS = {
     { s: 'ATK%', v: 20, pct: true, on: '1', dur: 2, why: 'Crimson Rose: +20% ATK for 2 turns; it is in every rotation' }
   ],
   'Ryuji Sakamoto': [
-    { s: 'ATK%', v: 45, pct: true, why: 'Adrenaline: +45% ATK while the target has more HP than Ryuji, i.e. against any boss' },
+    { s: 'ATK%', v: 45, pct: true, needHp: true, why: 'Adrenaline: +45% ATK while the target has more HP than Ryuji (a share of each one\'s own); always on in stats, and in the Teams fight while the boss\'s HP share is above his (TC_HP)' },
     { s: 'ATK%', v: 10, pct: true, aw: 0, why: 'Wounded Glory: at least +10% ATK from missing HP at any HP' }
   ],
   'Haruna Nishimori': [
@@ -1634,7 +1634,7 @@ function kitStatBuffs(char, lo, opts) {
   const L = lo || charLoadout(char.n);
   // `alwaysAw`: a line tied to a cast (`on`) that is on for good from that Awareness
   return (KIT_STAT_BUFFS[char.n] || []).map(b => b.on && b.alwaysAw != null && (L.awareness || 0) >= b.alwaysAw ? Object.assign({}, b, { on: undefined, dur: undefined }) : b).filter(b =>
-    (b.aw == null || (L.awareness || 0) >= b.aw) && (!b.weapon || L.weapon === b.weapon) && !(L.noTimed && (b.on || b.needAil || b.needDown)) && (!b.fight || (opts && opts.fight))
+    (b.aw == null || (L.awareness || 0) >= b.aw) && (!b.weapon || L.weapon === b.weapon) && !(L.noTimed && (b.on || b.needAil || b.needDown || b.needHp)) && (!b.fight || (opts && opts.fight))
   ).map(b => Object.assign({}, b, {
     v: (b.ladder ? b.ladder[Math.max(1, Math.min(7, L.refine)) - 1] : b.tiers ? b.tiers[kitTierIndex(char, L)] : b.v) * (b.stacks || 1)
   }));
@@ -13183,7 +13183,7 @@ const DPS_KIT_SKIPS = {
     'Burn (Trifire 75%, Falling Sun 30%, Rosethorn on entering La Vie en Rose): lufel never states a Burn damage value, so the DoT is not priced.'
   ],
   'Ryuji Sakamoto': [
-    'No damage outside his numbered skills and Highlight. Rebound\'s +30% on the next skill and Grand Presser depend on his own HP: not priced. His other damage bonuses are, and Fearless Charge (A2) as Pierce 35 on his skills.',
+    'No damage outside his numbered skills and Highlight. His own HP is played from what spends and restores it (Pirate Tactics, Rebellious Spirit, Leo\'s barrier and Highlight: TC_HP), so Rebound, Wounded Glory and Adrenaline follow it; the boss\'s attacks are not played, so his HP falls only by those. Grand Presser\'s low-HP growth is not priced. His other damage bonuses are, and Fearless Charge (A2) as Pierce 35 on his skills.',
     'God Hand Burst (Skill 3) charges on one turn and hits automatically on his NEXT turn (Korean text: "next turn automatically deals 341.6%"). lufel\'s rotation writes 3 on all six turns; if the simulator prices SKILL_DMG d[2] on every "3" token it counts the hit twice. Read it as one hit per two "3" tokens (charge, release).'
   ],
   'Motoha Arai': [
@@ -13224,7 +13224,7 @@ const DPS_KIT_SKIPS = {
     'Nuclear Finisher\'s ATK counts while the boss has an elemental ailment (KIT_STAT_BUFFS `needAil: \'any\'`), A2\'s pierce by the ailments on it (TC_AIL_SELF).'
   ],
   'Motoha Arai [Tropical]': [
-    'Her Highlight\'s +25% above 50% HP depends on her own HP; the crit lines are stats.',
+    'Her Highlight\'s +25% above 50% HP reads her own HP as her skills spend and restore it (TC_HP); heals from teammates restore an amount nothing publishes, so they are not added to it. The crit lines are stats.',
     'Her "when healed" bonuses (Energy Overload! +30%, Summer Starts Here! +25%, Stay Cool!, Bubble Puff Star) follow the heals the fight gives her: her own Skill 2 and Highlight, her Awareness 1 Blessing, and the team\'s healers (TC_HEALS). Every heal counts the same; a heal on "the ally with the lowest HP" is taken to reach her half the time.',
     'Tropical Heart (5 heals lift Surf \'n\' Shine\'s cooldown) follows the heals the team gives her a round, by their lufel rotations; a lufel rotation the team cannot heal for is replaced by one composed for it.'
   ],
@@ -13440,6 +13440,7 @@ const DPS_KIT_BONUS = {
     { to: 'skill:3', v: 80, after: 'HL', dur: 1, aw: 4, why: 'The Fun Never Ends! (Awareness 4): after a Highlight the next Surf \'n\' Shine +80%. The fight spends her gauge just before she acts, so the next Surf is that round\'s when her rotation casts it (2 of 3 turns at A0, every turn at A6); a Surf a round later is missed' },
     { to: 'hit', match: 'Surf', v: 80, after: 'HL', dur: 1, aw: 4, why: 'The Fun Never Ends!: as above, on the A6 Surf \'n\' Shine multiplier part of the same cast' },
     // Energy Overload!, Summer Starts Here! and Bubble Puff Star follow the heals she receives: KIT_STAT_BUFFS `on: 'healed'`
+    { to: 'hl', v: 25, selfHp: { above: 50 }, why: 'Highlight: +25% damage while her HP is above 50% (her Skill 1 in Summer Hype and Skill 3 spend 10% and 15%, Skill 2 and the Highlight restore 20%: TC_HP)' },
     { to: 'skill:3', ladder: [34, 44, 44, 54, 54, 64, 64], weapon: '5', why: 'Colorful Coast (5-star weapon): Surf \'n\' Shine +34-64% (Korean: the skill that enters the summer state; English: when cast in Summer Hype). Read as every cast, as Surf enters Hype itself' },
     { to: 'hit', match: 'Surf', ladder: [34, 44, 44, 54, 54, 64, 64], weapon: '5', why: 'Colorful Coast: as above, on the A6 Surf \'n\' Shine multiplier part' },
     { to: 'skill:1', ladder: [34, 44, 44, 54, 54, 64, 64], weapon: '5', why: 'Colorful Coast: each Surf gives 1 Sunlight, spent by the next skill or Highlight for the same increase; every Skill 1 in lufel\'s rotations follows a Surf' },
@@ -13644,6 +13645,10 @@ const DPS_KIT_BONUS = {
   ],
   'Ryuji Sakamoto': [
     { to: 'skill:1', v: 30, why: 'Pirate Tactics (Skill 1): without Rebound he spends 20% HP for +30% damage, and with Rebound he has Rebound\'s +30%, so the cast always has it. Not in lufel\'s rotation.' },
+    { to: 'skill:2', v: 30, selfHp: { rebound: true }, why: 'Rebound (A0): below 75% HP as he acts, his next skill +30% damage (Pirate Tactics has it either way, above)' },
+    { to: 'skill:3', v: 30, selfHp: { rebound: true }, why: 'Rebound (A0), as above, on God Hand Burst' },
+    { to: 'all', k: 'atkPct', v: 45, selfHp: { belowBoss: true }, why: 'Adrenaline (passive 1) in the fight: +45% ATK while the boss\'s HP share is above his (the boss falls evenly over the fight, tcBossHp; his own HP falls by Pirate Tactics and Leo\'s barrier, TC_HP)' },
+    { to: 'all', k: 'atkPct', v: 30, selfHp: { missing: true, fullAt: 20 }, why: 'Wounded Glory (A0): ATK +10% at full HP rising to +40% at 20% or less; the +10% is in his stats, this is the rest, read as growing evenly' },
     { to: 'skill:3', v: 20, aw: 1, why: 'Under the Skull and Bones (A1): God Hand Burst damage +20%.' },
     { to: 'skill', k: 'pierce', v: 35, aw: 2, why: 'Fearless Charge (A2; Korean A3, English and Japanese A2): a skill that crits ignores 35% of the foe\'s DEF, which lufel\'s defence calculator lists as Pierce 35 on a crit. His skills always crit here (CRIT_PROFILE locked), so every skill hit; not his Highlight.' },
     { to: 'skill:3', v: [58.6, 58.6, 62.2, 62.2], after: 'HL', dur: 2, why: 'Highlight: next skill damage +58.6%. The fight prices God Hand Burst as half a hit on each of the two "3" tokens (charge, release), so 2 rounds from the Highlight carry one whole hit.' },
@@ -14528,6 +14533,28 @@ function tcSimPrep(D, names, fit, blank, opt) {
 /* One fight under one spending order: { total, hl: {name: Highlights}, cover: {actor: {ref: share}}, log }.
    `order`: names in the order the gauge is spent on; `hold`: keep a full gauge for the moment just
    before the damage dealer acts (unless the next action would overflow it). */
+/* The damage dealer's own HP (Nov 2026), for the kits that read it. Only what the kit text gives as a number
+   moves it: HP their own skills spend or restore (`cost`, `gain`, in % of max HP; `hype`: a cost only in Summer
+   Hype, from her Skill 3 to the end of her next turn), Ryuji's Rebellious Spirit heal (`healAtk`: % of his ATK
+   when he has Rebound), and Leo's Justice Barrier and Highlight on them (TC_HP_LEO). Damage the boss deals and
+   the amounts other healers restore are published nowhere, so neither is played: HP can only fall by the kits'
+   own costs, and a low-HP bonus counts no more often than they make it. A DPS_KIT_BONUS entry's `selfHp` reads
+   it at the hit: `above`/`below` a %, `missing` (growing with HP lost, full at `fullAt` %), `belowBoss` (the
+   boss's HP share above theirs, tcBossHp) or `rebound` (Ryuji began this action below TC_HP's `rebound` %). */
+const TC_HP = {
+  'Ryuji Sakamoto': { cost: { 1: 20 }, freeInRebound: true, rebound: 75, healAtk: 30 },
+  'Motoha Arai [Tropical]': { cost: { 3: 15 }, hype: { 1: 10 }, gain: { 2: 20, HL: 20 }, gainA6: { 2: 40 } }
+};
+/* Leo's Justice Barrier (Skill 2) spends 30% of the damage dealer's remaining HP and shields 80% of it plus
+   31.6-32.9% of his ATK + 900-1230 for 2 turns; Energy Recharge returns what is left of the shield as HP when it
+   ends — all of it, with no boss damage played. His Highlight lifts them back to 60% (at most 200% of his ATK). */
+const TC_HP_LEO = { n: 'Leo Kamiyama', spend: 30, keep: 80, atk: [31.6, 31.6, 32.9, 32.9], flat: [900, 1095, 1035, 1230], dur: 2, hlTo: 60, hlCap: 200 };
+function tcSelfHpF(sh, hp, bossHp, rebound) {
+  if (sh.rebound) return rebound ? 1 : 0;
+  if (sh.belowBoss) return bossHp > hp ? 1 : 0;
+  if (sh.missing) return Math.min(1, (1 - hp) / (1 - (sh.fullAt || 0) / 100));
+  return (sh.below != null ? hp * 100 < sh.below : hp * 100 > sh.above) ? 1 : 0;
+}
 function tcSimRun(P, order, hold) {
   const { D, E, F, skill, kit, dps, elu, concerto } = P;
   const T = P.thieves.map(a => Object.assign({}, a, { th: a.th || 0, acts: 0, since: Infinity, hlN: 0, fortune: 0, rk: P.rk && a.n === TC_RK.n && !a.isDps ? Object.assign({}, P.rk) : null }));
@@ -14536,6 +14563,16 @@ function tcSimRun(P, order, hold) {
   let stacks = FU ? Math.min(FU.max, FU.start) : 0, shiftRound = 0, lastA2 = -99;
   const shifts = [];
   const dpsA = T.find(a => a.isDps);
+  /* the damage dealer's HP (TC_HP): played when their kit or Leo's moves it; `barriers` are Leo's shields that
+     come back as HP when they end, after that many of the damage dealer's actions */
+  const HPK = TC_HP[D.n] || null, HPL = T.some(a => a.n === TC_HP_LEO.n && !a.isDps) ? TC_HP_LEO : null;
+  const HPON = !!(HPK || HPL);
+  let selfHp = 1, rebound = false, hypeLeft = 0;
+  const barriers = [], hpLog = { min: 1, rebounds: 0 };
+  const hpMax = HPON ? Math.max(1, tcStat(D.n, 'HP')) : 1, hpAtk = HPK && HPK.healAtk ? tcStat(D.n, 'ATK') : 0;
+  const hpAw = HPK ? +charLoadout(D.n).awareness || 0 : 0;
+  const hpLeo = HPL ? (() => { const lo = charLoadout(HPL.n), ti = kitTierIndex(charDef(HPL.n), lo); return { atk: tcStat(HPL.n, 'ATK'), pct: HPL.atk[ti], flat: HPL.flat[ti] }; })() : null;
+  const hpSet = h => { selfHp = Math.max(0.01, Math.min(1, h)); hpLog.min = Math.min(hpLog.min, selfHp); };
   const buffs = [];        // { k, v, left, enemy, owner, ref, vc }
   const pending = [];      // lines that wait for the damage dealer's next Highlight
   let gauge = P.gauge0, total = 0, dpsActs = 0, vc = false, round = 0;
@@ -14706,7 +14743,9 @@ function tcSimRun(P, order, hold) {
         // stacks read off the foe's ailments, or the team's ailments between two Transform turns (Heat)
         // `hp`: by the boss's HP this round (tcBossHp)
         const f = (b.perAil ? Math.max(0, Math.min(b.perAil[1], ailN()) - b.perAil[0]) : b.perHeat ? Math.min(b.perHeat, heat) : 1) *
-          (1 + tcTechScale(b.tech, X && X.tp)) * (b.hp ? tcHpF(b.hp, Math.max(1, round)) : 1);
+          (1 + tcTechScale(b.tech, X && X.tp)) * (b.hp ? tcHpF(b.hp, Math.max(1, round)) : 1) *
+          // `selfHp`: by the damage dealer's own HP (TC_HP)
+          (b.selfHp ? tcSelfHpF(b.selfHp, selfHp, tcBossHp(Math.max(1, round)), rebound) : 1);
         if (!f) continue;
         // `k`: a stat on those hits, not damage (Ryuji's Pierce, Radiance Motoha's Highlight ATK and crit damage)
         if (b.k) { xs = xs || {}; xs[b.k] = (xs[b.k] || 0) + b.val * f; }
@@ -15002,7 +15041,13 @@ function tcSimRun(P, order, hold) {
         lastUse.HL = round; lastUse.TH = round;
         kitFire('selfHL', X);
         trigger('dpsHL', a);
-      } else kitFire('allyHL', curX(), { by: a });
+        // a Highlight that restores their own HP does so after its hit (Tropical Motoha's)
+        if (HPK && HPK.gain && HPK.gain.HL) hpSet(selfHp + HPK.gain.HL / 100);
+      } else {
+        kitFire('allyHL', curX(), { by: a });
+        // Leo's Highlight lifts the damage dealer back to 60% of their HP, at most 200% of his ATK
+        if (HPL && a.n === HPL.n && selfHp * 100 < HPL.hlTo) hpSet(Math.min(HPL.hlTo / 100, selfHp + HPL.hlCap / 100 * tcStat(HPL.n, 'ATK') / hpMax));
+      }
       // a damaging Highlight or Theurgy gives Yumi a Mixer; from her A4 any ally's gives a Tailor-Made
       if (CK) {
         if (a.n && a.n !== 'Wonder' && ((SKILL_DMG[a.n] || {}).d || [])[3] > 0) ckMix(a === dpsA ? D.e : (charDef(a.n) || {}).e);
@@ -15117,6 +15162,16 @@ function tcSimRun(P, order, hold) {
         // their own buffs the turn's skills and tokens set off, on before the hit (a Theurgy's or a
         // Highlight's are set off where it fires)
         const mine = new Set([...toks, ...raw].filter(t => t !== 'HL' && t !== 'TH'));
+        /* their own HP (TC_HP): Rebound is read as the action begins (below 75% "on his action"), and a skill's
+           cost is paid as it is cast, before its hit — Pirate Tactics spends nothing with Rebound */
+        if (HPON) {
+          rebound = !!(HPK && HPK.rebound != null && selfHp * 100 < HPK.rebound);
+          if (rebound) hpLog.rebounds++;
+          if (HPK) uses.forEach((u, i) => {
+            const c = u ? ((HPK.cost || {})[i + 1] || 0) + (hypeLeft > 0 ? (HPK.hype || {})[i + 1] || 0 : 0) : 0;
+            if (c && !(HPK.freeInRebound && rebound)) hpSet(selfHp - u * c / 100);
+          });
+        }
         // the heals this turn sets off land after its hits (below); Summer Hype opens at once
         if (HR) { healToks = mine; usedSkill = uses.some(u => u > 0); if (TC_HEAL_HYPE[D.n] && uses[+TC_HEAL_HYPE[D.n] - 1]) HR.hype = 2; }
         if (raw.includes('Transform')) { heat = inflicted - heatAt; heatAt = inflicted; }
@@ -15164,10 +15219,28 @@ function tcSimRun(P, order, hold) {
           }
         }
         inflict(a, new Set(uses.map((u, i) => u ? String(i + 1) : null).filter(Boolean)));
+        // what their skills restore lands after the hits; Summer Hype runs to the end of her turn after Skill 3;
+        // Leo's barriers on them count down after their action and give back what is left of the shield
+        if (HPON) {
+          if (HPK) {
+            const g = (hpAw >= 6 && HPK.gainA6) ? Object.assign({}, HPK.gain, HPK.gainA6) : HPK.gain || {};
+            uses.forEach((u, i) => { if (u && g[i + 1]) hpSet(selfHp + u * g[i + 1] / 100); });
+            if (HPK.healAtk && rebound && uses.some(u => u)) hpSet(selfHp + HPK.healAtk / 100 * hpAtk / hpMax);
+            if (HPK.hype) { if (hypeLeft > 0) hypeLeft--; if (uses[2]) hypeLeft = 1; }
+          }
+          for (let i = barriers.length - 1; i >= 0; i--) if (--barriers[i].left <= 0) { hpSet(selfHp + barriers[i].hp); barriers.splice(i, 1); }
+          rebound = false;   // spent on this action's skill
+        }
       } else {
         // their skills, and the turn's other tokens ("Special", "Punch") for lines tied to one
         const mates = a.wonder ? toks : new Set([...toks, ...String(step).split('+').map(t => t.trim().replace(/↺/g, '')).filter(t => t && !/^[1-3]+$/.test(t))]);
         castBy(a, mates);
+        // Leo's Justice Barrier on the damage dealer (TC_HP_LEO): 30% of their remaining HP spent and shielded
+        if (HPL && a.n === HPL.n && toks.has('2')) {
+          const spent = selfHp * HPL.spend / 100;
+          hpSet(selfHp - spent);
+          barriers.push({ left: HPL.dur, hp: spent * HPL.keep / 100 + (hpLeo.pct / 100 * hpLeo.atk + hpLeo.flat) / hpMax });
+        }
         // Summer Ichigo: Romantic Pearl / Astral Anchor give a Seal (with another Psy / [Summer] member); Heart's
         // Desire spends it and makes the damage dealer the Helmsman (TC_RAM)
         if (P.ram && a.n === TC_RAM.n) {
@@ -15287,7 +15360,9 @@ function tcSimRun(P, order, hold) {
   return { total, parts, hl, shifts, downs, cover: share, order: T.map(a => a.n || '—'), gaugeLeft: Math.round(gauge), ailMean: F ? ailSum / F : 0, tech, copy: copyLog, track: TR,
     surf: SF ? { catches: SF.catches, inSurf: SF.inSurf, acts: dpsActs } : null, heals: HR ? { n: HR.n, by: HR.by } : null, rams: P.ram ? rams : null,
     cocktails: CK ? { casts: CK.casts, sum: CK.sum, std2: CK.std2, one: CK.one, oneSum: CK.oneSum, lost: CK.lost, spent: CK.spent } : null,
-    rikoSp: (T.find(x => x.rk) || {}).rk || null };
+    rikoSp: (T.find(x => x.rk) || {}).rk || null,
+    // the damage dealer's own HP where it is played (TC_HP): its lowest share, Rebounds, and where it ended
+    selfHp: HPON ? { min: hpLog.min, rebounds: hpLog.rebounds, end: selfHp } : null };
 }
 
 /* The fight under the spending orders worth trying, the best kept. */
