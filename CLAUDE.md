@@ -1526,6 +1526,20 @@ damage formula (`docs/DATA-SOURCES.md`, the damage-formula section):
   Tropical Motoha alone +2%; build scores Ryuji 77.3 to 77.1, Motoha 80.13 to 80.15; calibration unchanged.
   Not played: Leo's Power of Friendship and A6 lines (still judged), Grand Presser's low-HP growth, Shoki's
   Highlight (not owned), and any HP lost to the boss.
+- **Ann's Passion and La Vie en Rose are counted** (`TC_LV`, Nov 2026). Each Fire skill gives 1 Passion per foe it
+  hits (at most 4), from A6 a 60% chance of 1 more (a running tally); at 4+ as she acts she spends them all and is in
+  La Vie en Rose for that action, never two running. Until then its rate was judged at every 4th action (3rd at
+  A6) — on one foe, though her default fight (an AoE DPS) has 5, where it is every other action — and its own
+  bonuses were not priced at all. DPS_KIT_BONUS `lv` lines now count only in it: its +50% ATK, Falling Sun's +30%,
+  A6's +11% Fire damage per Passion spent (`perLvSpent`, at most 110%), A1's +25% ATK on her own hits (the party
+  line keeps its judged uptime for a teammate's, `own: false`), Trifire's bonus hit (below 50% HP), and Crimson
+  Rose's extra ATK for 2 turns after (`after: 'lv1'`, read as +8% ATK, a slight undercount of a flat 8% of hers);
+  Marriage of Flames fires as it ends (DPS_KIT `on: 'lvEnd'`), Rosethorn's Burn as it starts (TC_AILMENTS `on:
+  'lv'`). Two Highlight lines that were missing went in too: her Fire skills' +78.1% for that action and A4's +100%
+  ATK. On save (56), Ann at A6: in La Vie en Rose on 3 of her 6 actions; her damage alone +80% and her best team's
+  +52% in absolute terms; the team unchanged (Beachflower Minami / Kotone / Fuuka / Kumi), its multiplier 18.1× to
+  15.3× (her own damage grew more); build score 76.4 to 76.1; calibration unchanged. Not played: her Passion when
+  she is a teammate (her A1 party ATK and Rosethorn's Burn then keep judged rates or none).
 - **Ichigo's Chains of Love are counted** (`TC_LS.col`, `colUp`, Nov 2026): +1 the first time she casts Vorpal
   Butterfly and +1 per Highlight, at most 3 (5 from A2, which starts her on 1). What they give follows the count in
   the fight instead of judged shares: Overflowing Love's +15% ATK each (DPS_KIT_BONUS `perCol`), crit rate +15% and

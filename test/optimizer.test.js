@@ -3195,6 +3195,14 @@ function awarenessOverrideDrift() {
         gain: run(keepKb) / run(keepKb.filter(b => !b.hp)) };
       DPS_KIT_BONUS[km] = keepKb; tcMemo.key = '';
     }
+    // Ann's Passion (TC_LV): Trifire gives 1 a cast (one foe), so La Vie en Rose comes on her 5th action at A0;
+    // A6's 60% tally brings it sooner, and its end sets off Marriage of Flames (A2)
+    {
+      const keep = { a: TEAMS[ann.n], lo: state.chars[ann.n].loadout };
+      const run = aw => { state.chars[ann.n].loadout = Object.assign({}, DEFAULT_LOADOUT, { awareness: aw }); TEAMS[ann.n] = Object.assign({}, keep.a, { rot: [{ aw: 0, label: 'Test', seq: ['2'] }] }); tcMemo.key = ''; const s = tcSim(ann, [null, null], false); return { lv: s.laVie, fu: (s.parts || {}).fu || 0 }; };
+      out.laVie = { a0: run(0), a2: run(2), a6: run(6) };
+      TEAMS[ann.n] = keep.a; state.chars[ann.n].loadout = keep.lo; tcMemo.key = '';
+    }
     // Kotone Shiomi's Lunar Bond (TC_LB): +1 per skill the Arcana Link ally casts and per Lyre's Melody on them
     {
       const ko = 'Kotone Shiomi', keep = { a: TEAMS[ann.n], k: TEAMS[ko], lo: state.chars[ko].loadout };
@@ -3361,7 +3369,7 @@ function awarenessOverrideDrift() {
     out.skillBad = Object.entries(SKILL_DMG).filter(([n, s]) => !charDef(n) || !['HL', 'TH'].includes(s.hl) || !Array.isArray(s.d) || s.d.length !== 4 || s.d.some(x => !(x >= 0)) || (s.hl === 'TH' && !(s.th > 0))).map(([n]) => n);
     out.skillN = Object.keys(SKILL_DMG).length;
     // 'wave': fired by Wavecatcher Miyu's Surf engine (TC_SURF), her character only
-    const ON = /^(self|self:[123]|tok:.+|selfHL|ally|allySkill|allyAtk|allyHL|anyHL|turnEnd|turnStart|round|wave)$/;
+    const ON = /^(self|self:[123]|tok:.+|selfHL|ally|allySkill|allyAtk|allyHL|anyHL|turnEnd|turnStart|round|wave|lvEnd)$/;
     out.kitBad = [];
     Object.entries(DPS_KIT).forEach(([n, list]) => { if (!charDef(n)) out.kitBad.push(n); list.forEach((c, i) => { if (!['res', 'fu', 'dot', 'hit'].includes(c.kind) || !ON.test(c.on) || !c.why || (c.v == null && !c.ladder)) out.kitBad.push(n + ' #' + i); }); });
     out.kitN = Object.keys(DPS_KIT).length;
@@ -3797,6 +3805,11 @@ function awarenessOverrideDrift() {
     check('Miku\'s Skill Amplification: 15% on her skills from Awareness 1, her 5-star weapon\'s 10% (R1) on what she casts in Virtual Concert, and never on a count or her weapon',
       near(m[0].beat, 1) && near(m[0].show, 1.1) && near(m[1].beat, 1.15) && near(m[1].show, 1.25) && near(m[2].show, 1.15) &&
       near(m[1].turns, 1) && near(m[0].turns, 1) && near(m[1].weapon, 1), JSON.stringify(m));
+  }
+  {
+    const v = th.laVie;
+    check('Ann\'s La Vie en Rose follows her Passion: with Trifire alone (1 a cast) on every 5th action at A0, more often with A6\'s extra Passion, and Marriage of Flames fires as it ends from A2',
+      v.a0.lv && v.a0.lv.n === Math.floor(v.a0.lv.acts / 5) && v.a0.fu === 0 && v.a2.lv.n === v.a0.lv.n && v.a2.fu > 0 && v.a6.lv.n > v.a0.lv.n, JSON.stringify(v));
   }
   {
     const b = th.lunarBond;

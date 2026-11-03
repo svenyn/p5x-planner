@@ -12968,7 +12968,7 @@ const TC_MED_ON = ['iA', 'iB', 'iC'];
 const TC_MEDS_OF = 'Minami Miyashita [Beachflower]';
 const TEAM_BUFFS = {
   'Ann Takamaki': [
-    { k: 'atk%', v: 25, to: 'party', src: 'aw', up: 0.25, aw: 1, why: 'A1 Seguidilla: entering La Vie en Rose gives the party +25% ATK for 1 turn. Uptime judged for a boss fight: one Passion per skill against a single foe means La Vie en Rose about every 4th action (every other action against 4+ foes, where it would be about 0.5)' }
+    { k: 'atk%', v: 25, to: 'party', src: 'aw', up: 0.25, aw: 1, own: false, why: 'A1 Seguidilla (her own share, as the damage dealer, follows her counted La Vie en Rose: DPS_KIT_BONUS `lv`): entering La Vie en Rose gives the party +25% ATK for 1 turn. Uptime judged for a boss fight: one Passion per skill against a single foe means La Vie en Rose about every 4th action (every other action against 4+ foes, where it would be about 0.5)' }
   ],
   'Ryuji Sakamoto': [
 
@@ -13613,7 +13613,7 @@ const TEAM_BUFF_SKIPS = {
   'Ann Takamaki': [
     'Rosethorn (5-star weapon): inflicts Burn on a random foe on entering La Vie en Rose - only helps allies whose effects need a Burning foe, not priced',
     'Trifire / Falling Sun: chance to inflict Burn - same, ailment enabling only',
-    'A6 Time for Punishment: extra Passion chance raises the La Vie en Rose rate (and so the A1 uptime) - not reflected in the single uptime above',
+    'A6 Time for Punishment: extra Passion chance raises the La Vie en Rose rate (and so the A1 uptime) - not reflected in the single uptime above (as the damage dealer, her Passion is counted: TC_LV)',
     'Everything else (La Vie en Rose ATK, A6 Fire damage, Highlight, A2 follow-ups, Masquerade Ribbon) is Ann\'s own damage'
   ],
   'Ryuji Sakamoto': [
@@ -17518,8 +17518,7 @@ function tcTechMix(D) {
    by hand-checked batches (Nov 2026); `why` says where each number comes from. */
 const DPS_KIT = {
   'Ann Takamaki': [
-    { kind: 'fu', v: 66, n: 2, on: 'self', chance: 0.25, aw: 2, why: 'Marriage of Flames (Awareness 2): when La Vie en Rose ends, 2 follow-ups of 66% ATK to random foes (both on the boss). La Vie en Rose comes from 4 Passion; against one foe each Fire skill gives 1, so it is entered about every 4th action (the same 0.25 TEAM_BUFFS uses for A1); priced as 0.25 per action' },
-    { kind: 'fu', v: 66, n: 2, on: 'self', chance: 0.08, aw: 6, why: 'Time for Punishment (Awareness 6): 60% chance of a 2nd Passion per Fire skill brings La Vie en Rose to about every 3rd action (non-consecutive rule kept), so the Marriage of Flames rate rises from 0.25 to about 0.33 per action; this is the added 0.08' }
+    { kind: 'fu', v: 66, n: 2, on: 'lvEnd', aw: 2, why: 'Marriage of Flames (Awareness 2): when La Vie en Rose ends, 2 follow-ups of 66% ATK to random foes (both on the boss); the fight ends it with the action it was entered on, as it counts her Passion (TC_LV)' }
   ],
   'Motoha Arai': [
     { kind: 'fu', v: [23, 25.4, 24, 26.3], on: 'self:1', aw: 1, why: 'Shocking Double Play (Awareness 1): Wrathful Thunder gets a 5th bolt and repeat hits on the same foe deal 15% instead of 10%. On one boss: 76.7% x (1 + 4 x 0.15) = 122.7 against the corrected 99.7, i.e. +0.3 x the per-bolt value' }
@@ -17931,8 +17930,15 @@ const DPS_KIT_BONUS = {
     { to: 'hl', v: 30, needAil: 'Burn', why: 'Passive 1, as above, on her Highlight' },
     { to: 'skill', v: 2, needAil: 'Burn', tech: 'fire', amp: true, why: 'Fireburn\'s own skill damage +2% on a Burning foe, +10% of itself per 100 Technical Precision; a multiplier of its own, like every Technical\'s damage increase (her +30% above is not)' },
     { to: 'hl', v: 2, needAil: 'Burn', tech: 'fire', amp: true, why: 'Fireburn\'s own +2%, as above, on her Highlight' },
-    { to: 'skill:2', v: 30, amp: true, chance: 0.25, awBelow: 6, hp: { below: 50 }, why: 'Trifire (Skill 2): in La Vie en Rose, on a foe below 50% HP, bonus damage of 30% of what the skill dealt. La Vie en Rose about every 4th action on one boss, as her other lines judge it' },
-    { to: 'skill:2', v: 30, amp: true, chance: 0.33, aw: 6, hp: { below: 50 }, why: 'Trifire\'s bonus, as above, with La Vie en Rose about every 3rd action from Time for Punishment (A6)' }
+    // `lv`: only in La Vie en Rose, as the fight counts her Passion (TC_LV)
+    { to: 'skill:2', v: 30, amp: true, lv: true, hp: { below: 50 }, why: 'Trifire (Skill 2): in La Vie en Rose, on a foe below 50% HP, bonus damage of 30% of what the skill dealt' },
+    { to: 'all', k: 'atkPct', v: 50, lv: true, why: 'La Vie en Rose (A0): her ATK +50% (at level 70+) for the action it is entered on' },
+    { to: 'skill:3', v: 30, lv: true, why: 'Falling Sun (Skill 3): in La Vie en Rose, skill damage +30%' },
+    { to: 'all', v: 11, lv: true, perLvSpent: true, aw: 6, why: 'Time for Punishment (A6): in La Vie en Rose, Fire damage +11% per Passion spent entering it (at most 110%); all her damage is Fire' },
+    { to: 'all', k: 'atkPct', v: 25, lv: true, aw: 1, why: 'Seguidilla (A1): entering La Vie en Rose gives the party, her included, +25% ATK for 1 turn (her own share here; TEAM_BUFFS has the party line, `own: false`)' },
+    { to: 'all', k: 'atkPct', v: 8, after: 'lv1', dur: 2, why: 'Crimson Rose (Skill 1) in La Vie en Rose: for 2 turns, foes\' ATK -8% of hers and her ATK +the same (flat; read as +8% ATK, a slight undercount)' },
+    { to: 'skill', v: [78.1, 86.1, 82.9, 90.9], after: 'HL', dur: 1, why: 'Highlight: her Fire skills\' damage +78.1-90.9% for 1 turn (the gauge is spent as she acts, so that action\'s skills)' },
+    { to: 'all', k: 'atkPct', v: 100, after: 'HL', dur: 1, aw: 4, why: 'Awareness 4 (Highlight Enhanced): using a Highlight gives her ATK +100% for 1 turn' }
   ],
   'Kiyoshi Kurotani': [
     { to: 'skill:2', v: 2, needAil: 'Burn', tech: 'fire', amp: true, why: 'Crimson Summon (Skill 2) activates a Fire Technical: Fireburn on a Burning foe, skill damage +2%, +10% of itself per 100 Technical Precision' },
@@ -18421,7 +18427,7 @@ const TC_AILMENTS = {
   'Ann Takamaki': [
     { on: '2', n: 1, chance: 0.75, type: 'Burn', dur: 2, why: 'Trifire (Skill 2, single target): 75% base chance to Burn; no duration printed.' },
     { on: '3', n: 1, chance: 0.3, type: 'Burn', dur: 2, why: 'Falling Sun (Skill 3, all foes): 30% base chance to Burn each foe; no duration printed.' },
-    { on: ['1', '2', '3'], n: 1, chance: 0.25, type: 'Burn', dur: 2, weapon: '5', cond: 'entering La Vie en Rose (A0: all foes take Fire damage 4 times; about every 4th action on one boss, as TEAM_BUFFS judges)', why: 'Rosethorn (5-star weapon): Burns 1 random foe on entering La Vie en Rose (the boss when alone); no chance or duration printed. Played as a quarter of her skill turns, La Vie en Rose\'s rate (judged as TEAM_BUFFS does).' }
+    { on: 'lv', n: 1, type: 'Burn', dur: 2, weapon: '5', cond: 'entering La Vie en Rose', why: 'Rosethorn (5-star weapon): Burns 1 random foe on entering La Vie en Rose (the boss when alone); no chance or duration printed. The fight sets it off as she enters it (TC_LV, the token \'lv\'), which it plays only while she is the damage dealer.' }
   ],
   'Ryuji Sakamoto': [
     { on: '2', n: 1, chance: 0.293, tiers: [29.3, 29.3, 31.1, 31.1], type: 'Shock', dur: 2, cond: 'with Rebound the chance becomes 58.6/58.6/62.2/62.2%', why: 'Thunderbolt (Skill 2, all foes): base chance to Shock. Korean says the Rebound chance rises TO 58.6%; English says BY 58.6%. Korean used.' }
@@ -19138,6 +19144,14 @@ const TC_HP_LEO = { n: 'Leo Kamiyama', spend: 30, keep: 80, atk: [31.6, 31.6, 32
    `needCol`, always on in her stats); Mine Alone's damage taken per Lovesick stack needs 1. */
 const TC_LS = { n: 'Ichigo Shikano', v: 18, add: [2, 4, 0], dur: 4, cap: 10, cap6: 15, hlTicks: 3, hlCrit: 3, s3At: 10, s3Share: 118.7 / 373.5, comp: { kind: 'dot', why: 'Lovesick' },
   col: { cap: 3, capA2: 5, startA2: 1, dotAt: 2 } };
+/* Ann's Passion and La Vie en Rose (Nov 2026; until then its rate was judged at every 4th action, every 3rd at A6,
+   and its own bonuses were not priced at all). Each Fire skill gives 1 Passion per foe it hits, at most 4 (A0);
+   from A6 each also has a 60% chance of 1 more, played as a running tally. At 4 or more as she acts she spends them
+   all and is in La Vie en Rose for that action, never on two actions running. DPS_KIT_BONUS `lv` lines count only
+   then (`perLvSpent`: per Passion spent, at most `spentCap`); Marriage of Flames fires as it ends (DPS_KIT
+   `on: 'lvEnd'`); Rosethorn's Burn as it starts (TC_AILMENTS `on: 'lv'`). Played only while she is the damage
+   dealer; as a teammate her A1 party ATK keeps its judged uptime. */
+const TC_LV = { n: 'Ann Takamaki', need: 4, perSkill: 4, a6: 0.6, spentCap: 10 };
 /* Kotone Shiomi's Lunar Bond on the Arcana Link ally (Nov 2026): the damage dealer, when a Sweeper or Assassin
    (lufel's AoE / ST DPS). 0 at the start (5 from A1), +1 per Persona skill they cast and per Lyre's Melody she
    casts on them, at most 10, never reset (she never reselects). Her TEAM_BUFFS lines with `lb` and her weapon's
@@ -19168,6 +19182,8 @@ function tcSimRun(P, order, hold) {
   const hpLeo = HPL ? (() => { const lo = charLoadout(HPL.n), ti = kitTierIndex(charDef(HPL.n), lo); return { atk: tcStat(HPL.n, 'ATK'), pct: HPL.atk[ti], flat: HPL.flat[ti] }; })() : null;
   const hpSet = h => { selfHp = Math.max(0.01, Math.min(1, h)); hpLog.min = Math.min(hpLog.min, selfHp); };
   // Ichigo's Lovesick on the boss (TC_LS): stacks, turns left, the snapshot it deals with, its crit window
+  // Ann's Passion and La Vie en Rose (TC_LV): stacks, the 60% tally, in it now, Passion spent, her actions
+  const LV = D.n === TC_LV.n ? { p: 0, acc: 0, on: false, spent: 0, acts: 0, last: -9, n: 0, a6: (+charLoadout(D.n).awareness || 0) >= 6 } : null;
   // Kotone Shiomi's Lunar Bond on the damage dealer (TC_LB), and the level it reached
   const KO = T.find(a => a.n === TC_LB.n && !a.isDps);
   const LB = KO && TC_LB.arch.includes(D.arch) ? { lv: (KO.aw || 0) >= 1 ? TC_LB.startA1 : TC_LB.start, at5: null, at10: null } : null;
@@ -19341,6 +19357,8 @@ function tcSimRun(P, order, hold) {
         if (b.re && !(comp && b.re.test(comp.why || ''))) continue;
         // Ichigo's Chains of Love (TC_LS): a line that needs that many, or one per stack (`perCol`)
         if (b.col != null && !(LS && LS.col >= b.col)) continue;
+        // Ann's La Vie en Rose (TC_LV): only in it
+        if (b.lv && !(LV && LV.on)) continue;
         if (b.needAil) {
           if (b.amp) { if (b.tech) ta += b.val; else pa += b.val; } else if (b.tech) tf += b.val; else pf += b.val;
           if (!ailOn(b.needAil)) continue;
@@ -19351,7 +19369,7 @@ function tcSimRun(P, order, hold) {
           (1 + tcTechScale(b.tech, X && X.tp)) * (b.hp ? tcHpF(b.hp, Math.max(1, round)) : 1) *
           // `selfHp`: by the damage dealer's own HP (TC_HP)
           (b.selfHp ? tcSelfHpF(b.selfHp, selfHp, tcBossHp(Math.max(1, round)), rebound) : 1) *
-          (b.perCol ? (LS ? LS.col : 0) : 1);
+          (b.perCol ? (LS ? LS.col : 0) : 1) * (b.perLvSpent ? (LV ? Math.min(TC_LV.spentCap, LV.spent) : 0) : 1);
         if (!f) continue;
         // `k`: a stat on those hits, not damage (Ryuji's Pierce, Radiance Motoha's Highlight ATK and crit damage)
         if (b.k) { xs = xs || {}; xs[b.k] = (xs[b.k] || 0) + b.val * f; }
@@ -19790,6 +19808,16 @@ function tcSimRun(P, order, hold) {
             if (c && !(HPK.freeInRebound && rebound)) hpSet(selfHp - u * c / 100);
           });
         }
+        /* Ann: 4+ Passion as she acts, and not in La Vie en Rose on her last action — she spends them all and is in
+           it for this action (TC_LV); entering it Burns the foe (Rosethorn); a Crimson Rose in it marks 'lv1' */
+        if (LV && uses.some(u => u)) {
+          if (LV.p >= TC_LV.need && LV.last !== LV.acts - 1) {
+            LV.on = true; LV.spent = LV.p; LV.p = 0; LV.last = LV.acts; LV.n++;
+            lastUse.lv = round;
+            inflict(a, new Set(['lv']));
+            if (uses[0]) lastUse.lv1 = round;
+          }
+        }
         // the heals this turn sets off land after its hits (below); Summer Hype opens at once
         if (HR) { healToks = mine; usedSkill = uses.some(u => u > 0); if (TC_HEAL_HYPE[D.n] && uses[+TC_HEAL_HYPE[D.n] - 1]) HR.hype = 2; }
         if (raw.includes('Transform')) { heat = inflicted - heatAt; heatAt = inflicted; }
@@ -19843,6 +19871,17 @@ function tcSimRun(P, order, hold) {
         inflict(a, new Set(uses.map((u, i) => u ? String(i + 1) : null).filter(Boolean)));
         // Kotone Shiomi's Lunar Bond rises after each Persona skill they cast (TC_LB)
         lbUp(uses.reduce((x, y) => x + y, 0));
+        /* Ann's Passion from this action's Fire skills (1 a foe hit, at most 4 a skill; from A6 a 60% chance of 1 more,
+           as a running tally); La Vie en Rose ends with the action, and Marriage of Flames fires (TC_LV) */
+        if (LV && uses.some(u => u)) {
+          uses.forEach((u, i) => {
+            if (!u) return;
+            LV.p += u * Math.min(TC_LV.perSkill, P.aoe[i] ? P.foes : 1);
+            if (LV.a6) { LV.acc += u * TC_LV.a6; while (LV.acc >= 1 - 1e-9) { LV.p++; LV.acc -= 1; } }
+          });
+          if (LV.on) { LV.on = false; kitFire('lvEnd', X, { xAtk: xa, fin }); }
+          LV.acts++;
+        }
         // Lovesick: the turn's skills add their stacks, and any skill takes a new snapshot for 4 more turns
         if (LS && uses.some(u => u)) {
           uses.forEach((u, i) => { if (u) LS.n = Math.min(LS.cap, LS.n + u * (TC_LS.add[i] + (LS.a1 ? 1 : 0))); });
@@ -20001,7 +20040,9 @@ function tcSimRun(P, order, hold) {
     // Ichigo's Lovesick (TC_LS): how many times it ticked and its highest stack count
     lovesick: LS ? { ticks: LS.ticks, peak: LS.peak, col: LS.col, colAt: LS.colAt.slice() } : null,
     // Kotone Shiomi's Lunar Bond (TC_LB): the level it ended on and the rounds it reached 5 and 10
-    lunarBond: LB ? { lv: LB.lv, at5: LB.at5, at10: LB.at10 } : null };
+    lunarBond: LB ? { lv: LB.lv, at5: LB.at5, at10: LB.at10 } : null,
+    // Ann's La Vie en Rose (TC_LV): how many times she entered it, over how many of her actions
+    laVie: LV ? { n: LV.n, acts: LV.acts } : null };
 }
 
 /* The fight under the spending orders worth trying, the best kept. */
