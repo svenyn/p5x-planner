@@ -3319,6 +3319,15 @@ function awarenessOverrideDrift() {
       // lufel's own rows for her rotations (operation.js `lunar_bond` / `powerful_bond`), the damage dealer casting a skill each turn
       const rows = (aw, kseq) => { state.chars[ko].loadout = Object.assign({}, DEFAULT_LOADOUT, { awareness: aw }); TEAMS[ann.n] = Object.assign({}, keep.a, rot(['2'])); TEAMS[ko] = Object.assign({}, keep.k, rot(kseq)); tcMemo.key = ''; const r = tcSim(ann, [ko, null], false); return r.lunarBond.rows.slice(0, 6).join(',') + '|' + r.powerfulBond.rows.slice(0, 6).join(','); };
       out.lufelRows = { a0burst: rows(0, ['1', '1+1+3', 'Fatigue', 'Fatigue', '1', '3']), a0late: rows(0, ['1', '1', '1', '1', '1+3+2', 'Fatigue']), a1burst: rows(1, ['1', '1+1+3', 'Fatigue', 'Fatigue', '1', '3']), a1late: rows(1, ['1', '1', '1', '1', '1+3+2', 'Fatigue']) };
+      // Miku's Tracks: a song gains its Track only if she does not hold it; Showstopper spends all three
+      const mk = 'Hatsune Miku', keepM = TEAMS[mk], keepAnn = TEAMS[ann.n];
+      const tracks = seq => { TEAMS[ann.n] = Object.assign({}, keep.a, rot(['1'])); TEAMS[mk] = Object.assign({}, keepM, rot(seq)); tcMemo.key = ''; return tcSim(ann, [null, null, mk], false).mikuTracks; };
+      out.miku = { F: tcFight(), cycle: tracks(['2 Fire', '1 Heaven', '2 Spring', '3', '2 Fire', '1 Heaven']), same: tracks(['2 Fire']), toks: ['2+3', '3+3', '1', '2 Fire', 'ⓘA+2', '1+1+3'].map(st => [...tcTurnSkills(st)].sort().join(',')) };
+      TEAMS[mk] = keepM; TEAMS[ann.n] = keepAnn;
+      // the twins' Desire Level: their lines entered at 100 scale with it
+      const jc = 'Justine & Caroline', jcd = charDef(jc), D = tcDesire(jc), l1 = TEAM_BUFFS[jc].find(e => e.desire === 1), lh = TEAM_BUFFS[jc].find(e => e.desire === 0.5);
+      const plain = e => tcLineValue(Object.assign({}, e, { desire: undefined }), jcd, charLoadout(jc));
+      out.desire = { D, one: tcLineValue(l1, jcd, charLoadout(jc)) / plain(l1), half: tcLineValue(lh, jcd, charLoadout(jc)) / plain(lh), other: tcDesire('Ann Takamaki') };
       out.powerfulBond = { every: pb(0, ['1']), sparse: pb(0, ['1', '2', '2']), none: pb(0, ['2']), a1: pb(1, ['2']), burst: pb(0, ['1+1+3']), burst6: pb(6, ['1+1+3']) };
       Object.assign(TEAMS, { [ann.n]: keep.a, [ko]: keep.k }); state.chars[ko].loadout = keep.lo; tcMemo.key = '';
     }
@@ -3935,6 +3944,11 @@ function awarenessOverrideDrift() {
     const b = th.lunarBond;
     check('Kotone Shiomi\'s Lunar Bond is counted: +1 per skill of the linked damage dealer and per Lyre\'s Melody on them (5 by round 3, 10 by round 5 when both cast every turn), 5 at once from A1, only the damage dealer\'s skills without Lyre\'s Melody, none without Kotone',
       b.a0 && b.a0.at5 === 3 && b.a0.at10 === 5 && b.a1 && b.a1.at10 != null && b.a1.at10 < b.a0.at10 && b.noMelody && b.noMelody.at10 > b.a0.at10 && b.none === null, JSON.stringify(b));
+    const mi = th.miku, de = th.desire, near6 = (x, y) => Math.abs(x - y) < 1e-6;
+    check('Miku gains a Track only for a song whose Track she does not hold, and Showstopper spends all three; a song turn and an extra-action skill are tokens of their own',
+      mi.cycle === ({ 6: 5, 12: 8 })[mi.F] && mi.same === 1 && mi.toks.join(' | ') === '2,3,x3,y3 | 3,x3 | 1 | 2,2 Fire | 2,iA | 1,3,x1,x3,y3', JSON.stringify(mi));
+    check('the twins\' Desire Level comes from their stats (at most 100 before A6) and their per-100 lines scale with it',
+      de.D >= 25 && de.D <= 100 && near6(de.one, de.D / 100) && near6(de.half, (100 + de.D) / 200) && de.other === 100, JSON.stringify(de));
     const lr = th.lufelRows;
     check('Kotone Shiomi\'s Lunar Bond and Powerful Bond follow lufel\'s own rows for her rotations: Lunar Phaseshift adds a Lunar Bond, a Fortune burst keeps Powerful Bond 2 turns longer',
       lr.a0burst === '2,6,7,8,10,10|1,3,3,3,3,3' && lr.a0late === '2,4,6,8,10,10|1,2,3,3,3,3' && lr.a1burst === '7,10,10,10,10,10|2,3,3,3,3,3' && lr.a1late === '7,9,10,10,10,10|2,3,3,3,3,3', JSON.stringify(lr));

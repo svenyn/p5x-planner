@@ -13762,9 +13762,9 @@ const TEAM_BUFFS = {
   ],
   'Justine & Caroline': [
     { k: 'atk%', v: 30, to: 'party', src: 'passive', pair: ['MA'], why: 'Oxymoron (passive), Strategist pair (Mischief & Innocence + Absurdity & Nonsense): party ATK +30% while on the field' },
-    { k: 'atk%', v: [39, 43, 41.4, 45.4], to: 'party', src: '1', on: '1', dur: 3, pair: ['MA','MS'], why: 'Selected Skill 1 = Mask of Mischief & Innocence: party ATK +39-45.4% per 100 Desire Level, 3 turns; encoded at Desire 100' },
-    { k: 'pierce', v: [9.8, 10.8, 10.4, 11.4], to: 'ally', src: '2', on: '2', dur: 3, arch: ['AoE DPS', 'ST DPS'], pair: ['MA'], why: 'Selected Skill 2 = Mask of Absurdity & Nonsense: pierce for the highest-ATK Sweeper/Assassin, 4.9% + 4.9% per 100 Desire, 3 turns; encoded at Desire 100' },
-    { k: 'cm', v: [19.5, 21.5, 20.7, 22.7], to: 'party', src: '3', on: '3', dur: 2, pair: ['MA'], why: 'Two Masks as One (Mischief + Absurdity Facades): party critical damage +19.5-22.7% per 100 Desire, duration taken as the same 2 turns; encoded at Desire 100' },
+    { k: 'atk%', v: [39, 43, 41.4, 45.4], to: 'party', src: '1', on: '1', dur: 3, pair: ['MA','MS'], desire: 1, why: 'Selected Skill 1 = Mask of Mischief & Innocence: party ATK +39-45.4% per 100 Desire Level, 3 turns; encoded at Desire 100' },
+    { k: 'pierce', v: [9.8, 10.8, 10.4, 11.4], to: 'ally', src: '2', on: '2', dur: 3, arch: ['AoE DPS', 'ST DPS'], pair: ['MA'], desire: 0.5, why: 'Selected Skill 2 = Mask of Absurdity & Nonsense: pierce for the highest-ATK Sweeper/Assassin, 4.9% + 4.9% per 100 Desire, 3 turns; encoded at Desire 100' },
+    { k: 'cm', v: [19.5, 21.5, 20.7, 22.7], to: 'party', src: '3', on: '3', dur: 2, pair: ['MA'], desire: 1, why: 'Two Masks as One (Mischief + Absurdity Facades): party critical damage +19.5-22.7% per 100 Desire, duration taken as the same 2 turns; encoded at Desire 100' },
     { k: 'skillAmp', v: [14.6, 16.1, 15.5, 17.0], to: 'party', src: '3', on: '3', dur: 2, own: false, pair: ['MA'], why: 'Two Masks as One (Mischief + Absurdity Facades): other allies get Skill Amplification 14.6-17% for 2 turns: "increase the values of skills... calculated separately from other effects". The fight multiplies the damage dealer\'s skill hits (and a Ram, a Persona skill) by it, and raises the skill buffs the other allies cast while it is up (TC_SKILL_SRC); not Highlights, follow-ups, Resonance or damage over time' },
     { k: 'atk%', v: [24.4, 26.9, 25.9, 28.4], to: 'party', src: 'HL', on: 'HL', dur: 2, pair: ['MA','MS'], why: 'Highlight, Mischief & Innocence version: party ATK up for 2 turns' },
     { k: 'dmg', v: [34.2, 37.7, 36.3, 39.8], to: 'party', src: 'HL', on: 'HL', dur: 2, pair: ['MA','MS'], why: 'Highlight, Mischief & Innocence version: party damage up for 2 turns' },
@@ -13773,9 +13773,9 @@ const TEAM_BUFFS = {
     { k: 'atk%', v: 20, to: 'party', src: 'aw', on: 'HL', dur: 2, aw: 4, own: false, why: 'A4 Execution of Rebirth: on Highlight, other allies get half of her ATK +40% for 2 turns (not for herself: the other allies only)' },
     { k: 'dmg', v: 10, to: 'party', src: 'aw', on: 'HL', dur: 2, aw: 4, own: false, why: 'A4 Execution of Rebirth: on Highlight, other allies get half of her damage +20% for 2 turns (not for herself: the other allies only)' },
     { k: 'dmg', v: 24, to: 'party', src: 'passive', pair: ['MS'], why: 'Oxymoron (passive), Medic pair (Mischief & Innocence + Service & Admonition): party damage +24% while on the field' },
-    { k: 'dmg', v: [43.9, 48.4, 46.6, 51.1], to: 'party', src: '3', on: '3', dur: 2, pair: ['MS'], why: 'Two Masks as One (Mischief + Service Facades): party damage +43.9-51.1% per 100 Desire for 2 turns (and a heal); encoded at Desire 100' },
+    { k: 'dmg', v: [43.9, 48.4, 46.6, 51.1], to: 'party', src: '3', on: '3', dur: 2, pair: ['MS'], desire: 1, why: 'Two Masks as One (Mischief + Service Facades): party damage +43.9-51.1% per 100 Desire for 2 turns (and a heal); encoded at Desire 100' },
     { k: 'dmg', v: 24, to: 'enemy', src: 'passive', pair: ['SL'], why: 'Oxymoron (passive), Saboteur pair (Service & Admonition + Luck & Loss): all foes take +24% damage while she is on the field' },
-    { k: 'defdown', v: [50.8, 56, 53.8, 59], to: 'enemy', src: '3', on: '3', dur: 2, pair: ['SL'], why: 'Two Masks as One (Service + Luck Facades): all foes DEF -25.4% plus 25.4% per 100 Desire for 2 turns, encoded at Desire 100 (and Shock, Windswept and Curse on the main target, not priced). Her Skills 1 and 2 in this pair, Service (party damage taken down, a heal) and Luck (her own ATK, damage and crit), add nothing to the damage dealer\'s' },
+    { k: 'defdown', v: [50.8, 56, 53.8, 59], to: 'enemy', src: '3', on: '3', dur: 2, pair: ['SL'], desire: 0.5, why: 'Two Masks as One (Service + Luck Facades): all foes DEF -25.4% plus 25.4% per 100 Desire for 2 turns, encoded at Desire 100 (and Shock, Windswept and Curse on the main target, not priced). Her Skills 1 and 2 in this pair, Service (party damage taken down, a heal) and Luck (her own ATK, damage and crit), add nothing to the damage dealer\'s' },
     { k: 'cm', ladder: [13, 17, 17, 21, 21, 25, 25], to: 'party', src: 'weapon', on: '1', dur: 2, weapon: '5', why: 'Warden\'s Judgement: each Facade gained gives party critical damage for 2 turns, stacks to 2; this entry is the Facade from Selected Skill 1' },
     { k: 'cm', ladder: [13, 17, 17, 21, 21, 25, 25], to: 'party', src: 'weapon', on: '2', dur: 2, weapon: '5', why: 'Warden\'s Judgement: second stack, the Facade from Selected Skill 2' },
     { k: 'dmg', ladder: [13, 17, 17, 21, 21, 25, 25], to: 'party', src: 'weapon', on: '1', dur: 2, weapon: '5', why: 'Warden\'s Judgement: each Facade gained gives party damage dealt for 2 turns, stacks to 2; Facade from Selected Skill 1' },
@@ -13843,8 +13843,9 @@ const TEAM_BUFFS = {
     { k: 'def%', v: [9.8, 10.8, 10.4, 11.4], per: { s: 'Speed', rate: 22.2, cap: [175.7, 193.7, 186.5, 204.5] }, to: 'party', src: '2', on: '2', dur: 2, why: 'Aero Setup (Skill 2): party DEF +9.8-11.4% plus 2.22% per 10 Speed, capped at 39.0/43.0/41.4/45.4%, 2 turns (reaches a DEF-scaling damage dealer; Nov 2026)' },
     { k: 'pierce', v: [1, 1.1, 1, 1.1], per: { s: 'Speed', rate: 2.2, cap: [177.3, 195.5, 186.4, 204.5] }, to: 'party', src: '3', on: '3', dur: 2, why: 'Power Setup (Skill 3): party pierce +1.0-1.1% plus 0.22% per 10 Speed, capped at 3.9/4.3/4.1/4.5% (the printed maximum caps the scaled part; the fixed 1% comes on top)' },
     { k: 'atk%', v: [12.7, 14, 13.5, 14.8], per: { s: 'Speed', rate: 28.9, cap: [175.7, 193.7, 186.5, 204.5] }, to: 'party', src: '3', on: '3', dur: 2, why: 'Power Setup (Skill 3): party ATK +12.7-14.8% plus 2.89% per 10 Speed, capped at 50.8/56.0/53.9/59.1% (the printed maximum caps the scaled part; the fixed 12.7% comes on top)' },
-    { k: 'pierce', v: [2, 2.2, 2.1, 2.3], per: { s: 'Speed', rate: 4.4, cap: [177.3, 195.5, 188.6, 206.8] }, to: 'ally', src: '3', on: '3', dur: 1, cond: 'skill 3 cast as her extra action (the \'2+3\' turns of her lufel rotations)', why: 'Power Setup on an extra action: main target pierce +2.0-2.3% plus 0.44% per 10 Speed (max 7.8-9.1%) for 1 turn. Over-counts on the A0 rotation\'s plain \'3\' turn (the printed maximum caps the scaled part; the fixed 2% comes on top)' },
-    { k: 'pierce', v: 10, to: 'ally', src: 'aw', on: '3', dur: 1, aw: 1, cond: 'skill 3 cast as her extra action right after a different skill (the \'2+3\' turns)', why: 'Tire Change (A1): Power Setup on an extra action after a different skill gives the main target +10% pierce more' },
+    { k: 'pierce', v: [2, 2.2, 2.1, 2.3], per: { s: 'Speed', rate: 4.4, cap: [177.3, 195.5, 188.6, 206.8] }, to: 'ally', src: '3', on: 'x3', dur: 1, cond: 'skill 3 cast as her extra action (the \'2+3\' turns of her lufel rotations; token x3, Nov 2026: it was on every Skill 3)', why: 'Power Setup on an extra action: main target pierce +2.0-2.3% plus 0.44% per 10 Speed (max 7.8-9.1%) for 1 turn. Over-counts on the A0 rotation\'s plain \'3\' turn (the printed maximum caps the scaled part; the fixed 2% comes on top)' },
+    { k: 'def%', v: 30, to: 'party', src: 'aw', on: 'y2', dur: 2, aw: 1, cond: 'Aero Setup (Skill 2) cast as her extra action right after a different skill', why: 'Tire Change (A1): Aero Setup on such an extra action raises party DEF by 30% more, read as lasting its own 2 turns (Nov 2026)' },
+    { k: 'pierce', v: 10, to: 'ally', src: 'aw', on: 'y3', dur: 1, aw: 1, cond: 'skill 3 cast as her extra action right after a different skill (the \'2+3\' turns; token y3, Nov 2026: it was on every Skill 3)', why: 'Tire Change (A1): Power Setup on an extra action after a different skill gives the main target +10% pierce more' },
     { k: 'atk%', v: [5.9, 6.5, 6.2, 6.8], per: { s: 'Speed', rate: 13.3, cap: [176, 194, 187.2, 205.2] }, to: 'party', src: 'HL', on: 'HL', dur: 2, durAw: [4, 3], why: 'Highlight: party ATK +5.9-6.8% plus 1.33% per 10 Speed, capped at 23.4/25.8/24.9/27.3%, 2 turns (3 from A4 Pole Position) (the printed maximum caps the scaled part; the fixed 5.9% comes on top)' },
     { k: 'dmg', v: [5.9, 6.5, 6.2, 6.8], per: { s: 'Speed', rate: 13.3, cap: [176, 194, 187.2, 205.2] }, to: 'party', src: 'HL', on: 'HL', dur: 2, durAw: [4, 3], why: 'Highlight: party damage +5.9-6.8% plus 1.33% per 10 Speed, capped at 23.4/25.8/24.9/27.3%, 2 turns (3 from A4 Pole Position) (the printed maximum caps the scaled part; the fixed 5.9% comes on top)' },
     { k: 'dmg', v: 10, to: 'party', src: 'aw', on: 'HL', dur: 3, aw: 4, why: 'Pole Position (A4): Highlight gives party damage +10% more, and its buffs last 3 turns' },
@@ -13928,15 +13929,17 @@ const TEAM_BUFFS = {
   'Hatsune Miku': [
     { k: 'atk%', v: 0, per: { s: 'ATK', rate: 0.5682, cap: [4400, 4840, 4928, 5368] }, to: 'party', src: '1', on: '1', dur: 3, why: 'Feel the Beat (Skill 1): party ATK +0.57% per 100 of Miku\'s ATK, max 25/27.5/28/30.5% (rate taken as max/cap), 3 turns' },
     { k: 'dmg', v: 0, per: { s: 'ATK', rate: 0.3409, cap: [4400, 4840, 4928, 5368] }, to: 'party', src: '2', on: '2', dur: 3, why: 'Clear Sound (Skill 2): party damage +0.34% per 100 of Miku\'s ATK, max 15/16.5/16.8/18.3%, 3 turns' },
-    { k: 'pierce', v: 0, per: { s: 'ATK', rate: 0.2045, cap: [4400, 4840, 4928, 5368] }, to: 'party', src: '1', up: 0.9, cond: 'song Heaven on Skill 1 (every lufel build but No Pierce)', why: 'Feel the Beat on Heaven: party pierce up to 9/9.9/10.1/11% for 3 turns. Uptime judged: re-applied every Heaven cast (A0 reapplies it even with the Track held) and extended 2 turns by Virtual Concert, so up from about turn 3 on' },
-    { k: 'cr', v: 0, per: { s: 'ATK', rate: 0.2045, cap: [4400, 4840, 4928, 5368] }, to: 'party', src: '2', up: 0.9, cond: 'lufel\'s Crit Rate build: Play-With-Fire on Skill 2', why: 'Clear Sound on Play-With-Fire: party crit rate up to 9/9.9/10.1/11% for 3 turns. Uptime judged as for pierce; the Crit Multiplier build plays Fire on Skill 1 instead (see skip)' },
-    { k: 'weak', v: 0, per: { s: 'ATK', rate: 0.1091, cap: [4400, 4840, 4928, 5368] }, to: 'party', src: '2', up: 0.9, cond: 'song Spring Storm on Skill 2 (lufel: generally fixed there)', why: 'Clear Sound on Spring Storm: party weakness damage up to 4.8/5.3/5.4/5.9% for 3 turns. Uptime judged as for pierce' },
-    { k: 'atk%', v: 12, to: 'party', src: 'passive', up: 0.8, stacks: 3, why: 'Setlist (passive 1): party ATK +12% for 3 turns per Track gained, max 3. Judged: three Tracks gained per Showstopper cycle, Virtual Concert extends them and re-grants them, but stacks drop after Showstopper spends the Tracks - about 2.4 stacks on average' },
+    { k: 'pierce', v: 0, per: { s: 'ATK', rate: 0.2045, cap: [4400, 4840, 4928, 5368] }, to: 'party', src: '1', on: '1 Heaven', dur: 3, cond: 'song Heaven on Skill 1 (lufel\'s \'1 Heaven\' turns; it was a judged 0.9 until Nov 2026)', why: 'Feel the Beat on Heaven: party pierce up to 9/9.9/10.1/11% for 3 turns. Uptime judged: re-applied every Heaven cast (A0 reapplies it even with the Track held) and extended 2 turns by Virtual Concert, so up from about turn 3 on' },
+    { k: 'cr', v: 0, per: { s: 'ATK', rate: 0.2045, cap: [4400, 4840, 4928, 5368] }, to: 'party', src: '2', on: '2 Fire', dur: 3, cond: 'Play-With-Fire on Skill 2 (lufel\'s \'2 Fire\' turns; a judged 0.9 until Nov 2026)', why: 'Clear Sound on Play-With-Fire: party crit rate up to 9/9.9/10.1/11% for 3 turns. Uptime judged as for pierce; the Crit Multiplier build plays Fire on Skill 1 instead (see skip)' },
+    { k: 'weak', v: 0, per: { s: 'ATK', rate: 0.1091, cap: [4400, 4840, 4928, 5368] }, to: 'party', src: '2', on: '2 Spring', dur: 3, cond: 'Spring Storm on Skill 2 (lufel\'s \'2 Spring\' turns; a judged 0.9 until Nov 2026)', why: 'Clear Sound on Spring Storm: party weakness damage up to 4.8/5.3/5.4/5.9% for 3 turns. Uptime judged as for pierce' },
+    { k: 'cm', v: 0, per: { s: 'ATK', rate: 0.4091, cap: [4400, 4840, 4928, 5368] }, to: 'party', src: '1', on: '1 Fire', dur: 3, why: 'Feel the Beat on Play-With-Fire (lufel\'s \'1 Fire\' turns): party crit damage +0.41% per 100 of Miku\'s ATK, max 18/19.8/20.2/22%, 3 turns (Nov 2026; not entered before)' },
+    { k: 'dmg', v: 0, per: { s: 'ATK', rate: 0.3409, cap: [4400, 4840, 4928, 5368] }, to: 'party', src: '1', on: '1 Spring', dur: 3, why: 'Feel the Beat on Spring Storm (lufel\'s \'1 Spring\' turns): party damage +0.34% per 100 of Miku\'s ATK, max 15/16.5/16.8/18.3%, 3 turns (Nov 2026; not entered before)' },
+    { k: 'atk%', v: 12, to: 'party', src: 'passive', on: 'track', dur: 3, build: true, stacks: 3, upQ: 0.8, why: 'Setlist (passive 1, Nov 2026: played out): party ATK +12% for 3 turns per Track gained, up to 3; the fight gives a Track for each song whose Track she does not hold and spends all three on Showstopper. The quick screen keeps the old judged 0.8 at 3 stacks. Was: party ATK +12% for 3 turns per Track gained, max 3. Judged: three Tracks gained per Showstopper cycle, Virtual Concert extends them and re-grants them, but stacks drop after Showstopper spends the Tracks - about 2.4 stacks on average' },
     { k: 'cm', v: 0, per: { s: 'ATK', rate: 0.3409, cap: [4400, 4840, 4928, 5368] }, to: 'party', src: '3', on: '3', dur: 2, cond: 'Virtual Concert: the 2 extra ally turns Skill 3 grants', why: 'Showstopper (Skill 3): party crit damage up to 15/16.5/16.8/18.3%, 2 turns; those 2 turns are Virtual Concert\'s extra turns' },
     { k: 'dmg', v: 24, to: 'party', src: 'passive', on: '3', dur: 2, cond: 'Virtual Concert: the 2 extra ally turns Skill 3 grants', why: 'Fan Favorite (passive 2): party damage +24% while Virtual Concert is active, which is only during its 2 extra ally turns' },
     { k: 'final', v: 8, to: 'party', src: 'aw', on: '3', dur: 2, aw: 2, cond: 'Virtual Concert: the 2 extra ally turns Skill 3 grants', why: 'Blue-Green Sea (A2): party final damage amp +8% while Virtual Concert is active' },
     { k: 'cm', ladder: [18.1, 23.5, 23.5, 28.9, 28.9, 34.3, 34.3], to: 'party', src: 'weapon', weapon: '5', why: 'Light Up Your World (5-star weapon): party crit damage up, unconditional' },
-    { k: 'cm', ladder: [3, 3.9, 3.9, 4.8, 4.8, 5.7, 5.7], to: 'party', src: 'weapon', up: 0.8, weapon: '5', stacks: 3, why: 'Light Up Your World (5-star weapon): party crit damage up more per Track gained, 3 turns, max 3; uptime judged as for Setlist' },
+    { k: 'cm', ladder: [3, 3.9, 3.9, 4.8, 4.8, 5.7, 5.7], to: 'party', src: 'weapon', on: 'track', dur: 3, build: true, stacks: 3, upQ: 0.8, weapon: '5', why: 'Light Up Your World (5-star weapon): party crit damage +3-5.7% more per Track gained, 3 turns, max 3, played out as Setlist above (Nov 2026); uptime judged as for Setlist' },
     { k: 'turns', v: 2, to: 'party', src: '3', up: 1, why: 'Showstopper (Skill 3): Virtual Concert stops the foes and gives every ally 2 extra turns; its cooldown is 6 Wonder actions (the extra turns do not count), so the damage dealer acts 8 times in 6 turns' },
     { k: 'hlx', v: 0.375, to: 'party', src: 'aw', up: 1 / 6, aw: 1, only: 'HL', why: 'Hologram Screen (A1): Virtual Concert resets every ally\'s Highlight cooldown. Once per 6 turns, landing at a random point of a 4-turn cooldown, a reset brings the next Highlight 1.5 turns forward on average: 0.375 of a Highlight' },
     { k: 'hlFinal', v: 10, to: 'party', src: 'aw', on: '3', dur: 2, aw: 1, cond: 'Virtual Concert: the 2 extra ally turns Skill 3 grants', why: 'Hologram Screen (A1): Highlight and Theurgy final damage amp +10% while Virtual Concert is active' },
@@ -14377,7 +14380,7 @@ const TEAM_BUFF_SKIPS = {
   ],
   'Justine & Caroline': [
     'Persona pair: three pairs are entered and the fight plays the one that does most for each team, named on her seat (TC_PAIRS): Strategist (Mischief & Innocence + Absurdity & Nonsense), Medic (Mischief + Service & Admonition) and Saboteur (Service + Luck & Loss). Rotation slot 1 is the first mask, 2 the second, 3 Two Masks as One; lufel writes her rotations for the Strategist pair, and the others are read with the same turns. Sweeper and Assassin buff only her, Guardian only defends: not entered',
-    'Desire Level: values encoded at Desire 100 (25 from A0 + 45 ATK + 15 Damage Mult + 15 Crit Mult caps); A6\'s +20% and Warden\'s Judgement\'s Desire gain not encoded',
+    'Desire Level: computed from their stats since Nov 2026 (TC_DESIRE); A6\'s True Desire and Two Masks as One\'s Desire scaling of their own skill damage are not',
     'Highlight, Absurdity & Nonsense version: ATK +34.2-39.8% for the highest-ATK ally; Highlights share the gauge, so only the party Mischief version is encoded',
     'A6 Power to Resist Ruin: True Desire every 8 actions activates all Facade effects at once; periodic, not encoded',
     'A0/A6 Wonder skill level increases: not a team damage buff here',
@@ -14483,10 +14486,8 @@ const TEAM_BUFF_SKIPS = {
   ],
   'Hatsune Miku': [
     'Showstopper (Skill 3): the 2 extra turns are priced as extra actions; buffs that only run during them are counted as 2 turns of uptime, not as stronger extra turns',
-    'Showstopper (Skill 3): re-grants Track effects for 2 turns - folded into the 0.9 / 0.8 uptimes (the 2-turn extension of her timed buffs is played out in the fight)',
+    'Showstopper (Skill 3): reactivating the Track effects for 2 turns is left to Virtual Concert\'s 2-turn extension of her buffs (the Tracks themselves are played out since Nov 2026)',
     'Blue-Green Sea (A2): Virtual Concert grants \'all effects of Feel the Beat and Clear Sound\' for 2 turns - unclear whether that includes every song\'s extra effect (e.g. crit damage from Fire on Skill 1); not priced beyond the base entries',
-    'Crit Multiplier build alternative: Play-With-Fire on Skill 1 gives party crit damage up to 18/19.8/20.2/22% (0.41% per 100 ATK) instead of Skill 2\'s crit rate - only one of the two is encoded (the Crit Rate build, lufel\'s first rotation)',
-    'Off-element build: Spring Storm on Skill 1 gives party damage up to 15-18.3% instead of Skill 2\'s weakness damage - not encoded',
     'Hologram Screen (A1): doubled Theurgy gauge gain during Virtual Concert - not counted (the shared Highlight gauge filling twice as fast, the cooldown reset and the +10% Highlight final damage are)',
     'Neverending Song (A6): Almighty damage equal to all damage foes took during Virtual Concert - a separate damage instance, not a multiplier here',
     'Clear Sound on Heaven: party heal - not damage'
@@ -15112,7 +15113,16 @@ function tcStat(name, s) {
    "2×4+1" Skill 2 and Skill 1, "HL(2)+3" a Highlight and Skill 3, "W+3+TH↺" Skill 3 and Theurgy. */
 function tcTurnSkills(step) {
   const out = new Set();
+  let prev = null;
   String(step).split('+').forEach(tok => {
+    // Miku's song turns ("2 Fire"): the whole token, for the lines that only one song sets off
+    const raw = tok.trim().replace(/↺/g, '');
+    if (/^[1-3] (Heaven|Spring|Fire)$/.test(raw)) out.add(raw);
+    // a skill after the first of a turn is an extra action ('x3'); 'y3' when it is not the skill just used
+    // (Mayumi's Tire Change, A1)
+    const one = raw.match(/^([1-3])(?:\s|$)/);
+    // (only a skill before it counts: a medicine or a Highlight first is not an action of the same kind)
+    if (one) { if (prev !== null) { out.add('x' + one[1]); if (prev !== one[1]) out.add('y' + one[1]); } prev = one[1]; }
     // Beachflower Minami's medicine (ⓘA, ⓘB, ⓘC: TC_MEDS), alone or before a skill
     const im = tok.trim().match(/^ⓘ([A-C])/);
     if (im) out.add('i' + im[1]);
@@ -15411,6 +15421,19 @@ function tcDpsRate(dps, H, X) {
   return r + (x.hlx || 0);
 }
 
+/* The twins' Desire Level at the start of battle (Overseer of Rehabilitation, Twin Wardens; Nov 2026): 25, +1 per 100
+   ATK (at most 45), +1 per 2% Damage Multiplier (15), +1 per 6% Crit Multiplier above 100% (15), so at most 100,
+   and 20% more from A6. Every "per 100 Desire Level" line was entered at 100; their own skill damage is not scaled
+   (they are rarely the damage dealer). Their 5-star weapon raises it 10-19% each time Two Masks as One is cast: the
+   fight counts it from the first cast on, once (`dsw`, read as not stacking, since the text prints no stack count). */
+const TC_DESIRE = { n: 'Justine & Caroline', base: 25, atk: [100, 45], dm: [2, 15], cm: [6, 15], a6: 1.2, weapon: [10, 13, 13, 16, 16, 19, 19] };
+function tcDesire(n) {
+  if (n !== TC_DESIRE.n) return 100;
+  const D = TC_DESIRE, st = s => tcStat(n, s) || 0;
+  const v = D.base + Math.min(D.atk[1], Math.floor(st('ATK') / D.atk[0])) + Math.min(D.dm[1], Math.floor(st('Damage Multiplier') / D.dm[0])) +
+    Math.min(D.cm[1], Math.floor(Math.max(0, st('Crit Multiplier') - 100) / D.cm[0]));
+  return v * (tmAw(n) >= 6 ? D.a6 : 1);
+}
 /* One TEAM_BUFFS line's value for this supporter, or null when their Setup does not unlock it. */
 function tcLineValue(e, sup, lo) {
   if (e.aw != null && (+lo.awareness || 0) < e.aw) return null;
@@ -15421,6 +15444,8 @@ function tcLineValue(e, sup, lo) {
   const pick = x => Array.isArray(x) ? (x.length === 7 ? x[ri] : tierVal(x, sup, lo, e.src)) : x;
   let v = e.ladder ? e.ladder[ri] : (pick(e.v) || 0);
   if (e.per) v += (pick(e.per.rate) || 0) * Math.min(tcStat(sup.n, e.per.s), pick(e.per.cap) || Infinity) / 100;
+  // the twins' lines entered at Desire Level 100 (TC_DESIRE): `desire: 1` grows with it, `0.5` is "X + X per 100"
+  if (e.desire) { const D = tcDesire(sup.n); v *= e.desire === 0.5 ? (100 + D) / 200 : D / 100; }
   return v * (e.stacks || 1);
 }
 
@@ -20170,6 +20195,8 @@ function tcSimRun(P, order, hold) {
       if (ev.e.spT && a.rkF) { v *= a.rkF[ev.e.spT] || 0; if (!v) return; }
       // Kotone Shiomi's Powerful Bond tiers need that many stacks as she casts them (TC_PB)
       if (ev.e.pb && !(pbNow() >= ev.e.pb)) return;
+      // the twins' Desire Level after their first Two Masks as One, with their 5-star weapon (TC_DESIRE)
+      if (ev.e.desire && a.dsw) v *= ev.e.desire === 0.5 ? (100 + a.dl * a.dsw) / (100 + a.dl) : a.dsw;
       // what she casts in her Fortune burst lasts longer (TC_PB.fortune; +1 more from A2)
       const fx = a.fortuneNow && typeof ev.dur === 'number' ? TC_PB.fortune[String(ev.e.src)] : 0;
       const dur = fx ? ev.dur + fx + ((a.aw || 0) >= 2 ? 1 : 0) : ev.dur;
@@ -20652,6 +20679,11 @@ function tcSimRun(P, order, hold) {
         // Kotone Shiomi's Lyre's Melody adds its Powerful Bond before her lines land (TC_PB: the tiers read it)
         if (PB && a === KO) { const u1 = tcSkillUses(step)[0]; if (u1) { PB.n = Math.min(TC_PB.max, pbNow() + u1); PB.until = Math.max(PB.until, round + TC_PB.dur + (a.fortuneNow ? TC_PB.fortune['1'] + ((a.aw || 0) >= 2 ? 1 : 0) : 0)); PB.peak = Math.max(PB.peak, PB.n); } }
         castBy(a, mates);
+        // the twins' 5-star weapon: Desire Level 10-19% higher once Two Masks as One has been cast (TC_DESIRE)
+        if (a.n === TC_DESIRE.n && !a.dsw && tcSkillUses(step)[2] > 0) {
+          const lw = charLoadout(a.n);
+          if (lw.weapon === '5') { a.dl = tcDesire(a.n); a.dsw = 1 + TC_DESIRE.weapon[Math.max(1, Math.min(7, +lw.refine || 1)) - 1] / 100; }
+        }
         // Kotone Shiomi's Lyre's Melody on the Arcana Link ally raises Lunar Bond (TC_LB)
         if (LB && a === KO) { const u = tcSkillUses(step); lbUp(u[0] + u[2]); }
         // Leo's Justice Barrier on the damage dealer (TC_HP_LEO): 30% of their remaining HP spent and shielded
@@ -20734,6 +20766,13 @@ function tcSimRun(P, order, hold) {
         const toks = tcTurnSkills(step);
         if (CK) ckNow = ckCast(toks);
         castBy(elu, toks);
+        // Miku's Tracks (Setlist, her weapon): a song gains its Track only if she does not hold it; Showstopper spends all
+        if (elu.n === 'Hatsune Miku') {
+          elu.tracks = elu.tracks || new Set();
+          if (toks.has('3')) elu.tracks.clear();
+          const song = [...toks].map(t => (t.match(/^[12] (Heaven|Spring|Fire)$/) || [])[1]).find(Boolean);
+          if (song && !elu.tracks.has(song)) { elu.tracks.add(song); elu.trackN = (elu.trackN || 0) + 1; castBy(elu, new Set(['track'])); }
+        }
         ckNow = null;
         if (HR) healFrom(elu, toks);
         toks.forEach(t => downMark(elu, t));
@@ -20791,6 +20830,8 @@ function tcSimRun(P, order, hold) {
     lunarBond: LB ? { lv: LB.lv, at5: LB.at5, at10: LB.at10, rows: LB.rows } : null,
     // her Powerful Bond (TC_PB): the most stacks held, and how many burst turns Fortune lengthened
     powerfulBond: PB ? { peak: PB.peak, fortune: KO.fortuneDur || 0, rows: PB.rows } : null,
+    // Miku's Tracks gained (Setlist and her weapon fire on each)
+    mikuTracks: elu && elu.n === 'Hatsune Miku' ? elu.trackN || 0 : null,
     // Ann's La Vie en Rose (TC_LV): how many times she entered it, over how many of her actions
     laVie: LV ? { n: LV.n, acts: LV.acts } : null,
     // Ren's Will of Rebellion (TC_WR): its highest count and where it ended

@@ -1413,6 +1413,21 @@ damage formula (`docs/DATA-SOURCES.md`, the damage-formula section):
   ATK per Highlight (`stack: 5`, permanent). Calibration: mean 69.5 (69.6 before), median 71, range
   42-84, bands 8/53/7 unchanged. On the real save no Optimise pick moved; Akihiko's build score fell
   0.4 (the crit damage sits in his perfect build too).
+- **Three support kits played from their text** (Nov 2026; the user's "do 1, 2, 3"). *The twins' Desire Level*
+  (`TC_DESIRE`, `tcDesire`): 25 at the start of battle (A0) plus 1 per 100 ATK (at most 45), per 2% Damage Multiplier
+  (15) and per 6% Crit Multiplier above 100% (15), so at most 100, and 20% more from A6; every "per 100 Desire" line
+  had been entered at 100 and now scales with it (TEAM_BUFFS `desire: 1`, or `0.5` for "X + X per 100"), and their
+  5-star weapon raises it 10-19% once Two Masks as One has been cast (`dsw`, read as not stacking). The user's twins sit
+  at 100 exactly (ATK, damage and crit damage all at their caps); their teams +1.3% from the weapon. *Mayumi's extra
+  actions*: a turn's later skill is an extra action, token `x3` (and `y3` when it is not the skill just used,
+  `tcTurnSkills`); Power Setup's extra-action Pierce and A1's +10% were on every Skill 3, and now land only on `x3`/`y3`;
+  A1's Aero Setup DEF +30% (`y2`) is new. Her teams −1%. *Miku's songs and Tracks*: a song turn ("2 Fire") is a token;
+  each of the six song effects (both skills × Heaven, Spring Storm, Play-With-Fire) lands on its own song turns for 3
+  turns (three were a judged 0.9, two were missing), and the fight keeps her three Tracks (`elu.tracks`: a song gains
+  its Track only if she does not hold it, Showstopper spends all), firing Setlist's ATK and her weapon's crit damage
+  (`on: 'track'`, `build`) on each gain, where they had been a judged 0.8 at three stacks (`upQ` keeps that for the quick
+  screen). Her teams −6% to −12.5% (Makoto Niijima's 19.2× to 16.8×): less of her is up at once than was judged. No best
+  team changed on save (56); calibration unchanged.
 - **The twins' mask pairs** (Nov 2026, the user asked): Justine & Caroline pick 2 of 4 masks before
   battle, and the pair sets their role (Medic, Strategist, Sweeper, Guardian, Saboteur, Assassin), their
   Skills 1 and 2, their passive and Two Masks as One. Only the Strategist pair was entered. `TC_PAIRS`
