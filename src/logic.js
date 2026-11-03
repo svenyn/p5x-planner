@@ -8491,6 +8491,8 @@ const TEAM_BUFFS = {
     { k: 'defdown', v: 0, per: { s: 'Speed', rate: 30, cap: [165.7, 182.7, 178.3, 195.3] }, to: 'enemy', src: '1', on: '1', dur: 2, why: 'Underworld Ferry (Skill 1): foes\' DEF -3% per 10 of Yaoling\'s Speed, capped at 49.7/54.8/53.5/58.6% (cap converted to a Speed total)' },
     { k: 'dmg', v: 0, per: { s: 'Speed', rate: 30, cap: [161.7, 178.3, 174, 190.7] }, to: 'enemy', src: '3', on: '3', dur: 1, why: 'Lion Dance of Oblivion (Skill 3): Red Spider Lily, foes\' damage taken +3% per 10 Speed (cap 48.5/53.5/52.2/57.2%), lasts 2 turns or until hit twice - encoded as covering only the next turn\'s hits' },
     { k: 'dmg', v: 0, per: { s: 'Speed', rate: 30, cap: [161.7, 178.3, 174, 190.7] }, to: 'enemy', src: '3', on: '3', dur: 1, up: 0.5, cond: 'Meng Po Soup spent on this cast', why: 'Lion Dance with Meng Po Soup: Red Spider Lily doubled. Soup comes about every 2 turns (1 Memory per 10 Speed a turn, 40 per soup) and is spent on her next skill; at A0 she alternates 1 and 3, so about half the skill-3 casts' },
+    { k: 'dmg', v: [48.8, 53.8, 51.8, 56.8], to: 'enemy', src: 'HL', on: 'HL', dur: 1, cond: 'only the foes\' next hit; counts if the DPS lands it', why: 'Highlight: all foes\' next damage taken +48.8-56.8% (lufel\'s Korean, Japanese and Chinese text: the next damage taken; the English prints no duration) (Nov 2026)' },
+    { k: 'dmg', v: [9.8, 10.8, 10.4, 11.4], to: 'enemy', src: 'aw', on: 'HL', dur: 1, aw: 4, cond: 'only the foes\' next hit; counts if the DPS lands it', why: 'Training Results (A4, Highlight Enhanced): the damage-taken effect 20% stronger, read as 1.2 times it (lufel\'s Korean A4 is a skill-level node instead; the English is Global\'s)' },
     { k: 'dmg', v: 20, to: 'party', src: 'aw', up: 0.5, aw: 6, elem: ['Curse'], why: 'Wisps of Crimson (A6): spending Meng Po Soup gives party Curse damage +20% for 1 turn, not twice in a row; soup about every 2 turns' },
     { k: 'dmg', v: 0, per: { s: 'Speed', rate: [12, 16, 16, 20, 20, 24, 24] }, to: 'enemy', src: 'weapon', weapon: '5', why: 'Infinite Moment (5-star weapon): Waters of Oblivion, main target damage taken +1.2-2.4% per 10 of Yaoling\'s Speed for 1 turn after each skill attack. per.rate is the 7-step refinement ladder (R0..R6), not 4 skill tiers; no cap printed. Every rotation attacks every turn, so always on' }
   ],
@@ -8553,6 +8555,8 @@ const TEAM_BUFFS = {
     { k: 'dmg', v: 2, to: 'ally', src: 'aw', on: '2', dur: 2, aw: 6, elem: ['Bless'], stacks: 2, cond: 'ally holds Oath', why: 'Extenuating Circumstances (A6): Bless damage +2% per Blessing stack on the Oath ally (max 20%); Law-Abiding Spirit (A2) gives one per action and Blessing lasts 2 turns, so about 2 are held' }
   ],
   'Kiyoshi Kurotani': [
+    { k: 'dmg', v: [30.1, 33.1, 31.3, 34.4], to: 'enemy', src: 'HL', on: 'HL', dur: 1, elem: ['Fire'], why: 'Highlight: all foes\' Fire damage taken +30.1-34.4%, applied before its own hit; no language prints a duration, so read as 1 turn, reaching the damage dealer\'s hits right after it (Nov 2026)' },
+    { k: 'dmg', v: 30.8, to: 'enemy', src: 'aw', on: 'HL', dur: 1, aw: 4, elem: ['Fire'], why: 'A4 (Highlight Enhanced): all foes\' Fire damage taken +30.8% more, the same 1 turn (the English text; lufel\'s Korean A4 is a skill-level node)' },
     { k: 'dmg', v: 5, to: 'party', src: 'aw', on: '2', dur: 2, elem: ['Fire'], stacks: 2, why: 'Make Sparks Fly (A0): each skill gives a Chosen One stack, party Fire damage +5% per stack, each stack lasts 2 turns -> 2 held from one skill a turn. Extra stacks need Burning foes (see skip)' }
   ],
   'Tomoko Noge': [
@@ -8666,6 +8670,7 @@ const TEAM_BUFFS = {
   'Tomoko Noge [Seaside]': [
     { k: 'atk%', v: [14.6, 14.6, 15.5, 15.5], to: 'ally', src: '2', on: '2', dur: 2, why: 'Hale Summer Days (Skill 2): target ally +ATK for 2 turns (A1 spreads the healing to all allies; main target is the DPS either way)' },
     { k: 'dmg', v: 30, to: 'ally', src: '2', on: '2', dur: 2, why: 'Hale Summer Days (Skill 2): target ally +30% damage for 2 turns' },
+    { k: 'atk%', v: 0, per: { s: 'Ailment Accuracy', rate: 25, cap: 90, of: 'target', plus: [58.6, 58.6, 62.2, 62.2] }, to: 'ally', src: '2', on: '2', dur: 2, why: 'Hale Summer Days (Skill 2): the target\'s ATK +25% of its ailment accuracy, up to 22.5% (at 90%); read with the 58.6-62.2% accuracy the same cast gives, so it is near its cap for most damage dealers (Nov 2026)' },
     { k: 'hp', v: 1800, to: 'ally', src: 'passive', on: '2', dur: 2, why: 'Soothing Waves (passive 2): Hale Summer Days gives its main target +1800 max HP for 2 turns (Nov 2026)' },
     { k: 'dmg', v: [19.5, 19.5, 20.7, 20.7], to: 'enemy', src: '3', on: '3', dur: 2, why: 'Sparkling Memories (Skill 3): all foes take more damage for 2 turns (ticks down at the start of her turn)' },
     { k: 'defdown', v: 15, to: 'enemy', src: 'aw', from: 2, aw: 1, stacks: 3, cond: 'Resonance (Summer Reminiscence) firing, fed by her own Skill 2/3 Sparks', why: 'A1 Flash of Summer: each Resonance effect on a foe gives -15% DEF for 3 turns, up to 3 stacks; up 0.9 judged: Sparks land on nearly every ally action so stacks build in the first round or two and are then refreshed; the fight counts it from round 2' },
@@ -8749,6 +8754,8 @@ const TEAM_BUFFS = {
     { k: 'defdown', v: 0, per: { s: 'Ailment Accuracy', rate: 15.4, cap: [171.4, 189, 181.8, 199.4] }, to: 'enemy', foes: 'all', src: '1', on: '1', dur: 2, durAw: [6, 3], excl: 'def', why: 'Welcome Hug (Skill 1, all foes): DEF down 15.4% of ailment accuracy, max 26.4/29.1/28.0/30.7%, 2 turns, 3 from A6; does not stack with Furrious Bark\'s, the larger applies' },
     { k: 'defdown', v: [26.4, 26.4, 28, 28], to: 'enemy', foes: 'all', src: '1', on: '1', dur: 2, durAw: [6, 3], excl: 'def', elem: ['Fire', 'Ice', 'Electric', 'Wind'], why: 'Welcome Hug: a foe with it that takes Fire, Ice, Electric or Wind skill damage loses 26.4/26.4/28.0/28.0% more DEF (52.8% in all at level 10, as lufel\'s defence calculator); counted for a damage dealer of those elements, whose own hits set it off' },
     { k: 'dmg', v: 0, per: { s: 'Ailment Accuracy', rate: 34.3, cap: [170.8, 188.3, 181.3, 198.8] }, to: 'enemy', src: '3', on: '3', dur: 2, cond: 'Furrocious Follow-Up active (Skill 2 before Skill 3, as in the single-target rotation)', why: 'Woof Woof Blaze (Skill 3) via Furrocious Follow-Up: target damage taken +34.3% of ailment accuracy, max 58.6/64.6/62.2/68.2%, 2 turns' },
+    { k: 'resDm', v: [39, 43, 41.4, 45.4], to: 'enemy', foes: 'one', src: '3', on: '3', dur: 2, cond: 'Furrocious Follow-Up active (Skill 2 before Skill 3, as in the single-target rotation)', why: 'Woof Woof Blaze (Skill 3) via Furrocious Follow-Up: the target\'s Resonance damage taken +39.0-45.4% for 2 turns (Nov 2026)' },
+    { k: 'resDm', v: 50, to: 'enemy', foes: 'one', src: 'aw', on: '3', dur: 2, aw: 1, cond: 'Furrocious Follow-Up active', why: 'Legendary Devotion (A1): Woof Woof Blaze with Furrocious Follow-Up raises the target\'s Resonance damage taken a further 50% for 2 turns (the English text; lufel\'s Korean says follow-up damage, 추격)' },
     { k: 'dmg', v: [20.5, 22.6, 21.8, 23.9], to: 'enemy', src: '3', on: '3', dur: 2, aw: 6, elem: ['Fire', 'Ice', 'Electric', 'Wind'], cond: 'Big Welcome active (Skill 1 before Skill 3); the A0 single-target rotation 2>3 never triggers it, the A6 one does both', why: 'Woof Woof Blaze via Big Welcome: Fire/Ice/Electric/Wind damage taken +20.5-23.9% for 2 turns' },
     { k: 'dmg', v: 36, to: 'enemy', src: 'aw', on: '3', dur: 2, aw: 6, elem: ['Fire', 'Ice', 'Electric', 'Wind'], cond: 'Big Welcome activated by Skill 3; node is A1 but the single-target rotation only triggers Big Welcome from A6', why: 'A1 Legendary Devotion: after Big Welcome\'s Woof Woof Blaze, Fire/Ice/Electric/Wind damage taken +36% for 2 turns' },
     { k: 'cm', v: 36, to: 'enemy', src: 'aw', aw: 2, cond: 'foe carries one of Runa\'s debuffs (her DEF down is up full time)', why: 'A2 Trapped in Shibuya: foes with her debuff take +36% critical damage' },
@@ -9120,8 +9127,8 @@ const TEAM_BUFFS = {
     { k: 'defdown', v: 10, to: 'enemy', src: 'aw', up: 0.5, aw: 0, stacks: 4, why: 'Dancing Wind (A0): after a Persona skill, 2 more Windworn (4 with Roving Rave), 1 turn; it has a 1-turn cooldown, so it lands every other turn' },
     { k: 'defdown', v: 10, to: 'enemy', src: 'aw', up: 0.5, aw: 0, elem: ['Wind'], stacks: 4, why: 'Dancing Wind (A0): with another Wind ally in the party the cooldown is gone, so the extra Windworn lands on the other turns too' },
     { k: 'cm', v: 30, to: 'party', src: 'aw', aw: 1, own: false, why: 'Grand Entrance (A1): at his first turn, all allies permanently gain crit damage +30% (not for himself: already counted for his own stats (KIT_STAT_BUFFS))' },
-    { k: 'dmg', v: [29.3, 32.3, 31.1, 34.1], to: 'enemy', src: 'HL', on: 'HL', dur: 3, why: 'Highlight: all foes take +29.3-34.1% damage for 3 turns (permanent from A4)' },
-    { k: 'dmg', v: [29.3, 32.3, 31.1, 34.1], to: 'enemy', src: 'HL', on: 'HL', dur: 3, elem: ['Wind'], why: 'Highlight: all foes also take +29.3-34.1% Wind damage for 3 turns (permanent from A4)' },
+    { k: 'dmg', v: [29.3, 32.3, 31.1, 34.1], to: 'enemy', src: 'HL', on: 'HL', dur: 3, durAw: [4, 99], why: 'Highlight: all foes take +29.3-34.1% damage for 3 turns (permanent from A4, Not Done Dancing Yet)' },
+    { k: 'dmg', v: [29.3, 32.3, 31.1, 34.1], to: 'enemy', src: 'HL', on: 'HL', dur: 3, durAw: [4, 99], elem: ['Wind'], why: 'Highlight: all foes also take +29.3-34.1% Wind damage for 3 turns (permanent from A4, Not Done Dancing Yet)' },
     { k: 'dmg', v: 10, to: 'enemy', src: 'aw', on: 'HL', dur: 99, aw: 4, cond: 'after Morgana\'s first Highlight', why: 'Not Done Dancing Yet (A4): the Highlight adds damage taken +10%, and its debuffs become permanent' },
     { k: 'dmg', v: 10, to: 'enemy', src: 'aw', on: 'HL', dur: 99, aw: 4, elem: ['Wind'], cond: 'after Morgana\'s first Highlight', why: 'Not Done Dancing Yet (A4): the Highlight adds Wind damage taken +10%, permanent' },
     { k: 'final', v: 20, to: 'enemy', src: 'aw', on: '2', dur: 1, aw: 6, elem: ['Wind'], why: 'Shape-Shifting Performance (A6): in Meowtor Charge, the automatic Gentleman Seal at the end of each turn becomes Fever and raises foes\' Wind total damage amp taken by 20% for 1 turn' },
@@ -9173,7 +9180,6 @@ const TEAM_BUFF_SKIPS = {
   ],
   'Yaoling Li': [
     'Flowers of Naihe (Skill 2): damage taken +2% per 10 Speed on a foe with Forget or another spiritual ailment - skill 2 is not in her lufel rotations and Forget is not reliable',
-    'Highlight: foes\' damage taken +48.8-56.8% (A4: +20%) - no duration printed; may apply only to the Highlight\'s own hit',
     'Up to Chance (passive 2): foe\'s Curse damage taken +30% when she attacks a foe above 50% HP - no duration, likely her own hit only, and HP-gated',
     'Red Spider Lily ends after 2 hits - how many of those land on the DPS depends on the team order and hit counts',
     'A4 Training Results: inflicts Curse ailment - ailment not modelled',
@@ -9222,7 +9228,6 @@ const TEAM_BUFF_SKIPS = {
   ],
   'Kiyoshi Kurotani': [
     'Chosen One extra stacks from Ring of Fire on a Burning target and Crimson Summon per Burning foe (up to 5 stacks, +25% Fire damage) - his skill-2-only rotation does not apply Burn itself (lufel: \'pre-apply the burn\')',
-    'Highlight: all foes\' Fire damage taken +30.1-34.4% (A4: +30.8%) - no duration printed; may apply only to the Highlight\'s own hit',
     'Uplifting Embers (passive 1): Fire and ailment damage to Sacred Flame foes +6% per Chosen One stack - no target named, read as his own damage',
     'Contagious Passion (A6): party Fire damage +30% per 10 Chosen One stacks gained, 2 turns - unclear whether it triggers each 10 gained or grows with the total',
     'Baptism by Fire (5-star weapon): target damage taken +18-33% for 2 turns when he inflicts Burn - his rotation does not inflict Burn reliably (only A1\'s chance)',
@@ -9305,7 +9310,6 @@ const TEAM_BUFF_SKIPS = {
     'Every effect in the kit is her own (Summer Hype / Blowout, healing-triggered damage and crit, HP-to-ATK conversion, Colorful Coast and Sunlight), already in the planner; as a damage dealer she gains from the team\'s heals (TC_HEALS)'
   ],
   'Tomoko Noge [Seaside]': [
-    'Hale Summer Days: +ATK equal to 25% of the target\'s ailment accuracy (cap 22.5%) - depends on the DPS\'s own ailment accuracy, and unclear whether the skill\'s own +58.6% AA counts',
     'Summer Reminiscence (Resonance): its damage, and the foe damage-dealt reduction - Resonance not modelled / defensive',
     'A4 Highlight bonus hits and A6 Resonance crit rate - her own damage, not a team buff',
     'Bubble Babies: foe ailment resistance down - ailment chance, not damage'
@@ -9356,7 +9360,7 @@ const TEAM_BUFF_SKIPS = {
   ],
   'Runa Dogenzaka': [
     'Big Welcome\'s generic damage taken (24% of ailment accuracy): does not stack with Follow-Up\'s larger one; the greater applies',
-    'Furrocious Follow-Up / A1 / A6: Resonance damage taken increases; Resonance not modelled',
+    'A6: the main target\'s Resonance damage taken +60% with both effects held - unclear whether points or relative to Furrocious Follow-Up\'s, not entered',
     'Highlight Enthusiastic Fuse: per-hit consumable damage boost (2 or 4 stacks), not a timed buff',
     'A0 Station Square Mascot: 18% DEF down on Woof Woof Blaze is only a 60% chance',
     'A6: debuff durations +1 turn encoded on the two DEF downs only (the damage-taken lines kept at 2); \'increase FIEW damage taken effect by 30%\' and Resonance +60% unclear whether points or relative',
@@ -9497,7 +9501,7 @@ const TEAM_BUFF_SKIPS = {
     'My Own Worth (A6): the Pros and Cons final damage amp stacks twice - counted once (the cheaper Oracle Shift, the stacks from Divine Prayer and the 2-turn duration are played out in the fight)',
     'Oracle Shift copies the swapped-out ally\'s buffs to the backup and runs the backup\'s start-of-battle effects on their first swap - matters for the backup\'s own damage, not the damage dealer\'s; not priced',
     'Spirit Wave (Skill 3): cleanse / heal / SP pick - not damage',
-    'Global 4.12 skill buff: Radiant Power, Holy Prayer and Spirit Wave values here are lufel\'s (JP) text; on Global base, rate and cap are x1.2 (x4/3 for Holy Prayer) - the calculator should scale them if it runs on Global numbers'
+    'Global 4.12 skill buff: Radiant Power, Holy Prayer and Spirit Wave lines above already carry Global\'s x1.2 (x4/3 for Holy Prayer) on base, rate and cap'
   ],
   'Shoki Ikenami [Notte]': [
     'Every effect is self-only (Spada dell\'Alba crit damage, Night\'s Contract, Grace, Nirvana pierce, Night\'s Monarch, Highlight, both weapons) - already in the planner',
@@ -9568,7 +9572,6 @@ const TEAM_BUFF_SKIPS = {
     'Jazz Blade crit rate and All-Out Attack damage, Baselard (4-star weapon): self only'
   ],
   'Morgana [Starlight]': [
-    'Not Done Dancing Yet (A4): the Highlight\'s own 29.3-34.1% debuffs become permanent - only the 3-turn version is encoded',
     'Rushing Haze (passive 2): +24% damage and up to +60% Wind damage against a foe whose DEF is down to 1 - needs DEF fully stripped and depends on each ally\'s pierce; not priced',
     'Crash! (Skill 3 follow-up): on a crit, Down Points cut to 6, damage taken while downed +4.9-5.7% (doubled for Wind) and Windworn - crit-dependent and only every other "3", not priced',
     'Whirlwind Waltz / Crash!: buff dispels - not damage',
@@ -10027,9 +10030,9 @@ const WONDER_SKIPS = {
     'Okuninushi': ['Ruler\'s Majesty II: +10% Psychokinesis damage when attacking an affected foe - reads as Wonder\'s own'],
     'Orobas': ['Fire Break: removes one foe\'s Fire resistance for 2 turns - affinity change, not modelled'],
     'Pazuzu': ['Eternal Curse II: the Curse damage it settles is Wonder\'s own; Maeigaon and Eigaon (Curse attacks with a chance of a Curse stack) are his own damage'],
-    'Pixie': ['Advising Missing Persons I: after a knockdown, party ATK +16.5% for 2 turns - Down is not modelled'],
+    'Pixie': ['Advising Missing Persons I: after a knockdown, party ATK +16.5% for 2 turns - knockdowns are played (#tmDown), but a Persona\'s knockdown line would count even while it is not in use, so not entered'],
     'Raphael': ['Soul Catalysis: main target crit rate +13.2% more, only while Attribute Harmony is active (two party members share an element, or an Almighty ally) - depends on the team', 'Tree of Life\'s Guidance: all allies crit damage +25% while Attribute Harmony is active - depends on the team'],
-    'Seth': ['Schemes of a Wicked God III: after a knockdown, party damage +11% for 1 turn - Down is not modelled'],
+    'Seth': ['Schemes of a Wicked God III: after a knockdown, party damage +11% for 1 turn - knockdowns are played (#tmDown), but a Persona\'s knockdown line would count even while it is not in use, so not entered'],
     'Shiva': ['Karmic Alteration III: spending 3 Wisdom also makes the target take Psychokinesis crits 18% more often for 1 turn - needs the unique only every third turn, which costs the 2-stack DEF cut every other turn; not counted'],
     'Thor': ['Thunder Caller: 80% chance to Shock all foes at 3 stacks - ailment, not priced'],
     'Throne': ['Purifying Flames / Flaming Chariot: Burn inflicted on random foes - ailment, not priced (matters for Burn-reliant DPS kits)'],
@@ -10392,7 +10395,7 @@ function tcDesire(n) {
   return v * (tmAw(n) >= 6 ? D.a6 : 1);
 }
 /* One TEAM_BUFFS line's value for this supporter, or null when their Setup does not unlock it. */
-function tcLineValue(e, sup, lo) {
+function tcLineValue(e, sup, lo, tgt) {
   if (e.aw != null && (+lo.awareness || 0) < e.aw) return null;
   if (e.weapon && lo.weapon !== e.weapon) return null;
   const ri = Math.max(1, Math.min(7, +lo.refine || 1)) - 1;
@@ -10400,7 +10403,11 @@ function tcLineValue(e, sup, lo) {
   // refinement steps
   const pick = x => Array.isArray(x) ? (x.length === 7 ? x[ri] : tierVal(x, sup, lo, e.src)) : x;
   let v = e.ladder ? e.ladder[ri] : (pick(e.v) || 0);
-  if (e.per) v += (pick(e.per.rate) || 0) * Math.min(tcStat(sup.n, e.per.s), pick(e.per.cap) || Infinity) / 100;
+  // `per.of: 'target'` reads the receiving ally's stat (the damage dealer, `tgt`), plus what the same cast gives (`plus`)
+  if (e.per) {
+    const st = (e.per.of === 'target' ? (tgt ? tcStat(tgt, e.per.s) || 0 : 0) : tcStat(sup.n, e.per.s)) + (pick(e.per.plus) || 0);
+    v += (pick(e.per.rate) || 0) * Math.min(st, pick(e.per.cap) || Infinity) / 100;
+  }
   // the twins' lines entered at Desire Level 100 (TC_DESIRE): `desire: 1` grows with it, `0.5` is "X + X per 100"
   if (e.desire) { const D = tcDesire(sup.n); v *= e.desire === 0.5 ? (100 + D) / 200 : D / 100; }
   return v * (e.stacks || 1);
@@ -12212,7 +12219,7 @@ function tcMemberCalc(dps, name, inTeam, backup, fit, pair) {
     // and Tempest Riko's Blossoming Season tiers at the strength her SP gives on this rotation (TC_RK)
     const ckQ = (e.ck ? tcCkQuick(e.ck, aw) : 1) * (e.spT ? tcRkQuick(seq, e.spT) : 1);
     const lbOff = name === TC_LB.n && !TC_LB.arch.includes(dps.arch) ? 0 : undefined;
-    const v = tcLineValue(e, sup, lo) * ckQ * tcSelfAmp(name, e, lo, aw, undefined, lbOff);
+    const v = tcLineValue(e, sup, lo, dps.n) * ckQ * tcSelfAmp(name, e, lo, aw, undefined, lbOff);
     if (v == null || !v || isNaN(v)) continue;
     const k = TC_FROM_K[e.k];
     if (!k) continue;
@@ -13480,7 +13487,7 @@ const DPS_KIT_SKIPS = {
   ],
   'Runa Dogenzaka': [
     'Welcome Hug (Skill 1): 50% chance to Burn - no Burn damage coefficient published, not entered.',
-    'Furrocious\' Resonance damage taken: her next Resonance never falls inside its window in lufel\'s rotations, not priced.',
+    'Furrocious\' Resonance damage taken is a TEAM_BUFFS line on the foe; in lufel\'s rotations her own next Resonance falls outside its window, which the fight plays out.',
     'The A0 multi-target rotation (1 > 3) would use Big Welcome (109.8%) instead; on one boss the single-target one applies.'
   ],
   'Yaoling Li [Firecracker]': [

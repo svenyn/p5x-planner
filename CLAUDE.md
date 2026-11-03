@@ -1454,6 +1454,18 @@ damage formula (`docs/DATA-SOURCES.md`, the damage-formula section):
   (`on: 'track'`, `build`) on each gain, where they had been a judged 0.8 at three stacks (`upQ` keeps that for the quick
   screen). Her teams −6% to −12.5% (Makoto Niijima's 19.2× to 16.8×): less of her is up at once than was judged. No best
   team changed on save (56); calibration unchanged.
+- **Four small support lines entered from the text** (Nov 2026; the measured "second batch" on the list page). Runa's
+  Resonance damage taken (TEAM_BUFFS `resDm`: Furrocious Follow-Up's 39-45.4%, A1's +50%, on the target, 2 turns; A6's
+  +60% is not entered, points or relative being unclear); Yaoling's Highlight damage taken (the foes' *next* hit, as the
+  Korean, Japanese and Chinese text say; `dur: 1` like Tomoko Noge's next-hit lines; A4 read as ×1.2); Kiyoshi's
+  Highlight Fire damage taken (no language prints a duration, 1 turn judged; A4 +30.8%); Seaside Tomoko's Hale Summer
+  Days ATK from **the receiving ally's** ailment accuracy (`per.of: 'target'`, read by `tcLineValue`'s `tgt`, the damage
+  dealer; `plus` adds the 58.6-62.2% the same cast gives, so most damage dealers sit at the 22.5% cap). Starlight
+  Morgana's Highlight debuffs are permanent from A4 (`durAw: [4, 99]`, Not Done Dancing Yet). On save (56), each one's
+  best team with each owned damage dealer: Runa up to +5.5% (Resonance damage dealers only), Yaoling +3.4% median (−0.2
+  to +8.8%), Kiyoshi up to +4.8% (Fire only; Firecracker Yaoling's team with him −2.7%, the full fit settling lower),
+  Seaside Tomoko +3.0% median; no best team changed; calibration unchanged. Pixie's and Seth's knockdown lines stay out:
+  a Persona's `on: 'knock'` line would count even while it is not in use.
 - **The twins' mask pairs** (Nov 2026, the user asked): Justine & Caroline pick 2 of 4 masks before
   battle, and the pair sets their role (Medic, Strategist, Sweeper, Guardian, Saboteur, Assassin), their
   Skills 1 and 2, their passive and Two Masks as One. Only the Strategist pair was entered. `TC_PAIRS`

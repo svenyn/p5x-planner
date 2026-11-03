@@ -3336,6 +3336,9 @@ function awarenessOverrideDrift() {
       const jc = 'Justine & Caroline', jcd = charDef(jc), D = tcDesire(jc), l1 = TEAM_BUFFS[jc].find(e => e.desire === 1), lh = TEAM_BUFFS[jc].find(e => e.desire === 0.5);
       const plain = e => tcLineValue(Object.assign({}, e, { desire: undefined }), jcd, charLoadout(jc));
       out.desire = { D, one: tcLineValue(l1, jcd, charLoadout(jc)) / plain(l1), half: tcLineValue(lh, jcd, charLoadout(jc)) / plain(lh), other: tcDesire('Ann Takamaki') };
+      // a line read off the receiving ally's stat (`per.of: 'target'`): Seaside Tomoko's Hale Summer Days ATK
+      const st = 'Tomoko Noge [Seaside]', stl = TEAM_BUFFS[st].find(e => e.per && e.per.of === 'target'), tv = tg => tcLineValue(stl, charDef(st), charLoadout(st), tg);
+      out.targetPer = { none: tv(), runa: tv('Runa Dogenzaka'), runaAA: tcStat('Runa Dogenzaka', 'Ailment Accuracy'), ann: tv(ann.n), annAA: tcStat(ann.n, 'Ailment Accuracy') };
       out.powerfulBond = { every: pb(0, ['1']), sparse: pb(0, ['1', '2', '2']), none: pb(0, ['2']), a1: pb(1, ['2']), burst: pb(0, ['1+1+3']), burst6: pb(6, ['1+1+3']) };
       Object.assign(TEAMS, { [ann.n]: keep.a, [ko]: keep.k }); state.chars[ko].loadout = keep.lo; tcMemo.key = '';
     }
@@ -3961,6 +3964,9 @@ function awarenessOverrideDrift() {
       mi.cycle === ({ 6: 5, 12: 8 })[mi.F] && mi.same === 1 && mi.toks.join(' | ') === '2,3,x3,y3 | 3,x3 | 1 | 2,2 Fire | 2,iA | 1,3,x1,x3,y3', JSON.stringify(mi));
     check('the twins\' Desire Level comes from their stats (at most 100 before A6) and their per-100 lines scale with it',
       de.D >= 25 && de.D <= 100 && near6(de.one, de.D / 100) && near6(de.half, (100 + de.D) / 200) && de.other === 100, JSON.stringify(de));
+    const tp = th.targetPer;
+    check('a line read off the receiving ally\'s stat: Hale Summer Days\' ATK is 25% of the damage dealer\'s ailment accuracy plus the skill\'s own, at most 22.5%',
+      tp.none > 14 && tp.none < 16 && near6(tp.ann, Math.min(22.5, 0.25 * (tp.annAA + tp.none / 0.25))) && near6(tp.runa, 22.5) && tp.runaAA > 32, JSON.stringify(tp));
     const lr = th.lufelRows;
     check('Kotone Shiomi\'s Lunar Bond and Powerful Bond follow lufel\'s own rows for her rotations: Lunar Phaseshift adds a Lunar Bond, a Fortune burst keeps Powerful Bond 2 turns longer',
       lr.a0burst === '2,6,7,8,10,10|1,3,3,3,3,3' && lr.a0late === '2,4,6,8,10,10|1,2,3,3,3,3' && lr.a1burst === '7,10,10,10,10,10|2,3,3,3,3,3' && lr.a1late === '7,9,10,10,10,10|2,3,3,3,3,3', JSON.stringify(lr));
