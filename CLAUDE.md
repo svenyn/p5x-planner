@@ -324,12 +324,26 @@ belong in the totals the stat targets are scored against.
 at all is measured, `kitMix` below; Kumi's was a hand-entered `nocrit: 0.45` until Nov 2026): `locked` is that share,
 ⓓ is a mixture of the locked share at 100% (at its `cmClamp`ed crit damage where the kit
 clamps it) and the rolled rest, and `lockedCritSupply` feeds the same split into the
-coupling so Crit Rate is priced for the rolled share only. Ryuji and Pioneer Shun are
-`locked: 1`; Skull's Crit Rate weight is already 0 for this reason, and without this the
-spread term valued a Crit Multiplier roll on him at his 5% base rate. Akihiko is `locked:
-0.3`: his Theurgy and Finishing Blow always crit (crit damage clamped 250-350%, 300-400% at
-Awareness 4) but Lightning Fist, Blitzkrieg and Spark Impact roll, and by his own
-coefficients the guaranteed part is 26-29% of his damage. A single guaranteed skill with no
+coupling so Crit Rate is priced for the rolled share only. Pioneer Shun is `locked: 1`.
+Akihiko is `locked: 0.3`: his Theurgy and Finishing Blow always crit (crit damage clamped
+250-350%, 300-400% at Awareness 4) but Lightning Fist, Blitzkrieg and Spark Impact roll, and
+by his own coefficients the guaranteed part is 26-29% of his damage. **Since Nov 2026 a
+guaranteed crit is marked on the hit** (DPS_KIT_BONUS `k: 'lock'`, read as the hit's `lk`):
+the fight deals that hit as a crit (at the clamp where there is one) and every other hit of a
+kit that marks any rolls; `kitMix` measures the marked share (`lk`, like `nc`) and the build
+model and coupling read it, so `locked` stands only where no fight can run. Marked: Akihiko's
+Theurgy and Finishing Blow (measured 23% of his damage at A0), Ryuji's God Hand Burst in
+Rebound, Kotone Montagne's Blade Dancer. **Ryuji was `locked: 1` with a Crit Rate weight of 0**
+("his damage always crits"); his text guarantees only God Hand Burst in Rebound, with +30% crit
+rate on Pirate Tactics and on any skill in Rebound (DPS_KIT_BONUS `cr`), so his profile and the
+weight override went (Crit Rate 4, lufel's unlisted). Rebound needs him below 75% HP, which the
+planner's HP model never reached with lufel's God Hand rotation, since the boss's damage is not
+played; the user's play settles it ("almost always"), so from round 2 his actions start at 70% HP
+at most (TC_HP `lowFrom`/`lowTo`). On save (56): 89% of his critting damage guaranteed, the rest
+at 33%; build score 73.6 to 80.4, Optimise's Star from ATK% to lufel's Crit Multiplier; his damage
+alone −4% and his best team +0.7%; Akihiko alone −2%, team +0.1%; no best team changed;
+calibration mean 70.2 to 70.1, bands unchanged. Pioneer Shun's kit fight books all his damage as
+unable to crit (`nc` 1), which is not checked yet. A single guaranteed skill with no
 stated share (Junpei's Power Swing, Mayumi's extra action) does not earn an entry. Everyone's
 rolled crit rate is capped at 100%. The third shape, `extraCr`, is a share that crits at a
 *higher* rate: Wavecatcher Miyu's Mermaid Dreamer adds 16.4-31.4% crit rate to her Resonance
@@ -1547,9 +1561,7 @@ damage formula (`docs/DATA-SOURCES.md`, the damage-formula section):
   YUI +18% / +3%, Makoto Yuki +14% / +10%, Mitsuru +11% / +10%, Haru +5% / +10%, Frostgale +6% / +3%, Makoto
   Niijima +4% / −4%, Kasumi −4% / −1%, Firecracker Yaoling −14% / −8%; best teams changed for Makoto Niijima
   (Minami / Kotone / Fuuka / Chizuko) and Makoto Yuki (Minami / Kotone / Fuuka / Kumi); build scores moved 0.7 at
-  most; calibration mean 70.1 to 70.2, bands unchanged. Left as judgment calls (on the list page): Ryuji's
-  CRIT_PROFILE `locked: 1` (only God Hand Burst with Rebound is guaranteed), Akihiko's Theurgy lock and 250%
-  floor (CRIT_PROFILE mixes 30/70 on every hit), Wavecatcher Miyu's Surf extending allies' buffs, Haru's
+  most; calibration mean 70.1 to 70.2, bands unchanged. Left as judgment calls (on the list page): Wavecatcher Miyu's Surf extending allies' buffs, Haru's
   Target Audience stack lines, Tropical Motoha's Summer Hype lines on every hit, Makoto Yuki's Entrusted Hope and
   Melody of Flames multiplier, and the A1+/4-star-weapon items.
 - **The support audit** (Nov 2026; the user asked next, since the same supports sit in nearly every best team):
@@ -1994,8 +2006,9 @@ build still scores 83 (the damage is real, so it must not be priced to zero), an
 judgement lives. Two things earn an entry, both about magnitude, never about order —
 reorder by fixing the source data:
 
-- a kit fact the three tiers cannot express (Skull always crits, so Crit Rate is *dead*,
-  not merely low; Messa's Rending damage cannot crit at all), or
+- a kit fact the three tiers cannot express (Messa's Rending damage cannot crit at all, so
+  both crit stats are *dead*, not merely low; Skull's "always crits" entry went in Nov 2026,
+  when his text turned out to guarantee only God Hand Burst in Rebound), or
 - a weight vector broader than the character's actual contribution, as above.
 
 Every entry carries a `why`, and applying one prints to stderr, so a regeneration always

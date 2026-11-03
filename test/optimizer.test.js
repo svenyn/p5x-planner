@@ -382,7 +382,7 @@ function awarenessOverrideDrift() {
     fail('CRIT_PROFILE names real characters with a locked share in (0,1] or an extra-crit share on a weapon ladder (the no-crit share is measured: kitMix)',
       Object.entries(CRIT_PROFILE).every(([n, pr]) => charDef(n) && !('nocrit' in pr) && ((pr.locked > 0 && pr.locked <= 1) ||
         (pr.extraCr && pr.extraCr.share > 0 && pr.extraCr.share < 1 && (pr.extraCr.v > 0 || (Array.isArray(pr.extraCr.ladder) && pr.extraCr.ladder.length === 7))))) &&
-      CRIT_PROFILE['Ryuji Sakamoto'].locked === 1 && CRIT_PROFILE['Shun Kano [Pioneer]'].locked === 1);
+      !CRIT_PROFILE['Ryuji Sakamoto'] && CRIT_PROFILE['Shun Kano [Pioneer]'].locked === 1);
     fail('DAMAGE_SCALE names the eight DEF/HP-scaling kits, each weighting ATK% at zero',
       Object.keys(DAMAGE_SCALE).length === 8 && Object.entries(DAMAGE_SCALE).every(([n, s]) => charDef(n) && ['DEF', 'HP'].includes(s) && target(charDef(n)).w['ATK%'] === 0) &&
       DAMAGE_SCALE['Minami Miyashita [Beachflower]'] === 'HP' && !DAMAGE_SCALE['Yukimi Fujikawa'] && !DAMAGE_SCALE['Motoha Arai [Tropical]']);
@@ -466,13 +466,18 @@ function awarenessOverrideDrift() {
         55 + bonus2Value('Love', c, tt) > 55 * 0.22 + bonus2Value('Worry', c, tt)) && bonus4Value('Love', morgH, tMorgH, 55) === 55);
     // Skull and Messa: kit facts the tiers cannot express
     const skull = charDef('Ryuji Sakamoto'), ts = target(skull);
-    fail('Skull weights Crit Rate at 0', ts.w['Crit Rate'] === 0, 'w=' + ts.w['Crit Rate']);
+    fail('Skull weights Crit Rate as lufel leaves it, unlisted (4): only God Hand Burst in Rebound always crits', ts.w['Crit Rate'] === 4, 'w=' + ts.w['Crit Rate']);
     fail('Skull wants Crit Multiplier on Star', mainTop(ts, 'Star') === 'Crit Multiplier', J(mainList(ts, 'Star')));
     const messa = charDef('Kira Kitazato'), tm0 = target(messa);
     fail('Messa weights both crit stats at 0', tm0.w['Crit Rate'] === 0 && tm0.w['Crit Multiplier'] === 0);
     fail('no coupling where there is no trade-off (Messa\'s crit product has no live stat)',
-      Object.keys(couplingFactors(tm0, 'Star', 'Crit Rate')).every(k => k !== 'Crit Rate' && k !== 'Crit Multiplier') &&
-      Object.keys(couplingFactors(ts, 'Star', 'Crit Multiplier')).every(k => k !== 'Crit Rate' && k !== 'Crit Multiplier'));
+      Object.keys(couplingFactors(tm0, 'Star', 'Crit Rate')).every(k => k !== 'Crit Rate' && k !== 'Crit Multiplier'));
+    fail('a guaranteed crit is marked per hit (DPS_KIT_BONUS lock): such a hit deals its crit damage, held to 250-350% for Akihiko; the build model reads the share his fight measures, and for Ryuji the share from God Hand Burst in Rebound', (() => {
+      const aki = charDef('Akihiko Sanada'), ta0 = target(aki), lo0 = Object.assign({}, DEFAULT_LOADOUT, { awareness: 0, bare: true });
+      const f1 = damageFactors([], aki, ta0, lo0, { lk: 1 }), f0 = damageFactors([], aki, ta0, lo0, { lk: 0 }), cm = damageBase(aki, lo0).cm;
+      const kA = kitMix(aki, Object.assign({}, DEFAULT_LOADOUT, { awareness: 0 })), kR = kitMix(skull, Object.assign({}, DEFAULT_LOADOUT, { awareness: 0 }));
+      return near(f1.crit, Math.min(350, Math.max(250, cm)) / 100) && f0.crit < f1.crit && kA && kA.lk > 0.05 && kA.lk < 0.6 && kR && kR.lk != null && kR.lk < 1 && !critProfile(skull);
+    })());
 
     // ---- coupling: complements inside a product ----
     const ann = charDef('Ann Takamaki'), ta = target(ann);
@@ -880,10 +885,13 @@ function awarenessOverrideDrift() {
     })());
     fail('an HP-scaling kit books HP% as a damage stat (Junpei), a DEF-scaling one DEF% (Yusuke)',
       modelledStats(charDef('Junpei Iori')).includes('HP%') && !modelledStats(charDef('Junpei Iori')).includes('ATK%') && modelledStats(yu).includes('DEF%') && modelledStats(joker).includes('ATK%'));
-    /* Locked crit: Skull's every hit crits, so Crit Rate moves nothing and Crit Multiplier is ⓓ. */
-    const ls = charLoadout(skull.n);
-    fail('a fully locked-crit kit ignores Crit Rate and scales with Crit Multiplier (Skull)',
-      near(damageFactors([crCard], skull, ts, ls).value, damageFactors([], skull, ts, ls).value) && damageFactors([cmCard], skull, ts, ls).value > damageFactors([], skull, ts, ls).value * 1.05);
+    /* Locked crit: Pioneer Shun's every hit crits, so Crit Rate moves nothing and Crit Multiplier is ⓓ (Skull was the
+       standing case until his crits were read per hit, Nov 2026). */
+    const shp = charDef('Shun Kano [Pioneer]'), tsp = target(shp), ls = Object.assign({}, charLoadout(shp.n), { bare: true });
+    // against a Sun card with no substats: an HP kit's Sun main counts towards its damage
+    const sun0 = mk('Sun', 'Power', 'HP', []);
+    fail('a fully locked-crit kit ignores Crit Rate and scales with Crit Multiplier (Pioneer Shun)',
+      near(damageFactors([crCard], shp, tsp, ls).value, damageFactors([sun0], shp, tsp, ls).value) && damageFactors([cmCard], shp, tsp, ls).value > damageFactors([sun0], shp, tsp, ls).value * 1.02);
     fail('lockedCritSupply adds nothing for a fully locked or unlocked kit and locked/(1-locked) otherwise',
       lockedCritSupply({ locked: 1 }, 150) === 0 && lockedCritSupply(null, 150) === 0 && near(lockedCritSupply({ locked: 0.3 }, 150), 100 * 0.3 / 0.7) &&
       lockedCritSupply({ locked: 0.3, cmClamp: [250, 350] }, 150) === 0 && near(lockedCritSupply({ locked: 0.3, cmClamp: [250, 350] }, 300), 100 * 0.3 / 0.7));
@@ -3261,8 +3269,12 @@ function awarenessOverrideDrift() {
       state.chars[ryu].loadout = Object.assign({}, DEFAULT_LOADOUT, { awareness: 0 });
       const rot = seq => ({ rot: [{ aw: 0, label: 'Test', seq }] });
       const hp = (rseq, mates) => { TEAMS[ryu] = Object.assign({}, keep.r, rot(rseq)); TEAMS[leo] = Object.assign({}, keep.l, rot(['2'])); tcMemo.key = ''; return tcSim(R, mates, false).selfHp; };
+      // the kits' own costs alone first (the boss's damage, `lowFrom`, off), then with it
+      const low = TC_HP[ryu].lowFrom; TC_HP[ryu].lowFrom = 0;
       out.selfHp = { f: [tcSelfHpF({ below: 75 }, 0.7), tcSelfHpF({ above: 50 }, 0.4), tcSelfHpF({ missing: true, fullAt: 20 }, 0.6), tcSelfHpF({ belowBoss: true }, 0.5, 0.6), tcSelfHpF({ rebound: true }, 1, 1, true)],
         skill1: hp(['1', '2'], [null, null]), plain: hp(['2'], [null, null]), leo: hp(['2'], [leo, null]) };
+      TC_HP[ryu].lowFrom = low;
+      out.selfHp.low = Object.assign(hp(['2'], [null, null]), { F: tcFight() });
       Object.assign(TEAMS, { [ryu]: keep.r, [leo]: keep.l }); state.chars[ryu].loadout = keep.lo; tcMemo.key = '';
     }
     // Makoto Niijima's Nuclear Finisher: ATK on a foe with any elemental ailment (KIT_STAT_BUFFS needAil 'any')
@@ -3867,7 +3879,9 @@ function awarenessOverrideDrift() {
     const s = th.selfHp, near = (x, y) => Math.abs(x - y) < 1e-6;
     check('the damage dealer\'s own HP: Pirate Tactics spends 20% (Rebound once below 75%), a Skill 2 rotation spends nothing, and Leo\'s Justice Barrier brings Rebound on its own',
       s.f.join() === '1,0,' + s.f[2] + ',1,1' && near(s.f[2], 0.5) && s.skill1 && s.skill1.min < 0.75 && s.skill1.rebounds > 0 &&
-      s.plain && near(s.plain.min, 1) && s.plain.rebounds === 0 && s.leo && s.leo.min < 0.75 && s.leo.rebounds > 0, JSON.stringify(s));
+      s.plain && near(s.plain.min, 1) && s.plain.rebounds === 0 && s.leo && s.leo.min < 0.75 && s.leo.rebounds > 0 &&
+      // the user's play: the boss keeps Ryuji below 75% from round 2, so every action from then on is in Rebound
+      s.low && near(s.low.min, 0.7) && s.low.rebounds === s.low.F - 1, JSON.stringify(s));
   }
   check('Makoto Niijima\'s Nuclear Finisher: +30% ATK counted in her stats, and in the fight while the boss carries an elemental ailment',
     th.nuclearFinisher.stat && th.nuclearFinisher.gain > 1.01, JSON.stringify(th.nuclearFinisher));

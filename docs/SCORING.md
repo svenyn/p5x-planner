@@ -382,7 +382,9 @@ damage to ATK) is evaluated on pre-conversion totals, an undercount.
 **`CRIT_PROFILE`** handles kits where some or all damage always crits, or cannot crit. `locked` is the share
 of the kit's damage that is a guaranteed critical; ⓓ becomes `locked × cm_clamped/100 +
 (1 − locked) × (1 + cr × cmBonus)`, and `cmClamp` bounds the locked share's crit damage where
-the kit says so. Ryuji and Pioneer Shun are `locked: 1` (ⓓ = cm/100). Akihiko is `locked:
+the kit says so. Pioneer Shun is `locked: 1` (ⓓ = cm/100); Ryuji was until Nov 2026, and his
+guaranteed hits (God Hand Burst in Rebound) are now marked per hit like Akihiko's (DPS_KIT_BONUS
+`lock`, measured by `kitMix` as `lk`, which replaces `locked` wherever a fight runs). Akihiko is `locked:
 0.3` with the Theurgy's 250-350% clamp (300-400% at Awareness 4): sized from his own
 coefficients over a representative window, the Theurgy and Finishing Blow are 26-29% of his
 damage and Lightning Fist, Blitzkrieg and Spark Impact roll. The coupling sees the same

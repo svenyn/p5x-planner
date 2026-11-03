@@ -3258,8 +3258,8 @@ const CHARACTERS = [
   { n:'Ryuji Sakamoto', a:'Skull', r:5, e:'Physical', arch:'ST DPS',
     sets:['Courage'], space:'Meditation',
     ov:{ main:{Moon:['ATK%','Damage Multiplier'],Star:'Crit Multiplier'},
-         w:{'Crit Rate':0,'Crit Multiplier':10,'Damage Multiplier':8,'ATK%':8,'Resistance Pierce':8},
-         bp:'Skull always crits — Crit Rate is dead weight. Go Crit Multiplier on Star and ignore CR substats entirely.' } },
+         w:{'Crit Rate':4,'Crit Multiplier':10,'Damage Multiplier':8,'ATK%':8,'Resistance Pierce':8},
+         bp:'Pirate Tactics and Rebound add +30% crit rate and God Hand Burst always crits in Rebound, so lufel goes Crit Multiplier on Star and does not chase Crit Rate.' } },
   { n:'Morgana', a:'Mona', r:5, e:'Wind', arch:'Healer',
     sets:['Love'], space:'Meditation',
     ov:{ main:{Star:'Crit Rate'},
@@ -5697,7 +5697,8 @@ function productSupply(product, t, slot, main) {
      board already holds, so Akihiko below his Theurgy's 250% floor gets no Crit
      Multiplier credit from the locked share until he clears it. */
   if (R['Crit Rate'] != null && R['Crit Multiplier'] != null && t && t.n) {
-    const prof = critProfile(charDef(t.n)), L = charLoadout(t.n);
+    const ch = charDef(t.n), L = charLoadout(t.n), prof0 = critProfile(ch), K = kitMix(ch, L);
+    const prof = K && K.lk != null ? Object.assign({}, prof0 || {}, { locked: K.nc < 1 ? K.lk / (1 - K.nc) : 0 }) : prof0;
     if (prof) add('Crit Rate', lockedCritSupply(prof, 100 + R['Crit Multiplier'] * maxRoll('Crit Multiplier', 'Sun'),
       L) / maxRoll('Crit Rate', 'Sun'));
     /* A share critting at a higher rate (`extraCr`) makes a Crit Multiplier point worth
@@ -6907,10 +6908,10 @@ function conversionSources(char) {
    the rolled share (see lockedCritSupply). `cmClamp` bounds the crit damage the locked
    share is dealt at, where the kit says so.
 
-   - Skull and Pioneer Shun: every damage line is a guaranteed critical (`locked: 1`).
-     Skull's Crit Rate weight is already 0 for this reason; this is the other half of the
-     same fact. Without it the spread term valued a Crit Multiplier roll on him at his 5%
-     base rate, a twentieth of its worth.
+   - Pioneer Shun: every damage line is a guaranteed critical (`locked: 1`). Skull was
+     too until Nov 2026, but his text guarantees only God Hand Burst in Rebound; Pirate
+     Tactics and Rebound add +30% crit rate, and the rest rolls (DPS_KIT_BONUS `cr` and
+     `lock` lines, measured by his fight like Akihiko's below).
    - Akihiko: Lightning Spike (Theurgy) and Finishing Blow (Awareness 6) always crit, with
      the Theurgy's crit damage clamped to 250-350% (300-400% at Awareness 4). Blitzkrieg,
      Spark Impact and Lightning Fist — his top-priority skill — roll. Sized from the kit's
@@ -6919,11 +6920,12 @@ function conversionSources(char) {
      Flash Blow 56%, and a 297% Theurgy roughly every fourth turn): the guaranteed share
      is 26% without Awareness 6 and 29% with, so 0.3. The clamp is why his Crit
      Multiplier reads oddly on the Theurgy: below 250% total it is floored up, so extra
-     Crit Multiplier does nothing there until he clears the floor.
+     Crit Multiplier does nothing there until he clears the floor. Since Nov 2026 the
+     fight marks those two hits (DPS_KIT_BONUS `lock`) and the build model reads the share
+     his fight measures (kitMix `lk`); the 0.3 stands only where no fight can run.
    Junpei's Power Swing and Mayumi's extra-action hit are guaranteed too, but are single
    skills without a stated share of the kit, so they stay on their rate. */
 const CRIT_PROFILE = {
-  'Ryuji Sakamoto':      { locked: 1 },
   'Shun Kano [Pioneer]': { locked: 1 },
   'Akihiko Sanada':      { locked: 0.3, cmClamp: [250, 350], cmClampAw4: [300, 400] },
   /* Junpei: Sunder Strike (42% HP, guaranteed when it detonates Fever Pitch) and Power
@@ -7149,7 +7151,7 @@ function kitMix(char, lo) {
     const T = tcSimBest(Object.assign(tcSimPrep(char, [null, null, null], false, true), { track: true })).track;
     if (T && T.u > 0 && T.w > 0) {
       const m = k => T.sum[k] / T.w, mc = k => T.wc > 0 ? T.sum[k] / T.wc : 0;
-      r = { nc: Math.max(0, Math.min(1, T.nc / T.u)), x: { atkPct: m('atkPct'), atk: m('atk'), dm: m('dm'), cr: mc('cr'), cm: mc('cm'), pierce: m('pierce'), defdown: m('defdown') } };
+      r = { nc: Math.max(0, Math.min(1, T.nc / T.u)), lk: T.lp ? Math.max(0, Math.min(1, T.lk / T.u)) : null, x: { atkPct: m('atkPct'), atk: m('atk'), dm: m('dm'), cr: mc('cr'), cm: mc('cm'), pierce: m('pierce'), defdown: m('defdown') } };
     }
   } finally {
     state.cards = keep.cards; state.teamCrit = keep.tc; state.teamBuffs = keep.tb; state.den = keep.den;
@@ -7202,7 +7204,7 @@ function damageBase(char, lo) {
   const v = {
     atk: b ? b.flat : 1000, atkPct: (b ? b.pct : 0) + (atkKit ? (kx.atkPct || 0) + T.atkPct : 0), atkFlat: atkKit ? kx.atk || 0 : 0,
     cr: at('Crit Rate', 5) + T.cr + (kx.cr || 0), cm: at('Crit Multiplier', 150) + T.cm + (kx.cm || 0), dm: at('Damage Multiplier', 0) + T.dm + (kx.dm || 0),
-    pierce: at('Resistance Pierce', 0) + (kx.pierce || 0), defdown: T.defdown + (kx.defdown || 0), nc: K ? K.nc : 0
+    pierce: at('Resistance Pierce', 0) + (kx.pierce || 0), defdown: T.defdown + (kx.defdown || 0), nc: K ? K.nc : 0, lk: K && K.lk != null ? K.lk : undefined
   };
   // not remembered while the kit could not be measured yet (the page still loading, or inside a kit's own fight)
   if (bare || K || (kitMixReady && !kitMixBusy)) damageBaseCache[key] = v;
@@ -7250,13 +7252,18 @@ function damageFactors(cards, char, t, lo, extra) {
   /* A kit that partly or wholly always crits (CRIT_PROFILE): that share of the damage is
      dealt at 100% crit rate — at its clamped crit damage where the kit clamps it — and
      only the rest rolls. Skull is the `locked: 1` case: his factor is simply cm / 100. */
-  if (prof && prof.locked > 0) {
+  /* The share that always crits: a hit in the Teams fight says so itself (`X.lk`, 0-1, from the kit's DPS_KIT_BONUS
+     `lock` lines: Akihiko's Theurgy, Ryuji's God Hand Burst in Rebound), the build model reads the share the kit's own
+     fight measured (`B.lk`, kitMix, a share of all its damage, so over the part that can crit here), and a kit with
+     neither keeps CRIT_PROFILE's judged `locked`. */
+  const nc = B.nc || 0;
+  const lk = X.lk != null ? Math.min(1, X.lk) : B.lk != null ? (nc < 1 ? Math.min(1, B.lk / (1 - nc)) : 0) : prof && prof.locked > 0 ? prof.locked : 0;
+  if (lk > 0) {
     const clamp = critClamp(prof, L2);
     const cmLocked = clamp ? Math.min(clamp[1], Math.max(clamp[0], cmTotal)) : cmTotal;
-    crit = prof.locked * Math.max(1, cmLocked / 100) + (1 - prof.locked) * crit;
+    crit = lk * Math.max(1, cmLocked / 100) + (1 - lk) * crit;
   }
   // ...and the share that cannot crit at all (kitMix: Highlights, damage over time) is dealt at exactly 1x.
-  const nc = B.nc || 0;
   if (nc > 0) crit = nc * 1 + (1 - nc) * crit;
   /* ⓒ, the foe's defence, in the build model only: the Teams fight prices it itself (tcDefence) and
      passes a bare setup. Pierce from the character, the kit and the cards; DEF down from the kit and
@@ -17874,7 +17881,6 @@ const DPS_KIT_SKIPS = {
     'Electroshark (Skill 3, not in lufel\'s rotation) already carries its Shocked-foe bonus 42.7% in SKILL_DMG (122 = 79.3 + 42.7); that is right whenever the boss is Shocked.'
   ],
   'Kotone Montagne': [
-    'The Blade Dancer Resonance is a guaranteed critical hit (the format has no field for that).',
     'Queen of Winter (5-star weapon): Blade Dancer usable at 8+ Crystals - the text does not say whether 8 or 10 are spent, so the rate change is not priced (its damage increase is).',
     'Opening Ceremony (Awareness 6): +4 Crystals once at battle start (0.4 of a Resonance per battle), not expressible per trigger.',
     'Her missing-HP bonuses read the boss\'s HP as falling evenly over the fight (tcBossHp); how fast a real boss falls is not known.'
@@ -18067,6 +18073,7 @@ const DPS_KIT_BONUS = {
     { to: 'skill:3', v: 2, needAil: 'Burn', tech: 'fire', amp: true, why: 'Skill 3 activates a Fire Technical: Fireburn, as above' }
   ],
   'Kotone Montagne': [
+    { to: 'res', k: 'lock', v: 1, why: 'Blade Dancer (Awareness 0): the Resonance is a guaranteed critical hit (every res component is Blade Dancer; Nov 2026, until then not counted)' },
     { to: 'res', ladder: [46, 68, 68, 90, 90, 112, 112], weapon: '5', why: 'Queen of Winter (5-star weapon): Blade Dancer damage +46/68/68/90/90/112/112%. Every res component is Blade Dancer. Its other line (Blade Dancer usable at 8+ Crystals) changes the rate and is not priced here' },
     { to: 'skill:3', v: [29.3, 29.3, 30.5, 30.5], hp: { missing: true }, why: 'Durandal of Ice (Skill 3): with Parhelion or 10+ Ice Crystals, damage up with the foe\'s missing HP, at most 29.3-30.5% (read as growing evenly to nothing left). Judged always met: her rotations set up Parhelion or Crystals before it' },
     { to: 'res', v: [29.3, 29.3, 30.5, 30.5], hp: { missing: true }, why: 'Durandal of Ice\'s passive part: Blade Dancer damage up with the foe\'s missing HP, at most 29.3-30.5%' },
@@ -18230,6 +18237,8 @@ const DPS_KIT_BONUS = {
     { to: 'hit', v: 8, stacks: 2, aw: 6, why: 'As above, on the per-Grit multiplier part of Lightning Fist (same cast)' },
     { to: 'hl', v: 8, stacks: 2, aw: 6, why: 'Striving for Power (A6): his Theurgy fires between actions, when he holds 1-3 Grit: 2' },
     { to: 'all', ladder: [34, 44, 44, 54, 54, 64, 64], weapon: '5', chance: 0.85, why: 'Sabazios (5-star weapon): a critical from a skill, Theurgy or Resonance does +34-64% damage. Applies to crits only; entered as an average: at about 70% crit rate and 250% crit damage the crit share of expected damage is about 0.85' },
+    { to: 'hl', k: 'lock', v: 1, why: 'Lightning Spike (Theurgy): a guaranteed critical hit, crit damage held to 250-350% (300-400% from A4, CRIT_PROFILE cmClamp)' },
+    { to: 'res', match: 'Finishing Blow', k: 'lock', v: 1, aw: 6, why: 'Finishing Blow (A6): a guaranteed critical hit' },
     { to: 'hl', ladder: [34, 44, 44, 54, 54, 64, 64], weapon: '5', chance: 0.15, why: 'Sabazios: Lightning Spike always crits, so the full value (0.85 + 0.15)' },
     { to: 'res', match: 'Finishing Blow', ladder: [34, 44, 44, 54, 54, 64, 64], weapon: '5', chance: 0.15, aw: 6, why: 'Sabazios: Finishing Blow always crits, so the full value (0.85 + 0.15)' }
   ],
@@ -18356,12 +18365,16 @@ const DPS_KIT_BONUS = {
   ],
   'Ryuji Sakamoto': [
     { to: 'skill:1', v: 30, why: 'Pirate Tactics (Skill 1): without Rebound he spends 20% HP for +30% damage, and with Rebound he has Rebound\'s +30%, so the cast always has it. Not in lufel\'s rotation.' },
+    { to: 'skill:1', k: 'cr', v: 30, why: 'Pirate Tactics: +30% crit rate without Rebound (for 20% HP), and Rebound\'s +30% with it, so the cast always has it (his skills roll: only God Hand Burst in Rebound is guaranteed, Nov 2026).' },
+    { to: 'skill:2', k: 'cr', v: 30, selfHp: { rebound: true }, why: 'Rebound (A0): his next skill +30% crit rate, on Thunderbolt' },
+    { to: 'skill:3', k: 'cr', v: 30, selfHp: { rebound: true }, why: 'Rebound (A0): his next skill +30% crit rate, on God Hand Burst (guaranteed in Rebound anyway, next line)' },
+    { to: 'skill:3', k: 'lock', v: 1, selfHp: { rebound: true }, why: 'God Hand Burst (Skill 3): with Rebound, a guaranteed critical hit (Korean: 반드시 크리티컬)' },
     { to: 'skill:2', v: 30, selfHp: { rebound: true }, why: 'Rebound (A0): below 75% HP as he acts, his next skill +30% damage (Pirate Tactics has it either way, above)' },
     { to: 'skill:3', v: 30, selfHp: { rebound: true }, why: 'Rebound (A0), as above, on God Hand Burst' },
     { to: 'all', k: 'atkPct', v: 45, selfHp: { belowBoss: true }, why: 'Adrenaline (passive 1) in the fight: +45% ATK while the boss\'s HP share is above his (the boss falls evenly over the fight, tcBossHp; his own HP falls by Pirate Tactics and Leo\'s barrier, TC_HP)' },
     { to: 'all', k: 'atkPct', v: 30, selfHp: { missing: true, fullAt: 20 }, why: 'Wounded Glory (A0): ATK +10% at full HP rising to +40% at 20% or less; the +10% is in his stats, this is the rest, read as growing evenly' },
     { to: 'skill:3', v: 20, aw: 1, why: 'Under the Skull and Bones (A1): God Hand Burst damage +20%.' },
-    { to: 'skill', k: 'pierce', v: 35, aw: 2, why: 'Fearless Charge (A2; Korean A3, English and Japanese A2): a skill that crits ignores 35% of the foe\'s DEF, which lufel\'s defence calculator lists as Pierce 35 on a crit. His skills always crit here (CRIT_PROFILE locked), so every skill hit; not his Highlight.' },
+    { to: 'skill', k: 'pierce', v: 35, aw: 2, why: 'Fearless Charge (A2; Korean A3, English and Japanese A2): a skill that crits ignores 35% of the foe\'s DEF, which lufel\'s defence calculator lists as Pierce 35 on a crit. Only a crit gets it, and his skills now roll (Nov 2026): counted at a judged 0.6 of each skill hit (+30% crit rate from Pirate Tactics or Rebound over his 5% and the team\'s, God Hand Burst in Rebound always); not his Highlight.', chance: 0.6 },
     { to: 'skill:3', v: [58.6, 58.6, 62.2, 62.2], after: 'HL', dur: 2, why: 'Highlight: next skill damage +58.6%. The fight prices God Hand Burst as half a hit on each of the two "3" tokens (charge, release), so 2 rounds from the Highlight carry one whole hit.' },
     { to: 'skill:3', v: 30, after: 'HL', dur: 2, aw: 4, why: 'Riding the Storm (A4): enhanced Highlight, next skill damage +30% more; same 2-token window.' },
     { to: 'skill:3', v: 60, amp: true, chance: 0.67, aw: 6, why: 'Comeback Kid (A6): God Hand Burst inflicts Cower; his next skill on that foe deals +60% total damage (Korean: an independent bonus). Every God Hand Burst but the battle\'s first follows one: 2 of 3 in the default 6 rounds (5 of 6 in 12).' },
@@ -19253,9 +19266,12 @@ function tcSimPrep(D, names, fit, blank, opt) {
    the amounts other healers restore are published nowhere, so neither is played: HP can only fall by the kits'
    own costs, and a low-HP bonus counts no more often than they make it. A DPS_KIT_BONUS entry's `selfHp` reads
    it at the hit: `above`/`below` a %, `missing` (growing with HP lost, full at `fullAt` %), `belowBoss` (the
-   boss's HP share above theirs, tcBossHp) or `rebound` (Ryuji began this action below TC_HP's `rebound` %). */
+   boss's HP share above theirs, tcBossHp) or `rebound` (Ryuji began this action below TC_HP's `rebound` %).
+   The one place the boss's damage is assumed: Ryuji's `lowFrom`/`lowTo` (the user's play, Nov 2026: the boss, or
+   Leo, keeps him below 75% almost always), so from round 2 each of his actions starts at 70% HP at most and he is
+   in Rebound; his own costs and heals still move it within the round. */
 const TC_HP = {
-  'Ryuji Sakamoto': { cost: { 1: 20 }, freeInRebound: true, rebound: 75, healAtk: 30 },
+  'Ryuji Sakamoto': { cost: { 1: 20 }, freeInRebound: true, rebound: 75, healAtk: 30, lowFrom: 2, lowTo: 70 },
   'Motoha Arai [Tropical]': { cost: { 3: 15 }, hype: { 1: 10 }, gain: { 2: 20, HL: 20 }, gainA6: { 2: 40 } }
 };
 /* Leo's Justice Barrier (Skill 2) spends 30% of the damage dealer's remaining HP and shields 80% of it plus
@@ -19356,7 +19372,9 @@ function tcSimRun(P, order, hold) {
   /* `P.track` (kitMix, the build model's fight): per hit, its damage before the crit factor (`u`), how much of
      it could not crit (`nc`), and what the kit had added into each factor then, weighted by the hit's damage.
      spread() notes the main target's hit, gain() books it. */
-  const TR = P.track ? { u: 0, nc: 0, w: 0, wc: 0, sum: { atkPct: 0, atk: 0, dm: 0, cr: 0, cm: 0, pierce: 0, defdown: 0 }, last: null, cf: new Map() } : null;
+  // a kit that marks its guaranteed crits (DPS_KIT_BONUS `lock`): every other hit of theirs rolls
+  const LOCKP = (P.bonus || []).some(b => b.k === 'lock');
+  const TR = P.track ? { u: 0, nc: 0, lk: 0, lp: LOCKP, w: 0, wc: 0, sum: { atkPct: 0, atk: 0, dm: 0, cr: 0, cm: 0, pierce: 0, defdown: 0 }, last: null, cf: new Map() } : null;
   const gain = (kind, x) => {
     total += x; parts[kind] = (parts[kind] || 0) + x;
     if (!TR) return;
@@ -19364,7 +19382,7 @@ function tcSimRun(P, order, hold) {
     TR.last = null;
     if (!h || !(x > 0)) return;
     const u = x / h.cf;
-    TR.u += u; if (h.dot) TR.nc += u;
+    TR.u += u; if (h.dot) TR.nc += u; else if (h.lk) TR.lk += u * h.lk;
     TR.w += x;
     TR.sum.atkPct += x * ((h.X.atkPct || 0) + h.atkPct); TR.sum.atk += x * (h.X.atk || 0); TR.sum.dm += x * ((h.X.dm || 0) + h.dm);
     TR.sum.pierce += x * (h.X.pierce || 0); TR.sum.defdown += x * (h.X.defdown || 0);
@@ -19454,10 +19472,11 @@ function tcSimRun(P, order, hold) {
     // one hit's multiplier over the damage dealer's unbuffed hit; `dot` cannot crit, `noWeak` (Almighty)
     // never lands on a weakness
     const mult = (X, dm, atkPct, fin, dot, noWeak) => {
-      const key = TC_DMG_KEYS.map(k => Math.round((X[k] || 0) * 100)).join(',') + '|' + Math.round(dm * 100) + '|' + Math.round(atkPct * 100) + '|' + (dot ? 1 : 0) + (noWeak ? 'n' : '');
+      const key = TC_DMG_KEYS.map(k => Math.round((X[k] || 0) * 100)).join(',') + '|' + Math.round(dm * 100) + '|' + Math.round(atkPct * 100) + '|' + (dot ? 1 : 0) + (noWeak ? 'n' : '') + '|' + Math.round((X.lk || 0) * 100);
       let m = memo.get(key);
       if (m == null) {
         const Y = Object.assign({}, X, { dm: X.dm + dm, atkPct: X.atkPct + atkPct, flat: E.den.flat, cr: X.cr + E.den.cr, cm: X.cm + E.den.cm });
+        if (LOCKP && Y.lk == null) Y.lk = 0;
         const f = damageFactors(E.worn, D, E.t, E.lo, Y);
         // against the unbuffed hit with its crit: a hit that cannot crit is worth that much less
         const body = dot ? f.atk * f.dmg / E.f0 : f.value / E.f0;
@@ -19481,7 +19500,8 @@ function tcSimRun(P, order, hold) {
     const addXs = (X, xs) => {
       if (!xs) return X;
       const Y = Object.assign({}, X);
-      Object.keys(xs).forEach(k => { Y[k] = (Y[k] || 0) + xs[k]; });
+      // `lock` (a guaranteed crit) is the hit's `lk`, the share damageFactors deals as a crit
+      Object.keys(xs).forEach(k => { const j = k === 'lock' ? 'lk' : k; Y[j] = (Y[j] || 0) + xs[k]; });
       return Y;
     };
     const spread = (aoe, X0, dm, atkPct, fin, dot, noWeak, hits, xs) => {
@@ -19489,10 +19509,11 @@ function tcSimRun(P, order, hold) {
       let v = mult(X, dm, atkPct, fin, dot, noWeak);
       if (TR) {
         // the crit factor this hit carried, so its damage can be read before crit
-        const ck = dot ? 'dot' : TC_DMG_KEYS.map(k => Math.round((X[k] || 0) * 100)).join(',') + '|' + Math.round(dm * 100) + '|' + Math.round(atkPct * 100);
+        const lkh = LOCKP ? Math.min(1, X.lk || 0) : undefined;
+        const ck = dot ? 'dot' : TC_DMG_KEYS.map(k => Math.round((X[k] || 0) * 100)).join(',') + '|' + Math.round(dm * 100) + '|' + Math.round(atkPct * 100) + '|' + Math.round((lkh || 0) * 100);
         let cf = TR.cf.get(ck);
-        if (cf == null) { cf = dot ? 1 : damageFactors(E.worn, D, E.t, E.lo, Object.assign({}, X, { dm: X.dm + dm, atkPct: X.atkPct + atkPct, flat: E.den.flat, cr: X.cr + E.den.cr, cm: X.cm + E.den.cm })).crit; TR.cf.set(ck, cf); }
-        TR.last = { X, dm, atkPct, dot: !!dot, cf: cf > 0 ? cf : 1 };
+        if (cf == null) { cf = dot ? 1 : damageFactors(E.worn, D, E.t, E.lo, Object.assign({}, X, { dm: X.dm + dm, atkPct: X.atkPct + atkPct, flat: E.den.flat, cr: X.cr + E.den.cr, cm: X.cm + E.den.cm, lk: lkh })).crit; TR.cf.set(ck, cf); }
+        TR.last = { X, dm, atkPct, dot: !!dot, lk: lkh || 0, cf: cf > 0 ? cf : 1 };
       }
       if (aoe && P.foes > 1) v += (P.foes - 1) * mult(addXs(curX(true, hits), xs), dm, atkPct, fin, dot, noWeak);
       return v;
@@ -19978,6 +19999,7 @@ function tcSimRun(P, order, hold) {
         /* their own HP (TC_HP): Rebound is read as the action begins (below 75% "on his action"), and a skill's
            cost is paid as it is cast, before its hit — Pirate Tactics spends nothing with Rebound */
         if (HPON) {
+          if (HPK && HPK.lowFrom && round >= HPK.lowFrom && selfHp * 100 > HPK.lowTo) hpSet(HPK.lowTo / 100);
           rebound = !!(HPK && HPK.rebound != null && selfHp * 100 < HPK.rebound);
           if (rebound) hpLog.rebounds++;
           if (HPK) uses.forEach((u, i) => {

@@ -208,10 +208,6 @@ const SUPERSEDED = {
    rather than in src/data.js because a hand edit to src/data.js is lost on the next run
    — see the note at the top of this file. */
 const WEIGHT_OVERRIDES = {
-  'Ryuji Sakamoto': {
-    w: { 'Crit Rate': 0 },
-    why: 'his damage always crits, so Crit Rate is dead weight, not a low priority'
-  },
   'Kira Kitazato': {
     w: { 'Crit Rate': 0, 'Crit Multiplier': 0 },
     why: 'his Rending damage cannot crit at all'
