@@ -1419,7 +1419,7 @@ damage formula (`docs/DATA-SOURCES.md`, the damage-formula section):
   The quick screen (`tcCopyQuick` in `tcMultiplier`) copies each member's averaged buffs (`vec.allyCopy`) at the
   share of turns her Skill 3 covers (`vec.copyBy`), so the sweep's shortlist sees the partner too. A teammate's
   part includes what she copies from them (the fight without them has nothing to copy); her seat lists the
-  average copy, the copied seat how often. Fortune's longer durations are still not modelled. On the real save
+  average copy, the copied seat how often. Fortune lengthens the copies by a turn (two from A2, `TC_PB`). On the real save
   team numbers rose 0-8% and the best team changed for 3 of 16 damage dealers (Ann and Tropical Motoha to
   Mayumi, Ren to Beachflower Minami), at no measurable cost.
 - **Summer Ichigo's Ram is played out** (`TC_RAM`, `tcRamFor`, Nov 2026; the user asked for the largest
@@ -1446,9 +1446,11 @@ damage formula (`docs/DATA-SOURCES.md`, the damage-formula section):
   Elucidator is not on the field and gets none. Highlights, follow-ups, Resonance and damage over time are not
   raised: the text says skills. The quick screen raises each member's `vec.skillPart` and the damage dealer's
   skill part by the amp at its share of turns (`tcMultiplier`). On the real save (twins at A1) their team rose
-  +1% to +29% (median +20%); they lead Ryuji's (24.9× over 24.6×) and no other. Not entered: Kotone Shiomi
-  copying the amp (lufel's partner note: her Lunar Phaseshift can copy it; `TC_COPY.keys` leaves it out), and
-  Kotone Shiomi copying her own. Miku's and Kotone's own are priced (below).
+  +1% to +29% (median +20%); they lead Ryuji's (24.9× over 24.6×) and no other. Kotone Shiomi copies it
+  (`TC_COPY.keys`, Nov 2026, lufel's partner note: "Kotone can copy and grant the Skill Effect Amplification value an
+  ally receives from J&C"), at her copy rate onto the damage dealer, where it raises only their own skill hits (a
+  copy never amplifies another ally's casts, `ampF`); the copy choice prices it as a factor on the whole hit. Not
+  entered: Kotone Shiomi copying her own. Miku's and Kotone's own are priced (below).
 - **Yumi's Cocktails are played out** (`TC_CK`, `tcCkFor`, Nov 2026; Invigorating Blend had no line at all).
   As the Elucidator she gets a Mixer of each ally's element per damaging skill use, Highlight, Theurgy or
   Resonance hit (`ckMix`; Wonder's give none, his element being his Persona's); three make a Cocktail —
@@ -1568,8 +1570,7 @@ damage formula (`docs/DATA-SOURCES.md`, the damage-formula section):
   +4.8%: slower stacks against longer Fortune buffs), Minami's −2.3% to 0; Kasumi's best team became the twins /
   Kotone / Fuuka / Kumi (27.7×). Chizuko's, Kumi's and Mayumi's moved nothing on the save: Chizuko sits in
   Fuuka's backup seat, whose one action is her Skill 1 (its DEF down is worth more), Kumi is A0, Mayumi is in no
-  best team. Calibration unchanged. Left as judgment calls (on the list page): whether Lunar Phaseshift counts
-  toward Lunar Bond, Arcana Link moving, Kotone copying the twins' Skill Amplification, Miku's song and Track
+  best team. Calibration unchanged. Left as judgment calls (on the list page): Arcana Link moving, Miku's song and Track
   stacks, the twins' Desire level and Facades, Mayumi's extra-action tokens, and that no team key carries a DEF
   or HP buff yet. Settled since: Fuuka's Luminous Force damage half is 12% + 1.371% per 100 ATK like its ATK half
   (the user read 12% in game; it was lufel's Korean 8% / 0.914 ×1.2 = 9.6 / 1.097), +2.4% to +3.8% on every
@@ -1622,17 +1623,25 @@ damage formula (`docs/DATA-SOURCES.md`, the damage-formula section):
   Ichigo's Chains of Love "+31%" (really −21%).
 - **Kotone Shiomi's Lunar Bond is counted** (`TC_LB`, Nov 2026; the user asked which judged numbers the fight
   could count, and she is in all 16 best teams on the real save). On the Arcana Link ally (the damage dealer, when
-  a Sweeper or Assassin): 0 at the start, 5 from A1, +1 per Persona skill they cast and per Lyre's Melody she casts
-  on them (Korean 페르소나 스킬: Highlights, her Skill 2 and Skill 3 add none), at most 10. Her TEAM_BUFFS lines
+  a Sweeper or Assassin): 0 at the start, 5 from A1, +1 per Persona skill they cast and per Lyre's Melody or Lunar
+  Phaseshift she casts (Korean 페르소나 스킬: Highlights and her Skill 2 add none), at most 10. Phaseshift was left out
+  until lufel's own rotation rows were read (Nov 2026; `operation.js` carries `lunar_bond`/`powerful_bond` per turn):
+  her A0 1 › 1+1+3 › Fatigue › Fatigue › 1 › 3 reads Lunar Bond 2, 6, 7, 8, 10, and the 6 needs it (it raises the
+  party's ATK, so it reaches the Arcana Link ally). The same rows showed Fortune keeping Powerful Bond (TC_PB) 2 turns
+  longer (3 from A2). The fight now reproduces lufel's rows for her A0 and A1 rotations exactly (a test holds four),
+  and every Kotone team on save (56) rose 0-4.4% (Makoto Yuki most), YUI's best team becoming the twins / Kotone /
+  Fuuka / Kumi (58.4×, the copied Skill Amplification). Her TEAM_BUFFS lines
   carry `lb` (the level they need: ATK +50% at 1, Pierce +15% at 5, crit damage +50% at 10) and read it in `curX`
   instead of their round gate; her weapon's amplification (TC_SELF_AMP `lb`) reads it through `ampAt`. The quick
-  screen keeps round estimates, Lunar Bond 10 moved from round 5 to 6 (4 at A1) to match what the fight reaches.
+  screen keeps round estimates: Lunar Bond 10 from round 5 (3 at A1), where lufel's rows and the fight reach it (it
+  was round 6, 4 at A1, before Phaseshift counted).
   On save (56) it reaches 5 in round 2-4 and 10 in round 5-6 (never for Haru and Makoto Yuki), so every Kotone team
   fell 1-11% (Ren and Kasumi most). Two search changes came with it: the list's fit (`true`) fits Kotone's rotation
   in the fight (`timed`, one pass, as for Mio), since how often she casts Lyre's Melody now decides the team (her
   team for Kasumi was 7th on the list's fit and best fully fitted, 29.0×; in the first pass too it doubled the
-  search's time for the same leads); and a Fuuka team's close runner-up backup (`alt`, within `TC_BACKUP_ALT` 3% on
-  the list's fit) is fought fully too and takes the team's place if it wins (Kumi over Tempest Riko for Haru). Best
+  search's time for the same leads); and a Fuuka team's close runner-up backup (`alt`, within `TC_BACKUP_ALT` 5% on
+  the list's fit; 3% until Nov 2026, when Haru's Kumi team priced 3.06% under Tempest Riko's on the list's fit and
+  6% over it fully fitted, about 5% more search time) is fought fully too and takes the team's place if it wins (Kumi over Tempest Riko for Haru). Best
   teams unchanged for all 16; the search about 23% slower (2.0 to 2.4 s a damage dealer); calibration unchanged.
 - **Ichigo's Lovesick is played** (`TC_LS`, `lsTick` in `tcSimRun`, Nov 2026). lufel's data never defines the
   status; the in-game tooltip does (the Mega Ten wiki's copy, which the user pasted): "Each turn, take Curse

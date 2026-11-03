@@ -3234,6 +3234,9 @@ function awarenessOverrideDrift() {
       out.lunarBond = { a0: run(0, ['1']), a1: run(1, ['1']), noMelody: run(0, ['2']), none: (() => { tcMemo.key = ''; return tcSim(ann, [null, null], false).lunarBond; })() };
       // her Powerful Bond (TC_PB): one a Lyre's Melody, gone 3 rounds after the last, at most 3; Fortune once (twice at A6)
       const pb = (aw, kseq) => { state.chars[ko].loadout = Object.assign({}, DEFAULT_LOADOUT, { awareness: aw }); TEAMS[ann.n] = Object.assign({}, keep.a, rot(['1'])); TEAMS[ko] = Object.assign({}, keep.k, rot(kseq)); tcMemo.key = ''; return tcSim(ann, [ko, null], false).powerfulBond; };
+      // lufel's own rows for her rotations (operation.js `lunar_bond` / `powerful_bond`), the damage dealer casting a skill each turn
+      const rows = (aw, kseq) => { state.chars[ko].loadout = Object.assign({}, DEFAULT_LOADOUT, { awareness: aw }); TEAMS[ann.n] = Object.assign({}, keep.a, rot(['2'])); TEAMS[ko] = Object.assign({}, keep.k, rot(kseq)); tcMemo.key = ''; const r = tcSim(ann, [ko, null], false); return r.lunarBond.rows.slice(0, 6).join(',') + '|' + r.powerfulBond.rows.slice(0, 6).join(','); };
+      out.lufelRows = { a0burst: rows(0, ['1', '1+1+3', 'Fatigue', 'Fatigue', '1', '3']), a0late: rows(0, ['1', '1', '1', '1', '1+3+2', 'Fatigue']), a1burst: rows(1, ['1', '1+1+3', 'Fatigue', 'Fatigue', '1', '3']), a1late: rows(1, ['1', '1', '1', '1', '1+3+2', 'Fatigue']) };
       out.powerfulBond = { every: pb(0, ['1']), sparse: pb(0, ['1', '2', '2']), none: pb(0, ['2']), a1: pb(1, ['2']), burst: pb(0, ['1+1+3']), burst6: pb(6, ['1+1+3']) };
       Object.assign(TEAMS, { [ann.n]: keep.a, [ko]: keep.k }); state.chars[ko].loadout = keep.lo; tcMemo.key = '';
     }
@@ -3846,6 +3849,9 @@ function awarenessOverrideDrift() {
     const b = th.lunarBond;
     check('Kotone Shiomi\'s Lunar Bond is counted: +1 per skill of the linked damage dealer and per Lyre\'s Melody on them (5 by round 3, 10 by round 5 when both cast every turn), 5 at once from A1, only the damage dealer\'s skills without Lyre\'s Melody, none without Kotone',
       b.a0 && b.a0.at5 === 3 && b.a0.at10 === 5 && b.a1 && b.a1.at10 != null && b.a1.at10 < b.a0.at10 && b.noMelody && b.noMelody.at10 > b.a0.at10 && b.none === null, JSON.stringify(b));
+    const lr = th.lufelRows;
+    check('Kotone Shiomi\'s Lunar Bond and Powerful Bond follow lufel\'s own rows for her rotations: Lunar Phaseshift adds a Lunar Bond, a Fortune burst keeps Powerful Bond 2 turns longer',
+      lr.a0burst === '2,6,7,8,10,10|1,3,3,3,3,3' && lr.a0late === '2,4,6,8,10,10|1,2,3,3,3,3' && lr.a1burst === '7,10,10,10,10,10|2,3,3,3,3,3' && lr.a1late === '7,9,10,10,10,10|2,3,3,3,3,3', JSON.stringify(lr));
     const p = th.powerfulBond;
     check('Kotone Shiomi\'s Powerful Bond: one a Lyre\'s Melody up to 3, back to none 3 rounds after the last, 1 for good from A1; Fortune\'s longer buffs once a battle, twice from A6',
       p.every.peak === 3 && p.sparse.peak === 1 && p.none.peak === 0 && p.a1.peak === 0 && p.burst.fortune === 1 && p.burst6.fortune === 2 && p.every.fortune === 0, JSON.stringify(p));

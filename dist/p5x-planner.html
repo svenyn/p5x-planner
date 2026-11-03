@@ -13546,7 +13546,7 @@ const TEAM_BUFFS = {
        The fight counts it (tcSimRun, TC_LB); the quick screen keeps the rounds judged from about 2 a round. */
     { k: 'atk%', v: 50, to: 'ally', src: 'aw', from: 1, lb: 1, arch: ['AoE DPS', 'ST DPS'], cond: 'DPS holds Arcana Link', why: 'Moment of Truth (A0): Lunar Bond 1 - Arcana Link ally ATK +50%; Lunar Bond rises with every skill by either of them and only resets on reselection; in the fight from the first such skill (at once from A1)' },
     { k: 'pierce', v: 15, to: 'ally', src: 'aw', fromAw: [[0, 3], [1, 1]], lb: 5, arch: ['AoE DPS', 'ST DPS'], cond: 'DPS holds Arcana Link', why: 'Moment of Truth (A0): Lunar Bond 5 - pierce +15%; the fight counts the level (immediately at A1); the quick screen takes it from round 3' },
-    { k: 'cm', v: 50, to: 'ally', src: 'aw', fromAw: [[0, 6], [1, 4]], lb: 10, arch: ['AoE DPS', 'ST DPS'], cond: 'DPS holds Arcana Link', why: 'Moment of Truth (A0): Lunar Bond 10 - crit damage +50%; the fight counts the level; the quick screen takes it from round 6 (4 at A1), where the fight reaches it on the real save (Nov 2026: Highlight turns and her Skill 2 and 3 turns add none)' },
+    { k: 'cm', v: 50, to: 'ally', src: 'aw', fromAw: [[0, 5], [1, 3]], lb: 10, arch: ['AoE DPS', 'ST DPS'], cond: 'DPS holds Arcana Link', why: 'Moment of Truth (A0): Lunar Bond 10 - crit damage +50%; the fight counts the level; the quick screen takes it from round 5 (3 at A1), where lufel\'s own rows for her rotations and the fight on the real save reach it (Nov 2026: Highlights and her Skill 2 add none; Lunar Phaseshift adds one)' },
     { k: 'cm', v: 30, to: 'ally', src: 'aw', on: '1', dur: 5, aw: 1, arch: ['AoE DPS', 'ST DPS'], pb: 3, cond: 'DPS holds Arcana Link at 3 Powerful Bond stacks', why: 'Echoing Strings (A1): Lyre\'s Melody on a target with 3 Powerful Bond stacks gives +30% crit damage more for 5 turns' },
     { k: 'cm', ladder: [6, 7.8, 7.8, 9.6, 9.6, 11.4, 11.4], to: 'ally', src: 'weapon', on: '1', dur: 3, weapon: '5', arch: ['AoE DPS', 'ST DPS'], stacks: 3, build: true, cond: 'DPS holds Arcana Link', why: '(one Powerful Bond a cast) Vetri Vel Muruga (5-star weapon): crit damage +6-11.4% per Powerful Bond stack on the ally, 3 stacks held' }
   ],
@@ -16560,7 +16560,7 @@ function tcMedOpts(dps) {
    member's averaged buffs at the share of turns her Skill 3 covers (tcMultiplier). Fortune's longer
    durations are not modelled, here as for her other lines. */
 const TC_COPY = { n: 'Kotone Shiomi', on: '3', dur: 1, rate: 30, a2: 1.25, a6: 6, arch: ['AoE DPS', 'ST DPS'],
-  keys: ['atkPct', 'atk', 'dm', 'cr', 'cm', 'pierce', 'final', 'weak', 'hlDm', 'hlFinal', 'xDm', 'xFinal', 'xAtkPct', 'resDm', 'dotDm', 'dotFinal', 'resFinal', 'tp'] };
+  keys: ['atkPct', 'atk', 'dm', 'cr', 'cm', 'pierce', 'final', 'weak', 'hlDm', 'hlFinal', 'xDm', 'xFinal', 'xAtkPct', 'resDm', 'dotDm', 'dotFinal', 'resFinal', 'tp', 'skillAmp'] };
 const tcCopyRate = () => TC_COPY.rate * (tmAw(TC_COPY.n) >= 2 ? TC_COPY.a2 : 1) / 100;
 // whether `name` copies buffs onto this damage dealer (she does only onto a Sweeper or Assassin in Arcana Link)
 const tcCopies = (dps, name) => name === TC_COPY.n && dps.n !== name && TC_COPY.arch.includes(dps.arch);
@@ -19295,12 +19295,15 @@ const TC_LV = { n: 'Ann Takamaki', need: 4, perSkill: 4, a6: 0.6, spentCap: 10 }
    that skill's own. Rebellion Resurgence's stacks from foes below 60% HP are not played. */
 const TC_WR = { n: 'Ren Amamiya', gain: [1, 2, 0], hl: 1, hlA4: 3, cap: 5, spend: 3 };
 /* Kotone Shiomi's Lunar Bond on the Arcana Link ally (Nov 2026): the damage dealer, when a Sweeper or Assassin
-   (lufel's AoE / ST DPS). 0 at the start (5 from A1), +1 per Persona skill they cast and per Lyre's Melody she
-   casts on them, at most 10, never reset (she never reselects). Her TEAM_BUFFS lines with `lb` and her weapon's
+   (lufel's AoE / ST DPS). 0 at the start (5 from A1), +1 per Persona skill they cast and per Lyre's Melody or Lunar
+   Phaseshift she casts (Phaseshift raises the whole party's ATK, so it is cast on them too: lufel's own Lunar Bond
+   row for her 1 › 1+1+3 › Fatigue › Fatigue › 1 › 3 reads 2, 6, 7, 8, 10, and the 6 needs it; Nov 2026), at most 10, never reset (she never reselects). Her TEAM_BUFFS lines with `lb` and her weapon's
    Skill Amplification (TC_SELF_AMP `lb`) read it in the fight. */
 const TC_LB = { n: 'Kotone Shiomi', start: 0, startA1: 5, max: 10, arch: ['AoE DPS', 'ST DPS'] };
 /* Her Powerful Bond on the same ally (Nov 2026): +1 per Lyre's Melody she casts on them, each 3 turns (read as all
-   gone 3 rounds after her last one), at most 3, 1 for good from A1. TEAM_BUFFS `pb` lines need that many as she casts
+   gone 3 rounds after her last one), at most 3, 1 for good from A1 (cast in Fortune
+   they last 2 turns longer, 3 from A2, as her skill says of all Lyre's Melody's effects and lufel's Powerful Bond row
+   shows: 3 still on turn 5 after a Fortune burst on turn 2). TEAM_BUFFS `pb` lines need that many as she casts
    them: Lyre's pierce at 2, its final damage and Burning Moon's Cry's damage taken at 3. Until then all came with the
    first cast. Her Fortune burst (Go for Broke: a turn with two or more skills, once a battle, twice from A6) makes
    what she casts in it last longer, as her skill text says: Skills 1 and 2 and the Highlight +2 turns, Skill 3 and its
@@ -19337,10 +19340,10 @@ function tcSimRun(P, order, hold) {
   const WR = D.n === TC_WR.n ? { will: 0, a4: (+charLoadout(D.n).awareness || 0) >= 4, peak: 0 } : null;
   // Kotone Shiomi's Lunar Bond on the damage dealer (TC_LB), and the level it reached
   const KO = T.find(a => a.n === TC_LB.n && !a.isDps);
-  const LB = KO && TC_LB.arch.includes(D.arch) ? { lv: (KO.aw || 0) >= 1 ? TC_LB.startA1 : TC_LB.start, at5: null, at10: null } : null;
+  const LB = KO && TC_LB.arch.includes(D.arch) ? { lv: (KO.aw || 0) >= 1 ? TC_LB.startA1 : TC_LB.start, at5: null, at10: null, rows: [] } : null;
   // her Powerful Bond on them (TC_PB): the count, its floor (A1), and the round of her last Lyre's Melody
-  const PB = LB ? { n: (KO.aw || 0) >= 1 ? 1 : 0, base: (KO.aw || 0) >= 1 ? 1 : 0, last: -9, peak: 0 } : null;
-  const pbNow = () => PB ? (round - PB.last < TC_PB.dur ? PB.n : PB.base) : 0;
+  const PB = LB ? { n: (KO.aw || 0) >= 1 ? 1 : 0, base: (KO.aw || 0) >= 1 ? 1 : 0, until: -9, peak: 0, rows: [] } : null;
+  const pbNow = () => PB ? (round < PB.until ? PB.n : PB.base) : 0;
   const lbUp = n => { if (!LB || !(n > 0)) return; LB.lv = Math.min(TC_LB.max, LB.lv + n); if (LB.at5 == null && LB.lv >= 5) LB.at5 = round; if (LB.at10 == null && LB.lv >= 10) LB.at10 = round; };
   const LS = D.n === TC_LS.n ? (() => { const aw = +charLoadout(D.n).awareness || 0; return { n: 0, left: 0, snap: null, critTo: -1, cap: aw >= 6 ? TC_LS.cap6 : TC_LS.cap, a1: aw >= 1, ticks: 0, peak: 0,
     col: aw >= 2 ? TC_LS.col.startA2 : 0, colCap: aw >= 2 ? TC_LS.col.capA2 : TC_LS.col.cap, vb: false, colAt: [] }; })() : null;
@@ -19595,7 +19598,7 @@ function tcSimRun(P, order, hold) {
       let v =ev.e.fx != null && a.medNext ? ev.e.fx * (tcMedBoost() + a.medNext) : ev.gate ? ev.v * ev.gate(Math.max(1, round)) : ev.v;
       /* a skill cast under the twins' Skill Amplification is that much stronger (TC_SKILL_SRC): any ally on the field
          but the twins (it is up on the damage dealer, and the others got it with them); the line is kept as cast */
-      const ampF = a !== elu && TC_SKILL_SRC.has(String(ev.e.src)) && ev.k !== 'skillAmp' ? 1 + buffs.reduce((s, b) => s + (b.k === 'skillAmp' && !b.enemy && b.owner !== a.n ? b.v : 0), 0) / 100 : 1;
+      const ampF = a !== elu && TC_SKILL_SRC.has(String(ev.e.src)) && ev.k !== 'skillAmp' ? 1 + buffs.reduce((s, b) => s + (b.k === 'skillAmp' && !b.enemy && b.owner !== a.n && (!b.copy || a.isDps) ? b.v : 0), 0) / 100 : 1;
       v *= ampF;
       // her own Skill Amplification as it stands this round (TC_SELF_AMP's Lunar Bond part)
       if (ev.ampAt) v *= ev.ampAt(Math.max(1, round), LB ? LB.lv : null);
@@ -19636,7 +19639,8 @@ function tcSimRun(P, order, hold) {
         if (!list.length) return;
         const X = Object.assign({}, X0);
         list.forEach(c => { if (!c.minHits) X[c.k] = (X[c.k] || 0) + c.v * CP.rate; });
-        const g = mult(X, 0, 0, 1) / base - 1;
+        // a copied Skill Amplification raises the damage dealer's skill hits (taken here as their whole hit)
+        const g = mult(X, 0, 0, 1) / base * (1 + (X.skillAmp || 0) / 100) / (1 + (X0.skillAmp || 0) / 100) - 1;
         if (g > bestGain) { bestGain = g; best = list; bestN = n; bestW = w.length > 0; }
       });
       if (!best) return;
@@ -20083,10 +20087,10 @@ function tcSimRun(P, order, hold) {
         // their skills, and the turn's other tokens ("Special", "Punch") for lines tied to one
         const mates = a.wonder ? toks : new Set([...toks, ...String(step).split('+').map(t => t.trim().replace(/↺/g, '')).filter(t => t && !/^[1-3]+$/.test(t))]);
         // Kotone Shiomi's Lyre's Melody adds its Powerful Bond before her lines land (TC_PB: the tiers read it)
-        if (PB && a === KO) { const u1 = tcSkillUses(step)[0]; if (u1) { PB.n = Math.min(TC_PB.max, pbNow() + u1); PB.last = round; PB.peak = Math.max(PB.peak, PB.n); } }
+        if (PB && a === KO) { const u1 = tcSkillUses(step)[0]; if (u1) { PB.n = Math.min(TC_PB.max, pbNow() + u1); PB.until = Math.max(PB.until, round + TC_PB.dur + (a.fortuneNow ? TC_PB.fortune['1'] + ((a.aw || 0) >= 2 ? 1 : 0) : 0)); PB.peak = Math.max(PB.peak, PB.n); } }
         castBy(a, mates);
         // Kotone Shiomi's Lyre's Melody on the Arcana Link ally raises Lunar Bond (TC_LB)
-        if (LB && a === KO) lbUp(tcSkillUses(step)[0]);
+        if (LB && a === KO) { const u = tcSkillUses(step); lbUp(u[0] + u[2]); }
         // Leo's Justice Barrier on the damage dealer (TC_HP_LEO): 30% of their remaining HP spent and shielded
         if (HPL && a.n === HPL.n && toks.has('2')) {
           const spent = selfHp * HPL.spend / 100;
@@ -20203,6 +20207,8 @@ function tcSimRun(P, order, hold) {
       ail.forEach((l, t) => { if (l <= 1) ail.delete(t); else ail.set(t, l - 1); });
       // what the enemy's own turn sets off (Junpei's Center Stage Burn)
       T.forEach(a => inflict(a, new Set(['enemy'])));
+      // Kotone Shiomi's Lunar Bond and Powerful Bond as each round ends, as lufel's rotation rows show them
+      if (LB) { LB.rows.push(LB.lv); PB.rows.push(pbNow()); }
     }
   } finally { state.teamCrit = keep; }
   const share = new Map();
@@ -20219,9 +20225,9 @@ function tcSimRun(P, order, hold) {
     // Ichigo's Lovesick (TC_LS): how many times it ticked and its highest stack count
     lovesick: LS ? { ticks: LS.ticks, peak: LS.peak, col: LS.col, colAt: LS.colAt.slice() } : null,
     // Kotone Shiomi's Lunar Bond (TC_LB): the level it ended on and the rounds it reached 5 and 10
-    lunarBond: LB ? { lv: LB.lv, at5: LB.at5, at10: LB.at10 } : null,
+    lunarBond: LB ? { lv: LB.lv, at5: LB.at5, at10: LB.at10, rows: LB.rows } : null,
     // her Powerful Bond (TC_PB): the most stacks held, and how many burst turns Fortune lengthened
-    powerfulBond: PB ? { peak: PB.peak, fortune: KO.fortuneDur || 0 } : null,
+    powerfulBond: PB ? { peak: PB.peak, fortune: KO.fortuneDur || 0, rows: PB.rows } : null,
     // Ann's La Vie en Rose (TC_LV): how many times she entered it, over how many of her actions
     laVie: LV ? { n: LV.n, acts: LV.acts } : null,
     // Ren's Will of Rebellion (TC_WR): its highest count and where it ended
@@ -20542,7 +20548,7 @@ function tcLineupAt(dps, names) {
    (or no entry, priced at what an Elucidator-free thief brings: nothing) and every available
    Elucidator, plus Fuuka's best backup when she is the one. Members' vectors are worked out once
    each; a lineup is then a sum and one damage evaluation, about a millisecond for 30 thieves. */
-const TC_BACKUP_TOP = 40, TC_FULL_TOP = 3, TC_BACKUP_SHORT = 6, TC_BACKUP_FIGHT = 4, TC_BACKUP_ALT = 0.03;
+const TC_BACKUP_TOP = 40, TC_FULL_TOP = 3, TC_BACKUP_SHORT = 6, TC_BACKUP_FIGHT = 4, TC_BACKUP_ALT = 0.05;
 /* Fuuka's backup for this lineup chosen by the fight among `cands` (the screen's best few) and the one it
    has; the lineup unchanged when Fuuka is not its Elucidator. */
 // The lineup it returns carries the runner-up as `alt`, for the full fit to weigh too (tcSearchCalc).
