@@ -3195,6 +3195,16 @@ function awarenessOverrideDrift() {
         gain: run(keepKb) / run(keepKb.filter(b => !b.hp)) };
       DPS_KIT_BONUS[km] = keepKb; tcMemo.key = '';
     }
+    // Makoto Niijima's Nuclear Finisher: ATK on a foe with any elemental ailment (KIT_STAT_BUFFS needAil 'any')
+    {
+      const mn = 'Makoto Niijima', M = charDef(mn), keepK = KIT_STAT_BUFFS[mn], keepLo = state.chars[mn].loadout;
+      state.chars[mn].loadout = Object.assign({}, DEFAULT_LOADOUT, { weapon: '5', refine: 1 });
+      const nf = keepK.find(b => b.needAil === 'any');
+      const run = lines => { KIT_STAT_BUFFS[mn] = lines; tcMemo.key = ''; Object.keys(kitMixCache).forEach(k => delete kitMixCache[k]); Object.keys(damageBaseCache).forEach(k => delete damageBaseCache[k]); return tcSim(M, [null, null], false).total; };
+      out.nuclearFinisher = { stat: kitStatBuffs(M, charLoadout(mn)).some(b => b === nf || (b.needAil === 'any' && b.v === 30)), gain: run(keepK) / run(keepK.filter(b => b !== nf)) };
+      KIT_STAT_BUFFS[mn] = keepK; state.chars[mn].loadout = keepLo; tcMemo.key = '';
+      Object.keys(kitMixCache).forEach(k => delete kitMixCache[k]); Object.keys(damageBaseCache).forEach(k => delete damageBaseCache[k]);
+    }
     // Kotone Shiomi's weapon Skill Amplification from Lunar Bond 5 (round 3 at A0, round 1 from A1)
     {
       const ko = 'Kotone Shiomi', s1 = TEAM_BUFFS[ko].find(e => String(e.src) === '1'), hl = TEAM_BUFFS[ko].find(e => e.src === 'HL');
@@ -3755,6 +3765,8 @@ function awarenessOverrideDrift() {
       near(m[0].beat, 1) && near(m[0].show, 1.1) && near(m[1].beat, 1.15) && near(m[1].show, 1.25) && near(m[2].show, 1.15) &&
       near(m[1].turns, 1) && near(m[0].turns, 1) && near(m[1].weapon, 1), JSON.stringify(m));
   }
+  check('Makoto Niijima\'s Nuclear Finisher: +30% ATK counted in her stats, and in the fight while the boss carries an elemental ailment',
+    th.nuclearFinisher.stat && th.nuclearFinisher.gain > 1.01, JSON.stringify(th.nuclearFinisher));
   {
     const b = th.bossHp, near = (x, y) => Math.abs(x - y) < 1e-6;
     check('the boss\'s HP falls evenly over the fight (mid-round), and HP-gated kit bonuses read it: above 70% in rounds 1-2 of 6, below 50% from round 4, missing HP growing to the end',

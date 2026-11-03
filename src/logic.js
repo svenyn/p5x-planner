@@ -1351,7 +1351,8 @@ const AWARENESS_STAT_PCT = [0, 2, 5, 7, 10, 12, 15];
    duration from an Awareness, `stack: N` one more permanent stack each time, up to N.
    `needAil` (Nov 2026): a line that needs an ailment on the foe ("+36% to Burning foes"). Always on in
    stats and build scores, as above; the Teams fight leaves it out of the baseline too and counts it
-   only while the foe has the ailment (its ailment tracker), so a teammate who Burns is credited. */
+   only while the foe has the ailment (its ailment tracker), so a teammate who Burns is credited; `'any'`
+   is any elemental ailment (Makoto Niijima's Nuclear Finisher). */
 const KIT_STAT_BUFFS = {
   'Ann Takamaki': [
     { s: 'ATK%', v: 20, pct: true, on: '1', dur: 2, why: 'Crimson Rose: +20% ATK for 2 turns; it is in every rotation' }
@@ -1392,7 +1393,8 @@ const KIT_STAT_BUFFS = {
   'Makoto Niijima': [
     { s: 'ATK%', tiers: [48.8, 53.8, 51.8, 56.8], pct: true, on: '2', dur: 2, why: "President's Prowess: +48.8% ATK for 2 turns; used every other turn" },
     { s: 'ATK%', v: 50, pct: true, aw: 1, why: 'Execution of Justice: +50% ATK while Crash Out is active, which 5 starting Tenacity stacks make her normal state' },
-    { s: 'Damage Multiplier', v: 35, pct: true, aw: 1, why: 'Execution of Justice: +35% damage while Crash Out is active' }
+    { s: 'Damage Multiplier', v: 35, pct: true, aw: 1, why: 'Execution of Justice: +35% damage while Crash Out is active' },
+    { s: 'ATK%', pct: true, weapon: '5', ladder: [30, 39, 39, 48, 48, 57, 57], needAil: 'any', why: 'Nuclear Finisher (5-star weapon): +30-57% ATK when attacking a foe with an elemental ailment; counted as always on in stats (her own skills keep one on the boss), and in the Teams fight only while the boss has one' }
   ],
   'Chizuko Nagao': [
     { s: 'Ailment Accuracy', v: 10, pct: true, stacks: 3, aw: 2, why: "From Now On: +10% ailment accuracy for 2 turns per ally elemental ailment, 3 stacks; lufel's own target note counts it" }
@@ -13219,7 +13221,7 @@ const DPS_KIT_SKIPS = {
   ],
   'Makoto Niijima': [
     'Skill 1\'s Radiation: what Radiation does is not in lufel\'s text; not priced.',
-    'Nuclear Finisher\'s ATK is a stat, not priced here (A2\'s pierce is, by the ailments on the boss: TC_AIL_SELF).'
+    'Nuclear Finisher\'s ATK counts while the boss has an elemental ailment (KIT_STAT_BUFFS `needAil: \'any\'`), A2\'s pierce by the ailments on it (TC_AIL_SELF).'
   ],
   'Motoha Arai [Tropical]': [
     'Her Highlight\'s +25% above 50% HP depends on her own HP; the crit lines are stats.',
@@ -14589,7 +14591,9 @@ function tcSimRun(P, order, hold) {
   const ailEl = () => TC_AIL_TYPES.filter(t => ail.get(t) > 0).length;
   const ailN = () => ailEl() + (P.radCounts && ail.get('Radiation') > 0 ? 1 : 0);
   const ailMine = { Fire: 'Burn', Electric: 'Shock', Ice: 'Freeze', Wind: 'Windswept' }[D.e];
-  const ailF = c => c.needAil && !(ail.get(c.needAil) > 0) ? 0 : c.perAil ?Math.min(c.perAil, ailN()) : c.ailMin && ailN() < c.ailMin ? 0 : c.ailOfElem && !(ail.get(ailMine) > 0) ? 0 : 1;
+  // a line that needs an ailment on the foe: that one, or any elemental ailment ('any')
+  const ailOn = n => n === 'any' ? ailN() > 0 : ail.get(n) > 0;
+  const ailF = c => c.needAil && !ailOn(c.needAil) ? 0 : c.perAil ?Math.min(c.perAil, ailN()) : c.ailMin && ailN() < c.ailMin ? 0 : c.ailOfElem && !(ail.get(ailMine) > 0) ? 0 : 1;
   const inflict = (a, toks) => (a && a.ail || []).forEach((x, i) => {
     // `ifAil`: only onto a foe that has an elemental ailment, or (a name) that one
     if (!x.on.some(o => toks.has(o)) || (x.ifAil && !(typeof x.ifAil === 'string' ? ail.get(x.ifAil) > 0 : ailEl()))) return;
@@ -14697,7 +14701,7 @@ function tcSimRun(P, order, hold) {
         if (b.re && !(comp && b.re.test(comp.why || ''))) continue;
         if (b.needAil) {
           if (b.amp) { if (b.tech) ta += b.val; else pa += b.val; } else if (b.tech) tf += b.val; else pf += b.val;
-          if (!(ail.get(b.needAil) > 0)) continue;
+          if (!ailOn(b.needAil)) continue;
         }
         // stacks read off the foe's ailments, or the team's ailments between two Transform turns (Heat)
         // `hp`: by the boss's HP this round (tcBossHp)
@@ -14750,7 +14754,7 @@ function tcSimRun(P, order, hold) {
       if (tcIsVc(ev.e) && !vc) return;
       const enemy = ev.e.to === 'enemy';
       // a Technical lands only on a foe that has the ailment when it is cast (Scald, Cold Flames)
-      if (ev.e.needAil && !(ail.get(ev.e.needAil) > 0)) return;
+      if (ev.e.needAil && !ailOn(ev.e.needAil)) return;
       const ex = buffs.find(b => b.owner === a.n && b.ref === ev.ref);
       // `noRefresh`: cannot be put on again while it lasts (Scald)
       if (ex && ev.e.noRefresh) return;

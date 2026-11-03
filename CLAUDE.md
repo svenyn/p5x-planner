@@ -1507,6 +1507,13 @@ damage formula (`docs/DATA-SOURCES.md`, the damage-formula section):
   extra actions, a KIT_ROT counter) and Merciless Pursuit (A6), Yaoling's Up to Chance (her own hit), and
   Belphegor's 40% below 50% (a Wonder on-cast line, which carries no round gate). Cutting the HP faster or
   slower than the fight is not a setting.
+- **Makoto Niijima's Nuclear Finisher ATK** (Nov 2026): her 5★ weapon's +30-57% ATK "when attacking a foe with
+  an elemental ailment" is a KIT_STAT_BUFFS line with `needAil: 'any'` (any elemental ailment, `ailOn` in
+  `tcSimRun`): always on in her stats and build score, like Firecracker Rin's Burn lines, since her own skills
+  keep one on the boss; in the fight only while the boss carries one. On save (56): her damage alone +8.1%,
+  her best team +4.2% (Beachflower Minami / Kotone / Miku, unchanged); build score 75.87 to 75.53 (the
+  perfect build gains it too, and ATK% rolls are worth a little less beside it); Optimise's pick unchanged;
+  calibration unchanged.
 - **Miku's own Skill Amplification** (`TC_SELF_AMP`, `tcSelfAmp`, Nov 2026): Hologram Screen (A1) gives her 15%,
   her 5★ weapon 10-19% while Virtual Concert is active. It raises the values her own skills grant (Korean 스킬
   효과 증폭), so `tcMemberCalc` multiplies each of her skill lines (TC_SKILL_SRC; caps included, as the twins'
