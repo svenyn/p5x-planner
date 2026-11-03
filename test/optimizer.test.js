@@ -885,6 +885,12 @@ function awarenessOverrideDrift() {
     })());
     fail('an HP-scaling kit books HP% as a damage stat (Junpei), a DEF-scaling one DEF% (Yusuke)',
       modelledStats(charDef('Junpei Iori')).includes('HP%') && !modelledStats(charDef('Junpei Iori')).includes('ATK%') && modelledStats(yu).includes('DEF%') && modelledStats(joker).includes('ATK%'));
+    fail('a party DEF or max HP buff reaches the kit that scales with it and no other (TEAM_BUFFS def%/def, hp%/hp)', (() => {
+      const jp = charDef('Junpei Iori'), b = { bare: true }, f = (c, x) => damageFactors([], c, target(c), Object.assign({}, charLoadout(c.n), b), x).atk;
+      return f(yu, { defPct: 30 }) > f(yu, {}) * 1.05 && f(yu, { def: 500 }) > f(yu, {}) && f(yu, { hpPct: 30 }) === f(yu, {}) &&
+        f(jp, { hpPct: 30 }) > f(jp, {}) * 1.05 && f(jp, { hp: 1000 }) > f(jp, {}) && f(jp, { defPct: 30 }) === f(jp, {}) &&
+        f(joker, { defPct: 30, hpPct: 30, def: 500, hp: 1000 }) === f(joker, {}) && TC_FROM_K['def%'] === 'defPct' && TC_FROM_K['hp%'] === 'hpPct';
+    })());
     /* Locked crit: Pioneer Shun's every hit crits, so Crit Rate moves nothing and Crit Multiplier is ⓓ (Skull was the
        standing case until his crits were read per hit, Nov 2026). */
     const shp = charDef('Shun Kano [Pioneer]'), tsp = target(shp), ls = Object.assign({}, charLoadout(shp.n), { bare: true });
@@ -2662,6 +2668,74 @@ function awarenessOverrideDrift() {
   check('the Persona collection goes through a save file, and a save from before it starts with every released Persona owned and the old setup\'s skill cards on their Persona',
     psUi.inSave && psUi.back && psUi.redrawn && psUi.oldAll && psUi.oldCards === 'Rebellion' && psUi.oldSetup === 'Rebellion,,', JSON.stringify(psUi));
   check('on a phone-width screen the Personas tab does not scroll sideways', psPhone <= 390, `${psPhone}px wide`);
+  // a Persona's skills (the user, Nov 2026): besides its unique skill and Highlight at most 6 — the innate skills it
+  // has learned, at most 3 skill cards, any skill through fusion; every skill lufel lists can be chosen, priced or
+  // not; all at the Persona's skill level; saved
+  const psFused = await p.evaluate(() => {
+    const keepP = JSON.stringify(state.personas), keepW = JSON.stringify(state.wonder), r = {};
+    const ann = CHARACTERS.find(c => /^Ann /.test(c.n));
+    // a Persona that learns two innate skills, both after level 1
+    const pn = personaNames().find(n => (WONDER_INNATE[n] || []).length === 2 && WONDER_INNATE[n].every(x => (WONDER_PERSONA[n].learn[x] || 1) > 1));
+    const inn = WONDER_INNATE[pn], top = Math.max(...inn.map(x => WONDER_PERSONA[pn].learn[x]));
+    const K = personaSkillNames().filter(c => !inn.includes(c) && c !== 'Rebellion');
+    r.pn = pn;
+    personaSet(pn, { own: true, lv: 1, cards: [], fused: [], drop: [] });
+    r.six = personaRoom(pn) === 6 && personaSet(pn, { fused: K.slice(0, 8) }).length === 2 && personaRec(pn).fused.length === 6;
+    // learning both innate skills takes two slots: the last two fused skills go
+    r.learned = personaSet(pn, { lv: top }).join(',') === K.slice(4, 6).join(',') && personaRoom(pn) === 4;
+    r.pushed = personaSet(pn, { cards: [K[0], K[6], K[7]] }).join(',') === K.slice(2, 4).join(',') &&
+      personaRec(pn).cards.length === 3 && personaRec(pn).fused.join(',') === K[1];
+    // replacing an innate skill frees its slot
+    personaSet(pn, { drop: [inn[0]] });
+    r.dropped = personaRoom(pn) === 5 && !personaInnateHas(pn, personaRec(pn)).includes(inn[0]);
+    personaSet(pn, { cards: [], fused: [], drop: [] });
+    // any skill, priced or not: Apt Pupil and Psy Boost are lufel skills the Teams tab does not price
+    r.unpriced = ['Apt Pupil I', 'Psy Boost I'].every(c => personaSkillNames().includes(c) && !WONDER_BUFFS.cards[c]) &&
+      personaSet(pn, { cards: ['Apt Pupil I'], fused: ['Psy Boost I'] }).length === 0 && personaRec(pn).cards[0] === 'Apt Pupil I' && personaRec(pn).fused[0] === 'Psy Boost I' &&
+      personasFrom({ [pn]: { cards: ['Auto-Mataru'] } })[pn].cards[0] === 'Auto-Mataru IV';
+    // priced alike as a card or fused, at the Persona's skill level (Rebellion: 10.2% top, 9.3% at level 6, its bonus 7.0 → 6.4)
+    const setup = sk => { personaSet(pn, sk); state.wonder = { personas: [{ name: pn }], weapon: '', refine: 1 }; return JSON.stringify(tcWonder(ann, wonderSetup()).vec); };
+    const none = setup({ cards: [], fused: [] }), asCard = setup({ cards: ['Rebellion'], fused: [] }), asFused = setup({ cards: [], fused: ['Rebellion'] });
+    r.priced = asFused !== none && asFused === asCard && wonderSetup().personas[0].fused.join(',') === 'Rebellion';
+    personaSet(pn, { sk: 6 });
+    const L6 = personaSkillLines(pn, 'Rebellion')[0];
+    r.level = L6.v === 9.3 && Math.abs(L6.per.rate * L6.per.cap / 100 - 6.4) < 0.01 && setup({}) !== asFused;
+    personaSet(pn, { sk: 8, cards: [], fused: [] });
+    // the popup: an innate tick per innate skill, three card and six fused boxes open as far as the slots allow
+    openPersona(pn);
+    const B = document.getElementById('dlgBody'), boxes = [...B.querySelectorAll('[data-psd-fused]')], ticks = [...B.querySelectorAll('[data-psd-innate]')];
+    r.boxes = boxes.length === 6 && boxes.filter(x => x.disabled).length === 2 && ticks.length === 2 && ticks.every(x => x.checked) &&
+      [...document.querySelectorAll('#psSkillList option')].some(o => o.value === 'Apt Pupil I') &&
+      [...B.querySelectorAll('[data-psd-card], [data-psd-fused]')].every(x => x.tagName === 'INPUT' && x.list && x.list.id === 'psSkillList');
+    // typed: a name in any case is the skill's own; a name that is no skill is refused and the box goes back
+    boxes[0].value = 'rebellion'; boxes[0].dispatchEvent(new Event('change', { bubbles: true }));
+    r.typed = personaRec(pn).fused.join(',') === 'Rebellion' && boxes[0].value === 'Rebellion';
+    boxes[1].value = 'Not A Skill'; boxes[1].dispatchEvent(new Event('change', { bubbles: true }));
+    r.refused = personaRec(pn).fused.join(',') === 'Rebellion' && boxes[1].value === '' && /No skill is called/.test(document.getElementById('toastMsg').textContent);
+    ticks[0].checked = false; ticks[0].dispatchEvent(new Event('change', { bubbles: true }));
+    r.popupSet = personaRec(pn).fused.join(',') === 'Rebellion' && personaRec(pn).drop.join(',') === inn[0] && boxes.filter(x => x.disabled).length === 1 &&
+      /Fused/.test(document.getElementById('psDOut').textContent) && boxes.concat(ticks).every(x => x.labels && x.labels.length);
+    document.getElementById('dlg').close();
+    // through a save file
+    const sv = personasSaved()[pn];
+    r.saved = JSON.stringify(sv.fused) === '["Rebellion"]' && JSON.stringify(sv.drop) === JSON.stringify([inn[0]]) &&
+      JSON.stringify(personasFrom(personasSaved())[pn]) === JSON.stringify(personaRec(pn));
+    // the Teams tab's card boxes complete from every skill too, and take a typed name the same way
+    state.wonder = { personas: [{ name: pn }], weapon: '', refine: 1 }; renderTmPicker();
+    const tb = document.getElementById('tmWC0_0');
+    r.teamBoxes = tb.tagName === 'INPUT' && tb.list && tb.list.id === 'psSkillList' && !tb.disabled && document.getElementById('tmWC1_0').disabled;
+    tb.value = 'rakunda'; tb.dispatchEvent(new Event('change', { bubbles: true }));
+    const typedT = personaRec(pn).cards.join(',') === 'Rakunda';
+    tb.value = 'nonsense'; tb.dispatchEvent(new Event('change', { bubbles: true }));
+    r.teamTyped = typedT && personaRec(pn).cards.join(',') === 'Rakunda' && tb.value === 'Rakunda';
+    state.personas = JSON.parse(keepP); state.wonder = JSON.parse(keepW); commit(); markSaved();
+    return r;
+  });
+  check('a Persona has at most 6 skills besides its unique skill and Highlight: learned innate skills (one can be replaced), at most 3 skill cards, fused skills; any lufel skill can be chosen; all priced at the Persona\'s skill level; set in the popup and saved',
+    psFused.six && psFused.learned && psFused.pushed && psFused.dropped && psFused.unpriced && psFused.priced && psFused.level &&
+    psFused.boxes && psFused.popupSet && psFused.teamBoxes && psFused.saved, JSON.stringify(psFused));
+  check('the skill boxes (the Persona popup\'s and the Teams tab\'s card boxes) are typeable fields completing from every skill: a name in any case is taken as the skill, one that is no skill is refused and the box goes back',
+    psFused.typed && psFused.refused && psFused.teamTyped, JSON.stringify(psFused));
   // the Personas tab's sort: rarity, highest first, by default; kept in the save's prefs
   const psSortUi = await p.evaluate(() => {
     showTab('personas');
@@ -4143,8 +4217,8 @@ function awarenessOverrideDrift() {
     const saved = JSON.stringify(old), keepPs = state.personas;
     state.wonder = {};
     applySave(saved, '');
-    const e3 = { name: '', cards: ['', '', ''] };
-    out.trip = JSON.stringify(wonderSetup()) === JSON.stringify({ personas: [{ name: pn, cards: [cn, '', ''] }, e3, e3], weapon: wn, refine: 4 }) && !!pn && !!cn && !!wn;   // an old one-Persona setup becomes slot 1
+    const e3 = { name: '', cards: ['', '', ''], fused: [] };
+    out.trip = JSON.stringify(wonderSetup()) === JSON.stringify({ personas: [{ name: pn, cards: [cn, '', ''], fused: [] }, e3, e3], weapon: wn, refine: 4 }) && !!pn && !!cn && !!wn;   // an old one-Persona setup becomes slot 1
     hideToast();
     state.wonder = keep; state.personas = keepPs;
     return out;
@@ -4155,7 +4229,7 @@ function awarenessOverrideDrift() {
   check('Wonder\'s actions go to his most valuable skills first, a Persona\'s passives count only while it is in use, cards need their Persona, and an unknown or old setup is read right',
     tw.busy && cardUps.filter(u => u === 1).length === 2 && cardUps.filter(u => u === undefined).length === 1 &&
     tw.ups.some(x => x[0] === 'defdown' && x[2] === 3 && x[1] === 1) && tw.none === 0 &&
-    tw.clean === JSON.stringify({ personas: [0, 1, 2].map(() => ({ name: '', cards: ['', '', ''] })), weapon: '', refine: 7 }) && tw.trip &&
+    tw.clean === JSON.stringify({ personas: [0, 1, 2].map(() => ({ name: '', cards: ['', '', ''], fused: [] })), weapon: '', refine: 7 }) && tw.trip &&
     JSON.stringify(tw.split.slice().sort()) === JSON.stringify([['atkPct', 1], ['cm', 0.5], ['dm', 0.5]]) && tw.cardless === 0, JSON.stringify(tw));
 
   await p.evaluate(() => { tmPick = {}; $('#tmBasis').value = 'calc'; $('#tmChar').value = 'Yusuke Kitagawa'; renderTeams(); });

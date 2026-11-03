@@ -41,6 +41,8 @@ node tools/gen-bosses.js [boss.js]           # replace the BOSSES block (lufel's
 node tools/gen-wonder-innate.js [folder]     # replace the WONDER_INNATE block (each Persona's innate skills,
                                              # WONDER_UNRELEASED: Personas not out on Global yet, and
                                              # WONDER_PERSONA: rarity, talent ranks, learn levels, rank values)
+node tools/gen-wonder-skills.js [skills.js]  # replace the WONDER_SKILLS block (every Persona skill lufel lists,
+                                             # its kind and its values at skill levels 6/7/8)
 node tools/gen-skill-damage.js lufel.json    # replace the SKILL_DMG block (damage per skill and Highlight)
 node tools/gen-mind-paths.js lufel.json      # replace the MIND_SKILL_PATHS block (which skills each Mindscape skill path raises)
 node tools/fetch-persona-art.js              # the Personas tab's pictures into dist/art/ (gitignored, like the portraits)
@@ -343,7 +345,9 @@ at most (TC_HP `lowFrom`/`lowTo`). On save (56): 89% of his critting damage guar
 at 33%; build score 73.6 to 80.4, Optimise's Star from ATK% to lufel's Crit Multiplier; his damage
 alone −4% and his best team +0.7%; Akihiko alone −2%, team +0.1%; no best team changed;
 calibration mean 70.2 to 70.1, bands unchanged. Pioneer Shun's kit fight books all his damage as
-unable to crit (`nc` 1), which is not checked yet. A single guaranteed skill with no
+unable to crit (`nc` 1): his Ranged Attack, the 'Gunshot' of every lufel turn and his main damage (A0:
+27.4% of max HP to all foes, guaranteed crit), was never entered, so his fight saw only his Highlight. It is
+a DPS_KIT `hit` since, and his fight reads 48%. A single guaranteed skill with no
 stated share (Junpei's Power Swing, Mayumi's extra action) does not earn an entry. Everyone's
 rolled crit rate is capped at 100%. The third shape, `extraCr`, is a share that crits at a
 *higher* rate: Wavecatcher Miyu's Mermaid Dreamer adds 16.4-31.4% crit rate to her Resonance
@@ -857,7 +861,15 @@ damage formula (`docs/DATA-SOURCES.md`, the damage-formula section):
 
 - **ⓐⓑⓓ are `damageFactors(..., extra)`** — the damage dealer's own cards, Setup, conversions
   and crit profile with the team's buffs added; an ATK buff reaches ⓐ only for an ATK kit (a DEF
-  or HP kit's hits ignore it). The team crit rate setting is zeroed for this: the supports who
+  or HP kit's hits ignore it), and a party DEF or max HP buff only for a DEF or HP kit (TEAM_BUFFS `def%`/`def`,
+  `hp%`/`hp`, Nov 2026; until then the model had no key for them and 20-odd lines were notes). Entered from
+  lufel's English text: Mayumi's Aero Setup DEF, Mio's A2, Yukimi's Skill 2, Highlight and A1, Masaki Ashiya's Skill
+  2, passive 1 and A2, Shoki's Adlib, Kayo's Pulsating Rhythm (and her weapon's share), Leo's A1, plain Miyu's
+  Seashell DEF (judged stacks), plain Minami's Highlight and battle-start HP, plain Shun's Skill 3 and Highlight HP,
+  Seaside Tomoko's Soothing Waves, Riko's battle-start flat DEF and HP, Yumi's Enchanting Stir HP. Left out: the
+  twins' Guardian DEF and Medic-mask HP (Desire Level and mask choice), Minami's per-Diagnosis HP, Frostgale
+  Kotone's Winter-mode DEF, Riko's random weapon buff, Miyu's 6-stack DEF. Kotone Shiomi copies them. On save
+  (56) no best team changes; Mayumi's team for Yusuke goes 6.6× to 7.2× and still trails his best (9.7×). The team crit rate setting is zeroed for this: the supports who
   supply that crit rate are counted one by one.
 - **ⓒ is lufel's defence formula**, 1 − E/(E+1400) with E = DEF × max(0, (1 + coefficient) ×
   (1 − Pierce) − DEF down), against the boss the page picks (`#tmBoss`, a pref): one of lufel's
@@ -1158,11 +1170,30 @@ damage formula (`docs/DATA-SOURCES.md`, the damage-formula section):
   `tools/gen-wonder-innate.js` writes from lufel's Korean text: `learn` (an innate skill counts from the
   level it is learned at, `wonderInnateHere`), `tv` (a talent number's value at each rank, lined up sentence
   by sentence; null before the rank that adds the clause — Janosik's crit lines arrive at Hunting IV) and
-  `sv` (a unique-skill, Highlight or innate number printed a/b/c). `personaLines`/`personaInnateLines` give
-  a Persona's lines at its record; a passive reads `tv` first, the rest `sv` first, each falling back on the
-  other (16 unique-skill lines are really a talent's). 136 of the 142 priced Persona lines follow a rank this
-  way; the rest keep their top value. Skill cards taught to a Persona keep theirs, and a Persona's level
-  does nothing to a line that grows with Wonder's stats (still not tracked). Bulk marks are undoable.
+  `sv` (a unique-skill or Highlight number printed a/b/c). `personaLines` gives a Persona's own lines at its
+  record; a passive reads `tv` first, the rest `sv` first, each falling back on the other (16 unique-skill lines
+  are really a talent's). 136 of the 142 priced Persona lines follow a rank this way; the rest keep their top
+  value. A Persona's level does nothing to a line that grows with Wonder's stats (still not tracked). Bulk
+  marks are undoable.
+  **A Persona's skills** (the user, Nov 2026): besides its unique skill and Highlight it has at most
+  `PERSONA_ACTIVE` (6) — the innate skills it has learned by its level, at most 3 skill cards (`cards`), and any
+  skill through fusion (`fused`). An innate skill can be replaced (`drop`, unticked in the popup), freeing its
+  slot. `personaFit` holds a record to that: whatever leaves more than six (a card, a level that teaches an
+  innate skill, an innate skill ticked back) costs the last fused skills first, then the last cards, and
+  `personaSet` returns what went for the toast. On load an old save's cards are fitted the same way, so a
+  Persona with four learned innate skills keeps two cards. **Every skill lufel lists can be chosen**, as a card
+  or fused, priced or not (`personaSkillNames`: `WONDER_SKILLS` plus every innate name), since an unpriced one
+  (Apt Pupil, Psy Boost) still takes a slot; the popup lists the priced ones first, and the Teams tab's card boxes
+  list every skill too, or an unpriced card would be cleared on the next edit there. `WONDER_SKILLS` is written by
+  `tools/gen-wonder-skills.js` from lufel's `/data/kr/wonder/skills.js`: each skill's kind and, for an active one,
+  its numbers at skill levels 6/7/8 (`sv`); lufel's rank summaries ("Attack Boost" beside Attack Boost I-V) are
+  left out, and an old card "Auto-Mataru" reads as Auto-Mataru IV. **All of a Persona's skills are at its skill
+  level** (the user): an innate skill, card or fused skill is priced as the `WONDER_BUFFS.cards` entry of its name
+  through `personaSkillLines`, each number at that level by `WONDER_SKILLS.sv` (an innate one falling back on the
+  Persona's own table), a per-stat bonus scaled by its cap (Rebellion 10.2% + up to 7.0% at level 8, 9.3% + 6.4%
+  at 6). Until then a card kept its top value. A skill is cast only while its Persona is in use; every reader of
+  a slot's skills goes through `wonderSkills(p)`, and the suggestion (`tcWonderBest`) keeps each Persona's fused
+  skills like its cards.
   **`tcWonderBest` suggests three Personas with the skill cards each has learned** (the user asked for no
   cards before the collection existed; the default collection has none): the weapon, then each
   slot the Persona that adds most to the others, or, when none adds anything (his six actions are
