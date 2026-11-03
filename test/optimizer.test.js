@@ -2572,6 +2572,100 @@ function awarenessOverrideDrift() {
   await p.setViewportSize({ width: 1280, height: 720 });
   check('on a phone-width screen the Optimise tab does not scroll sideways (its tables scroll inside themselves)', phone <= 390, `${phone}px wide`);
 
+  // the Personas tab: one row a released Persona, edits through commit(), bulk marks with undo, phone width,
+  // and the collection through a save file — and a save from before it starts with everything owned
+  await p.setViewportSize({ width: 390, height: 844 });
+  const psPhone = await p.evaluate(() => { showTab('personas'); const w = document.documentElement.scrollWidth; return w; });
+  await p.setViewportSize({ width: 1280, height: 720 });
+  const psUi = await p.evaluate(() => new Promise(res => {
+    const keepP = JSON.stringify(state.personas), keepW = JSON.stringify(state.wonder);
+    showTab('personas');
+    const card = n => document.querySelector(`#psGrid [data-ps="${n}"]`);
+    const r = { rows: document.querySelectorAll('#psGrid [data-ps]').length, names: personaNames().length,
+      unrelListed: WONDER_UNRELEASED.some(n => card(n)), art: !!card('Shiva').querySelector('img[src="art/persona-shiva.webp"]') };
+    markSaved();
+    // the card's own button marks it, with an undo
+    card('Shiva').querySelector('[data-ps-own]').click();
+    r.unowned = !personaRec('Shiva').own && !wonderPersonas().includes('Shiva') && isDirty() && card('Shiva').classList.contains('psOff') && !document.getElementById('dlg').open;
+    undo();
+    r.ownUndone = personaRec('Shiva').own;
+    // the card itself opens the popup; an edit there applies at once and the popup keeps its fields
+    card('Shiva').click();
+    const B = document.getElementById('dlgBody');
+    r.popup = document.getElementById('dlg').open && B.dataset.view === 'persona' && B.dataset.name === 'Shiva';
+    const tal = document.getElementById('psDTal');
+    tal.value = '0'; tal.dispatchEvent(new Event('change', { bubbles: true }));
+    r.tal = personaRec('Shiva').tal;
+    r.sameField = document.getElementById('psDTal') === tal;
+    r.listed = /not at this talent rank|top 45/.test(document.getElementById('psDOut').textContent);
+    r.cardShows = /Talent Base/.test(card('Shiva').textContent);
+    const c0 = document.querySelector('[data-psd-card="0"]');
+    c0.value = 'Rebellion'; c0.dispatchEvent(new Event('change', { bubbles: true }));
+    r.cardSet = personaRec('Shiva').cards.join(',') === 'Rebellion' && /Rebellion/.test(document.getElementById('psDOut').textContent);
+    r.labels = [...B.querySelectorAll('input, select')].every(x => x.labels && x.labels.length);
+    personaSet('Shiva', { cards: [] });
+    document.getElementById('dlg').close();
+    // Enter on a focused card opens it too
+    card('Alice').dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
+    r.keyOpen = document.getElementById('dlg').open && B.dataset.name === 'Alice';
+    document.getElementById('dlg').close();
+    document.getElementById('psQ').value = 'shiva'; document.getElementById('psQ').dispatchEvent(new Event('input'));
+    r.filtered = document.querySelectorAll('#psGrid [data-ps]').length;
+    document.getElementById('psAllOff').click();
+    r.bulkOff = !personaRec('Shiva').own && personaRec('Alice').own;
+    undo();
+    r.undone = personaRec('Shiva').own;
+    document.getElementById('psQ').value = ''; renderPersonas();
+    // through a save file
+    personaSet('Pixie', { own: false, lv: 30 }); personaSet('Alice', { cards: [Object.keys(WONDER_BUFFS.cards)[0]] });
+    const payload = savePayload(), json = JSON.stringify(payload);
+    r.inSave = !!(payload.settings.personas && payload.settings.personas.Pixie && payload.settings.personas.Pixie.own === false);
+    state.personas = null;
+    load(new File([json], 'p5x-planner-save.json', { type: 'application/json' }));
+    setTimeout(() => {
+      r.back = !personaRec('Pixie').own && personaRec('Pixie').lv === 30 && personaRec('Alice').cards.length === 1 && personaRec('Shiva').tal === 0 && !isDirty();
+      showTab('personas');
+      r.redrawn = /not obtained/.test(document.querySelector('#psGrid [data-ps="Pixie"]').textContent);
+      // a save from before the section: every released Persona owned, the old setup's cards on their Persona
+      const old = JSON.parse(json);
+      delete old.settings.personas;
+      old.settings.wonder = { personas: [{ name: 'Alice', cards: ['Rebellion', 'not a card'] }], weapon: '', refine: 1 };
+      load(new File([JSON.stringify(old)], 'old-save.json', { type: 'application/json' }));
+      setTimeout(() => {
+        r.oldAll = personaNames().every(n => personaRec(n).own);
+        r.oldCards = personaRec('Alice').cards.join(',');
+        r.oldSetup = wonderSetup().personas[0].cards.join(',');
+        state.personas = JSON.parse(keepP); state.wonder = JSON.parse(keepW); commit(); markSaved(); showTab('roster');
+        res(r);
+      }, 400);
+    }, 400);
+  }));
+  check('the Personas tab shows a card for every Persona out on Global; a card opens its popup (click or Enter), whose edits apply at once and keep their fields; the card\'s button and the bulk marks undo; it filters',
+    psUi.rows === psUi.names && !psUi.unrelListed && psUi.art && psUi.unowned && psUi.ownUndone && psUi.popup && psUi.tal === 0 && psUi.sameField && psUi.listed && psUi.cardShows &&
+    psUi.cardSet && psUi.labels && psUi.keyOpen && psUi.filtered === 1 && psUi.bulkOff && psUi.undone, JSON.stringify(psUi));
+  check('the Persona collection goes through a save file, and a save from before it starts with every released Persona owned and the old setup\'s skill cards on their Persona',
+    psUi.inSave && psUi.back && psUi.redrawn && psUi.oldAll && psUi.oldCards === 'Rebellion' && psUi.oldSetup === 'Rebellion,,', JSON.stringify(psUi));
+  check('on a phone-width screen the Personas tab does not scroll sideways', psPhone <= 390, `${psPhone}px wide`);
+  // the Personas tab's sort: rarity, highest first, by default; kept in the save's prefs
+  const psSortUi = await p.evaluate(() => {
+    showTab('personas');
+    const sel = document.getElementById('psSort'), stars = () => [...document.querySelectorAll('#psGrid [data-ps]')].map(c => WONDER_PERSONA[c.dataset.ps].r);
+    const keep = sel.value;
+    const r = { def: sel.options[sel.selectedIndex].defaultSelected && sel.value === 'rarity' };
+    const s = stars();
+    r.highFirst = s[0] === 5 && s.every((x, i) => !i || s[i - 1] >= x);
+    sel.value = 'name'; sel.dispatchEvent(new Event('change'));
+    const names = [...document.querySelectorAll('#psGrid [data-ps]')].map(c => c.dataset.ps);
+    r.byName = names.every((x, i) => !i || names[i - 1].localeCompare(x) <= 0);
+    r.saved = collectPrefs().psSort === 'name' && savePayload().prefs.psSort === 'name';
+    sel.value = 'rarity'; applyPrefs({ psSort: 'rarity-asc' }); renderPersonas();
+    r.restored = sel.value === 'rarity-asc' && stars()[0] === Math.min(...stars());
+    sel.value = keep; renderPersonas(); showTab('roster');
+    return r;
+  });
+  check('the Personas tab sorts by rarity, highest first, by default; another order applies at once and goes into the save\'s prefs and back',
+    psSortUi.def && psSortUi.highFirst && psSortUi.byName && psSortUi.saved && psSortUi.restored, JSON.stringify(psSortUi));
+
   // Save / load round trip through the real load() path, with an in-page File
   const roundTrip = await p.evaluate(() => new Promise(res => {
     const prefsBefore = collectPrefs();
@@ -2974,6 +3068,143 @@ function awarenessOverrideDrift() {
     const manaka = F => { setF(F); return tcMember(ann, 'Manaka Nagao', null, null, false).vec.xturns; };
     out.dacapo = [manaka(12), manaka(6)];
     setF(12);
+    /* Summer Ichigo's Ram (TC_RAM): Heart's Desire makes the damage dealer the Helmsman, who rams at the end of
+       their turn and steps down (from A6 keeps the helm); the Boat is the crew's max HP plus Wonder's at their
+       mean; a Seal needs another Psy (Skill 1) or [Summer] (Skill 2) member; the HP part does not grow with ATK;
+       the quick screen sees it */
+    {
+      const ich = 'Ichigo Shikano [Summer]', ryu = 'Ryuji Sakamoto';
+      const keepIT = TEAMS[ich], keepIL = state.chars[ich].loadout, keepRB = TEAM_BUFFS[ryu], keepSp = tmSpeed;
+      TEAMS[ich] = { rot: [{ aw: 0, label: 'Test', seq: ['1', '3'] }] };
+      tmSpeed = n => n === ich ? 200 : n === 'Ann Takamaki' ? 100 : 50;
+      const run = (aw, atk) => {
+        state.chars[ich].loadout = Object.assign({}, DEFAULT_LOADOUT, { awareness: aw });
+        TEAM_BUFFS[ryu] = atk ? [{ k: 'atk%', v: 100, to: 'party', src: 'passive', why: 'test: party ATK' }] : [];
+        tcMemo.key = '';
+        return tcSim(ann, [ich, ryu, null], false);
+      };
+      const a6 = run(6, false), a0atk = run(0, true), a0 = run(0, false);
+      const R = tcRamFor(ann, [ich, ryu, null]);
+      const hpA = tcStat('Ann Takamaki', 'HP'), hpI = tcStat(ich, 'HP'), hpR = tcStat(ryu, 'HP');
+      const vi = tcMember(ann, ich, null, null, false).vec;
+      out.ram = {
+        rams: [a0.rams, a6.rams], none: tcSim(ann, [ryu, null, null], false).rams,
+        boat: R.boat / ((hpA + hpI + hpR) * 4 / 3), seal: [R.sealOn[1], R.sealOn[2], tcRamFor(charDef('Haru Okumura'), [ich, null, null]).sealOn[1]],
+        dm: R.dm, ramGrow: a0atk.parts.ram / a0.parts.ram, skillGrow: a0atk.parts.skill / a0.parts.skill,
+        quick: [tcMultiplier(ann, [vi]), tcMultiplier(ann, [Object.assign({}, vi, { ram: null })])], fight: tcSim(ann, [ich, null, null], false).mult
+      };
+      TEAMS[ich] = keepIT; state.chars[ich].loadout = keepIL; TEAM_BUFFS[ryu] = keepRB; tmSpeed = keepSp; tcMemo.key = '';
+    }
+    /* The twins' Skill Amplification (Two Masks as One, Strategist masks): the damage dealer's skill hits and the
+       skill buffs the other allies cast while it is up are that much stronger; a passive and a Highlight are not;
+       the quick screen sees it */
+    {
+      const jc = 'Justine & Caroline', ryu = 'Ryuji Sakamoto';
+      const keep = { jb: TEAM_BUFFS[jc], jt: TEAMS[jc], rb: TEAM_BUFFS[ryu], rt: TEAMS[ryu], sp: tmSpeed };
+      const amp = keep.jb.find(e => e.k === 'skillAmp');
+      TEAMS[jc] = { rot: [{ aw: 0, label: 'Test', seq: ['3'] }] };
+      TEAMS[ryu] = { rot: [{ aw: 0, label: 'Test', seq: ['1'] }] };
+      tmSpeed = n => n === jc ? 300 : n === ryu ? 200 : n === 'Ann Takamaki' ? 100 : 50;
+      const run = (on, src) => {
+        TEAM_BUFFS[jc] = on ? [amp] : [];
+        TEAM_BUFFS[ryu] = [{ k: 'atk%', v: 40, to: 'party', src, on: src === '1' ? '1' : undefined, dur: 3, why: 'test: ATK' }];
+        tcMemo.key = '';
+        const S = tcSim(ann, [jc, ryu, null], false);
+        return { skill: S.parts.skill, hl: S.parts.hl || 0, quick: tcMultiplier(ann, [tcMember(ann, jc, null, null, false).vec, tcMember(ann, ryu, null, null, false).vec]) };
+      };
+      const s1 = [run(false, '1'), run(true, '1')], ps = [run(false, 'passive'), run(true, 'passive')];
+      Object.assign(TEAM_BUFFS, { [jc]: keep.jb, [ryu]: keep.rb }); Object.assign(TEAMS, { [jc]: keep.jt, [ryu]: keep.rt }); tmSpeed = keep.sp; tcMemo.key = '';
+      out.skillAmp = { has: !!amp, skill: s1[1].skill / s1[0].skill, passive: ps[1].skill / ps[0].skill, hl: ps[0].hl ? ps[1].hl / ps[0].hl : 1, quick: ps[1].quick / ps[0].quick };
+    }
+    /* Yumi's Cocktails (TC_CK): Mixers from allies' damaging hits by element, Tailor-Made from one element and
+       Standard or Basic from a mix; Invigorating Blend spends them all, Tempting Build its best one; her Skill 3
+       lines raise the damage dealer's damage; no Cocktails without her */
+    {
+      const yu = 'Yumi Shiina', ryu = 'Ryuji Sakamoto';
+      const keep = { yt: TEAMS[yu], yl: state.chars[yu].loadout, rt: TEAMS[ryu], at: TEAMS['Ann Takamaki'], yb: TEAM_BUFFS[yu] };
+      state.chars[yu].loadout = Object.assign({}, DEFAULT_LOADOUT, { awareness: 0 });
+      TEAMS[ryu] = { rot: [{ aw: 0, label: 'Test', seq: ['1'] }] };
+      TEAMS['Ann Takamaki'] = Object.assign({}, keep.at, { rot: [{ aw: 0, label: 'Test', seq: ['1'] }] });
+      const run = (seq, mates, lines) => {
+        TEAMS[yu] = { rot: [{ aw: 0, label: 'Test', seq }] };
+        TEAM_BUFFS[yu] = lines || keep.yb;
+        tcMemo.key = '';
+        return tcSim(ann, mates.concat([yu]), false);
+      };
+      const s3 = ['3', '-', '-', '-'];
+      const mono = run(s3, [null, null]), mixed = run(s3, [ryu, null]), s1 = run(['1'], [null, null]);
+      const off = run(s3, [null, null], keep.yb.filter(e => e.ck !== 'all' && e.ck !== 'std2'));
+      out.ck = { mono: mono.cocktails, mixed: mixed.cocktails, s1: s1.cocktails, gain: mono.total / off.total, none: tcSim(ann, [null, null, 'Fuuka Yamagishi'], false).cocktails };
+      Object.assign(TEAMS, { [yu]: keep.yt, [ryu]: keep.rt, 'Ann Takamaki': keep.at }); TEAM_BUFFS[yu] = keep.yb; state.chars[yu].loadout = keep.yl; tcMemo.key = '';
+    }
+    /* Tempest Riko's SP (TC_RK): Blossoming Season spends all of it, its tiers at 1% strength per 2 SP and only
+       from their thresholds; her turns refill it at SP Recovery; A2 refunds 50 and raises the max to 250 */
+    {
+      const st = (aw, rec, sp) => ({ aw, max: aw >= 2 ? 250 : 200, sp, rec, casts: 0, spent: 0, low: 0 });
+      const full = tcRkStep(st(0, 1, 200), '3');
+      const a = st(0, 1, 200); tcRkStep(a, '3'); const after3 = a.sp; tcRkStep(a, '2'); const low = tcRkStep(a, '3');
+      const quarter = tcRkStep(st(0, 4.801, 0), '3');
+      const b = st(2, 1, 250), a2 = tcRkStep(b, '3');
+      const ri = 'Riko Tanemura [Tempest]', keep = { rt: TEAMS[ri], rb: TEAM_BUFFS[ri], at: TEAMS['Ann Takamaki'] };
+      TEAMS['Ann Takamaki'] = Object.assign({}, keep.at, { rot: [{ aw: 0, label: 'Test', seq: ['1'] }] });
+      TEAMS[ri] = { rot: [{ aw: 0, label: 'Test', seq: ['3', '2'] }] };
+      const run = lines => { TEAM_BUFFS[ri] = lines; tcMemo.key = ''; return tcSim(ann, [ri, null], false); };
+      const on = run(keep.rb), off = run(keep.rb.filter(e => !e.spT));
+      out.rk = { full, after3, low, lowCount: a.low, quarter, a2, a2sp: b.sp, sp: on.rikoSp, gain: on.total / off.total,
+        none: tcSim(ann, [null, null], false).rikoSp };
+      Object.assign(TEAMS, { [ri]: keep.rt, 'Ann Takamaki': keep.at }); TEAM_BUFFS[ri] = keep.rb; tcMemo.key = '';
+    }
+    // Ryuji's Fearless Charge (A2): Pierce 35 on his skill hits, nothing below A2
+    {
+      const ryu = 'Ryuji Sakamoto', R = charDef(ryu), keep = { lo: state.chars[ryu].loadout, kb: DPS_KIT_BONUS[ryu] };
+      const at = (aw, lines) => { state.chars[ryu].loadout = Object.assign({}, DEFAULT_LOADOUT, { awareness: aw }); DPS_KIT_BONUS[ryu] = lines; tcMemo.key = ''; return tcSim(R, [null, null], false).total; };
+      const off = keep.kb.filter(b => b.k !== 'pierce');
+      out.ryuPie = { a0: at(0, keep.kb) / at(0, off), a2: at(2, keep.kb) / at(2, off) };
+      state.chars[ryu].loadout = keep.lo; DPS_KIT_BONUS[ryu] = keep.kb; tcMemo.key = '';
+    }
+    // Radiance Motoha's Twilight Radiance stats (DPS_KIT_BONUS `k`): ATK per Light and crit damage on her Highlight only
+    {
+      const mo = 'Motoha Arai [Radiance]', M = charDef(mo), keep = { lo: state.chars[mo].loadout, kb: DPS_KIT_BONUS[mo] };
+      const at = (aw, lines) => { state.chars[mo].loadout = Object.assign({}, DEFAULT_LOADOUT, { awareness: aw }); DPS_KIT_BONUS[mo] = lines; tcMemo.key = ''; const s = tcSim(M, [null, null], false); return { total: s.total, parts: s.base ? s.base.parts : s.parts }; };
+      const off = keep.kb.filter(b => !b.k);
+      const a0 = at(0, keep.kb), a0off = at(0, off), a4 = at(4, keep.kb), a4off = at(4, off);
+      out.motohaHl = { a0: a0.total / a0off.total, a4: a4.total / a4off.total, skill: a0.parts && a0off.parts ? (a0.parts.skill || 0) / (a0off.parts.skill || 1) : null };
+      state.chars[mo].loadout = keep.lo; DPS_KIT_BONUS[mo] = keep.kb; tcMemo.key = '';
+    }
+    // Miku's own Skill Amplification (TC_SELF_AMP): each line's value with it over without it
+    {
+      const mk = 'Hatsune Miku', keep = { lo: state.chars[mk].loadout, amp: TC_SELF_AMP[mk] };
+      const vals = (aw, weapon) => {
+        state.chars[mk].loadout = Object.assign({}, DEFAULT_LOADOUT, { awareness: aw, weapon, refine: 1 }); tcMemo.key = '';
+        const o = {}; tcMemberCalc(ann, mk, null).lines.forEach(l => { o[l.why.slice(0, 70)] = (o[l.why.slice(0, 70)] || 0) + l.v; }); return o;
+      };
+      const ratio = (aw, weapon) => { const on = vals(aw, weapon); delete TC_SELF_AMP[mk]; const off = vals(aw, weapon); TC_SELF_AMP[mk] = keep.amp;
+        const r = {}; Object.keys(off).forEach(k => { r[k] = on[k] / off[k]; }); return r; };
+      const pick = (r, re) => { const k = Object.keys(r).find(x => re.test(x)); return k ? r[k] : null; };
+      out.mikuAmp = [[0, '5'], [1, '5'], [1, '4']].map(([aw, w]) => { const r = ratio(aw, w);
+        return { aw, w, beat: pick(r, /^Feel the Beat \(Skill 1\)/), show: pick(r, /^Showstopper \(Skill 3\): party crit/), turns: pick(r, /^Showstopper \(Skill 3\): Virtual Concert stops/), weapon: pick(r, /^Light Up Your World \(5-star weapon\): party crit damage up, u/) }; });
+      state.chars[mk].loadout = keep.lo; tcMemo.key = '';
+    }
+    // Kotone Shiomi's weapon Skill Amplification from Lunar Bond 5 (round 3 at A0, round 1 from A1)
+    {
+      const ko = 'Kotone Shiomi', s1 = TEAM_BUFFS[ko].find(e => String(e.src) === '1'), hl = TEAM_BUFFS[ko].find(e => e.src === 'HL');
+      const lo = (w, aw) => Object.assign({}, DEFAULT_LOADOUT, { weapon: w, refine: 1, awareness: aw });
+      out.kotoneAmp ={ r2: tcSelfAmp(ko, s1, lo('5', 0), 0, 2), r3: tcSelfAmp(ko, s1, lo('5', 0), 0, 3), a1: tcSelfAmp(ko, s1, lo('5', 1), 1, 1),
+        w4: tcSelfAmp(ko, s1, lo('4', 0), 0, 5), hl: tcSelfAmp(ko, hl, lo('5', 0), 0, 5), mean: tcSelfAmp(ko, s1, lo('5', 0), 0), F: tcFight() };
+      const keepLo = state.chars[ko].loadout;
+      state.chars[ko].loadout = lo('5', 0); tcMemo.key = '';
+      const evs = tcMember(ann, ko, null, null, false).sim.events;
+      out.kotoneAmp.ev = evs.some(ev => String(ev.e.src) === '1' && ev.ampAt) && !evs.some(ev => ev.e.src === 'HL' && ev.ampAt);
+      state.chars[ko].loadout = keepLo; tcMemo.key = '';
+    }
+    // the search's lead fights at least as well, fully fitted, as the best listed team of every Elucidator
+    if (tmFitOn()) {
+      tcMemo.key = '';
+      const found = tcSearch(ann, 8), seen = new Set(), per = [];
+      found.forEach(t => { if (!seen.has(t.names[2])) { seen.add(t.names[2]); per.push(t); } });
+      const full = t => tcSim(ann, t.names, 'full').mult;
+      out.searchLead = { lead: full(found[0]), elus: per.map(t => ({ e: t.names[2], m: full(t) })) };
+    }
     // Wonder's Highlight: from his Persona whose Highlight does most
     const real = Object.assign({}, WONDER_BUFFS), keepW = state.wonder;
     Object.assign(WONDER_BUFFS, { personas: { P: [{ k: 'dmg', v: 30, to: 'party', src: 'HL', dur: 2, why: 'p' }], Q: [{ k: 'dmg', v: 10, to: 'party', src: 'HL', dur: 2, why: 'q' }] }, cards: {}, weapons: {} });
@@ -3128,6 +3359,21 @@ function awarenessOverrideDrift() {
     setSel('#tmFoes', 3);
     out.oneConst = [ryu(ddc('test: the target\'s DEF down')).mult, ryu(ddc('test: all foes\' DEF down')).mult];
     setSel('#tmFoes', 1);
+    /* effects that do not stack (`excl`): both cast on every turn, only the larger counts on a foe; with three
+       foes the all-foe one still reaches the foes the one-foe one misses */
+    const exA = { k: 'defdown', v: 40, to: 'enemy', foes: 'one', src: '2', on: '1', dur: 2, why: 'test: one foe' };
+    const exB = { k: 'defdown', v: 30, to: 'enemy', foes: 'all', src: '1', on: '1', dur: 2, why: 'test: all foes' };
+    const exX = e => Object.assign({}, e, { excl: 'def' });
+    out.excl = { drop: [], quick: null };
+    [1, 3].forEach(f => { setSel('#tmFoes', f); out.excl['f' + f] = { a: ryu([exA]).mult, excl: ryu([exX(exA), exX(exB)]).mult, stack: ryu([exA, exB]).mult }; });
+    setSel('#tmFoes', 1);
+    const bx = (xs, v) => ({ b: { excl: 'R|def|defdown', xs }, v });
+    const l1 = [bx('1', 26.4), bx('1', 26.4), bx('2', 68.3)], l2 = [bx('1', 26.4), bx('1', 26.4), bx('2', 50)];
+    out.excl.drop = [[...tcExclDrop(l1)].map(b => b.xs).join(','), [...tcExclDrop(l2)].map(b => b.xs).join(',')];
+    const us = [{ e: { excl: 'def', src: '2' }, k: 'defdown', v: 40, up: 0.75 }, { e: { excl: 'def', src: '1' }, k: 'defdown', v: 30, up: 0.5 }];
+    tcExclQuick(us); out.excl.quick = us.map(u => u.up);
+    const runaL = TEAM_BUFFS['Runa Dogenzaka'].filter(e => e.k === 'defdown' && e.excl);
+    out.excl.runa = runaL.map(e => e.src + ':' + (tcOneFoe(e) ? 'one' : 'all')).join(',');
     // Almighty (noWeak) takes no weakness bonus: a weakness-damage buff leaves that hit alone
     const keepDK = DPS_KIT[ann.n];
     setSel('#tmWeak', 'all');
@@ -3301,6 +3547,28 @@ function awarenessOverrideDrift() {
       best: Math.abs(mFree.mult - Math.max(...mForced)) < 1e-9 && mOpts.some(o => o.id === mFree.pairs[MIN]),
       text: tmTokenText('ⓘA+2', tcMedInfo('res.atk.dmg').meds)
     };
+    // her Highlight strengthens her next medicine (+9.8% at the base tier, 5% more from A4); Soothing Sunlight's
+    // Blessing stacks come one a Summer Garden or Gentle Sea Breeze and stay
+    {
+      const L0 = state.chars[MIN] ? state.chars[MIN].loadout : undefined;
+      if (!state.chars[MIN]) state.chars[MIN] = { owned: false };
+      state.chars[MIN].loadout = Object.assign({}, DEFAULT_LOADOUT, { awareness: 0 });
+      const b0 = tcMedHlBoost();
+      state.chars[MIN].loadout = Object.assign({}, DEFAULT_LOADOUT, { awareness: 4 });
+      const b4 = tcMedHlBoost(), t4 = [9.8, 10.8, 10.4, 11.4][kitTierIndex(charDef(MIN), charLoadout(MIN))] / 100;
+      state.chars[MIN].loadout = L0;
+      const hlB = window.tcMedHlBoost;
+      const fight = () => { tcMemo.key = ''; tcPairCtx = { [MIN]: 'dmg.atk.hl' }; const S = tcSim(ann, minTeam, false); tcPairCtx = null; return S; };
+      const withB = fight();
+      window.tcMedHlBoost = () => 0; const noB = fight(); window.tcMedHlBoost = hlB; tcMemo.key = '';
+      const sl = TEAM_BUFFS[MIN].find(e => /^Soothing Sunlight/.test(e.why)), slRef = TEAM_BUFFS[MIN].indexOf(sl);
+      const seat = tcMemberCalc(ann, MIN, null, null, false, 'dmg.atk.hl').lines.find(l => /^Soothing Sunlight/.test(l.why));
+      const cov = [...(withB.cover.get(MIN) || new Map()).values()];
+      out.medHl = { b0, b4, t4, withB: withB.total, noB: noB.total, hl: withB.hl[MIN] || 0,
+        build: !!sl.build && sl.build['2'] === 2 && sl.build['3'] === 1 && sl.up == null && sl.stacks === 6, slRef,
+        mean6: tcBuildMean(['3', 'ⓘA+2', '1'], sl, 6), mean12: tcBuildMean(['3', 'ⓘA+2', '1'], sl, 12),
+        seatV: seat ? seat.v : null, seatUp: seat ? seat.up : null, covMax: cov.length ? Math.max(...cov) : null };
+    }
     // Wonder: a Persona's innate skills count as the card of that name; the suggestion is three Personas
     // and no cards; one skill from two sources counts once; his six turns name the Persona and the skill
     const slotW = n => ({ name: n, cards: ['', '', ''] });
@@ -3313,6 +3581,93 @@ function awarenessOverrideDrift() {
       rebellion: two.lines.filter(l => /Rebellion/.test(l.why)).length, once: two.idle.some(x => /the same buff as/.test(x)),
       turns: kou.turns.length === 6 && kou.turns.every(t => t.persona === 'Koumokuten'),
       listed: wonderPersonas().includes('Kodama') && wonderPersonas().includes('Ose') };
+    // an on-cast passive fires only on casts of the kind it names (`castOn`): one needing a skill on an ally
+    // never fires on an attack turn, and a Persona with an ally skill recasts it on its idle turns instead
+    {
+      const realW = Object.assign({}, WONDER_BUFFS);
+      const pass = to => ({ k: 'cm', v: 30, to: 'ally', src: 'passive', dur: 2, onCast: true, castOn: to, why: 'p' });
+      Object.assign(WONDER_BUFFS, { cards: {}, weapons: {}, personas: {
+        F: [pass('ally'), { k: 'defdown', v: 10, to: 'enemy', src: 'unique', dur: 2, why: 'f' }],
+        A: [pass('ally'), { k: 'cr', v: 10, to: 'ally', src: 'unique', dur: 3, why: 'a' }],
+        G: [pass('foe'), { k: 'cr', v: 10, to: 'ally', src: 'unique', dur: 3, why: 'g' }] } });
+      const one = n => tcWonder(ann, { personas: [slotW(n), slotW(''), slotW('')], weapon: '', refine: 1 });
+      const upOf = w => (w.lines.find(l => l.why.endsWith(': p')) || { up: 0 }).up;
+      const f = one('F'), a = one('A'), g = one('G');
+      Object.assign(WONDER_BUFFS, realW); tcMemo.key = '';
+      out.castOn = { f: upOf(f), fTurns: f.turns.filter(t => t.what === 'attack').length,
+        a: upOf(a), aAgain: a.turns.filter(t => / again$/.test(t.what)).length, aSeq: a.sim.cast.seq.filter(t => t === 'wr').length,
+        g: upOf(g), gTurns: g.turns.filter(t => t.what === 'attack').length };
+    }
+    // Ice Age's Ancient Frost (`allyCast`): on at battle start for 3 turns, renewed only by a skill cast on an ally
+    // alone — not by an attack, nor by a skill on a foe that also buffs allies (Janosik's Tatra Shot)
+    {
+      const realW = Object.assign({}, WONDER_BUFFS);
+      Object.assign(WONDER_BUFFS, { cards: {},
+        weapons: { IA: [{ k: 'dmg', v: 20, to: 'ally', src: 'weapon', dur: 3, allyCast: true, why: 'frost' }] },
+        personas: {
+          M: [{ k: 'defdown', v: 30, to: 'enemy', src: 'unique', dur: 2, why: 'm' }, { k: 'atk%', v: 20, to: 'party', src: 'unique', dur: 2, why: 'm2' }],
+          A: [{ k: 'atk%', v: 20, to: 'party', src: 'unique', dur: 3, why: 'a' }] } });
+      const run = n => {
+        const s = { personas: [slotW(n), slotW(''), slotW('')], weapon: 'IA', refine: 1 };
+        tcMemo.key = '';
+        const w = tcWonder(ann, s), ref = w.lines.findIndex(l => l.why.endsWith(': frost'));
+        const ev = w.sim.cast.events.find(x => x.ref === ref);
+        const S = tcSim(ann, ['Ryuji Sakamoto', null, null], false, false, s);
+        return { up: w.lines[ref].up, on: ev ? [].concat(ev.e.on).join(',') : '', fight: (S.cover.get('Wonder') || new Map()).get(ref) || 0, turns: w.turns.map(t => t.what).join(',') };
+      };
+      const m = run('M'), a = run('A'), none = run('');
+      Object.assign(WONDER_BUFFS, realW); tcMemo.key = '';
+      out.frost = { F: tcFight(), m, a, none };
+    }
+    // a slot's shortlist keeps the quick screen's best that take none of his turns even when Personas that want
+    // a turn fill its top (Kohryu's reserve passive was crowded out for Wavecatcher Miyu that way)
+    {
+      const rows = [...Array(8)].map((_, i) => ['T' + i, 30 - i, 1, false]).concat([['R', 10, 1, true], ['R2', 9, 1, true], ['R3', 8, 1, true], ['R4', 7, 1, true]]);
+      out.wbIdle = { sh: tcWbShort(rows).join(','), top: TC_WB_SHORT, idle: TC_WB_IDLE };
+    }
+    // a Persona Global does not have yet is never offered, suggested, kept from a save or listed in the dropdown
+    {
+      const un = WONDER_UNRELEASED.slice(), keep = state.wonder;
+      state.wonder = { personas: [{ name: un[0], cards: ['', '', ''] }, { name: 'Succubus', cards: ['', '', ''] }], weapon: '', refine: 1 };
+      const kept = wonderSetup().personas.map(p => p.name);
+      renderTmPicker();
+      const opts = [...document.querySelectorAll('#tmWP0 option')].map(o => o.value);
+      out.unrel = { un, offered: un.filter(n => wonderPersonas().includes(n)), suggested: sug.personas.filter(p => un.includes(p.name)).map(p => p.name),
+        kept, inSelect: un.filter(n => opts.includes(n)), note: $('#tmWUnrel').textContent, priced: un.filter(n => WONDER_BUFFS.personas[n]).length };
+      state.wonder = keep; renderTmPicker();
+    }
+    // the Personas section: owned, level, talent rank and skill level decide what Wonder's Personas do
+    {
+      const keepP = state.personas, keepW = state.wonder, one = n => ({ personas: [{ name: n, cards: personaCards(n) }, { name: '', cards: ['', '', ''] }, { name: '', cards: ['', '', ''] }], weapon: '', refine: 1 });
+      const vals = n => tcWonder(ann, one(n)).lines.map(l => `${l.k}:${l.v}`).sort().join(' ');
+      state.personas = null;
+      const first = { all: personaNames().every(n => personaRec(n).own), noUnrel: !WONDER_UNRELEASED.some(n => n in personasState()), saved: Object.keys(personasSaved()).length === personaNames().length };
+      // talent rank: Janosik's crit lines arrive at Hunting IV and the 12% DEF cut at III; Shiva's DEF cut is 30% below rank II, 45% from it
+      const jTop = vals('Janosik'); personaSet('Janosik', { tal: 0 }); const jBase = vals('Janosik');
+      const sTop = vals('Shiva'); personaSet('Shiva', { tal: 0 }); const sBase = vals('Shiva');
+      // skill level: a unique-skill value lufel prints as a/b/c takes the level's
+      personaSet('Shiva', { tal: personaTop('Shiva'), sk: 6 }); const sSk6 = vals('Shiva');
+      // level: an innate skill counts from the level it is learned at
+      const inn = personaNames().find(n => wonderInnate(n).some(x => (WONDER_PERSONA[n].learn[x] || 1) > 1));
+      const innSk = wonderInnate(inn).find(x => WONDER_PERSONA[inn].learn[x] > 1), at = WONDER_PERSONA[inn].learn[innSk];
+      personaSet(inn, { lv: at }); const innOn = wonderInnateHere(inn).includes(innSk);
+      personaSet(inn, { lv: at - 1 }); const innOff = !wonderInnateHere(inn).includes(innSk);
+      // a skill card is its Persona's: taught to one, it is in the setup's slot and in the save
+      personaSet('Alice', { cards: ['Rebellion', 'Rebellion', 'no such card'] });
+      state.wonder = { personas: [{ name: 'Alice', cards: [] }] };
+      const aliceCards = wonderSetup().personas[0].cards.join(',');
+      // not owned: never offered, never suggested, dropped from the setup; a round trip keeps every field
+      personaSet('Shiva', { own: false }); state.wonder = { personas: [{ name: 'Shiva' }, { name: 'Alice' }] };
+      const setupAfter = wonderSetup().personas.map(p => p.name).join(',');
+      tcMemo.key = ''; const sugP = tcWonderBest(ann, []);
+      const saved = JSON.parse(JSON.stringify(personasSaved())), back = personasFrom(saved);
+      const same = JSON.stringify(back) === JSON.stringify(personasState());
+      delete saved.Alice;
+      const missing = !personasFrom(saved).Alice;
+      out.personas = { first, jTop, jBase, sTop, sBase, sSk6, inn, innSk, at, innOn, innOff, aliceCards, setupAfter, sug: sugP.personas.map(p => p.name), same, missing,
+        offered: wonderPersonas().includes('Shiva') };
+      state.personas = keepP; state.wonder = keepW; tcMemo.key = '';
+    }
     // Kira's Bleed: its Almighty part at the cap (60% of ATK a stack) makes damage over time most of his damage
     const kira = charDef('Kira Kitazato'); tcMemo.key = '';
     const kp = tcSimRun(tcSimPrep(kira, [null, null, null], false, true), [kira.n], false).parts;
@@ -3356,6 +3711,47 @@ function awarenessOverrideDrift() {
   check('a damage dealer\'s own Resonance counts, set off by teammates\' actions (Wavecatcher Miyu)', th.res > 0.05, String(th.res));
   check('Da Capo is extra actions over the fight; Wonder\'s Highlight is his best Persona\'s, fired from the gauge',
     near(th.dacapo[0], 2 / 12) && near(th.dacapo[1], 1 / 6) && JSON.stringify(th.wonder) === '{"lines":[30],"idle":1,"events":1}', JSON.stringify({ d: th.dacapo, w: th.wonder }));
+  {
+    const r = th.ram;
+    check('Summer Ichigo\'s Ram: one per Heart\'s Desire below A6 and every Helmsman turn after the first from A6, none without her; the Boat is the crew\'s max HP with Wonder at their mean; a Seal needs another Psy or [Summer] member; +25% per foe fewer than 5; the HP part does not grow with ATK; the quick screen sees it',
+      JSON.stringify(r.rams) === '[6,11]' && r.none === null && near(r.boat, 1) && JSON.stringify(r.seal) === '[false,false,true]' && r.dm === 100 &&
+      r.ramGrow > 1.001 && r.ramGrow < r.skillGrow - 0.05 && r.quick[0] > r.quick[1] * 1.05, JSON.stringify(r));
+  }
+  {
+    const a = th.skillAmp;
+    check('the twins\' Skill Amplification raises the damage dealer\'s skill hits and the skill buffs other allies cast under it, not a passive or a Highlight, and the quick screen sees it',
+      a.has && a.passive > 1.12 && a.passive < 1.18 && a.skill > a.passive + 0.005 && Math.abs(a.hl - 1) < 1e-9 && a.quick > 1.08, JSON.stringify(a));
+  }
+  {
+    const c = th.ck;
+    check('Yumi\'s Cocktails: one element makes Tailor-Made only, a mix makes Standard or Basic; Invigorating Blend spends them all (the first cast holds only the battle-start one), Tempting Build its best for x2.2; her Skill 3 raises the damage; none without her',
+      c.mono.casts >= 3 && c.mono.spent.S + c.mono.spent.B === 0 && c.mono.spent.T > c.mono.casts && c.mono.std2 < c.mono.casts && Math.abs(c.mono.sum - 1.2 * c.mono.spent.T) < 1e-9 &&
+      c.mixed.spent.S + c.mixed.spent.B > 0 && c.s1.one > 0 && Math.abs(c.s1.oneSum / c.s1.one - 2.2) < 1e-9 && c.gain > 1.03 && c.none === null, JSON.stringify(c));
+  }
+  {
+    const r = th.rk, all = (f, x) => [50, 100, 150].every(t => Math.abs(f[t] - x[t]) < 1e-9);
+    check('Tempest Riko\'s Blossoming Season: 200 SP is full strength and spends it all, under 50 SP nothing, 50 SP a turn at 480.1% gives the ATK tier at 25%, A2 is 125% and refunds 50; the fight follows her SP and the tiers raise the damage',
+      all(r.full, { 50: 1, 100: 1, 150: 1 }) && r.after3 === 0 && all(r.low, { 50: 0, 100: 0, 150: 0 }) && r.lowCount === 1 &&
+      Math.abs(r.quarter[50] - 0.25) < 1e-6 && r.quarter[100] === 0 && all(r.a2, { 50: 1.25, 100: 1.25, 150: 1.25 }) && r.a2sp === 50 &&
+      r.sp && r.sp.casts > 0 && r.sp.spent > 0 && r.gain > 1 && r.none === null, JSON.stringify(r));
+  }
+  check('Ryuji\'s Fearless Charge: Pierce 35 on his skills raises his damage from Awareness 2, and does nothing below it',
+    Math.abs(th.ryuPie.a0 - 1) < 1e-9 && th.ryuPie.a2 > 1.1, JSON.stringify(th.ryuPie));
+  check('Radiance Motoha\'s Twilight Radiance: ATK per Light and same-foe crit damage raise her Highlight, more from Awareness 4, and leave her skills alone',
+    th.motohaHl.a0 > 1.05 && th.motohaHl.a4 > th.motohaHl.a0 && (th.motohaHl.skill == null || Math.abs(th.motohaHl.skill - 1) < 1e-9), JSON.stringify(th.motohaHl));
+  {
+    const m = th.mikuAmp, near = (x, y) => x != null && Math.abs(x - y) < 1e-6;
+    check('Miku\'s Skill Amplification: 15% on her skills from Awareness 1, her 5-star weapon\'s 10% (R1) on what she casts in Virtual Concert, and never on a count or her weapon',
+      near(m[0].beat, 1) && near(m[0].show, 1.1) && near(m[1].beat, 1.15) && near(m[1].show, 1.25) && near(m[2].show, 1.15) &&
+      near(m[1].turns, 1) && near(m[0].turns, 1) && near(m[1].weapon, 1), JSON.stringify(m));
+  }
+  {
+    const k = th.kotoneAmp, near = (x, y) => Math.abs(x - y) < 1e-6;
+    check('Kotone Shiomi\'s 5-star weapon: 10% Skill Amplification on her skills from Lunar Bond 5 (round 3 at A0, round 1 from A1), at its share of the rounds on the quick screen, never on her Highlight',
+      near(k.r2, 1) && near(k.r3, 1.1) && near(k.a1, 1.1) && near(k.w4, 1) && near(k.hl, 1) && near(k.mean, 1 + 0.1 * Math.max(0, k.F - 2) / k.F) && k.ev, JSON.stringify(k));
+  }
+  check('the Teams search\'s lead is at least as strong, fully fitted, as the best listed team of each other Elucidator',
+    th.searchLead && th.searchLead.elus.length > 0 && th.searchLead.elus.every(x => x.m <= th.searchLead.lead + 1e-9), JSON.stringify(th.searchLead));
   check('Fuuka\'s backup fires their Highlight on the swap from her Awareness 2', th.backup[0] === 0 && th.backup[1] > 0, JSON.stringify(th.backup));
   check('skill numbers are read at the skill-level tier the Setup reaches',
     th.tiers.t0 === th.tiers.base && th.tiers.t3 > th.tiers.t0, JSON.stringify(th.tiers));
@@ -3441,6 +3837,33 @@ function awarenessOverrideDrift() {
   check('a cut waiting for the next hit knocks down sooner; a teammate\'s turn token ("Punch") fires their line; Kumi\'s Lightning Legs from a Skill 3 knockdown raises her next Skill 1',
     dn.nextCut.split(',').filter(Boolean).length > dn.nextPlain.split(',').filter(Boolean).length && dn.tokOff > dn.tokNone + 1e-6 && dn.ll > dn.noLl + 1e-6,
     JSON.stringify({ nextCut: dn.nextCut, nextPlain: dn.nextPlain, tokOff: dn.tokOff, tokNone: dn.tokNone, ll: dn.ll, noLl: dn.noLl }));
+  // Wonder's weapons: every one released on Global can be chosen, and Sennight Inferno's DEF cut waits for a knockdown
+  const ww = await p.evaluate(() => {
+    const ann = charDef('Ann Takamaki'), keep = state.wonder, e3 = { name: '', cards: ['', '', ''] };
+    const at = (weapon, pts) => {
+      state.wonder = { personas: [e3, e3, e3], weapon, refine: 7 };
+      $('#tmDown').value = String(pts); tcMemo.key = '';
+      return { mult: tcSim(ann, [null, null, null], false).mult, quick: tcWonder(ann).vec.defdown };
+    };
+    const out = { none0: at('', 0), si0: at('Sennight Inferno', 0), none3: at('', 3), si3: at('Sennight Inferno', 3) };
+    // Glimmer's Blessing, on the damage dealer: its Bless half only for a Bless one
+    const gl = d => { state.wonder = { personas: [e3, e3, e3], weapon: 'Glimmer', refine: 7 }; return tcWonder(d).lines.length; };
+    out.glAnn = gl(ann); out.glBless = gl(CHARACTERS.find(c => c.e === 'Bless' && SKILL_DMG[c.n]));
+    out.glMult = at('Glimmer', 0).mult;
+    state.wonder = keep; $('#tmDown').value = '0'; tcMemo.key = '';
+    out.names = Object.keys(WONDER_BUFFS.weapons);
+    out.unexplained = out.names.filter(n => !WONDER_BUFFS.weapons[n].length && !(WONDER_SKIPS.weapons[n] || []).length);
+    return out;
+  });
+  const lufelWeapons = ['Whisperer\'s Sting', 'Chaos Hex', 'Event Horizon', 'Starry Compass', 'Arc Knife', 'Ex Machina', 'Purgatory', 'Ice Age', 'Plasma Blade',
+    'Pheromone Sting', 'Abyss Fang', 'Glimmer', 'Cyclotron', 'Eye of Obsequies', 'Cursed Ties', 'All In', 'Sennight Inferno'];
+  check('every Wonder weapon lufel lists as released can be chosen on the Teams tab, and one with nothing priced says why',
+    lufelWeapons.every(n => ww.names.includes(n)) && !ww.names.includes('Midnight Sun') && ww.unexplained.length === 0,
+    JSON.stringify({ missing: lufelWeapons.filter(n => !ww.names.includes(n)), unexplained: ww.unexplained }));
+  check('Sennight Inferno\'s DEF cut counts only on a knockdown: nothing at "can\'t be knocked down", more with Down Points set, never in the quick screen',
+    Math.abs(ww.si0.mult - ww.none0.mult) < 1e-9 && ww.si3.mult > ww.none3.mult + 1e-6 && ww.si3.quick === 0, JSON.stringify(ww));
+  check('Glimmer\'s Blessing counts on the damage dealer, with its Bless damage only for a Bless one',
+    ww.glMult > ww.none0.mult + 1e-6 && ww.glAnn === 1 && ww.glBless === 2, JSON.stringify(ww));
   check('TC_DOWN_CUT names roster characters, each cut with its reason and an amount, states that exist; a stat line against a downed foe or set off by a knockdown counts in the Teams fight only',
     dn.bad.length === 0, JSON.stringify(dn.bad));
   check('SKILL_DMG and DPS_KIT name roster characters in their formats (a Theurgy with its gauge need); the fight length is a saved pref and the old cadence selects are gone',
@@ -3474,8 +3897,17 @@ function awarenessOverrideDrift() {
     th.meds.toks === '2,iA|1,iC' && ['atkPct:36.0', 'dm:30.0', 'hlFinal:12.0'].every(x => th.meds.lines.includes(x)) && th.meds.lines.filter(x => x === 'atkPct:15.0').length === 3 &&
     th.meds.judged === 0 && th.meds.miyu.length === 1 && th.meds.miyu.every(id => id.split('.').length === 3 && new Set(id.split('.')).size === 3 && id.split('.').includes('res')) &&
     th.meds.ich.length === 1 && th.meds.ich.every(id => id.split('.').includes('dot')) && th.meds.best && /Resonance medicine, then Skill 2/.test(th.meds.text), JSON.stringify(th.meds));
+  check('Beachflower Minami: her Highlight makes her next medicine stronger (+9.8%, +5% more from A4), and Soothing Sunlight\'s stacks build two a Summer Garden and one a Gentle Sea Breeze and are kept, the page reading the share of the 36% held',
+    Math.abs(th.medHl.b0 - 0.098) < 1e-9 && Math.abs(th.medHl.b4 - th.medHl.t4 - 0.05) < 1e-9 && th.medHl.hl > 0 && th.medHl.withB > th.medHl.noB &&
+    th.medHl.build && Math.abs(th.medHl.mean6 - 23 / 36) < 1e-9 && Math.abs(th.medHl.mean12 - 59 / 72) < 1e-9 &&
+    Math.abs(th.medHl.seatV - 36) < 1e-9 && th.medHl.seatUp > 0 && th.medHl.seatUp < 1, JSON.stringify(th.medHl));
   check('with three foes an always-on debuff on one foe helps less than one on all foes',
     th.oneConst[0] < th.oneConst[1] - 1e-6, JSON.stringify(th.oneConst));
+  check('effects that do not stack (excl): on one foe only the larger counts; with three foes the all-foe one reaches the others; the quick screen counts the smaller on uncovered turns only; Runa\'s Furrious Bark is one foe and Welcome Hug all foes',
+    Math.abs(th.excl.f1.excl - th.excl.f1.a) < 1e-9 && th.excl.f1.stack > th.excl.f1.excl + 1e-6 &&
+    th.excl.f3.excl > th.excl.f3.a + 1e-6 && th.excl.f3.stack > th.excl.f3.excl + 1e-6 &&
+    th.excl.drop[0] === '1,1' && th.excl.drop[1] === '2' && JSON.stringify(th.excl.quick) === '[0.75,0.25]' &&
+    th.excl.runa === '2:one,1:all,1:all', JSON.stringify(th.excl));
   check('Almighty damage takes no weakness bonus (a teammate\'s weakness-damage buff leaves it alone); SKILL_DMG marks Akechi\'s and Starlight Ren\'s Almighty skills',
     Math.abs(th.alm.almighty - 1) < 1e-9 && th.alm.normal > 1.05 && th.alm.skills[0] === '0011' && th.alm.skills[1] === '0010', JSON.stringify(th.alm));
   check('SKILL_DMG FIXES: Pioneer Shun\'s Skill 1 is one boss\'s 83 (later hits 20%), Starlight Morgana\'s "3" half Waltz and half Crash! (72.7), Mio\'s Skill 3 between her two casts, Kiyoshi\'s Skill 2 without its Sacred Flame tick (a dot instead), YUI\'s Meta Dynamite +25% priced once (as a bonus)',
@@ -3507,8 +3939,30 @@ function awarenessOverrideDrift() {
     th.pazuzu.lines === 'curse' && th.pazuzu.offered && th.pazuzu.with > th.pazuzu.base && Math.abs(th.pazuzu.full - 50) < 1e-6, JSON.stringify(th.pazuzu));
   check('Shoki\'s Improv states give the main target crit damage, pierce, damage over time or Technical Precision, one per state; Chilling Intensity\'s ATK only for a kit that activates Technicals',
     th.shoki.ids === 'E,T,B,C' && th.shoki.E === 'cm' && th.shoki.T === 'pierce' && th.shoki.B === 'dotDm' && th.shoki.C === 'tp,atkPct' && th.shoki.Cnon === 'tp', JSON.stringify(th.shoki));
-  check('Wonder: innate skills count as their card, the suggestion is three Personas with no skill cards, a skill from two sources counts once, and his six turns name the Persona',
+  check('Wonder: innate skills count as their card, the suggestion is three Personas with the skill cards each has learned (none by default), a skill from two sources counts once, and his six turns name the Persona',
     th.wonder3.innate && th.wonder3.sugN === 3 && !th.wonder3.sugCards && th.wonder3.adds === 3 && th.wonder3.once && th.wonder3.turns && th.wonder3.listed, JSON.stringify(th.wonder3));
+  check('Wonder: an on-cast passive fires only on the casts its trigger names — never an ally one on an attack turn; a Persona with an ally skill recasts it on idle turns, which do not hit the boss',
+    th.castOn.f === 0 && th.castOn.fTurns === 3 && th.castOn.a === 1 && th.castOn.aAgain === 4 && th.castOn.aSeq === 4 && th.castOn.g === 1 && th.castOn.gTurns === 4, JSON.stringify(th.castOn));
+  check('Wonder: Ice Age\'s Ancient Frost is on for the first 3 turns and lasts longer only while he casts a skill on an ally alone — an attack or a skill on a foe that buffs allies does not renew it',
+    Math.abs(th.frost.none.up - 3 / th.frost.F) < 1e-9 && Math.abs(th.frost.m.up - 3 / th.frost.F) < 1e-9 && th.frost.m.on === 'wStart' &&
+    th.frost.a.up === 1 && /^wStart,w\d$/.test(th.frost.a.on) && Math.abs(th.frost.m.fight - 3 / th.frost.F) < 1e-9 && th.frost.a.fight > 0.9, JSON.stringify(th.frost));
+  check('Wonder: the suggestion also fights the Personas that take none of his turns, so a reserve passive is not crowded out of the shortlist by Personas that want a turn',
+    th.wbIdle.sh === 'T0,T1,T2,T3,T4,T5,R,R2,R3', JSON.stringify(th.wbIdle));
+  check('Wonder: a Persona not out on Global yet (lufel\'s GLB schedule) is never offered, suggested or kept from a save, and the setup says which',
+    th.unrel.un.length > 0 && th.unrel.priced > 0 && !th.unrel.offered.length && !th.unrel.suggested.length && !th.unrel.inSelect.length &&
+    th.unrel.kept[0] === '' && th.unrel.kept[1] === 'Succubus' && th.unrel.un.every(n => th.unrel.note.includes(n)), JSON.stringify(th.unrel));
+  {
+    const P = th.personas, has = (s, x) => s.split(' ').includes(x);
+    check('Personas section: the first time every Persona out on Global is owned and saved, none that is not',
+      P.first.all && P.first.noUnrel && P.first.saved, JSON.stringify(P.first));
+    check('Personas section: a talent rank takes lufel\'s value at that rank, and a clause the talent gains later is not there yet (Janosik, Shiva)',
+      has(P.jTop, 'cr:4.5') && has(P.jTop, 'defdown:12') && !has(P.jBase, 'cr:4.5') && !has(P.jBase, 'defdown:12') && has(P.jBase, 'atkPct:20') &&
+      has(P.sTop, 'defdown:45') && has(P.sBase, 'defdown:30') && !has(P.sBase, 'defdown:45'), JSON.stringify(P));
+    check('Personas section: skill level 6 takes the unique skill\'s level-6 values; an innate skill counts from the level it is learned at',
+      P.sSk6 !== P.sTop && P.innOn && P.innOff, JSON.stringify({ sTop: P.sTop, sSk6: P.sSk6, inn: P.inn, innSk: P.innSk, at: P.at }));
+    check('Personas section: a skill card is its Persona\'s (once, priced cards only); a Persona not owned is never offered or suggested and leaves the setup; a saved collection round-trips',
+      P.aliceCards === 'Rebellion,,' && P.setupAfter === ',Alice,' && !P.sug.includes('Shiva') && !P.offered && P.same && P.missing, JSON.stringify(P));
+  }
   check('Kira\'s Bleed counts its Almighty part at the cap (60% of ATK a stack, no crit), so damage over time is most of his damage',
     th.kira.entry && th.kira.dot > 0.45, JSON.stringify(th.kira));
 
@@ -3537,13 +3991,16 @@ function awarenessOverrideDrift() {
     // a real setup goes through the save file and back
     const pn = Object.keys(WONDER_BUFFS.personas)[0], cn = Object.keys(WONDER_BUFFS.cards)[0], wn = Object.keys(WONDER_BUFFS.weapons)[0];
     state.wonder = { persona: pn, cards: [cn, '', ''], weapon: wn, refine: 4 };
-    const saved = JSON.stringify(savePayload());
+    // a save from before the Personas section: its skill cards move onto their Persona when it loads
+    const old = savePayload();
+    old.settings.wonder = state.wonder; delete old.settings.personas;
+    const saved = JSON.stringify(old), keepPs = state.personas;
     state.wonder = {};
     applySave(saved, '');
     const e3 = { name: '', cards: ['', '', ''] };
     out.trip = JSON.stringify(wonderSetup()) === JSON.stringify({ personas: [{ name: pn, cards: [cn, '', ''] }, e3, e3], weapon: wn, refine: 4 }) && !!pn && !!cn && !!wn;   // an old one-Persona setup becomes slot 1
     hideToast();
-    state.wonder = keep;
+    state.wonder = keep; state.personas = keepPs;
     return out;
   });
   const up = (k) => (tw.ups.find(x => x[0] === k) || [])[1];
@@ -3567,6 +4024,32 @@ function awarenessOverrideDrift() {
   check('the calculated basis seats the best-valued team of available characters, a backup only beside Fuuka, and prices lufel\'s team for comparison',
     tcPage.avail && /^fffe(b)?w$/.test(tcPage.roles) && tcPage.fuukaOk && tcPage.sorted && Math.abs(tcPage.best - tcPage.top) < 1e-9 &&
     /Calculated from the kits/.test(tcPage.text) && !!tcPage.lufel, JSON.stringify(tcPage).slice(0, 700));
+
+  // Wonder's Personas can be marked busy like characters: the one clicked is left out of the
+  // suggestion and of his own setup here, listed with the busy characters, kept in the prefs
+  const wpKeep = await p.evaluate(() => {
+    const keep = JSON.stringify(state.wonder || null);
+    const best = tcTeams('Yusuke Kitagawa').team.seats.find(s => s.wonder).wonder.best;
+    const name = best.personas[0].name;
+    state.wonder = { personas: [{ name, cards: ['', '', ''] }, { name: '', cards: ['', '', ''] }, { name: '', cards: ['', '', ''] }], weapon: '', refine: 1 };
+    commit(); renderTeams();
+    return { keep, name };
+  });
+  await p.click(`#tmOut [data-tm-busy-p="${wpKeep.name}"]`);
+  const wpBusy = await p.evaluate(n => {
+    const w = tcTeams('Yusuke Kitagawa').team.seats.find(s => s.wonder).wonder;
+    const pr = collectPrefs(); tmBusyP = new Set(); applyPrefs(pr);
+    return { sug: w.best.personas.map(x => x.name), lines: tcWonder(charDef('Yusuke Kitagawa')).lines.length, chip: $('#tmBusy').innerText,
+      seat: $('#tmOut').innerText, prefs: [...tmBusyP], opt: [...$('#tmWP1').options].some(o => o.value === n && /busy elsewhere/.test(o.text)) };
+  }, wpKeep.name);
+  check('a Persona marked busy on Wonder\'s seat is left out of the suggestion and of his setup here, listed as busy, and kept in the prefs',
+    !wpBusy.sug.includes(wpKeep.name) && wpBusy.sug.filter(Boolean).length === 3 && wpBusy.lines === 0 && wpBusy.chip.includes(wpKeep.name) &&
+    /busy in another team, so it and its skill cards are not counted here/.test(wpBusy.seat) && wpBusy.opt &&
+    wpBusy.prefs.length === 1 && wpBusy.prefs[0] === wpKeep.name, JSON.stringify(wpBusy).slice(0, 500));
+  await p.click(`#tmBusy [data-tm-unbusy-p="${wpKeep.name}"]`);
+  const wpFree = await p.evaluate(() => ({ busy: tmBusyP.size, lines: tcWonder(charDef('Yusuke Kitagawa')).lines.length }));
+  check('making a busy Persona available again counts it again', wpFree.busy === 0 && wpFree.lines > 0, JSON.stringify(wpFree));
+  await p.evaluate(k => { state.wonder = JSON.parse(k); commit(); renderTeams(); }, wpKeep.keep);
 
   // the page: a per-factor summary line per member with the kit lines folded under it, the next
   // teams and lufel's priced against the shown one, synergies named once, rotation options folded
@@ -3809,6 +4292,43 @@ function awarenessOverrideDrift() {
   check('the composer never offers an idle turn', !kr.idle.length, kr.idle.join(', '));
   check('the SP limit: lufel\'s pace is allowed, a rotation of dearer skills every turn is not',
     kr.sp.rate === (22 + 20) / 2 && kr.sp.lufelOk && !kr.sp.allThree, JSON.stringify(kr.sp));
+
+  /* Tropical Motoha and the heals she receives (TC_HEALS): the fight counts them and turns her "when healed"
+     lines on, her Tropical Heart follows the team's heals, and the quick screen sees a healer too */
+  const mh = await p.evaluate(() => {
+    const mo = 'Motoha Arai [Tropical]', D = charDef(mo), keep = state.chars[mo] && state.chars[mo].loadout;
+    if (!state.chars[mo]) state.chars[mo] = { owned: true };
+    state.chars[mo].loadout = Object.assign({}, DEFAULT_LOADOUT, { awareness: 0 });
+    tcMemo.key = ''; tcMemoFor(D);
+    const fight = (names, strip) => {
+      const k = KIT_STAT_BUFFS[mo];
+      if (strip) KIT_STAT_BUFFS[mo] = k.filter(b => !/^healed/.test(b.on || ''));
+      try {
+        const P = tcSimPrep(D, names, false, !names.some(Boolean));
+        P.dps.seq = ['3', '1'];
+        return tcSimRun(P, [mo], false);
+      } finally { KIT_STAT_BUFFS[mo] = k; }
+    };
+    const alone = fight([null, null, null]), lufel = fight(['Lufel', null, null]), lufelOff = fight(['Lufel', null, null], true);
+    const out = { alone: alone.heals, lufel: lufel.heals, gain: lufel.total / lufelOff.total };
+    // the cooldown is one turn and is never banked; a Heart (5 heals) lets a cast skip it
+    const walk = (seq, team) => tcRotWalk(mo, seq, 0, tcKitRot(mo, 0, undefined, team));
+    const solo = new Set([mo]), healers = tcTeamSet(mo, ['Minami Miyashita', 'Lufel', 'Yumi Shiina']);
+    out.rule = { twice: walk(['3', '3'], solo), banked: walk(['1', '1', '1', '3', '3'], solo), alternate: walk(['3', '1', '3', '1', '3'], solo),
+      healed: walk(['3', '1', '3', '3', '1', '3', '3'], healers), rate: { solo: tcTeamHeals(mo, solo), healers: tcTeamHeals(mo, healers) },
+      lufelSolo: tmRotPick(mo, solo).pick.length, lufelHealers: tmRotPick(mo, healers).pick.map(r => r.seq.join('')) };
+    // the quick screen: a healer adds what her healed lines are worth
+    const vec = tcMember(D, 'Lufel', new Set([mo, 'Lufel']), null, false).vec;
+    out.quick = { heal: vec.heal, with: tcMultiplier(D, [vec]), without: tcMultiplier(D, [Object.assign({}, vec, { heal: null })]) };
+    state.chars[mo].loadout = keep; tcMemo.key = '';
+    return out;
+  });
+  check('Tropical Motoha: the fight counts the heals she receives — her own alone, a healer\'s on top — and they turn on her "when healed" damage',
+    mh.alone && mh.lufel && mh.lufel.n > mh.alone.n && (mh.lufel.by.Lufel || 0) > 0 && mh.gain > 1.01, JSON.stringify(mh).slice(0, 400));
+  check('Tropical Motoha: Surf \'n\' Shine waits a turn after a cast and the wait is never banked; enough heals for a Heart let it skip the wait',
+    mh.rule.twice === 1 && mh.rule.banked === 4 && mh.rule.alternate === -1 && mh.rule.healed === -1 &&
+    mh.rule.rate.healers > 2 && mh.rule.rate.solo < 0.5 && mh.rule.lufelSolo === 2, JSON.stringify(mh.rule));
+  check('Tropical Motoha: the quick screen prices a healer\'s heals', mh.quick.heal && mh.quick.with > mh.quick.without, JSON.stringify(mh.quick));
 
   const kc = await p.evaluate(() => {
     $('#tmRotFit').checked = true; $('#tmRotCompose').checked = true; tmSyncCompose();

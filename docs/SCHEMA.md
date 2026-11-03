@@ -196,13 +196,15 @@ keep loading unchanged:
   `unowned`) / `rsElement` / `rsSort` / `rsHideBenched` / `rsQ` and its view (`rsView`:
   `cards` or `list`), the Inventory tab's `flSlot` / `flSet` / `flRar` / `flMain` / `flSub` /
   `flQ` and its column sort (`invSort: { key, dir }`), the Triage/Vault/Upgrades scope selects
-  (`trScope`, `trShow`, `trRar`, `vaRar`, `vaShow`, `upRar`) and Triage's verdict chips
-  (`trVerdict`, the pressed tiers 0-5). Written by `collectPrefs()`, read by `applyPrefs()` in
+  (`trScope`, `trShow`, `trRar`, `vaRar`, `vaShow`, `upRar`), Triage's verdict chips
+  (`trVerdict`, the pressed tiers 0-5), and the Personas tab's `psSort` (`rarity`, the default:
+  highest first; `rarity-asc`, `name`, `element`, `level`, `owned`, `priced`) with its filters
+  `psShow` / `psRar` / `psPriced` / `psQ`. Written by `collectPrefs()`, read by `applyPrefs()` in
   `src/logic.js`. Ignored if absent, so v1/v2 files keep loading unchanged; any field the
   loading build no longer recognises (a renamed set, a dropped filter option) is likewise
   ignored rather than rejected. Files saved before Sep 2026 may carry `rsHideUnowned`, the
   Roster's old "Hide not owned" checkbox: when true it opens the Roster on `owned`.
-- **`settings`** — scoring assumptions, as opposed to view state. Two today, both written by
+- **`settings`** — scoring assumptions, as opposed to view state, all written by
   `savePayload()`:
   - `teamCritRate`, the team crit rate (the header's scoring settings), in percentage points (0-100): the crit
     rate the user's usual supports add to every damage dealer when cards are valued. Absent, or anything
@@ -212,6 +214,15 @@ keep loading unchanged:
     `{ "ATK": 119, "HP": 473, "Crit Rate": 1, "Crit Multiplier": 2 }`. Only stats with a value are written.
     It is added to the in-battle totals a stat target is checked against, nothing else. Absent keys, and
     anything not a positive number, read as 0.
+  - `wonder`, Wonder's setup on the Teams tab: `{ "personas": [{ "name": "Alice", "cards": [...] }, ...], "weapon", "refine" }`,
+    three slots. A slot's `cards` are written for reference only; they are read from `personas` below.
+  - `personas`, the Personas tab (Nov 2026): Persona name (lufel's English name) -> the fields that differ from
+    the default, e.g. `{ "Alice": {}, "Pixie": { "own": false }, "Shiva": { "tal": 1, "sk": 6, "lv": 50, "cards": ["Rebellion"] } }`.
+    `own` (written only when false), `lv` (level, 1-120, default 80), `tal` (talent rank: 0 the base, 1 for I, ...,
+    default the top), `sk` (skill level 6, 7 or 8, default 8), `cards` (the skill cards it has learned, at most 3).
+    A Persona present is owned unless `own` is false; one absent is not owned (released after the file was
+    saved). A file without `personas` (saved before it existed) owns every Persona out on Global at the top of
+    every rank, and moves the old `wonder` slots' `cards` onto their Personas.
 
 ## Importing a rescan without losing your inventory
 

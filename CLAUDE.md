@@ -19,7 +19,8 @@ npm run export-tables # build, then write dist/tables.json — the slot/set/subs
                        # hand-copying src/data.js
 npm run site         # build, then write site/ — the phone app (PWA) for GitHub Pages:
                      # index.html + manifest, icons, offline service worker; README
-                     # "On your phone". `-- --with-art` adds the portraits (public!)
+                     # "On your phone". `-- --with-art` adds dist/art/ — portraits and Persona
+                     # pictures (public!) — and the build lists the files changed since the last one
 ```
 
 `site/` is the only place a manifest or service worker goes. `tools/build-site.js` injects
@@ -37,8 +38,11 @@ node tools/gen-data-from-lufel.js lufel.json # emit replacement SETS/SPACE_SETS/
 node tools/gen-awareness.js lufel.json       # patch CHAR_STATS[*].awareness into src/data.js in place
 node tools/gen-teams.js lufel.json           # replace the TEAMS block (lufel's parties, partners, rotations)
 node tools/gen-bosses.js [boss.js]           # replace the BOSSES block (lufel's calc/boss.js: DEF, coefficient, resistances)
-node tools/gen-wonder-innate.js [folder]     # replace the WONDER_INNATE block (each Persona's innate skills)
+node tools/gen-wonder-innate.js [folder]     # replace the WONDER_INNATE block (each Persona's innate skills,
+                                             # WONDER_UNRELEASED: Personas not out on Global yet, and
+                                             # WONDER_PERSONA: rarity, talent ranks, learn levels, rank values)
 node tools/gen-skill-damage.js lufel.json    # replace the SKILL_DMG block (damage per skill and Highlight)
+node tools/fetch-persona-art.js              # the Personas tab's pictures into dist/art/ (gitignored, like the portraits)
 ```
 
 Run the audit before changing anything in `src/data.js` by hand — it will usually tell you
@@ -811,7 +815,11 @@ a second run is byte-identical). Rules that hold it together:
   as lufel's; the long reviews are linked, not copied (the site build is public). A mechanic worth
   explaining goes in `TEAM_MECHANICS` in our own words — today only Fuuka's Oracle Shift.
 - The busy list is a pref (`tmBusy`), the chosen party and seat overrides are this session only
-  (`tmPick`). It reads state and writes none.
+  (`tmPick`). It reads state and writes none. Wonder's Personas have a busy list of their own (the
+  user asked, Nov 2026; `tmBusyP`, a pref, marked from buttons on his seat): a busy Persona is never
+  suggested (`tcWonderBest`), and in his own setup it is left out with its skill cards for pricing
+  (`wonderHere`, what `tcWonder` reads by default) while the saved setup keeps it; the seat says so.
+  Both lists are in `tcMemo`'s key and `tmInputSig`, and "Clear all" clears both.
 - **It calculates only when Calculate is pressed** (`#tmCalc`, `tmCalculate`; the user asked, Nov
   2026: a calculated team takes seconds, and every dropdown change waited for one). A visit, a
   settings change and `commit()` only redraw the controls (`tmRefresh`) and the status line above
@@ -860,8 +868,18 @@ damage formula (`docs/DATA-SOURCES.md`, the damage-formula section):
   boss is weak to Ice). Measured on the real save (19 damage dealers): boss DEF mattered most (821 to
   1280 changed the best team for Ren, YUI, the twins and Makoto Yuki); the weakness mode barely moved a
   team; 9, 12 and 15 rounds mostly agree while 6 changes it for 12 of 19; 3 and 5 foes agree. Fight
-  length stays 12: the Gateway ends after a set number of boss attacks nobody publishes. `applyPrefs`
-  reads a save's exact old trio (`8`/`boss`/`1`), which every save stored, as untouched. Extra foes are
+  length is 6 rounds since 2 Nov 2026 (`TC_FIGHT_DEFAULT`; the user: most Sea of Souls and Nightmare's
+  Gateway fights last about that long; it was 12). The build model's own fight (`kitMix`) plays the same
+  6; the calibration did not move (70.1 / 71 / 41-84, bands 8/52/8). The judged `chance`/`share`/
+  `stacks`/`up` figures that depend on fight length (a ramp to a cap, a battle-start window, "all but
+  the first") were re-judged over 6 rounds the same day — Akechi's A1 Deduction and +25%, Ichigo's
+  Chains of Love lines and her DPS_COUNTS_AS shares, Ryuji's Comeback Kid, Yusuke's Shadowkiller,
+  Seiji's Knight's Reward, Radiance Motoha's Reshape and Expedition's Edge, YUI's Potato Power,
+  Toshiya's A2 Curse, Junpei's second Fired Up — each `why` giving both the 6- and 12-round reckoning.
+  Steady-state averages (a cycle that refills, a per-round rate) were left alone. A change of the
+  default again means walking these. `applyPrefs`
+  reads a save's exact old trio (`8`/`boss`/`1`), which every save stored, as untouched, and a fight
+  length of `12` in a save without `tmFightDefault` likewise. Extra foes are
   still copies of the boss, not the DEF-364 helpers.
 - **What each member supplies is `TEAM_BUFFS` in `logic.js`**: kit lines turned into numbers,
   one entry per effect (`k` the factor, four-tier `v` or a 7-step weapon `ladder`, `per` for a
@@ -882,6 +900,18 @@ damage formula (`docs/DATA-SOURCES.md`, the damage-formula section):
   on 170.7%, the accuracy cap Koromaru's kit names outright, and every tier lands on its own cap.
   Half the first batches read Y as the total, 20-25% low on Mayumi, Runa, Mio, Kumi, Yukari,
   Manaka and Fuuka; that was corrected (Oct 2026) and the reading is not a choice to revisit.
+  The user asked again about Kumi's Hard Knocks (Nov 2026): lufel's Japanese text names the cap
+  "追加低下分" (the *added* decrease), and lufel's defence calculator lists 48.8% (9.8 + 39.0); English,
+  Korean and Chinese are ambiguous there. Runa's Furrious Bark is unambiguous in every language (the cap
+  sits inside the brackets with the ailment-accuracy part) and the calculator gives 68.3%. Only an
+  in-game reading of the debuff would overturn it.
+  **Effects that do not stack** are `excl` (Nov 2026, the user asked for Runa's Welcome Hug): cast lines
+  of one character with the same `excl`; lines of one `src` add up as one effect and of the effects up
+  on a foe only the largest counts (`tcExclDrop`, per foe, so Welcome Hug's all-foe cut reaches the foes
+  Furrious Bark's one-foe cut misses); the quick screen counts the smaller only on turns the larger leaves
+  uncovered (`tcExclQuick`). Welcome Hug was not priced at all until then, and Furrious Bark was read as
+  all foes and 2 turns at A6 (lufel: 3). On the real save only Mio's best team moved (20.9× to 22.0×,
+  Runa already in it).
 - **A rotation is fitted to the team, within lufel's own** (`tcRotFit`, Oct 31 2026). lufel writes
   a character's rotations once, for a typical team, so a member's rotation is adjusted to the team on
   screen without inventing a cadence: every rotation lufel writes for them at their Awareness (the
@@ -913,7 +943,7 @@ damage formula (`docs/DATA-SOURCES.md`, the damage-formula section):
 - **The number is the fight, played round by round** (`tcSim`, Nov 2026; the user asked for turn
   order, cooldowns, a measured Highlight gauge, the damage dealers' Resonance and damage over time,
   and Summer Ayaka, Catchy Hook, starting gauge and Kotone Shiomi's Fortune done properly). Over the
-  rounds `#tmFight` sets (12 by default, a pref and part of `tcMemo`'s key), the Elucidator acts at
+  rounds `#tmFight` sets (6 by default, a pref and part of `tcMemo`'s key), the Elucidator acts at
   the start of each round, the four thieves — the damage dealer, two teammates, Wonder — once each
   in Speed order (`tmSpeed`; Wonder just before the damage dealer while his Speed is unset; a tie goes to the teammate), and
   the enemy last. **A buff on an ally counts down after that ally's own action, a debuff on the
@@ -967,9 +997,18 @@ damage formula (`docs/DATA-SOURCES.md`, the damage-formula section):
   sweep). One member's debuff rounds decide where another's buff or hit belongs, which the quick
   model's share-of-turns cannot see (a test pins such a case). A teammate's candidates that cast the
   same priced skills and hit the boss on the same turns are one candidate (Kumi's 90, Runa's 160
-  shrink a lot); an Elucidator's are all tried. `fits[name]` feeds the Rotation panel. Cost is held
+  shrink a lot); an Elucidator's are all tried. A composed member takes up to `TC_FIT_STEPS` (2) changes
+  a pass (Nov 2026; it was 1, so a rotation moved at most three changes from where the quick fit started it,
+  and once Kotone Shiomi's numbers changed Ichigo's best team settled at 24.7× where the rotations found
+  before priced 25.7×). Over the real save's 48 leading lineups 2 gave +0.4% on average and never less, the
+  search about 9% slower; 4 lost to 2 on two lineups, and a second start from lufel's rotations as written
+  added 0.07% for 30% more time. It is still a local search: Ryuji's twins team prices 24.6× where the
+  rotations it had before Kotone's weapon was priced give 24.8×. `fits[name]` feeds the Rotation panel. Cost is held
   by fitting fully only what is shown: the search re-fights its shown 10 with `true`, gives the
-  leading `TC_FULL_TOP` (3) the full fit and lets the best of those lead; the headline, its rotations
+  leading `TC_FULL_TOP` (3) the full fit, and also the best shown team of each other Elucidator (the
+  full fit is the only one that fits hers, so what it gains depends most on her: Miku's team for Akihiko,
+  her at A1, was 4th at 20.7× and 27.0× fully fitted, above the 25.6× that led; Nov 2026), and lets the
+  best of those lead, about 10% more search time on the real save; the headline, its rotations
   and line uptimes are the full fit; members' parts, the next teams, lufel's team, replacements and
   Wonder's suggestion are priced with `true` and scaled to the headline (`Lref`), like for like. A
   fresh render is 0.6-1.0 s on the real save. The damage-formula memo is per damage dealer for the
@@ -1023,10 +1062,35 @@ damage formula (`docs/DATA-SOURCES.md`, the damage-formula section):
   Persona slots, each with the three skill cards that Persona has learned (a card is cast only
   while its Persona is in use), plus a weapon and refinement (`state.wonder`, saved as
   `settings.wonder`, in the fingerprint and the undo snapshot; `wonderFrom` drops anything
-  `WONDER_BUFFS` does not know, and reads a pre-slots save's single Persona as slot 1).
+  `WONDER_BUFFS` does not know or the Personas tab does not own, and reads a pre-slots save's single
+  Persona as slot 1).
   `WONDER_BUFFS`/`WONDER_SKIPS` come from lufel's Persona files, skill cards
   (`/data/kr/wonder/skills.js`) and Wonder weapons (`/data/kr/wonder/weapons.js`), the DEF-down
   values cross-checked against lufel's defence calculator (`/data/kr/calc/defense-data.js`).
+  Every weapon lufel lists as released is a key of `WONDER_BUFFS.weapons`, since the keys are the
+  dropdown: one with nothing for the team (Abyss Fang, All In, Plasma Blade, Whisperer's Sting) has
+  `[]` and its reason in `WONDER_SKIPS`, which Wonder's seat shows as "Not priced" (Nov 2026; until
+  then those weapons could not be chosen, and no skip note was shown). Sennight Inferno's knockdown
+  DEF cut is `on: 'knock'`, fight-only (`sim.knock`), like a teammate's. Glimmer's Blessing names no
+  ally; the user chose to count it on the damage dealer, always on (it is reapplied every 2 turns).
+  **Ice Age's Ancient Frost follows his casts** (`allyCast`, Nov 2026; the user asked after Starry Compass
+  beat the dagger made for Wavecatcher Miyu): on the damage dealer at battle start for 3 turns (`'wStart'`,
+  fired in round 1) and renewed only by a skill cast on an ally alone (`onAlly`: a skill with any line on a
+  foe, such as Janosik's Tatra Shot, is cast on the foe). It had been a judged 80% whatever he cast. The
+  quick screen reads his ally casts per six turns (`allyCastUp`, optimistic: a cast in the opening window
+  renews nothing), the fight plays them. `tcWonderBest` re-checks the weapon once its Personas are chosen
+  (the quick screen's best `TC_WB_WEAPONS`, 3, fought; a change gets one more pass over the slots), since a
+  weapon chosen with no Personas can never be Ice Age. On the real save, Miyu's best team: with the
+  suggested Personas (no ally casts) Ice Age fell from +3.4% to +1.1% and Starry Compass (+4.2%) stays;
+  with Dionysus casting Revolution on her Ice Age beats Starry Compass on the same Personas (21.93× to
+  21.82×), but Kohryu / Janosik / Belphegor with Starry Compass is higher still (22.14×), and the
+  suggestion is that now. It missed Kohryu at first: with Janosik and Belphegor spending his six turns the
+  quick screen's top six for the last slot were all Personas that take turns from them (Dionysus, Succubus,
+  Koumokuten… — rated first, and each loses in the fight), and Kohryu, whose +15% ATK works in reserve
+  and takes no turn, sat 15th; every Persona fought added nothing, and Leanan Sidhe kept the slot on the
+  tie-break. So each slot's shortlist also takes the quick screen's best `TC_WB_IDLE` (3) that take none of
+  his turns (`tcWbShort`; `inUse` 0 for that slot). On the real save only Miyu's suggestion changed (16
+  damage dealers), at 0.02-0.17 s more a suggestion.
   His stats are not tracked, so a value that grows with them is taken at its cap, and his skills
   at their top rank; his own damage is not counted, his Highlight comes from the shared gauge in
   the fight (above), from whichever of his Personas' Highlights does most.
@@ -1040,9 +1104,23 @@ damage formula (`docs/DATA-SOURCES.md`, the damage-formula section):
   for fewer turns), in two orders — by worth, and slot by slot — the better kept, so a later slot
   never costs anything; idle turns go to the Persona whose passives are worth most. The page
   shows each Persona's share of his turns and what goes uncast.
+  **An on-cast passive fires only on the casts its text names** (`castOn`, Nov 2026: `'ally'` for
+  Dionysus, Succubus, Jikokuten, Raphael, Throne; `'foe'` for Bishamonten and the other "skill on a foe"
+  lines; none, any skill). Until then every turn the Persona was in use counted, its attack turns too,
+  so an ally-triggered passive fired on turns the page showed as attacks. An idle turn is now an attack
+  (a skill on a foe) or, when the Persona has an ally skill and its passives are worth more that way, a
+  recast of it ("Rebellion again", token `wr`), which does not hit the boss (17% gauge, no Down). On the
+  real save Succubus and Dionysus moved by at most 1.4 points for 15 of 16 damage dealers (both recast
+  their own unique, and in the fight recasting beat attacking for both). Dionysus fell 5 points for Ryuji.
   **A Persona's innate skills count** (Nov 2026, the user asked): `WONDER_INNATE` in `src/data.js`
   (written by `tools/gen-wonder-innate.js` from lufel's 155 Persona files) lists each Persona's
-  innate skills; one with a skill card of the same name is priced as that card, cast while its Persona
+  innate skills; **a Persona Global does not have yet is never offered** (`WONDER_UNRELEASED`, the same
+  block, Nov 2026; the user asked): lufel shows every Persona whatever the server, so the generator reads
+  its GLB schedule — a Persona released in a version after the last one dated on or before the day it
+  runs is not out (Macabre, Raphael, Gabriel on 2 Nov 2026); one the schedule never names shipped at
+  launch. `wonderPersonas()` leaves them out, so the dropdowns, the suggestion and a loaded setup do too;
+  their `WONDER_BUFFS` lines stay for release day. Re-run the generator after a release. One with a skill
+  card of the same name is priced as that card, cast while its Persona
   is in use (16 Personas have such a skill — Auto-Mataru, Matarukaja, Tarukaja, Rakunda, Rebellion,
   Debilitate; the rest are attacks, heals, DEF or Wonder's own stats). A Persona with only priced innate
   skills can be chosen too (`wonderPersonas()`). **One skill from two sources counts once**, from the
@@ -1050,11 +1128,33 @@ damage formula (`docs/DATA-SOURCES.md`, the damage-formula section):
   innate skill, Auto-Mataru III and IV — the rest are listed as "the same buff, counted once". Before,
   each source was its own buff and stacked. Rakunda and Marakunda (or Tarukaja and Matarukaja) are
   still separate: whether P5X stacks the one-target and party versions is not settled.
-  **`tcWonderBest` suggests three Personas and no skill cards** (the user asked): the weapon, then each
+  **The Personas tab is Wonder's collection** (`#tab-personas`, `state.personas`, saved as
+  `settings.personas`; Nov 2026, the user asked): which Personas are owned, each one's level, talent rank and
+  skill level (6/7/8), and the skill cards it has learned. Laid out like the Roster: a card per Persona with
+  its art (`art/persona-<slug>.webp`, `tools/fetch-persona-art.js`; a full-body cut-out, shown whole, the
+  initials hidden once it loads) and a one-click Obtained (undoable); the card opens a popup (`openPersona`,
+  dialog view `persona`) whose edits commit at once and which lists what the Teams tab counts at those
+  settings, each line at its value now beside its top one (`psDialogOut`). Only owned Personas are offered, suggested or kept
+  in a loaded setup (`wonderPersonas()`), and a slot's skill cards are its Persona's (`wonderFrom` reads them
+  from the collection; the Teams card boxes write there). The first time — a new page, or a save without
+  `settings.personas` — every Persona out on Global is owned at the top of every rank, which is what was
+  priced before, and the old setup's cards move onto their Personas (`personasFrom`); after that a Persona
+  with no record is not owned (released since). The ranks change numbers through `WONDER_PERSONA`, which
+  `tools/gen-wonder-innate.js` writes from lufel's Korean text: `learn` (an innate skill counts from the
+  level it is learned at, `wonderInnateHere`), `tv` (a talent number's value at each rank, lined up sentence
+  by sentence; null before the rank that adds the clause — Janosik's crit lines arrive at Hunting IV) and
+  `sv` (a unique-skill, Highlight or innate number printed a/b/c). `personaLines`/`personaInnateLines` give
+  a Persona's lines at its record; a passive reads `tv` first, the rest `sv` first, each falling back on the
+  other (16 unique-skill lines are really a talent's). 136 of the 142 priced Persona lines follow a rank this
+  way; the rest keep their top value. Skill cards taught to a Persona keep theirs, and a Persona's level
+  does nothing to a line that grows with Wonder's stats (still not tracked). Bulk marks are undoable.
+  **`tcWonderBest` suggests three Personas with the skill cards each has learned** (the user asked for no
+  cards before the collection existed; the default collection has none): the weapon, then each
   slot the Persona that adds most to the others, or, when none adds anything (his six actions are
   spent), the one that does most on its own. **It is chosen by the fight**, not the quick screen (the
   user found character-made Personas missing): the screen's averages misjudge short effects, so it only
-  shortlists each slot (its best `TC_WB_SHORT`, 6, plus any Persona with a line it cannot price —
+  shortlists each slot (its best `TC_WB_SHORT`, 6, its best `TC_WB_IDLE`, 3, that take none of his turns
+  — see Ice Age above — plus any Persona with a line it cannot price —
   continuous damage, Resonance) and `tcSim` with the cheaper fit picks; one improvement pass. Measured on
   the real save, the fight's top five single Personas sit within the screen's top 13 for every damage
   dealer tried. A render costs about 0.2 s more (1.2-1.4 s). `adds` (not enumerable, so not saved or
@@ -1134,8 +1234,11 @@ damage formula (`docs/DATA-SOURCES.md`, the damage-formula section):
   and Starlight Morgana's A4 lines had been always on from round 1 for a teammate and never counted for
   a backup whose Highlight Fuuka's A2 fires. (4) *The backup is chosen by the fight*: the screen keeps
   its best `TC_BACKUP_SHORT` (6) per lineup and `tcFightBackup` re-fights them for the leading
-  `TC_BACKUP_FIGHT` (4) lineups shown (0.1-0.2 s a render). Before, the screen's pick was kept: at her
-  A1 it chose Kumi for Makoto Yuki where the fight gave Yukari 7 points more. Knockdowns, which lufel's
+  `TC_BACKUP_FIGHT` (4) lineups shown (0.1-0.2 s a render), at the fit the list is ranked on (`true`).
+  Before, the screen's pick was kept: at her A1 it chose Kumi for Makoto Yuki where the fight gave Yukari
+  7 points more. Until Nov 2026 the re-fight used the cheaper `'mates'` fit, which with an unrelated test
+  line entered chose Tempest Riko for Tropical Motoha (17.7× to Kumi's 17.3×) where `true` and the full
+  fit both give Kumi more (18.5× to 17.7×, 19.9× to 18.3×). Knockdowns, which lufel's
   Kumi entry rests on (four swaps to Down the boss, at Fuuka A6), are played out when the page is given
   the boss's Down Points (see "Knockdowns" below); by default a boss cannot be knocked down. On the
   real save (Fuuka A0, Kumi at 196 Speed) Kumi is the fight's best backup for all 17 damage dealers both
@@ -1290,8 +1393,7 @@ damage formula (`docs/DATA-SOURCES.md`, the damage-formula section):
   save, twins at Awareness 1: their Kasumi team 17.8× to 19.7×, still under Mayumi / Kotone Shiomi /
   Fuuka's 21.3×. Not entered: Tempest Riko's A6 note (her automatic Storm of Petals fires when the main
   target uses a skill, once per Blossoming Season, and whether that falls in her Dance Partner turn is
-  not settled), and the twins' Skill Amplification (Two Masks as One, 14.6-17% to other allies), still in
-  `TEAM_BUFF_SKIPS`, which undercounts them in every team.
+  not settled). The twins' Skill Amplification is priced since (next bullet but one).
 - **"An ally's skill" is counted per damaging skill** (Nov 2026, the user asked, after the twins' two-skill
   turn): a damage dealer's `DPS_KIT` line `on: 'allySkill'` fires once per skill use in a teammate's turn
   that deals damage by `SKILL_DMG` (`tcDmgSkills`: the twins' "3↺+1" is two, a buff-, heal- or shield-only
@@ -1319,6 +1421,93 @@ damage formula (`docs/DATA-SOURCES.md`, the damage-formula section):
   average copy, the copied seat how often. Fortune's longer durations are still not modelled. On the real save
   team numbers rose 0-8% and the best team changed for 3 of 16 damage dealers (Ann and Tropical Motoha to
   Mayumi, Ren to Beachflower Minami), at no measurable cost.
+- **Summer Ichigo's Ram is played out** (`TC_RAM`, `tcRamFor`, Nov 2026; the user asked for the largest
+  unpriced gaps to be measured, and this was the largest by far). Heart's Desire (her Skill 3) makes the damage
+  dealer the Helmsman; at the end of their next turn they deal 48.3-56.2% of the Boat's max HP plus 173.7-202.2%
+  of their ATK (347.4-404.3% when that cast spent a Seal) to all foes, +25% per foe fewer than 5, and step down;
+  from A6 they keep the helm and ram every turn, +30% skill damage. The Boat is the field allies' max HP summed
+  (+20% at A1; the Elucidator is not on it; Wonder's HP is not tracked, so he counts at the mean of the other
+  three). The Korean text has it priced with the Helmsman's Pierce, damage, amp, crit, weakness and Down bonus,
+  so the fight (`tcSimRun`, `gain('ram')`) prices the HP part with everything but ATK (`atkAt`: the hit's ⓐ is
+  divided back out). Seals: Skill 1 with another Psy member, Skill 2 with another [Summer] one (`tcIsSummer`:
+  lufel's "·여름" names). The quick screen prices it too (`vec.ram`, against the damage dealer's mean skill
+  coefficient a turn, `tcTurnCoef`): without that the sweep never shortlisted her, and on the real save her team
+  was missed for 7 of 16 damage dealers. Measured on the real save with her marked owned (no cards, 6-round
+  fight): she leads 13 of 16 best teams, the Ram is 36-70% of the damage dealer's damage, and she falls short
+  for Kasumi, Makoto Yuki and Mitsuru. The search costs the same. The DPS_KIT_SKIPS / TEAM_BUFF_SKIPS notes for
+  it went; her [Summer] crit-damage Seal line is still a skip.
+- **The twins' Skill Amplification is priced** (`skillAmp`, a TEAM_BUFFS key, Nov 2026; the second-largest
+  measured gap). Two Masks as One on the Strategist masks gives the other allies 14.6-17% Skill
+  Amplification for 2 turns — "increase the values of skills… calculated separately from other effects". The
+  fight multiplies the damage dealer's numbered-skill hits and a Ram (a Persona skill) by it, and a skill line
+  another ally casts while it is up (`TC_SKILL_SRC`: a thief's Skills 1-3, Wonder's cards and unique skills;
+  not a passive, an Awareness, a weapon or a Highlight) lands that much stronger (`addBuff`'s `ampF`). The
+  Elucidator is not on the field and gets none. Highlights, follow-ups, Resonance and damage over time are not
+  raised: the text says skills. The quick screen raises each member's `vec.skillPart` and the damage dealer's
+  skill part by the amp at its share of turns (`tcMultiplier`). On the real save (twins at A1) their team rose
+  +1% to +29% (median +20%); they lead Ryuji's (24.9× over 24.6×) and no other. Not entered: Kotone Shiomi
+  copying the amp (lufel's partner note: her Lunar Phaseshift can copy it; `TC_COPY.keys` leaves it out), and
+  Kotone Shiomi copying her own. Miku's and Kotone's own are priced (below).
+- **Yumi's Cocktails are played out** (`TC_CK`, `tcCkFor`, Nov 2026; Invigorating Blend had no line at all).
+  As the Elucidator she gets a Mixer of each ally's element per damaging skill use, Highlight, Theurgy or
+  Resonance hit (`ckMix`; Wonder's give none, his element being his Persona's); three make a Cocktail —
+  Tailor-Made if all match, Standard if two do, Basic otherwise — held up to 3 (4 at A6), and Taking Orders
+  starts her with one of the party's most common element. Invigorating Blend spends them all: damage +1% per
+  230 of her ATK (capped) per 100% of strength spent (120/100/50%; A6 135/120/75%), ×1.2 on the target, and its
+  crit damage only with 2+ Standard or better (TEAM_BUFFS `ck: 'all'`, `'std2'`). Tempting Build spends her best
+  one for +120/100/50% of its own ATK buff (`ck: 'one'`; the Korean text says "when cast"), Enchanting Stir
+  turns a Basic or Standard into a Tailor-Made; A1's upgrade and Mixer back, A2's +16% per Cocktail (now `on:
+  'cocktail'`, `upQ` for the quick screen), A4's Tailor-Made per Highlight and A6's are played too. `ckCast`
+  hands her lines their factors as she casts (`addBuff`); a Skill 3 with none spent lands nothing. The quick
+  screen takes a typical cast (`TC_CK.quick`, measured on the real save). On save (56), Yumi at A0: her best
+  team with each damage dealer rose 5-31% (median 13%), 2.65 strength a cast; at A6 about 5.2 (four
+  Tailor-Mades), her teams much higher (Ann's 9.6× at A0, 13.8× at A6); she leads no best team at either.
+  Tempting Build's "+120%" is read as ×2.2 (both texts say "increase by", where Skill 3's Korean says "at 120%
+  strength"); at A0 it is a median 14% of her gain (−12% to 49%: where it is negative, the Cocktail it spends
+  was worth more in Skill 3). Not priced:
+  Moonlit Feather's random per-Cocktail buffs.
+- **Tempest Riko's SP is played out for Blossoming Season** (`TC_RK`, `tcRkStep`, Nov 2026). Its tier
+  effects (flat ATK from 50 SP spent, crit damage from 100 and 150) are granted at **1% strength per 2 SP
+  spent**, so the printed values are at 200 SP (her A0 max) and 125% at A2's 250. The Japanese text says so
+  outright (ＳＰ消費２ごとに１%分の効果量), the Korean and Chinese as "1% strength per 2 SP"; only the English
+  "increase the effect by 1%" can be read as a bonus on top, which an earlier rough test did (+8% at 72 SP).
+  Until then the 50 SP tier was entered at full strength always, the 100 SP tier only from A2, the 150 SP tier
+  not at all. Her crit-rate line is not scaled. Her SP: full at the start of battle (assumed); each of her turns
+  refills `TC_RK.turn` × SP Recovery — nothing publishes a refill, so it is lufel's note that casting it every
+  turn needs 480.1% SP Recovery, i.e. 50 SP a turn (10.41 base); Storm of Petals +16 and Arrival of Spring +4
+  +12 × SP Recovery (her A0); from A2 +50 after each cast. SP other allies give her is not counted. The fight
+  steps her SP each turn (`a.rk`, her TEAM_BUFFS lines' `spT` read in `addBuff`), the quick screen walks her
+  rotation (`tcRkQuick`, a floor of 0.001 keeps a tier lufel's rotation never reaches for the fight). On save
+  (56), 498% SP Recovery: 189 SP a cast on 3 › 2, her teams +4% to +7% (median 5.5%), she leads none. The
+  result rests on the refill: without one, 3 › 2 at 450% gives 72-80 SP a cast and her tiers at 36-40%.
+- **A damage dealer's own bonus can be a stat on the hit** (DPS_KIT_BONUS `k`, Nov 2026): `own()` in `tcSimRun`
+  collects them as `xs` and `spread` adds them to that hit's board (every foe an area hit reaches), instead of ⓑ
+  or a multiplier. Ryuji's Fearless Charge (A2: a skill crit ignores 35% DEF; the Korean text puts it at A3) is
+  `k: 'pierce'` 35 on his skills — lufel's defence calculator lists it as Pierce, and his skills always crit
+  here; at A2 on save (56) his damage alone +30%, his best team's +33% (the twins / Kotone / Fuuka / Kumi,
+  24.1×), nothing at his saved A0. Radiance Motoha's Twilight Radiance is `atkPct` +29.3% × 3 Light (Spear of
+  Shadow copies Spear of Light, so the whole Highlight; Light is spent first, lufel never casts Unsetting Sun,
+  and from A1 Flowing Light is both), `cm` +30% when both spears hit one foe (`fewer: 2`: only with one foe;
+  the two-foe ×1.15 is not priced) and A4's +10% per Flowing Light; marked owned with no cards, her damage
+  alone +28% (A4 +36%), her best team's +13% (+17%). An earlier rough test as a ×1.61 multiplier read +36%
+  in her team: as a stat, her ATK adds to the team's ATK buffs.
+- **Miku's own Skill Amplification** (`TC_SELF_AMP`, `tcSelfAmp`, Nov 2026): Hologram Screen (A1) gives her 15%,
+  her 5★ weapon 10-19% while Virtual Concert is active. It raises the values her own skills grant (Korean 스킬
+  효과 증폭), so `tcMemberCalc` multiplies each of her skill lines (TC_SKILL_SRC; caps included, as the twins'
+  amp is read) by it, which the quick screen and the fight both read; never a count (Showstopper's extra turns),
+  a passive, an Awareness or her weapon's own lines. The weapon part reaches only a line cast in Virtual Concert
+  (`tcIsVc`: Showstopper's crit damage); Feel the Beat and Clear Sound are cast before it. On save (56), her
+  saved A0 and R0 weapon: +0.1% (the weapon part alone). At A1 her teams +4% (median, 3-10%), and she leads
+  Yusuke's best team too (she already led Makoto Niijima's), and Akihiko's (27.0× against 25.6×), which the
+  search missed until each Elucidator's best team got the full fit (the bullet on fitting teammates above).
+  **Kotone Shiomi's** 5★ weapon (Vetri Vel Muruga) gives her 10-19% once the Arcana Link ally reaches Lunar
+  Bond 5 (`lb`: from round 3 at A0 and round 1 from A1, the rounds her Moment of Truth pierce line judges).
+  That part comes on mid-fight, so her skill events carry `ampAt` (the factor at the cast's round, read in
+  `addBuff`) and the quick screen takes its share of the fight's rounds. Not applied to Lunar Phaseshift's
+  30% copy rate. On save (56) her teams +2.7% (median, −1.2% to +4.4%, with `TC_FIT_STEPS` at 2); she was
+  already in all 16 best teams, and Ryuji's moves to Kotone / Mitsuru / Fuuka / Kumi (25.8×). The one that falls
+  (Ryuji's twins team) rises 2-4% at every cheaper fit and falls only under the full fit, a local search that
+  settles elsewhere from a different starting point; at one step a pass Ichigo's fell too.
 - **Shoki's Improv states** (Nov 2026): he switches state each turn, and his Skill 3 gives the main
   target crit damage (Electrifying Performance, the only one entered before), pierce (Tempestuous
   Drama), damage over time (Blazing Passion) or Technical Precision (Chilling Intensity, with its +20%
@@ -1353,6 +1542,16 @@ damage formula (`docs/DATA-SOURCES.md`, the damage-formula section):
   is the composer's to weigh: in Miyu's best team (Kotone adds +143% ATK) her rotation puts the Resonance
   medicine on most medicine turns and never uses the ATK one, which the list under it says. With composing
   off, lufel's ⓘA turns play the ranking's first.
+  **Her Highlight strengthens her next medicine** (`tcMedHlBoost`, the user asked): +9.8-11.4% by tier, +5% more
+  from A4, added to her other increases. lufel's Korean text says the next medicine (다음번 약품 사용 시) for both,
+  where the English reads as every one; the fight spends it on her first medicine after each of her Highlights
+  (`medNext` on her actor in `tcSimRun`, the medicine line's `fx`), the quick screen leaves it out. **Soothing
+  Sunlight's Blessing stacks are permanent** (no duration printed; the user's reading): two a Summer Garden (its
+  own "grant all allies 1 Blessing stack" plus the passive's, the user's reading) and one a Gentle Sea Breeze, up
+  to 6 (+36%), from 0 at the start. A TEAM_BUFFS line with `build` is that shape — `true` for a stack a cast, or
+  the stacks per skill (`{ '2': 2, '3': 1 }`, `tcBuildGain`); `stacks` is the cap and the line's value the whole.
+  The fight lands a turn's stacks per cast, the quick screen reads the average over the fight (`tcBuildMean`),
+  and the page shows the share of the whole held.
 - **Kira's Bleed counts its Almighty part** (Nov 2026): 1% of the target's max HP per stack a turn,
   capped at 60% of his ATK (×1.5 from A1), entered at the cap since a boss always reaches it. Only
   lufel's Korean and Chinese text print the cap; the English and Japanese do not, so Global having it
@@ -1541,6 +1740,32 @@ damage formula (`docs/DATA-SOURCES.md`, the damage-formula section):
   ~189% (no cards) Surf held through Splash catches less often than 3 › 2, whose Aerial Tide resets the
   stacks and so the cost; a test pins only the mechanics. Aerial Tide outside Surf is still allowed (lufel:
   0 SP, no cooldown).
+- **Heals are played out for a kit that reads them** (`TC_HEALS`, Nov 2026; the user: Tropical Motoha
+  performs better with a healer). Her kit turns on when healed (Energy Overload! +30% and Summer Starts Here!
+  +25% damage for 2 turns, Stay Cool!'s crit damage at A2, Bubble Puff Star in Summer Hype), and 5 heals give
+  a Tropical Heart, which lets Surf 'n' Shine skip its cooldown — lufel's partner notes give her healers for
+  exactly that. Before, the healed bonuses were judged on at 0.9 from Awareness 1 and not counted at all
+  below it, even with her own Skill 2 and Highlight healing her, and no teammate's heal counted anywhere.
+  `TC_HEALS` lists who heals the damage dealer and when (skills, Highlights, Beachflower Minami's medicines,
+  Ayaka's Chorus on any Highlight, Seaside Tomoko's Resonance after an ally acts, heals over time, Blessing),
+  from lufel's English text; "the ally with the lowest HP" reaches her at `TC_HEAL_LOWEST` (0.5, judged), and
+  Blessing is a heal at the start of her turn, once a turn (assumed: her text counts "healing received from
+  Blessing" once per turn). The fight (`healDps`/`healFrom`/`healAll` in `tcSimRun`) fires her
+  `KIT_STAT_BUFFS` lines `on: 'healed'`/`'healedHype'` (fight only, `upTo` for stacks) per heal: a heal
+  during her own action lands after its count-down, so "2 turns" covers her next two actions. The quick screen
+  prices a member's heals (`vec.heal`, `tcHealSupply`, `tcHealQuick`: a Poisson rate). Her `KIT_ROT` was
+  rewritten: the old single counter capped at 4 let idle turns bank Surf's cooldown, so alone she could cast it
+  three turns running; now `cd` is the 1-turn cooldown (never banked), `ht` the heals toward a Heart, and a
+  cast pays with a Heart first (`alt`, a new rule primitive). In a known team `ally` is the heals its members
+  give her a round on their lufel rotations (`allyHeal`, `tcTeamHeals`); with none, enough for lufel's
+  rotations (whose 3, 3 opening needs a Heart by her second turn). `tmRotPick` drops a lufel option the team
+  cannot heal for, and the fit then plays a composed one even if it prices lower (`tcSimFitDps`); her
+  rotation is fitted in the search's cheaper passes too. The fight note says how often she was healed and
+  by whom. On the real save at Awareness 0: lufel's Minami / Leo / Yumi team 2.81× to 3.18×, Seaside Tomoko /
+  Ayaka / Futaba 5.59× to 6.16×; the best team (Beachflower Minami, Kotone Shiomi, Fuuka, Kumi) 17.70× to
+  18.05×, and the best team without a healer (Mayumi, Kotone Shiomi, Fuuka, Kumi) 15.21× to 14.09×. Healing
+  amounts are not read (every heal counts the same), nor Wonder's heal cards; what is left out is in
+  `TC_HEALS`' comment.
 
 ### Lufel publishes an order, not magnitudes
 

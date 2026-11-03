@@ -1,0 +1,535 @@
+<title>What the Teams Fight Leaves Out</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@75..100,400..800&family=JetBrains+Mono:wght@400;600&display=swap">
+<style>
+/* Layout: one reading column; a sticky control bar; each character is a block with a summary strip and its rows. */
+:root {
+  --bg: #f6f6f8; --surface: #ffffff; --fg: #17161c; --muted: #5d5b68; --line: #dddce3;
+  --accent: #c8102e; --accent-ink: #ffffff;
+  --t-L: #c8102e; --t-M: #b86a00; --t-S: #5f6b7a; --t-C: #127a73; --t-O: #8a8796;
+  --t-L-bg: #fbe5e8; --t-M-bg: #fbefdc; --t-S-bg: #eceef2; --t-C-bg: #dff2f0; --t-O-bg: #efeef2;
+  --f-display: "Archivo", "Arial Narrow", system-ui, sans-serif;
+  --f-body: "Archivo", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --f-mono: "JetBrains Mono", ui-monospace, Consolas, monospace;
+}
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
+  --bg: #121116; --surface: #1b1a21; --fg: #ecebf1; --muted: #a3a1b0; --line: #2e2c37;
+  --accent: #ff4d63; --accent-ink: #16050a;
+  --t-L: #ff6b7d; --t-M: #f0a640; --t-S: #a5b0bf; --t-C: #4cc9bd; --t-O: #8f8c9c;
+  --t-L-bg: #3a1520; --t-M-bg: #36260f; --t-S-bg: #252831; --t-C-bg: #10302d; --t-O-bg: #24232b;
+  color-scheme: dark } }
+:root[data-theme="dark"] {
+  --bg: #121116; --surface: #1b1a21; --fg: #ecebf1; --muted: #a3a1b0; --line: #2e2c37;
+  --accent: #ff4d63; --accent-ink: #16050a;
+  --t-L: #ff6b7d; --t-M: #f0a640; --t-S: #a5b0bf; --t-C: #4cc9bd; --t-O: #8f8c9c;
+  --t-L-bg: #3a1520; --t-M-bg: #36260f; --t-S-bg: #252831; --t-C-bg: #10302d; --t-O-bg: #24232b;
+  color-scheme: dark }
+body { background: var(--bg); color: var(--fg); font-family: var(--f-body); font-size: 15px; line-height: 1.5; }
+.wrap { max-width: 1080px; margin: 0 auto; padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); padding-block: 28px 64px; }
+h1 { font-family: var(--f-display); font-stretch: 78%; font-weight: 800; font-size: clamp(30px, 5vw, 46px); line-height: 1.05; letter-spacing: -0.01em; margin: 0 0 10px; text-wrap: balance; }
+h1 span { color: var(--accent); }
+h2 { font-family: var(--f-display); font-stretch: 85%; font-weight: 700; font-size: 22px; margin: 36px 0 10px; text-wrap: balance; }
+.lede { max-width: 68ch; color: var(--muted); margin: 0 0 18px; }
+.lede b { color: var(--fg); font-weight: 600; }
+.scale { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 8px; margin: 18px 0 8px; }
+.scale div { background: var(--surface); border: 1px solid var(--line); border-radius: 6px; padding: 10px 12px; font-size: 13.5px; min-width: 0; }
+.scale strong { display: block; font-size: 14px; margin-bottom: 2px; }
+.tier { display: inline-flex; align-items: center; gap: 6px; font-family: var(--f-mono); font-size: 11.5px; font-weight: 600; letter-spacing: 0.04em; text-transform: uppercase; padding: 2px 7px; border-radius: 3px; white-space: nowrap; }
+.tier.L { color: var(--t-L); background: var(--t-L-bg); }
+.tier.M { color: var(--t-M); background: var(--t-M-bg); }
+.tier.S { color: var(--t-S); background: var(--t-S-bg); }
+.tier.C { color: var(--t-C); background: var(--t-C-bg); }
+.tier.O { color: var(--t-O); background: var(--t-O-bg); }
+.bar { position: sticky; top: env(safe-area-inset-top, 0px); z-index: 5; background: var(--bg); border-bottom: 1px solid var(--line); padding-block: 10px; margin: 22px 0 6px; display: flex; flex-wrap: wrap; gap: 8px 14px; align-items: center; }
+body::before { content: ""; position: fixed; inset: 0 0 auto; height: env(safe-area-inset-top, 0px); z-index: 10; background: var(--bg); }
+.seg { display: inline-flex; border: 1px solid var(--line); border-radius: 6px; overflow: hidden; }
+.seg button, .chip { font: inherit; font-size: 13px; border: 0; background: var(--surface); color: var(--fg); padding: 6px 10px; cursor: pointer; }
+.seg button + button { border-left: 1px solid var(--line); }
+.seg button[aria-pressed="true"] { background: var(--fg); color: var(--bg); }
+.chips { display: inline-flex; flex-wrap: wrap; gap: 6px; }
+.chip { border: 1px solid var(--line); border-radius: 999px; padding: 4px 10px; display: inline-flex; gap: 6px; align-items: center; }
+.chip[aria-pressed="false"] { opacity: 0.45; }
+.chip .n { font-family: var(--f-mono); font-size: 11.5px; color: var(--muted); }
+button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+input[type="search"] { font: inherit; font-size: 13.5px; padding: 6px 10px; border: 1px solid var(--line); border-radius: 6px; background: var(--surface); color: var(--fg); min-width: 0; flex: 1 1 180px; max-width: 280px; }
+.count { font-size: 13px; color: var(--muted); font-variant-numeric: tabular-nums; }
+.char { background: var(--surface); border: 1px solid var(--line); border-radius: 8px; margin: 12px 0; overflow: hidden; }
+.char header { display: flex; flex-wrap: wrap; gap: 6px 12px; align-items: baseline; padding: 12px 14px 8px; border-bottom: 1px solid var(--line); }
+.char header h3 { font-family: var(--f-display); font-stretch: 85%; font-size: 18px; font-weight: 700; margin: 0; }
+.char header .sum { display: inline-flex; gap: 4px; flex-wrap: wrap; }
+.char header .head-note { flex-basis: 100%; font-size: 13px; color: var(--muted); }
+.row { display: grid; grid-template-columns: 92px 128px 1fr 24px; gap: 4px 12px; padding: 9px 14px; border-top: 1px solid var(--line); align-items: start; }
+.row:first-of-type { border-top: 0; }
+.row .what { min-width: 0; }
+.row .what b { font-weight: 600; }
+.row .why { display: block; color: var(--muted); font-size: 13.5px; margin-top: 2px; }
+.meas { display: block; margin-top: 5px; font-size: 13.5px; padding: 5px 9px; border-left: 3px solid var(--t-C); background: var(--t-C-bg); border-radius: 0 4px 4px 0; }
+.meas b { font-family: var(--f-mono); font-size: 11px; letter-spacing: 0.05em; text-transform: uppercase; color: var(--t-C); margin-right: 6px; }
+.mtable { width: 100%; border-collapse: collapse; font-size: 14px; background: var(--surface); }
+.mtable th, .mtable td { text-align: left; padding: 8px 10px; border-bottom: 1px solid var(--line); vertical-align: top; }
+.mtable th { font-size: 12px; text-transform: uppercase; letter-spacing: 0.05em; color: var(--muted); font-weight: 600; }
+.mtable td.num { font-variant-numeric: tabular-nums; white-space: nowrap; font-weight: 600; }
+.tablewrap { overflow-x: auto; border: 1px solid var(--line); border-radius: 8px; }
+.side { font-size: 12.5px; color: var(--muted); padding-top: 2px; }
+.dir { font-family: var(--f-mono); font-weight: 600; text-align: center; padding-top: 1px; }
+.dir.up { color: var(--t-C); } .dir.down { color: var(--t-L); } .dir.both { color: var(--muted); }
+.legend-dir { font-size: 13px; color: var(--muted); }
+.stale { background: var(--surface); border: 1px solid var(--line); border-radius: 8px; padding: 6px 16px; }
+.stale li { margin: 8px 0; }
+.foot { color: var(--muted); font-size: 13px; max-width: 70ch; }
+code { font-family: var(--f-mono); font-size: 12.5px; }
+@media (max-width: 640px) {
+  .row { grid-template-columns: 1fr auto; }
+  .row .tierc { grid-column: 1; grid-row: 1; }
+  .row .dir { grid-column: 2; grid-row: 1; }
+  .row .side { grid-column: 1 / -1; grid-row: 2; padding-top: 0; }
+  .row .what { grid-column: 1 / -1; grid-row: 3; }
+}
+@media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+</style>
+
+<div class="wrap">
+  <h1>What the Teams fight <span>leaves out</span></h1>
+  <p class="lede">Every effect in a character's kit that the planner does <b>not</b> price, collected from the four places the code records them: the "not priced" notes on each teammate, the same notes on each damage dealer, Wonder's Persona and weapon notes, and the warnings on the rotation rules. Notes that only say "this is a self-buff, already counted", "healing", "shield" or "skill level-up, covered by the tiers" are left out, because they change nothing.</p>
+  <p class="lede">The grades on the largest items are measured (below). The rest are <b>a judgement, not a measurement</b>: how much the Teams number for that character's teams would move if the item were priced, read from the size the kit text gives, how often it would be up, and how much of the damage factor it would land in (a +20% damage line lands in a sum that is already around 2.5×, so it moves the total by roughly 7%; a separate multiplier such as final damage or Skill Amplification moves it almost one for one). Build scores barely move for any of these: they only read a kit through its fight alone.</p>
+
+  <div class="scale" aria-label="Grades">
+    <div><strong><span class="tier L">Large</span></strong>Likely more than 10% on the teams it is in, or a whole damage source missing.</div>
+    <div><strong><span class="tier M">Medium</span></strong>Roughly 3–10%, or large but only at a high Awareness or in some teams.</div>
+    <div><strong><span class="tier S">Small</span></strong>Under about 3%, or rare.</div>
+    <div><strong><span class="tier C">Not in default fight</span></strong>Zero against the default boss (one foe, every hit on a weakness, cannot be knocked down, HP not tracked); real under other settings.</div>
+    <div><strong><span class="tier O">Outside the number</span></strong>Damage by someone other than the damage dealer. The team number never counts it, by design.</div>
+  </div>
+  <p class="legend-dir"><span class="dir up">↑</span> pricing it would raise the number (the planner undercounts) · <span class="dir down">↓</span> would lower it (the planner overcounts) · <span class="dir both">±</span> unclear which way</p>
+
+  <h2 id="measured">The large ones, measured on your save</h2>
+  <p class="lede">Each gap was entered as a test version from lufel's skill text and the Teams search run with and without it, on your newest save (56), for your 16 owned damage dealers at the default fight. A teammate's figure is how much their team's number goes up, with the same lineup on both sides; a damage dealer's is how much more damage they deal. Nothing in the planner was changed. Figures are medians, with the range across damage dealers.</p>
+  <div class="tablewrap"><table class="mtable">
+    <thead><tr><th>Effect</th><th>Their teams</th><th>What it changes</th></tr></thead>
+    <tbody>
+      <tr><td><b>Summer Ichigo</b>: Ram: Miracle Ichi-Boat <span class="tier C">now priced</span></td><td class="num">leads 13 of 16</td><td>Entered in the planner on 2 Nov, HP part priced without ATK and seen by the quick shortlist. With her marked owned (no cards) the Ram is 36–70% of the damage dealer's damage; Kasumi, Makoto Yuki and Mitsuru keep teams without her. The first rough test (ATK raising the HP part) read +105% to +413%.</td></tr>
+      <tr><td><b>Ryuji</b> (A2): Fearless Charge, 35% DEF ignore <span class="tier C">now priced</span></td><td class="num">+30% alone<br><span class="legend-dir">+33% in his team</span></td><td>Entered on 2 Nov as Pierce 35 on his skill hits (lufel's defence calculator lists it that way), from Awareness 2; yours is A0, so nothing moves on your save. At A2 his best team becomes the twins / Kotone / Fuuka / Kumi (24.1×).</td></tr>
+      <tr><td><b>Radiance Motoha</b>: Light stacks on Spear of Light <span class="tier C">now priced</span></td><td class="num">+28% alone<br><span class="legend-dir">+13% in her team</span></td><td>Entered on 2 Nov as stats on her Highlight: ATK +88% (3 Light), crit damage +30% on one boss, +30% more at A4 (alone +36%, team +17%). Smaller in a team than the rough test said, because the ATK now adds to the team's ATK buffs instead of multiplying them. Not owned; tested with no cards.</td></tr>
+      <tr><td><b>The twins</b>: Skill Amplification <span class="tier C">now priced</span></td><td class="num">+20%<br><span class="legend-dir">+1 to +29%</span></td><td>Entered on 2 Nov: their teams' damage dealer hits harder with skills, and the others' skill buffs cast under it are stronger. They now lead Ryuji's best team (24.9× against 24.6×); the first rough test's upper bound had them beating 7 of 16.</td></tr>
+      <tr><td><b>Yumi</b>: Cocktails and Invigorating Blend <span class="tier C">now priced</span></td><td class="num">+13%<br><span class="legend-dir">+5 to +31%</span></td><td>Entered on 2 Nov: the fight counts her Cocktails by the elements of the allies' hits, and her Skills 1–3 and Awareness use them. At Awareness 0 she spends 2.65 strength a cast; at Awareness 6 about 5.2, and her teams climb a lot (Ann's 9.6× to 13.8×). She still leads no best team. The first rough test (two Cocktails a cast) read +15% to +18%.</td></tr>
+      <tr><td><b>Tempest Riko</b>: SP spent sets Blossoming Season's strength <span class="tier C">now priced</span></td><td class="num">+5.5%<br><span class="legend-dir">+4 to +7%</span></td><td>Entered on 2 Nov. The Japanese text settles it: the tiers are granted at 1% strength per 2 SP spent, so the printed values are at a full 200 SP, not a bonus on top as the first rough test read it (+8% / +21%). The fight follows her SP turn by turn; at her saved 498% SP Recovery she spends 189 a cast. She leads no best team.</td></tr>
+      <tr><td><b>Miku</b> (A1): Hologram Screen Skill Amplification <span class="tier C">now priced</span></td><td class="num">+4%<br><span class="legend-dir">+3 to +10% at A1</span></td><td>Entered on 3 Nov: her own skill buffs are 15% stronger from Awareness 1, and her 5-star weapon adds 10% (R0) to what she casts in Virtual Concert. At your Awareness 0 only the weapon part counts: +0.1%. At A1 she also leads Yusuke's best team.</td></tr>
+      <tr><td><b>Wavecatcher Miyu</b>: Surf lengthens buffs</td><td class="num">none</td><td>Settled by the Korean text, not measured: it lengthens only her own states.</td></tr>
+    </tbody>
+  </table></div>
+  <h3>Second batch, measured 3 Nov</h3>
+  <p class="lede">The next ten that could be entered, measured the same way. None of them changes a best team on your save.</p>
+  <div class="tablewrap"><table class="mtable">
+    <thead><tr><th>Effect</th><th>Their teams</th><th>What it changes</th></tr></thead>
+    <tbody>
+      <tr><td><b>Yaoling</b>: Highlight damage taken, if it lasts a turn</td><td class="num">+4.8%<br><span class="legend-dir">+0.6 to +12.5%</span></td><td>No duration is printed; tested as 1 turn (the upper reading). Largest for Makoto Niijima (+12.5%) and Frostgale Kotone (+10%), but her teams stay well behind the best ones.</td></tr>
+      <tr><td><b>Makoto Yuki</b>: Scarlet Hades' +32.5% skill multiplier</td><td class="num">+6 to +9% alone<br><span class="legend-dir">+3 to +9% in his team</span></td><td>+6.2% alone read as damage, +9.3% as a multiplier of its own. His best team stays Kotone / Mitsuru / Fuuka / Kumi.</td></tr>
+      <tr><td><b>Makoto Niijima</b>: Nuclear Finisher's ATK on an ailing foe</td><td class="num">+8.1% alone<br><span class="legend-dir">+4.3% in her team</span></td><td>+30% ATK (R0) whenever the boss has an elemental ailment. Her best team stays Beachflower Minami / Kotone / Miku.</td></tr>
+      <tr><td><b>Kotone Shiomi</b>: Vetri Vel Muruga's Skill Amplification <span class="tier C">now priced</span></td><td class="num">+2.7%<br><span class="legend-dir">−1.2 to +4.4%</span></td><td>Entered on 3 Nov: 10% (R0) on her own skill buffs from the round Lunar Bond reaches 5 (round 3 at Awareness 0). She is in all 16 of your best teams, so it raises nearly every one; Ryuji's best becomes Kotone / Mitsuru / Fuuka / Kumi (25.8×). Ryuji's twins team falls 1.2%: the full rotation fit settles somewhere slightly worse, though it gains 2–4% at every cheaper fit. The fit now takes two changes a step instead of one, which fixed the same fall for Ichigo's team (now +3.3%) and raised six of your best teams by 0.3–5%.</td></tr>
+      <tr><td><b>Seaside Tomoko</b>: Hale Summer Days' ATK from ailment accuracy</td><td class="num">+2.8%<br><span class="legend-dir">−1.3 to +3.1%</span></td><td>Tested at its low end (+14.7% ATK, from the 58.6 accuracy she gives). Her teams stay far behind.</td></tr>
+      <tr><td><b>Runa</b>: Resonance damage taken</td><td class="num">0%<br><span class="legend-dir">up to +7.8%</span></td><td>Only Resonance damage dealers gain: Wavecatcher Miyu +7.8%, Frostgale Kotone +3.8%, Yusuke +2.5%.</td></tr>
+      <tr><td><b>Kiyoshi</b>: Highlight Fire damage taken, if it lasts a turn</td><td class="num">0%<br><span class="legend-dir">up to +5.3%</span></td><td>Fire damage dealers only; Makoto Yuki +5.3%.</td></tr>
+      <tr><td><b>Kumi</b>: Tenacious Teacher, both readings</td><td class="num">0%<br><span class="legend-dir">up to +2.8%</span></td><td>Read as +50 points of DEF down or as ×1.5 on Hard Knocks, it barely matters: in her teams the boss's DEF is already almost entirely removed, so more DEF down adds almost nothing.</td></tr>
+      <tr><td><b>Ichigo</b>: Melting Ichi-Go Butter (+15% damage over time)</td><td class="num">0%</td><td>Nothing on your roster deals priced damage over time beside her.</td></tr>
+    </tbody>
+  </table></div>
+  <p class="foot">These runs turned up two search misses, fixed on 3 Nov. With an unrelated change entered, the search showed Tropical Motoha's best team with Tempest Riko as Fuuka's backup (18.3×) instead of Kumi (19.9×): the backup was chosen with a cheaper version of the fight than the list is ranked on. And with Miku at Awareness 1, Akihiko's search showed a Fuuka team (25.6×) over Miku's (27.0×): only the top three teams got the fight with every rotation fitted, and Miku's team was fourth. Now the backup is chosen on the list's own fight, and each Elucidator's best team gets the full fight too. On your save no shown team changed; the search takes about 10% longer.</p>
+  <p class="foot">Not measurable as things stand: Kira's Bleed cap and Ichigo's Lovesick (the numbers are not published), Starlight Ren's Dance Fever Gala (All-Out Attacks are not played), Aigis at Awareness 6 (the English and Korean texts disagree).</p>
+
+  <h2 id="every">Gaps that touch many characters</h2>
+  <p class="lede">These are mechanics the fight has no model for at all. Each one shows up again under the characters it affects.</p>
+  <div id="global"></div>
+
+  <h2 id="bychar">By character</h2>
+  <div class="bar" role="toolbar" aria-label="Sort and filter">
+    <div class="seg" role="group" aria-label="Sort">
+      <button type="button" id="sortImpact" aria-pressed="true">Biggest effect first</button>
+      <button type="button" id="sortRoster" aria-pressed="false">Release order</button>
+    </div>
+    <div class="chips" id="tierChips" aria-label="Grades shown"></div>
+    <div class="chips" id="sideChips" aria-label="Kind shown"></div>
+    <input type="search" id="q" placeholder="Find a character or effect" aria-label="Find a character or effect">
+    <span class="count" id="count"></span>
+  </div>
+  <div id="list"></div>
+
+  <h2 id="stale">Notes in the code that are out of date</h2>
+  <p class="lede">Found while collecting these. Each note still says "not priced" but the model has since moved on, so the note itself should be updated; they are not counted above.</p>
+  <ul class="stale">
+    <li><b>Fuuka, Global 4.12 buff.</b> The skip note says the calculator "should scale them"; her Radiant Power, Holy Prayer and Spirit Wave lines already carry the ×1.2 (×4/3).</li>
+    <li><b>Elemental ailments as enablers</b> (Ann's Rosethorn and Trifire Burn, Ryuji's Shock, Morgana's Windswept, Motoha's Shock, Lufel's Burn). The fight now tracks Burn, Freeze, Shock and Windswept for 31 characters; what is still missing is only a reader for some of them (listed per character).</li>
+    <li><b>Pixie and Seth</b> say "Down is not modelled". Knockdowns are played out when the boss is given Down Points; these two Persona lines were just never entered.</li>
+    <li><b>Ichigo's Melting Ichi-Go Butter</b> and <b>Runa's Resonance damage-taken lines</b> say there is no key for them. <code>dotDm</code> and <code>resDm</code> exist now, so both can be entered.</li>
+    <li><b>Starlight Morgana, Not Done Dancing Yet (A4).</b> Its new +10% lines are permanent from the first Highlight; the note's "only the 3-turn version" now applies only to the Highlight's original 29.3–34.1% debuffs.</li>
+  </ul>
+
+  <p class="foot">Sources in <code>src/logic.js</code>: <code>TEAM_BUFF_SKIPS</code>, <code>DPS_KIT_SKIPS</code>, <code>WONDER_SKIPS</code> and the <code>caveats</code> in <code>KIT_ROT</code>, plus the "Not priced" list in CLAUDE.md. Collected 2 Nov 2026. Characters with nothing listed have every damage-relevant effect priced, or only notes about self-buffs, healing and shields.</p>
+</div>
+
+<script>
+// [character, kind, grade, direction, effect, why]
+// kind: dd = their own damage as the damage dealer, tm = what they give a team, rot = how the composer may write their rotation
+var ORDER = ["Ann Takamaki","Ryuji Sakamoto","Morgana","Yaoling Li","Haruna Nishimori","Lufel","Leo Kamiyama","Motoha Arai","Kotone Montagne","Shun Kano","Seiji Shiratori","Yukimi Fujikawa","Kiyoshi Kurotani","Tomoko Noge","Toshiya Sumi","Miyu Sahara","Kayo Tomiyama","Ren Amamiya","YUI","Minami Miyashita","Yusuke Kitagawa","Makoto Niijima","Chizuko Nagao","Yumi Shiina","Ayaka Sakai","Riko Tanemura","Motoha Arai [Tropical]","Tomoko Noge [Seaside]","Kira Kitazato","Futaba Sakura","Masaki Ashiya","Haru Okumura","Justine & Caroline","Kotone Montagne [Frostgale]","Runa Dogenzaka","Riko Tanemura [Tempest]","Mio Natsukawa","Yaoling Li [Firecracker]","Kasumi Yoshizawa","Mayumi Hashimoto","Goro Akechi","Manaka Nagao","Shoki Ikenami","Makoto Yuki","Yukari Takeba","Akihiko Sanada","Hatsune Miku","Minami Miyashita [Beachflower]","Miyu Sahara [Wavecatcher]","Ichigo Shikano","Kumi Katayama","YUI [Prism]","Kotone Shiomi","Mitsuru Kirijo","Fuuka Yamagishi","Shoki Ikenami [Notte]","Shun Kano [Pioneer]","Junpei Iori","Narumi Nashimoto","Koromaru","Motoha Arai [Radiance]","Aran Hirano","Aigis","Ren Amamiya [Starlight]","Morgana [Starlight]","Ann Takamaki [Starlight]","Ayaka Sakai [Summer]","Ichigo Shikano [Summer]","Wonder"];
+
+var GLOBAL = [
+  ["L","+","All-Out Attacks, 1 More and Dizzy","Not played at all. Largest for Starlight Ren (Dance Fever Gala's fixed damage per All-Out Attack), YUI [Prism] (Potato Power), Riko (+60% to them), and Beachflower Minami's One More medicine."],
+  ["L","+","Skill Amplification (strengthening skill values)","The twins give it to the other allies (14.6–17%; priced since 2 Nov, their teams +20%); Miku (15% at A1, priced since 3 Nov) and Kotone Shiomi's weapon (10–19%, still not priced) give it to themselves."],
+  ["M","+","Party HP and DEF buffs for HP- and DEF-scaling damage dealers","The team model has no HP or DEF key. Yukimi, Ashiya and Miyu raise DEF; Shun Kano, Minami and Seaside Tomoko raise max HP. Their partners Yusuke, Ashiya, Junpei, both Shuns, Kiyoshi, Summer Ichigo and Beachflower Minami are rated without it, so their best partner may be wrong."],
+  ["M","+","Damage over time with no published value","Burn ticks (Ann, Starlight Ann, Runa, Firecracker Yaoling) and Lovesick (Ichigo) deal nothing in the fight because lufel prints no number. For Ichigo it is most of her kit."],
+  ["M","+","Spiritual ailments","Sleep, Forget, Despair, Brainwash and Curse (beyond Pazuzu's) are not tracked. Matters for Tomoko's +36% party damage, Yaoling, Toshiya, and several Wonder Personas."],
+  ["M","±","Boss HP thresholds","The fight has no boss HP, so \"below 50% HP\" and \"above 70% HP\" lines count never. Ann's Trifire, Kotone Montagne's missing-HP bonuses, Ichigo's opening Vorpal Butterfly, Belphegor, Jikokuten."],
+  ["M","+","The damage dealer's own HP","Ryuji, Yusuke, Shoki [Notte], Tropical Motoha and Leo's partners have lines that hang on the user's HP. Ryuji's are the largest, and are why lufel pairs him with Leo."],
+  ["M","+","Effects that lengthen other buffs","Wavecatcher Miyu's Surf (+1 turn to buffs and debuffs applied), Kotone Shiomi's Fortune, Frostgale Kotone's A6, Mio's A4. If Surf reaches allies' buffs, it is large."],
+  ["M","+","Extra actions","Mayumi's Velocity turns, Narumi's for Wonder, Junpei's free Power Swing at A6, the Yggdrasil Evolution card. Miku's and Manaka's are played; these are not."],
+  ["M","↓","Boss ailment resistance","Every ailment lands at its stated chance. Teams built on ailments (Queen's Chief Strategist, Rin and Mio's Burn) are rated a little high."],
+  ["C","+","Weakness creation and resistance removal","Futaba's Virus, Koromaru's Attribute Downgrade, Jatayu, Orobas, Yurlungur. Worth nothing while the fight assumes every hit lands on a weakness (the default); real with the weakness setting on \"boss resistances\" or \"none\"."],
+  ["C","+","Effects that need two or more foes","On by default only for an AoE damage dealer, whom Auto puts against 5 foes. Pioneer Shun's High Noon Flag, Aran's Ritual Fire and A6, Haru's A1, YUI's splash."],
+  ["S","±","SP","Nothing publishes SP refill, so SP restoration (Tempest Riko, Narumi) is not priced and lufel's rotations stand in for SP limits."],
+  ["O","+","Wonder's own damage, and teammates' own hits","The number is how much the team multiplies the damage dealer's damage, so Wonder's attacks, Miku's Neverending Song, Aran's Sin copies, Mitsuru's Iceblade and similar teammate hits never count. Personas whose value is mostly Wonder's own damage (Thor, the ATK talents) rank low for this reason."]
+];
+
+var D = [
+["Ann Takamaki","dd","M","+","Burn damage over time","Trifire (75%), Falling Sun (30%) and Rosethorn inflict Burn, but lufel gives Burn no damage value, so the ticks deal nothing."],
+["Ann Takamaki","dd","M","+","Trifire's +30% below 50% boss HP","On one boss the composer puts Trifire on every turn; with no boss HP the extra 30% never applies, though it would for about half a real fight."],
+["Ann Takamaki","tm","S","+","A6 Time for Punishment","Extra Passion chance means more La Vie en Rose time than the single uptime used."],
+
+["Ryuji Sakamoto","dd","L","+","Fearless Charge (A2): skill crits ignore 35% DEF","Ryuji always crits, so it covers all his skill hits from A2.","Priced in the fight since 2 Nov, as Pierce 35 on his skill hits from Awareness 2 (lufel's defence calculator lists it as Pierce; the Korean text puts it at A3). At A2 his damage alone +30%, his best team's +33%; nothing moves at your A0."],
+["Ryuji Sakamoto","dd","M","+","Rebound and Grand Presser at low HP","Both grow as his own HP drops; the fight has no HP. This is the reason lufel pairs him with Leo."],
+["Ryuji Sakamoto","rot","S","-","Lone charge on the last turn","Skill 3 is half a hit on each 3; a charge on the final turn is credited half a hit that never lands."],
+
+["Yaoling Li","tm","M","+","Highlight: foes take +48.8–56.8% damage (+20% more at A4)","No duration is printed. If it lasts a turn it is large; if it only covers the Highlight's own hit, nothing."],
+["Yaoling Li","tm","S","+","Red Spider Lily ends after 2 hits","How many of the two hits are the damage dealer's depends on turn order and hit counts."],
+["Yaoling Li","tm","C","+","Forget and Curse","Flowers of Naihe (+2% damage taken per 10 Speed on a foe with Forget) and Up to Chance (+30% Curse damage taken) need spiritual ailments, which are not tracked; Skill 2 is not in her rotations."],
+
+["Haruna Nishimori","tm","M","+","A2 Here to Help (ATK and crit damage +24%)","Read as Haruna's own buff. If it reaches the ally, it is a sizeable party buff."],
+["Haruna Nishimori","tm","S","+","Chirpy Pickaxe","ATK per ATK buff after a skill on an ally; unclear who gets it."],
+
+["Lufel","tm","M","+","Fallen Angel Wing (5★ weapon): ATK +22–43% per Starfire stack","Unclear whether the ally with Starfire or Lufel gets it. If the ally, a large ATK line for Fire teams."],
+["Lufel","tm","S","+","A6 Starfire III","8% of Lufel's ATK and +20% Fire damage, if III is ever reached; Skill 1 keeps handing out a fresh Starfire."],
+["Lufel","tm","S","+","A1 Owl Eyes ailment accuracy","Only matters for a damage dealer that converts ailment accuracy into damage (Runa)."],
+
+["Leo Kamiyama","tm","M","+","Lowering Ryuji's HP","His HP-cost skills drive Ryuji's low-HP bonuses (see Ryuji). Without HP in the fight Leo is undervalued for him."],
+["Leo Kamiyama","tm","C","+","Turning the Tables and Justice Lance","Crit damage +25% for an ally under 60% HP; ATK per 20% HP lost. Both need HP states."],
+["Leo Kamiyama","tm","C","+","Intense Link (A1) DEF +10%","Only for a DEF-scaling damage dealer; no DEF key."],
+
+["Motoha Arai","rot","S","-","Electroshark without Shock","Priced with its Technical bonus (needs a Shocked foe); a composed rotation that casts it on an unshocked boss is overpriced."],
+
+["Kotone Montagne","dd","M","+","Blade Dancer Resonance always crits","The format cannot mark it, so it is priced at her crit rate. Worth roughly a quarter more on that share of her damage."],
+["Kotone Montagne","dd","M","+","Missing-HP bonuses","Ice Princess (A2, Resonance up to +50%), Durandal of Ice, her Highlight and Parhelion all grow as the boss loses HP."],
+["Kotone Montagne","dd","S","+","Queen of Winter rate, A6 Opening Ceremony","Blade Dancer at 8+ Crystals; +4 Crystals once at battle start."],
+
+["Shun Kano","tm","M","+","Daunting Firepower: 10% chance per shot, foe DEF −35%","A large DEF cut at a low chance; how many shots a Gun action fires is not known."],
+["Shun Kano","tm","C","+","Party max HP (Icy Defense, Highlight)","Only for HP-scaling damage dealers; no HP key."],
+
+["Seiji Shiratori","dd","S","+","Clumsy Swordwielder (A6) extra hit at 5 stacks","Simulated to reach 5 stacks on 1–2% of casts."],
+
+["Yukimi Fujikawa","tm","M","+","Karmic Cycle (5★ weapon): steals 13–34% of the target's DEF","Capped in DEF points and tied to her DEF, so it was never turned into a DEF-down percentage. Against a DEF-1280 boss it is a large cut."],
+["Yukimi Fujikawa","tm","C","+","Ally DEF up (Skill 2, Highlight, A1)","Matters only to Yusuke and Ashiya; no DEF key."],
+["Yukimi Fujikawa","tm","S","+","Gavel stacks above 2","More Blessing at A2+; count not settled."],
+
+["Kiyoshi Kurotani","tm","M","+","Highlight: all foes take +30.1–34.4% Fire damage","No duration printed; may cover only the Highlight's own hit. Large for Fire teams if it lasts."],
+["Kiyoshi Kurotani","tm","M","+","Contagious Passion (A6): party Fire damage +30% per 10 stacks","Unclear whether it triggers each 10 gained or grows with the total."],
+["Kiyoshi Kurotani","dd","M","+","Chosen One stacks from a Burning target (+25% Fire damage, up to 5)","Burn is now tracked, so a Burn teammate could feed this; it is not wired."],
+["Kiyoshi Kurotani","tm","S","+","Baptism by Fire (5★ weapon): +18–33% damage taken when he Burns","His rotation rarely Burns (A1's chance only)."],
+
+["Tomoko Noge","tm","M","+","Insult to Injury: party damage +36% against a foe with a spiritual ailment","Hinges on Sleep holding on the boss, which damage normally breaks. Large when it holds, so it is graded medium."],
+["Tomoko Noge","tm","S","+","Spirit's Lullaby","The larger next-hit damage taken when Sleep lands."],
+
+["Toshiya Sumi","dd","M","+","Verses from allies' follow-ups, Resonances and damage ticks","Only teammates' skills and Highlights give Verses; follow-up-heavy teams feed him more than the fight says."],
+["Toshiya Sumi","dd","S","+","Scream from the Soul (A4) and Life Advice","\"Increase damage of the next 4 Sonnets\" has no number; Life Advice's extra conversions are unclear."],
+["Toshiya Sumi","tm","S","+","Curse from Flight and Conflict (A2)","Spiritual ailment, not tracked."],
+
+["Miyu Sahara","tm","S","+","Runaway (A6) +20% damage at 8 Seashells","How often 8 is held is unclear."],
+["Miyu Sahara","tm","C","+","DEF buffs","Only for DEF-scaling damage dealers."],
+["Miyu Sahara","rot","S","-","Skill 1 back to back","Assumes the boss breaks all four shields every round."],
+
+["Kayo Tomiyama","tm","M","+","Retro Dance Number: her damage buff ×1.5 against an ailing foe","Elemental ailments are tracked now, so this could read the boss's state; it is not wired."],
+["Kayo Tomiyama","tm","M","+","Pulsating Rhythm held at 1 stack of 3","Each stack is party ATK +20%; A2/A4/A6 and both weapons add Beat, so the real average is likely above 1."],
+["Kayo Tomiyama","tm","M","+","Outdated Slang: +15% damage to an ally who inflicts an elemental ailment","Readable from the ailment tracker now; not wired."],
+
+["Ren Amamiya","dd","S","+","Merciless Pursuit below 25% HP","Up to 250% ATK once per foe; needs boss HP."],
+["Ren Amamiya","tm","C","+","Trickster's Plunder: 20% Curse chance","Spiritual ailment, not tracked."],
+
+["YUI","dd","S","+","Skill 1 +30% on a Shocked foe","Needs a teammate's Shock, which is tracked now; not wired."],
+["YUI","dd","S","±","Jolly Cooperation's reading","Korean says \"any thief\" (her own Skill 1 too); whether Player 2 sets off both follow-ups is not stated."],
+["YUI","tm","S","+","Jolly Cooperation: next Electric damage taken +15%","One hit, likely used by her own follow-ups."],
+["YUI","dd","C","+","Humongously Huge Harvest splash","Hits other foes only."],
+
+["Minami Miyashita","tm","M","+","Health Comes First: +3% per Blessing stack, up to 30%","Stack count and whether they are spent is not stated."],
+["Minami Miyashita","tm","C","+","Party max HP","Only for HP-scaling damage dealers."],
+
+["Yusuke Kitagawa","dd","M","+","Both Beauty and Vice (A2): +35% while his HP is above 70%","A shield tank probably holds it most of the fight."],
+["Yusuke Kitagawa","dd","M","+","A6 +30% Pierce on counters","Pierce is in the defence factor now; this stat line is not entered."],
+["Yusuke Kitagawa","dd","M","±","Counter count","Needs the boss to hit him with a skill; a boss that hits several times a round, or ignores Taunt, changes it."],
+
+["Makoto Niijima","dd","M","+","Nuclear Finisher's ATK","A stat line, not entered."],
+["Makoto Niijima","dd","S","+","What Radiation does","Not in lufel's text (Chizuko's A0 is priced)."],
+["Makoto Niijima","rot","S","-","Tenacity gain fixed at 2 ailment kinds a round","Alone she averages about 1.5, so a composed Transform can come a turn early."],
+
+["Chizuko Nagao","tm","S","-","Bullseye Bomber at its printed cap","Damage taken grows with ailment kinds on the foe; entered at the top."],
+
+["Yumi Shiina","tm","L","+","Invigorating Blend (Skill 3) has no team line at all","Party damage of the target's element +1% per 230 of her ATK for each 100% of Cocktail strength spent, ×1.2 on the target, and target crit damage +20–24.4% with 2+ good Cocktails, 2 turns. Her rotation casts it every other turn.","Priced in the fight since 2 Nov, with her Cocktails counted: a Mixer of each ally's element per damaging skill, Highlight or Resonance hit, three to a Cocktail. Her best team with each damage dealer +13% (median, +5% to +31%) at Awareness 0; she still leads none."],
+["Yumi Shiina","tm","M","±","Tempting Build: a Cocktail strengthens a skill by 120/100/50%","The English says an ally's skill; the Korean says Yumi's own skill (Tempting Build itself).","Priced since 2 Nov on the Korean reading: Tempting Build spends her best Cocktail and its own ATK buff is ×2.2 with a Tailor-Made. A median 14% of her gain (−12% to 49%)."],
+["Yumi Shiina","tm","S","+","Moonlit Feather: one random party buff per Cocktail","Random pick."],
+
+["Ayaka Sakai","tm","M","+","Rock 'n' Roller (4★ weapon): ATK +28–52% after Catchy Hook","No target named, read as hers. If it reaches the ally, it is large."],
+["Ayaka Sakai","tm","S","+","Hard Rock (A1): crit rate +15% to the top-ATK ally at battle start","Duration not stated."],
+["Ayaka Sakai","rot","S","-","Third and later Catchy Hooks","Allowed every 3rd turn below A6, one turn early."],
+
+["Riko Tanemura","tm","C","+","Plum Blossom Glory: 1 More and All-Out Attack damage +60%","All-Out Attacks are not played."],
+["Riko Tanemura","tm","S","+","Fair Winds growth, Sky's Edge, Red Plum Blossom","Growth per Intel spent, damage per 2 Insight, a random party buff."],
+
+["Motoha Arai [Tropical]","dd","S","+","Highlight +25% above 50% HP; healing-triggered bonuses below A1","Own HP, and a healer in the team."],
+["Motoha Arai [Tropical]","rot","S","-","Skill 3 twice without a Heart","The cooldown's recharge can stand in for a Heart."],
+
+["Tomoko Noge [Seaside]","tm","M","+","Hale Summer Days: ATK +25% of the target's ailment accuracy (up to 22.5%)","Depends on the damage dealer's ailment accuracy; large for Runa, small for most."],
+["Tomoko Noge [Seaside]","dd","S","+","A4 Highlight bonus hits, A6 Resonance crit rate +35%","No coefficient for the hits; the crit line is not entered."],
+["Tomoko Noge [Seaside]","tm","C","+","Soothing Waves: main target max HP +1800","HP-scaling damage dealers only."],
+
+["Kira Kitazato","dd","L","±","Bleed's cap","Priced at a cap of 60% ATK per stack (90% from A1), which only the Korean and Chinese text print. If Global has no cap, Bleed is a share of boss max HP, which nothing models.","Not measurable: the fight has no boss HP, and Global's rule is not known."],
+["Kira Kitazato","dd","M","+","All his skill and Highlight damage counts as damage over time (Korean text)","Then a teammate's damage-over-time buff would reach all of it."],
+["Kira Kitazato","dd","M","+","A1 Ripper bonus from teammates' debuffs, Bloodletter's Pierce","Not entered."],
+["Kira Kitazato","dd","S","+","Ayaka's Highlight stacking Bleed","lufel's partner note; not assumed."],
+["Kira Kitazato","dd","S","-","Extra Bleed tick on Ripper Skill 2 turns","A small overcount."],
+["Kira Kitazato","rot","S","-","Bleed never expires in the rules","A rotation with many turns between Doctor skills can still Transform."],
+
+["Futaba Sakura","tm","M","+","Zero-Day Exploit (A4): +8% skill effect per Security Flaw stack","Effect amplification, fed by allies' Highlights."],
+["Futaba Sakura","rot","M","-","Data Storm on every Skill 1/2","The kit needs 100% Analysis Progress first, so a Skill 1/2 every round gets party damage it may not have."],
+["Futaba Sakura","tm","C","+","Virus and A6 Data Link","Weakness creation; zero while every hit is on a weakness."],
+
+["Masaki Ashiya","tm","S","+","Frost Vines: damage taken +2% per 600 DEF","Skill 1 is not in lufel's 3-2 rotation."],
+["Masaki Ashiya","tm","C","+","Ally DEF up; Flower Knight's Devotion","DEF kits only; stacks when an ally resists an enemy ailment."],
+
+["Haru Okumura","rot","M","-","Gun ammo","Ammo is not in the kit text, so Gunshot many turns in a row is not limited."],
+["Haru Okumura","dd","S","±","Thoughtful Round count bonus and the A6 reading","Count bonus on the shot only; A6's \"all effects once\" is a judgement."],
+["Haru Okumura","dd","C","+","A1 extra Extrasensory Aim","Needs a new foe to appear."],
+
+["Justine & Caroline","tm","L","+","Two Masks as One: Skill Amplification 14.6–17% to other allies","\"Increase the values of skills… calculated separately\": the other members' skill damage and skill buffs, for 2 turns. Not priced anywhere.","Priced in the fight since 2 Nov: the damage dealer's skill hits, and the skill buffs the others cast while it is up. Her teams +20% (median, +1% to +29%); the twins now lead Ryuji's best team (24.9× against 24.6×) and no other."],
+["Justine & Caroline","dd","M","+","Damage mask pairs as damage dealer","As a damage dealer her kit is the Strategist pair's; an Assassin pair (two Two Masks hits, other Highlight numbers) is not entered."],
+["Justine & Caroline","tm","M","+","Absurdity & Nonsense Highlight: ATK +34.2–39.8% to the top-ATK ally","Only the party (Mischief) Highlight is entered."],
+["Justine & Caroline","dd","M","+","A6 \"Persona performance +20%\"","Would scale every number by 1.2 if it means 100 → 120; ambiguous."],
+["Justine & Caroline","tm","S","+","Desire at A6, Warden's Judgement, True Desire every 8 actions","Entered at Desire 100; the periodic all-Facade activation is not."],
+
+["Kotone Montagne [Frostgale]","tm","M","+","Winter mode for an Ice damage dealer","Iceburst's +13.7–14.5% Ice damage taken on a Frozen foe; Freeze is tracked now but Winter is never entered."],
+["Kotone Montagne [Frostgale]","tm","M","+","Dance of Love (A6): Edge 1 more turn","Lengthens the A2 DEF down and Ice window; only the 1-turn Edge is priced."],
+["Kotone Montagne [Frostgale]","tm","M","+","Lame de l'Amour (5★ weapon): Wind/Ice damage +27–51%","No target named, read as hers."],
+["Kotone Montagne [Frostgale]","dd","M","+","Does \"allies\" in Ailes au Vent include her?","If so her own Wind skills in the Edge add a hit and a stack each."],
+["Kotone Montagne [Frostgale]","dd","S","+","Vestige cap, A6 extended Edge, Spring Highlight extra hit","Small counts assumed or no value printed."],
+
+["Runa Dogenzaka","tm","M","+","Furrocious Follow-Up, A1, A6: Resonance damage taken","The key exists now (resDm); not entered. Matters for Resonance damage dealers (Wavecatcher Miyu, Kotone Montagne, YUI)."],
+["Runa Dogenzaka","tm","S","+","Enthusiastic Fuse per-hit boost; A0 DEF −18% at 60%","Not a timed buff; chance-based."],
+["Runa Dogenzaka","rot","S","-","Skill 3 always priced as Follow-Up","After Skill 1 the game fires the weaker Big Welcome instead."],
+["Runa Dogenzaka","dd","S","+","Welcome Hug Burn","No Burn damage value."],
+
+["Riko Tanemura [Tempest]","tm","M","+","Blossoming Season: 1% strength per 2 SP spent","It spends all her SP; every tier was entered at base value.","Priced in the fight since 2 Nov, her SP followed turn by turn (full at the start, a refill each turn from lufel's 480.1% note). The Japanese text makes the printed values the 200 SP ones. At her saved 498% SP Recovery: 189 SP a cast, her teams +5.5% (median, +4% to +7%), she leads none."],
+["Riko Tanemura [Tempest]","tm","M","+","Vernal Splendor 5/10 stacks","The stack bonuses depend on the damage dealer's hit count. (Blossoming Season's 100 and 150 SP tiers are priced since 2 Nov.)"],
+["Riko Tanemura [Tempest]","tm","M","+","A6 Storm of Petals","1 more turn of Falling Petals and an automatic extra cast."],
+["Riko Tanemura [Tempest]","rot","S","-","Blossoming Season below 50 SP","The fight now prices a cast on little SP low, so the rotation fit avoids it; the rules still allow one under 50 SP, which the game would not."],
+["Riko Tanemura [Tempest]","tm","S","+","Windplum Dance, SP restoration","Skill damage per 50 SP the skill spends; SP is not modelled."],
+["Riko Tanemura [Tempest]","tm","C","+","A6 Full Blossom","Needs crit rate above 100%."],
+
+["Mio Natsukawa","tm","M","+","A6 Firefighter's Soul and Damnation","Auto Sub-Zero Torrent and +25% on repeated Guidance; Damnation held at 2 stacks of up to 6."],
+["Mio Natsukawa","tm","S","+","Short Circuit, Deepfreeze, Biting Cold, A4","Technicals and Freeze bonuses not priced; Highlight window +1 turn."],
+["Mio Natsukawa","tm","S","+","Requiem Guidance's larger DEF down","Stack count not pinned down."],
+["Mio Natsukawa","rot","S","±","Skill 3 at the mean of Guidance and Requiem; 1↺ without Burn","A rotation's real Skill 3 mix differs; the rules cannot see Burn."],
+
+["Yaoling Li [Firecracker]","dd","M","+","Burn damage (Skill 2, A2's permanent Burn)","No Burn damage value."],
+["Yaoling Li [Firecracker]","dd","S","+","Happy New Year! at 42% instead of 51%; Windburn; Iceburn on a Frozen foe","Small or rare."],
+["Yaoling Li [Firecracker]","dd","S","-","A6 Scarlet Surprise counted twice once a rotation","A small overcount."],
+
+["Kasumi Yoshizawa","dd","S","+","Tempest Riko's A6 automatic Storm of Petals","Whether it counts toward Invitation is not settled."],
+["Kasumi Yoshizawa","dd","S","±","Glow timing; A6 second Highlight at 80%","Glows priced at the cast; the second Highlight may be priced full."],
+["Kasumi Yoshizawa","rot","S","-","Transform one Step early","The rule credits a Step the game loses."],
+
+["Mayumi Hashimoto","tm","M","+","Velocity extra actions","Her own extra turns are not played, so her buffs are refreshed less than in game."],
+["Mayumi Hashimoto","tm","M","+","A6 Circuit Queen","Party ATK +25% on a downed foe, +15% damage to downed, +25% party damage on Power Setup; which she spends on is not fixed."],
+["Mayumi Hashimoto","tm","M","+","Formula Pennant (4★ weapon): damage +18–34.2% on Torque Boost","No target named, read as hers."],
+["Mayumi Hashimoto","tm","S","±","Torque Boost rounds and Nebula Pennant stacks","Levels arrive at judged rounds; 3 stacks is a middle estimate."],
+
+["Goro Akechi","tm","M","+","A1: Deduction and Stratagem last 4 turns, not 2","The entries carry 2 turns, so from A1 his buffs are half-counted."],
+["Goro Akechi","dd","S","+","Stratagem's extra hit 3–4 rounds after Skill 2; Rival's Pride","Missed window; Desire Sonata count unknown."],
+["Goro Akechi","dd","S","+","Arrow of Truth from another Mastermind","Re-deals 19.5–40% of that ally's damage."],
+
+["Manaka Nagao","tm","M","+","Da Capo's full reset","Also resets the target's SP, buffs and cooldowns; counted only as the extra action. With Makoto Yuki it gives another stacked Scarlet Hades."],
+["Manaka Nagao","tm","S","+","Symphonia (A4) past 12 Notes","Left at 12."],
+
+["Shoki Ikenami","tm","S","-","Chilling Intensity's ATK +20% counted whenever up","It needs the damage dealer to set off a Technical."],
+["Shoki Ikenami","tm","S","+","Blazing Passion and Sipario ailment accuracy","Ailment chance only."],
+
+["Makoto Yuki","rot","M","+","Scarlet Hades at 2 Moon Phase stacks","A rotation that builds 3–4 stacks first is underpriced."],
+["Makoto Yuki","dd","M","±","Scarlet Hades +32.5% skill multiplier for 2 turns","Points or ×1.325 is unclear; not priced."],
+["Makoto Yuki","dd","M","+","Manaka's rewind giving another stacked Scarlet Hades","Teammate-specific; not entered."],
+["Makoto Yuki","tm","M","+","On-Site Leader: S.E.E.S. members ATK +30% after a Theurgy","Needs S.E.E.S. teammates."],
+["Makoto Yuki","tm","S","+","Assist: one ally ATK +20% for 1 turn","Support-slot skill, no rotation to cast it from."],
+
+["Yukari Takeba","tm","S","+","Erosion from her Theurgy","Counted from Skill 1 only, which her A1 rotations never cast."],
+["Yukari Takeba","tm","S","+","A6 Spring Day's Meeting: crit damage +30% on an ally's Theurgy","Recipient unclear."],
+
+["Akihiko Sanada","rot","M","-","Lightning Fist at 3 Grit","A composed Skill 3 with less Grit built up is overpriced."],
+["Akihiko Sanada","dd","M","-","Flash Blow and Mettle","By Mettle arithmetic lufel's rotation reaches 6 Mettle only every third turn; its \"Punch\" turns are trusted as written."],
+["Akihiko Sanada","tm","S","+","Assist: one ally crit damage +20% for 1 turn","Support-slot skill."],
+
+["Hatsune Miku","tm","M","+","Hologram Screen (A1): 15% Skill Amplification, more from her weapon in Virtual Concert","Priced since 3 Nov: her own skill values ×1.15 from A1, ×1.10 more on Showstopper's crit damage in Virtual Concert with her 5-star weapon at R0.","At your A0, +0.1% (weapon part only). At A1, her teams +4% (median, 3–10%), and she leads Yusuke's best team too."],
+["Hatsune Miku","tm","M","+","The other builds","Play-With-Fire's party crit damage (up to 22%) and the off-element Spring Storm (party damage 15–18.3%) are not entered; only the crit-rate build is."],
+["Hatsune Miku","tm","S","+","Blue-Green Sea (A2), doubled Theurgy gauge (A1)","Unclear coverage; gauge only for S.E.E.S."],
+["Hatsune Miku","tm","O","+","Neverending Song (A6)","Almighty damage equal to all damage foes took in Virtual Concert. Large, but it is Miku's hit."],
+
+["Minami Miyashita [Beachflower]","tm","S","+","Next-medicine boosts (Highlight +9.8–11.4%, A4 +5%)","Not counted."],
+["Minami Miyashita [Beachflower]","tm","S","±","Blessing stacks at 3 of 6; Flower Basket Pharmacy's free action","A judgement; action economy not modelled."],
+
+["Miyu Sahara [Wavecatcher]","tm","S","+","Surf and Offshore Paradise: buffs and debuffs +1 turn","Settled by the Korean text: it is her own states only (자신의 모든 상태, \"all of her own states\"), so it does nothing for teammates. What is left is her own few timed lines."],
+["Miyu Sahara [Wavecatcher]","dd","M","+","Does her own turn fire Catch a Wave?","Read as other thieves only."],
+["Miyu Sahara [Wavecatcher]","rot","S","+","Paddle Out inside Surf","Not offered as a move."],
+
+["Ichigo Shikano","dd","L","+","Lovesick ticks","lufel never prints what a stack deals, so the damage over time, the Highlight's \"activate all continuous damage once\" and its 2 more Lovesick deal nothing. Most of her kit.","Not measurable: there is no number to enter."],
+["Ichigo Shikano","dd","M","+","Vorpal Butterfly: +200% skill damage while the foe is above 70% HP","Her opening Skill 1s; needs boss HP."],
+["Ichigo Shikano","tm","M","+","Melting Ichi-Go Butter: party damage over time +15%","The key exists now (dotDm); not entered. Matters for Kira and Firecracker Yaoling."],
+
+["Kumi Katayama","tm","M","±","Tenacious Teacher: Hard Knocks' DEF down \"+10%, up to 40%\"","Points or relative is unclear; it is on the biggest DEF cut in the game."],
+["Kumi Katayama","tm","C","+","Dizzy, unnumbered Down Point cut","Control; no number."],
+
+["YUI [Prism]","dd","M","+","Potato Power All-Out Attack, Mixed Vegetables","All-Out Attacks are not played."],
+["YUI [Prism]","rot","M","-","Skill 3 at 7 Knights","Skill 3 every turn would have fewer Knights to spend."],
+["YUI [Prism]","tm","S","±","Harvest Havoc in Mushroom Red","Uptime follows the summon order, which the kit does not give."],
+
+["Kotone Shiomi","tm","M","+","Vetri Vel Muruga: Skill Amplification 10–19% at Lunar Bond 5+","Priced in the fight since 3 Nov, on her skill buffs from the round Lunar Bond reaches 5. Its effect on Lunar Phaseshift's copy rate is not counted.","Her teams +2.7% (median, −1.2 to +4.4%)."],
+["Kotone Shiomi","tm","M","+","Fortune: durations +1–2 turns (+1 at A2)","Its free Highlight is counted; the longer durations are not."],
+["Kotone Shiomi","tm","S","-","Lunar Bond uptime and copied buffs","Assumes the damage dealer is the Arcana Link ally all fight; Fatigue turns may drop stacks; every buff is copied though some \"cannot be\"."],
+["Kotone Shiomi","tm","S","+","Moment of Truth: +1% final damage per extra Strategist","Team-dependent."],
+
+["Mitsuru Kirijo","dd","M","±","Iceblade's scaling","English: 22% of the triggering ally's ATK; Korean: Mitsuru's. Whether her own attacks trigger it is unclear."],
+["Mitsuru Kirijo","tm","S","+","Assist Charged Mark and Snowpierced Waltz","35 Theurgy or 15% Highlight gauge per ally's first attack; +3% of the Elucidator's stats."],
+["Mitsuru Kirijo","tm","O","+","Iceblade as a teammate","Extra hits when allies attack a Snowbound foe; her damage."],
+
+["Fuuka Yamagishi","tm","S","+","My Own Worth (A6): Pros and Cons stacks twice","Counted once; +10% final damage at A6."],
+["Fuuka Yamagishi","tm","O","+","Buffs copied to the backup","Helps the backup's own damage only."],
+
+["Shoki Ikenami [Notte]","dd","M","+","Highlight up to +60% at low HP","His Skill 2 costs his own HP; HP is not tracked."],
+["Shoki Ikenami [Notte]","rot","S","±","Night's Contract at lufel's mean stacks","More or fewer Skill 2s per Skill 3 are priced the same."],
+
+["Shun Kano [Pioneer]","tm","M","+","Justice Shot: damage taken stacks per hit (A2: 5 more per hit)","No stack cap is printed, so the total was not entered. Could be large."],
+["Shun Kano [Pioneer]","tm","M","+","Stand with Honor (A6): up to 3 Special Ammo stacks","One counted."],
+["Shun Kano [Pioneer]","tm","C","+","High Noon Flag's second bonus","Needs 2+ foes."],
+
+["Junpei Iori","tm","S","+","A6 free Power Swing; doubled starting Theurgy with a Fire Assassin/Sweeper","Extra action and gauge."],
+["Junpei Iori","dd","S","±","Power Swing always crits","Covered by a fixed 35% locked share."],
+["Junpei Iori","rot","S","-","A6 counter Power Swing on every Hero Focus","A Charge comes only every 2 turns."],
+
+["Narumi Nashimoto","tm","M","+","A1 My Dearest Guest: Wonder gets an extra action and 15 SP","Wonder casts more; not played."],
+["Narumi Nashimoto","rot","M","-","LIVE of LOVE at 10 Shiny Points","A composed Skill 3 without the build-up is overpriced."],
+["Narumi Nashimoto","rot","S","-","Her extra actions","Assume Wonder casts Naruru every other round."],
+
+["Koromaru","tm","M","+","City's Top Dog: +25% weakness damage below A6","No duration printed, so it counts only at A6."],
+["Koromaru","tm","S","+","Brave Warrior (A6): Loyal Howl 2 stacks","How often 2 are held is unclear."],
+["Koromaru","tm","C","+","Attribute Downgrade","Weakness creation."],
+
+["Motoha Arai [Radiance]","dd","L","+","Twilight Radiance: Spear of Light ATK +29.3% per Light stack spent","3 stacks per Highlight is +88% ATK on Spear of Light (and Spear of Shadow, which copies it), plus +30% crit damage on one boss; none of it was entered.","Priced in the fight since 2 Nov, as stats on her Highlight (and A4's +10% crit damage per Flowing Light). Damage alone +28%, her best team's damage +13% (marked owned, no cards, Awareness 0); at A4 +36% / +17%. Two-foe x1.15 is still not priced."],
+["Motoha Arai [Radiance]","dd","M","±","Resolute Maiden","How many Highlights fall in its 2 turns, and whether +55.8% is points or ×1.558."],
+["Motoha Arai [Radiance]","rot","M","-","A6 cap 15 (Korean: 9)","Read from the English and lufel's HL×5."],
+["Motoha Arai [Radiance]","tm","S","+","Unsetting Sun's automatic Thunder Thrust","May apply Flashover again."],
+
+["Aran Hirano","dd","M","+","Sin: 5% of all damage the boss takes is copied back, raised by Transfer amplification","About 9–14% of everyone's damage, his own included. As a teammate it is his hit and outside the number."],
+["Aran Hirano","tm","C","+","Ritual Fire's second +18% ATK; A6's +150% transfer","Need a second foe under Sin."],
+["Aran Hirano","tm","S","+","Highlight damage to Sin foes","Highlight only."],
+
+["Aigis","rot","L","±","A6: Gear Boost buffs 5 turns (English) or permanent (Korean)","Permanent would keep her in Orgia Mode all fight after one Gear Boost.","Not measured: Awareness 6 only, and the two texts disagree."],
+["Aigis","dd","M","+","Explosive Rounds' crit damage","A stat line, not entered."],
+["Aigis","tm","S","+","Assist: permanent ATK +10% for S.E.E.S. members","Team-specific."],
+
+["Ren Amamiya [Starlight]","dd","L","+","Dance Fever Gala (A0): fixed damage per ally All-Out Attack","40,000 + 60,000 per Awareness level, ×1.6 on one boss. Large, and All-Out Attacks are not played.","Not measurable until All-Out Attacks are played: how often they come is the whole answer."],
+["Ren Amamiya [Starlight]","dd","M","±","Coordinated Strike and Coordinated Damage","Cannot crit (crit becomes final damage); uses the best stats among other allies."],
+["Ren Amamiya [Starlight]","dd","M","+","Dance of Heart's Desire (A6) bonus Coordinated Strike","Not entered."],
+["Ren Amamiya [Starlight]","tm","S","+","Rhythm's 36% for Starlight teammates","Ann and Morgana [Starlight] get 24% instead."],
+["Ren Amamiya [Starlight]","rot","S","±","Shared Rhapsodic Beat","Ann and Morgana [Starlight] add and spend it too."],
+
+["Morgana [Starlight]","tm","M","+","Not Done Dancing Yet (A4): the Highlight's 29.3–34.1% debuffs permanent","The new +10% lines are permanent; the original debuffs still last 3 turns."],
+["Morgana [Starlight]","tm","C","+","Rushing Haze; Crash! on a crit","+24–60% against a foe at DEF 1; Down Point cut and damage taken while downed."],
+
+["Ann Takamaki [Starlight]","dd","M","+","Ignite Burn","No Burn damage value."],
+["Ann Takamaki [Starlight]","dd","M","+","A1: +30% crit damage for a 100-SP Heat Score","A stat line, not entered."],
+["Ann Takamaki [Starlight]","dd","S","±","Pyro Vortex in the A6 Encore","Not stated."],
+
+["Ayaka Sakai [Summer]","dd","M","+","A6: more energy, Highlight at 4+ stacks","lufel writes HL(3)."],
+["Ayaka Sakai [Summer]","dd","S","+","Highlight: Starscape crit damage +24.4% for 1 turn","A crit line, not entered."],
+["Ayaka Sakai [Summer]","rot","M","-","Windward Melody procs","Need Starscape open and Star Wish; a composed Skill 3 before Skill 1 or without a Highlight may be overpriced."],
+["Ayaka Sakai [Summer]","tm","C","+","Gentle Hum dispel","Boss buffs not modelled."],
+
+["Ichigo Shikano [Summer]","tm","L","+","Ram: Miracle Ichi-Boat","A hit by the damage dealer (the Helmsman) at the end of their turn: about half the Boat's HP (all allies' max HP summed) plus 347% ATK, doubled on one boss, +30% at A6. It is the damage dealer's damage, so it belongs in the number.","Priced in the fight since 2 Nov, HP part without ATK, and on the quick shortlist too. With her marked owned (no cards) she leads 13 of your 16 damage dealers' best teams, and the Ram is 36–70% of their damage; she falls short for Kasumi, Makoto Yuki and Mitsuru. (The first rough test, which let ATK buffs raise the HP part, put her teams +105% to +413%.)"],
+["Ichigo Shikano [Summer]","tm","M","+","Words of Love ATK +30% from the Boat's heal","May trigger every turn; only Heart's Desire's heal is counted."],
+["Ichigo Shikano [Summer]","tm","M","+","Heart's Desire crit damage for [Summer] allies","The calculator cannot test the [Summer] tag."],
+
+["Wonder","tm","M","+","Raphael: Attribute Harmony","Crit rate +13.2% and party crit damage +25% while two members share an element. The default fight uses a one-element team, so this is usually on."],
+["Wonder","tm","M","+","Yggdrasil Evolution card: an extra turn after casting it","Extra actions are not played."],
+["Wonder","tm","S","+","Melchizedek, Plasma Blade, Starry Compass, Yamata-no-Orochi","Blessing-count ATK; Harmonic Element; Psychokinesis damage at 15 stacks; Technical damage taken +25%."],
+["Wonder","tm","S","+","Throne, Thor, Nian: Burn and Shock","Ailments are tracked now; these Persona lines are not entered."],
+["Wonder","tm","S","+","Shiva's crit chance, Chernobog's extra stacks, Janosik's opening Mark, White Rider's team Curse stacks","Small or unclear."],
+["Wonder","tm","C","+","Pixie and Seth after a knockdown","Party ATK +16.5% / damage +11%; knockdowns are played only when the boss has Down Points."],
+["Wonder","tm","C","+","Jatayu, Orobas, Yurlungur; Belphegor, Jikokuten; Whisperer's Sting","Resistance removal; boss HP thresholds; crystal counts unrealistic on one boss."],
+["Wonder","tm","C","+","Dakini, Inugami, Trumpeter, Ame-no-Uzume","Need spiritual ailments or Shock lines that are not entered."],
+["Wonder","tm","S","+","Cursed Ties, Cyclotron, Event Horizon, Purgatory for an off-element damage dealer","Only the battle-start stacks or a teammate's element would apply."]
+];
+
+var RANK = { L: 4, M: 3, S: 2, C: 1, O: 0 };
+var NAMES = { L: "Large", M: "Medium", S: "Small", C: "Not in default fight", O: "Outside the number" };
+var SIDES = { dd: "As damage dealer", tm: "As teammate", rot: "Rotation rules" };
+var state = { sort: "impact", tiers: { L: true, M: true, S: true, C: true, O: true }, sides: { dd: true, tm: true, rot: true }, q: "" };
+
+function esc(s) { return String(s).replace(/[&<>"]/g, function (c) { return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]; }); }
+function dirHtml(d) {
+  var cls = d === "+" ? "up" : (d === "-" || d === "↓") ? "down" : "both";
+  var ch = d === "+" ? "↑" : (d === "-" || d === "↓") ? "↓" : "±";
+  var lab = cls === "up" ? "would raise the number" : cls === "down" ? "would lower the number" : "unclear which way";
+  return '<span class="dir ' + cls + '" title="' + lab + '" aria-label="' + lab + '">' + ch + "</span>";
+}
+
+document.getElementById("global").innerHTML = '<div class="char">' + GLOBAL.map(function (g) {
+  return '<div class="row"><span class="tierc"><span class="tier ' + g[0] + '">' + NAMES[g[0]] + '</span></span><span class="side">Every character</span><span class="what"><b>' + esc(g[2]) + '</b><span class="why">' + esc(g[3]) + "</span></span>" + dirHtml(g[1]) + "</div>";
+}).join("") + "</div>";
+
+function chips() {
+  var tc = {}, sc = {};
+  D.forEach(function (r) { tc[r[2]] = (tc[r[2]] || 0) + 1; sc[r[1]] = (sc[r[1]] || 0) + 1; });
+  document.getElementById("tierChips").innerHTML = ["L", "M", "S", "C", "O"].map(function (t) {
+    return '<button type="button" class="chip" data-tier="' + t + '" aria-pressed="' + state.tiers[t] + '"><span class="tier ' + t + '">' + NAMES[t] + '</span><span class="n">' + (tc[t] || 0) + "</span></button>";
+  }).join("");
+  document.getElementById("sideChips").innerHTML = ["dd", "tm", "rot"].map(function (s) {
+    return '<button type="button" class="chip" data-side="' + s + '" aria-pressed="' + state.sides[s] + '">' + SIDES[s] + '<span class="n">' + (sc[s] || 0) + "</span></button>";
+  }).join("");
+}
+
+function render() {
+  var q = state.q.trim().toLowerCase();
+  var by = {};
+  D.forEach(function (r) {
+    if (!state.tiers[r[2]] || !state.sides[r[1]]) return;
+    if (q && (r[0] + " " + r[4] + " " + r[5]).toLowerCase().indexOf(q) < 0) return;
+    (by[r[0]] = by[r[0]] || []).push(r);
+  });
+  var names = Object.keys(by);
+  function score(n) { return by[n].reduce(function (a, r) { return a + [0, 0.2, 1, 4, 16][RANK[r[2]]]; }, 0); }
+  function top(n) { return Math.max.apply(null, by[n].map(function (r) { return RANK[r[2]]; })); }
+  if (state.sort === "impact") names.sort(function (a, b) { return top(b) - top(a) || score(b) - score(a) || ORDER.indexOf(a) - ORDER.indexOf(b); });
+  else names.sort(function (a, b) { return ORDER.indexOf(a) - ORDER.indexOf(b); });
+  var rows = 0;
+  document.getElementById("list").innerHTML = names.map(function (n) {
+    var rs = by[n].slice().sort(function (a, b) { return RANK[b[2]] - RANK[a[2]]; });
+    rows += rs.length;
+    var cnt = {}; rs.forEach(function (r) { cnt[r[2]] = (cnt[r[2]] || 0) + 1; });
+    var sum = ["L", "M", "S", "C", "O"].filter(function (t) { return cnt[t]; }).map(function (t) { return '<span class="tier ' + t + '">' + cnt[t] + " " + NAMES[t].toLowerCase() + "</span>"; }).join("");
+    var note = n === "Wonder" ? '<span class="head-note">His Persona, card and weapon lines that are not priced, whoever the damage dealer is.</span>' : "";
+    return '<section class="char"><header><h3>' + esc(n) + '</h3><span class="sum">' + sum + "</span>" + note + "</header>" + rs.map(function (r) {
+      var m = r[6] ? '<span class="meas"><b>' + (/^Not measur/.test(r[6]) ? "Not measured" : "Measured") + "</b>" + esc(r[6]) + "</span>" : "";
+      return '<div class="row"><span class="tierc"><span class="tier ' + r[2] + '">' + NAMES[r[2]] + '</span></span><span class="side">' + SIDES[r[1]] + '</span><span class="what"><b>' + esc(r[4]) + '</b><span class="why">' + esc(r[5]) + "</span>" + m + "</span>" + dirHtml(r[3]) + "</div>";
+    }).join("") + "</section>";
+  }).join("") || '<p class="lede">Nothing matches. Clear the search or turn a grade back on.</p>';
+  document.getElementById("count").textContent = rows + " items, " + names.length + " characters";
+}
+
+document.getElementById("sortImpact").onclick = function () { state.sort = "impact"; this.setAttribute("aria-pressed", "true"); document.getElementById("sortRoster").setAttribute("aria-pressed", "false"); render(); };
+document.getElementById("sortRoster").onclick = function () { state.sort = "roster"; this.setAttribute("aria-pressed", "true"); document.getElementById("sortImpact").setAttribute("aria-pressed", "false"); render(); };
+document.getElementById("tierChips").onclick = function (e) { var b = e.target.closest("[data-tier]"); if (!b) return; var t = b.dataset.tier; state.tiers[t] = !state.tiers[t]; b.setAttribute("aria-pressed", state.tiers[t]); render(); };
+document.getElementById("sideChips").onclick = function (e) { var b = e.target.closest("[data-side]"); if (!b) return; var s = b.dataset.side; state.sides[s] = !state.sides[s]; b.setAttribute("aria-pressed", state.sides[s]); render(); };
+document.getElementById("q").oninput = function () { state.q = this.value; render(); };
+chips(); render();
+</script>

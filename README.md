@@ -46,8 +46,12 @@ On the phone, open that address, then:
 - **Android (Chrome):** menu ⋮ → **Install app** (or **Add to Home screen**).
 - **iPhone (Safari):** Share → **Add to Home Screen**.
 
-To update it later: `npm run site` again and upload the new `site/` files over the old
-ones. The installed app picks up the new version the next time it opens online.
+To update it later: `npm run site` again (with `-- --with-art` if your hosted copy shows
+pictures) and upload the new `site/` files over the old ones. The build ends by listing the
+files that are new or changed since the last build — usually just `index.html` and `sw.js` —
+so those are all you need to upload. GitHub's web uploader takes at most 100 files at a time,
+so a first upload of the pictures (223 of them) goes in batches. The installed app picks up
+the new version the next time it opens online.
 
 Things that work differently on a phone:
 
@@ -57,9 +61,11 @@ Things that work differently on a phone:
   file and you move the `.json` between them.
 - **Save before you leave the app.** A phone closes apps without asking, so the
   "unsaved changes" warning a laptop browser shows cannot be relied on.
-- **Portraits are left out**, because the site is public and game art is not ours to
-  redistribute; the roster shows initials instead. `npm run site -- --with-art` includes
-  them if you accept that.
+- **Portraits and Persona pictures are left out**, because the site is public and game art
+  is not ours to redistribute; the Roster and the Personas tab show initials instead.
+  `npm run site -- --with-art` includes everything in `dist/art/` if you accept that: the
+  portraits (`python tools/fetch-art.py`) and the Persona pictures
+  (`node tools/fetch-persona-art.js`). It warns when the Persona pictures are missing.
 - Triage over a few thousand cards takes noticeably longer on a phone.
 
 ## The tabs
@@ -186,6 +192,13 @@ non-letters replaced by hyphens:
 dist/art/ren-amamiya.webp
 dist/art/ren-amamiya-starlight.webp
 dist/art/justine-caroline.webp
+```
+
+The Personas tab's pictures work the same way, saved as `dist/art/persona-<name>.webp`
+(all 155 of lufel's Personas, about 17 MB):
+
+```
+node tools/fetch-persona-art.js
 ```
 
 Any portrait that is missing falls back to an element-tinted placeholder, so a partial set

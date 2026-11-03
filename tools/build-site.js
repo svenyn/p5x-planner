@@ -78,7 +78,24 @@ async function renderIcons() {
   } finally { await browser.close(); }
 }
 
+/* What the last build held, by content: a hosted copy is updated by uploading files by hand (GitHub's web
+   uploader takes at most 100 at a time), so the build ends by naming the files that are new or changed. */
+function snapshot(dir) {
+  const seen = new Map();
+  const walk = d => {
+    if (!fs.existsSync(d)) return;
+    for (const e of fs.readdirSync(d, { withFileTypes: true })) {
+      const p = path.join(d, e.name);
+      if (e.isDirectory()) walk(p);
+      else seen.set(path.relative(dir, p).split(path.sep).join('/'), crypto.createHash('sha256').update(fs.readFileSync(p)).digest('hex'));
+    }
+  };
+  walk(dir);
+  return seen;
+}
+
 (async () => {
+  const before = snapshot(out);
   fs.rmSync(out, { recursive: true, force: true });
   fs.mkdirSync(out, { recursive: true });
   const write = (f, data) => fs.writeFileSync(path.join(out, f), data);
@@ -92,8 +109,10 @@ async function renderIcons() {
   let art = [];
   if (withArt) {
     const src = path.join(root, 'dist/art');
-    if (!fs.existsSync(src)) throw new Error('--with-art: dist/art/ is missing (tools/fetch-art.py fetches it)');
+    if (!fs.existsSync(src)) throw new Error('--with-art: dist/art/ is missing (tools/fetch-art.py fetches the portraits, tools/fetch-persona-art.js the Persona pictures)');
     art = fs.readdirSync(src).filter(f => f.endsWith('.webp'));
+    // the Personas tab's pictures sit beside the portraits (art/persona-<slug>.webp); say so when there are none
+    if (!art.some(f => f.startsWith('persona-'))) console.warn('--with-art: no Persona pictures in dist/art/ — run `node tools/fetch-persona-art.js` to include them');
     fs.mkdirSync(path.join(out, 'art'));
     art.forEach(f => fs.copyFileSync(path.join(src, f), path.join(out, 'art', f)));
   }
@@ -132,6 +151,24 @@ self.addEventListener('fetch', e => {
 `);
 
   const kb = f => (fs.statSync(path.join(out, f)).size / 1024).toFixed(0);
+  const nPersona = art.filter(f => f.startsWith('persona-')).length;
   console.log(`built site/ — index.html ${kb('index.html')} kB, ${ICONS.length} icons, ` +
-    (withArt ? `${art.length} portraits` : 'no portraits (add --with-art)') + `, cache ${version}`);
+    (withArt ? `${art.length - nPersona} portraits and ${nPersona} Persona pictures` : 'no portraits or Persona pictures (add --with-art)') + `, cache ${version}`);
+
+  // what to upload: the files that are new or differ from the last build (all of them the first time)
+  const after = snapshot(out);
+  const changed = [...after].filter(([f, h]) => before.get(f) !== h).map(([f]) => f).sort();
+  const gone = [...before.keys()].filter(f => !after.has(f)).sort();
+  if (!before.size) console.log(`first build here: upload everything in site/ (${after.size} files)`);
+  else if (!changed.length && !gone.length) console.log('nothing changed since the last build');
+  else {
+    const top = changed.filter(f => !f.includes('/')), inArt = changed.filter(f => f.startsWith('art/'));
+    console.log(`changed since the last build — upload these ${changed.length} file${changed.length === 1 ? '' : 's'}:`);
+    if (top.length) console.log('  ' + top.join(', '));
+    if (inArt.length) console.log(`  art/: ${inArt.length} picture${inArt.length === 1 ? '' : 's'}` +
+      (inArt.length <= 12 ? ` (${inArt.map(f => f.slice(4)).join(', ')})` : ` (${inArt.filter(f => f.startsWith('art/persona-')).length} Persona pictures)`));
+    if (gone.length) console.log(`  no longer built (delete from the hosted copy if you like): ${gone.join(', ')}`);
+  }
+  if (changed.length > 100 || (!before.size && after.size > 100))
+    console.log("  GitHub's web uploader takes at most 100 files at a time: upload them in batches (e.g. art/ in two halves), or push with git.");
 })().catch(e => { console.error(e); process.exit(1); });

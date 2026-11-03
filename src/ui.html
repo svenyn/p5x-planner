@@ -103,6 +103,17 @@ main{padding:20px;max-width:1500px;margin:0 auto}
 .muted{color:var(--dim)}
 .tiny{font-size:12px}
 .mono{font-family:ui-monospace,"Cascadia Code",Consolas,monospace}
+/* Persona cards: lufel's Persona art is a full-body cut-out, so it is shown whole over the element tint
+   rather than cropped like a character portrait. A Persona not obtained is dimmed. */
+.portrait.persona img{object-fit:contain;object-position:center bottom;transform:none;padding:10% 8% 14%;box-sizing:border-box}
+.cc:hover .portrait.persona img{transform:scale(1.04)}
+/* the cut-out leaves the background showing, so the initials go once the picture is there */
+.portrait.persona.art .initials{display:none}
+.cc.psOff{opacity:.6}
+.cc.psOff:hover{opacity:1}
+.psHead{display:grid;grid-template-columns:130px 1fr;gap:16px;align-items:start;padding-right:28px}
+.psHead .portrait{border-radius:8px}
+.psOwn{display:inline-flex;gap:6px;align-items:center;font-weight:600;cursor:pointer}
 .scroll{max-height:62vh;overflow:auto;border:1px solid var(--line);border-radius:8px}
 /* A long table that scrolls with the page instead of inside a box of its own; its header pins
    under the page header (--hdrH, set in logic.js). No overflow here, or the header stops sticking. */
@@ -530,6 +541,7 @@ details.sect>.inner{margin-top:10px}
     <button data-tab="roster" class="on">Roster</button>
     <button data-tab="opt">Optimise</button>
     <button data-tab="teams">Teams</button>
+    <button data-tab="personas">Personas</button>
     <button data-tab="inv">Inventory</button>
     <button data-tab="triage">Triage</button>
     <button data-tab="upgrades">Upgrades</button>
@@ -668,9 +680,9 @@ details.sect>.inner{margin-top:10px}
           <label>Fight length</label>
           <select id="tmFight" title="Rounds in the fight you are building for. The calculated basis plays the fight out round by round: turn order, cooldowns, the shared Highlight gauge (empty at the start, so the first Highlight usually comes in round 2) and once-per-battle effects such as Manaka's Da Capo all count for this many rounds.">
             <option value="3">3 rounds</option>
-            <option value="6">6 rounds</option>
+            <option value="6" selected>6 rounds</option>
             <option value="9">9 rounds</option>
-            <option value="12" selected>12 rounds</option>
+            <option value="12">12 rounds</option>
             <option value="15">15 rounds</option>
             <option value="20">20 rounds</option>
           </select>
@@ -722,13 +734,45 @@ details.sect>.inner{margin-top:10px}
             <div class="field"><label>Wonder's weapon</label><select id="tmWWeapon"></select></div>
             <div class="field"><label>Refinement</label><select id="tmWRefine"></select></div>
           </div>
-          <div class="tiny muted" style="margin-top:6px">A Persona's passives count only while it is in use; the planner shares his six actions among the Personas and skill cards set here.</div>
+          <div class="tiny muted" style="margin-top:6px">A Persona's passives count only while it is in use; the planner shares his six actions among the Personas and skill cards set here.<span id="tmWUnrel"></span></div>
         </div>
       </details>
       <div id="tmBusy" class="tiny" style="margin-top:10px"></div>
     </div>
     <div id="tmStatus"></div>
     <div id="tmOut"></div>
+  </section>
+
+  <!-- ===================== PERSONAS ===================== -->
+  <!-- Which of Wonder's Personas the player owns and how far each is raised, with the skill cards each
+       has learned: the Teams tab offers, suggests and prices only these (personasFrom in logic.js). -->
+  <section id="tab-personas" class="hide">
+    <div class="panel">
+      <h2>Personas <span class="muted" id="psCount"></span></h2>
+      <div id="psExplain" style="margin-bottom:10px"></div>
+      <div class="row" style="margin-bottom:10px">
+        <div class="field"><label>Show</label><select id="psShow">
+          <option value="">All</option><option value="own">Obtained</option><option value="not">Not obtained</option></select></div>
+        <div class="field"><label>Rarity</label><select id="psRar">
+          <option value="">Any</option><option value="5">5★</option><option value="4">4★</option>
+          <option value="3">3★</option><option value="2">2★</option><option value="1">1★</option></select></div>
+        <div class="field"><label title="Personas whose skills or talent the Teams tab turns into numbers">In the Teams tab</label><select id="psPriced">
+          <option value="">Any</option><option value="priced">Priced only</option></select></div>
+        <div class="field"><label>Sort</label><select id="psSort">
+          <option value="rarity" selected>Rarity (high-low)</option>
+          <option value="rarity-asc">Rarity (low-high)</option>
+          <option value="name">Name (A-Z)</option>
+          <option value="element">Element</option>
+          <option value="level">Level (high-low)</option>
+          <option value="owned">Obtained first</option>
+          <option value="priced">Used by the Teams tab first</option></select></div>
+        <div class="field"><label>Search</label><input id="psQ" placeholder="Persona, element, skill card..."></div>
+        <button class="ghost" id="psAllOn" title="Mark every Persona in the list below as obtained">Mark shown obtained</button>
+        <button class="ghost" id="psAllOff" title="Mark every Persona in the list below as not obtained">Mark shown not obtained</button>
+      </div>
+      <div class="grid cards" id="psGrid"></div>
+      <div class="tiny muted" id="psFoot" style="margin-top:8px"></div>
+    </div>
   </section>
 
   <!-- ===================== INVENTORY ===================== -->

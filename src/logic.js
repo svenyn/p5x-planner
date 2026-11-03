@@ -1,5 +1,5 @@
 /* ============================ state ============================ */
-const state = { cards: [], chars: {}, nextId: 1, teamCrit: 0, teamBuffs: {}, den: {}, wonderSpd: 0, wonder: {} };
+const state = { cards: [], chars: {}, nextId: 1, teamCrit: 0, teamBuffs: {}, den: {}, wonderSpd: 0, wonder: {}, personas: null };
 const $  = (s, r) => (r || document).querySelector(s);
 const $$ = (s, r) => Array.from((r || document).querySelectorAll(s));
 const esc = s => String(s == null ? '' : s).replace(/[&<>"]/g, c => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;' }[c]));
@@ -1407,7 +1407,14 @@ const KIT_STAT_BUFFS = {
     { s: 'Crit Rate', v: 10, pct: true, aw: 1, why: 'Exciting Summer!: +10% crit rate while Summer Hype is active' },
     { s: 'Crit Multiplier', v: 25, pct: true, aw: 1, why: 'Exciting Summer!: +25% crit damage while Summer Hype is active' },
     { s: 'HP', v: 1200, pct: false, aw: 2, why: 'Stay Cool!: +1200 max HP during battle' },
-    { s: 'Crit Multiplier', pct: true, weapon: '5', ladder: [26, 34, 34, 42, 42, 50, 50], why: 'Colorful Coast: +crit damage while Summer Hype is active' }
+    { s: 'Crit Multiplier', pct: true, weapon: '5', ladder: [26, 34, 34, 42, 42, 50, 50], why: 'Colorful Coast: +crit damage while Summer Hype is active' },
+    /* What a heal sets off, in the Teams fight only: each heal that reaches her (TC_HEALS: her own Skill 2,
+       Highlight and Awareness 1 Blessing, and the team's) turns these on for 2 of her turns, as a buff
+       on her counts down after her own action. Out of her stats, since how often she is healed is the team's. */
+    { s: 'Damage Multiplier', v: 30, pct: true, on: 'healed', dur: 2, fight: true, why: 'Energy Overload! (passive 1): +30% damage for 2 turns when healed' },
+    { s: 'Damage Multiplier', v: 25, pct: true, on: 'healed', dur: 2, fight: true, why: 'Summer Starts Here! (Awareness 0 text): +25% damage for 2 turns when healed' },
+    { s: 'Crit Multiplier', v: 20, pct: true, on: 'healed', dur: 2, upTo: 2, aw: 2, fight: true, why: 'Stay Cool! (Awareness 2): +20% crit damage for 2 turns when healed, up to 2 stacks' },
+    { s: 'Damage Multiplier', pct: true, weapon: '4', ladder: [7.6, 9.9, 9.9, 12.2, 12.2, 14.5, 14.5], on: 'healedHype', dur: 2, upTo: 2, fight: true, why: 'Bubble Puff Star (4-star weapon): healed while Summer Hype is active, +damage for 2 turns, up to 2 stacks' }
   ],
   'Tomoko Noge [Seaside]': [
     { s: 'Crit Rate', v: 35, pct: true, aw: 6, why: 'Heartfelt Days: +35% crit rate on Summer Reminiscence damage, which is all the damage she deals' }
@@ -7626,7 +7633,7 @@ function charsSig(detail) {
   });
   return (h >>> 0).toString(36);
 }
-function dataSignature() { return cardsSig(true) + ':' + charsSig('all') + ':' + teamSig() + ':' + denSig() + ':' + (wonderSpeed() || '') + ':' + JSON.stringify(wonderSetup()); }
+function dataSignature() { return cardsSig(true) + ':' + charsSig('all') + ':' + teamSig() + ':' + denSig() + ':' + (wonderSpeed() || '') + ':' + JSON.stringify(wonderSetup()) + ':' + JSON.stringify(personasSaved()); }
 
 /* The save file is the only persistence (no browser storage — see CLAUDE.md), so the header
    says when there is something it does not have yet, and the page asks before it is closed on
@@ -7679,7 +7686,7 @@ function commit() {
      one, it would silently revert that change too. Each undoable action commits and then offers
      its own. */
   if (undoSnap) hideToast();
-  renderInv(); renderRoster(); renderOpt(optForced || undefined); runOptIfShown(); runUpgradeViews(); renderTeamsIfShown();
+  renderInv(); renderRoster(); renderOpt(optForced || undefined); runOptIfShown(); runUpgradeViews(); renderTeamsIfShown(); renderPersonasIfShown();
   markStaleRuns(); updateSaveState();
 }
 
@@ -7691,7 +7698,7 @@ function commit() {
    the card objects that survived, so anything still holding one points at the live card. */
 let undoSnap = null, toastTimer = 0;
 function snapshotState() {
-  return { cards: JSON.stringify(state.cards), chars: JSON.stringify(state.chars), nextId: state.nextId, teamCrit: state.teamCrit, teamBuffs: JSON.stringify(state.teamBuffs || {}), den: JSON.stringify(state.den || {}), wonderSpd: state.wonderSpd, wonder: JSON.stringify(state.wonder || {}) };
+  return { cards: JSON.stringify(state.cards), chars: JSON.stringify(state.chars), nextId: state.nextId, teamCrit: state.teamCrit, teamBuffs: JSON.stringify(state.teamBuffs || {}), den: JSON.stringify(state.den || {}), wonderSpd: state.wonderSpd, wonder: JSON.stringify(state.wonder || {}), personas: JSON.stringify(state.personas || null) };
 }
 function showToast(text, button) {
   $('#toastMsg').textContent = text;
@@ -7742,6 +7749,7 @@ function undo() {
   state.den = JSON.parse(s.den || '{}');
   state.wonderSpd = s.wonderSpd || 0;
   state.wonder = JSON.parse(s.wonder || '{}');
+  state.personas = JSON.parse(s.personas || 'null');
   syncTeamCritField();
   commit();
   /* Redraw the Loadout popup (or its card picker) the undo was offered from; any other dialog
@@ -7775,10 +7783,11 @@ function teamSigText(sig) {
 const PREF_SELECTS = ['rsFilter', 'rsElement', 'rsSort', 'flSlot', 'flSet', 'flRar', 'flMain',
   'flSubMode', 'trScope', 'trShow', 'trRar', 'vaRar', 'vaShow', 'upRar',
   'hrShow', 'hrElement', 'hrSlot', 'hrRar', 'ccScope', 'ccKind', 'ccRolls', 'ccPolicy', 'ccElement', 'ikScope', 'ikPick', 'ikPolicy', 'ikElement', 'frKind', 'frPolicy', 'rgScope', 'rgFourth', 'rgShow', 'rgSlot', 'rgWho', 'tmBasis', 'tmFight', 'tmBoss', 'tmWeak', 'tmFoes', 'tmDown',
+  'psShow', 'psRar', 'psPriced', 'psSort',
   'trFlSlot', 'trFlSet', 'trFlRar', 'trFlMain', 'trFlSubMode',
   'vaFlSlot', 'vaFlSet', 'vaFlRar', 'vaFlMain', 'vaFlSubMode'];
 const PREF_CHECKS = ['rsHideBenched', 'upSameSet', 'upIgnoreEquipped', 'hrTakeEquipped', 'ccFree', 'ikFree', 'frFree', 'tmRotFit', 'tmRotCompose', 'tmMedic'];
-const PREF_TEXT = ['rsQ', 'flQ', 'trFlQ', 'vaFlQ', 'hrMin', 'hrQ', 'ccQ', 'ikQ', 'rgQ'];
+const PREF_TEXT = ['rsQ', 'flQ', 'trFlQ', 'vaFlQ', 'hrMin', 'hrQ', 'ccQ', 'ikQ', 'rgQ', 'psQ'];
 function collectPrefs() {
   const p = { invSort: { key: invSort.key, dir: invSort.dir },
     trSort: { key: trSort.key, dir: trSort.dir }, vaSort: { key: vaSort.key, dir: vaSort.dir },
@@ -7794,7 +7803,9 @@ function collectPrefs() {
   p.rsView = rosterView;
   p.frChosen = Object.assign({}, frChosen);
   p.tmBusy = [...tmBusy];
+  p.tmBusyP = [...tmBusyP];
   p.tmChar = $('#tmChar').value;
+  p.tmFightDefault = TC_FIGHT_DEFAULT;
   return p;
 }
 // Every field is applied defensively: a select id absent from an older save, or holding a
@@ -7808,6 +7819,12 @@ function applyPrefs(p) {
   if (p.tmBoss === '8' && p.tmWeak === 'boss' && p.tmFoes === '1') {
     p = Object.assign({}, p);
     delete p.tmBoss; delete p.tmWeak; delete p.tmFoes;
+  }
+  /* The same for the fight length: a save from before the 6-round default (it carries no tmFightDefault)
+     stored 12 whether or not it was chosen, so 12 there is read as untouched. */
+  if (p.tmFightDefault === undefined && p.tmFight === '12') {
+    p = Object.assign({}, p);
+    delete p.tmFight;
   }
   PREF_SELECTS.forEach(id => {
     if (p[id] === undefined || !$('#' + id)) return;
@@ -7825,6 +7842,7 @@ function applyPrefs(p) {
   if (p.rsView === 'cards' || p.rsView === 'list') rosterView = p.rsView;
   frChosen = {};
   tmBusy = new Set(Array.isArray(p.tmBusy) ? p.tmBusy.filter(n => charDef(n)) : []);
+  tmBusyP = new Set(Array.isArray(p.tmBusyP) ? p.tmBusyP.filter(n => wonderPersonas().includes(n)) : []);
   if (p.tmChar && charDef(p.tmChar)) tmWant = p.tmChar;
   tmStale = true;
   if (p.frChosen && typeof p.frChosen === 'object') Object.keys(p.frChosen).forEach(n => { if (charDef(n)) frSetIncluded(n, !!p.frChosen[n]); });
@@ -7852,7 +7870,7 @@ function applyPrefs(p) {
 // What save() writes — split out so the round trip in the tests reads the real shape.
 function savePayload() {
   return { version: 1, savedAt: new Date().toISOString(), nextId: state.nextId,
-    cards: state.cards, characters: state.chars, settings: { teamCritRate: state.teamCrit, teamBuffs: teamBuffsSaved(), thievesDen: denSaved(), wonderSpeed: wonderSpeed(), wonder: wonderSetup() }, prefs: collectPrefs() };
+    cards: state.cards, characters: state.chars, settings: { teamCritRate: state.teamCrit, teamBuffs: teamBuffsSaved(), thievesDen: denSaved(), wonderSpeed: wonderSpeed(), wonder: wonderSetup(), personas: personasSaved() }, prefs: collectPrefs() };
 }
 function save() {
   const payload = savePayload();
@@ -7895,6 +7913,8 @@ function applySave(text, from) {
     state.teamBuffs = teamBuffsFrom(d.settings && d.settings.teamBuffs);   // likewise
     state.den = denFrom(d.settings && d.settings.thievesDen);   // likewise
     state.wonderSpd = wonderSpeedFrom(d.settings && d.settings.wonderSpeed);   // likewise
+    // the Personas section first: Wonder's setup reads its Personas and their skill cards from it
+    state.personas = personasFrom(d.settings && d.settings.personas, d.settings && d.settings.wonder);
     state.wonder = wonderFrom(d.settings && d.settings.wonder);
     syncTeamCritField();
     applyPrefs(d.prefs);
@@ -8359,11 +8379,17 @@ function csv() {
    fight (tcMember with the damage dealer as the member: their buffs on before their hit, their
    debuffs after it). `own: false` keeps a line from its own character — already counted for their
    own stats (KIT_STAT_BUFFS) or written for the other allies only — and `ownAw` lets it reach them
-   only from that Awareness (Makoto Yuki's Cadenza). */
+   only from that Awareness (Makoto Yuki's Cadenza).
+
+   `excl`: cast lines of one character that the kit says do not stack with each other (Runa's Welcome Hug
+   and Furrious Bark DEF downs). Lines with the same `excl` and `src` add up as one effect; when two such
+   effects are up on a foe together only the larger counts (tcExclDrop), in the fight per foe, so Welcome
+   Hug's all-foe cut still reaches the foes Furrious Bark's one-foe cut misses. The quick screen counts the
+   smaller effect only over the turns the larger leaves uncovered (tcExclQuick). */
 const TC_BOSS = { def: 820.7, coef: 1.584 };
 const TC_WEAK = 1.2;
 const TC_KEYS = ['atkPct', 'atk', 'dm', 'cr', 'cm', 'pierce', 'defdown', 'final', 'weak', 'turns',
-  'hlDm', 'hlFinal', 'hlx', 'hlxDm', 'hlGauge', 'thGauge', 'hlCdRate', 'hlCd', 'hlFree', 'xturns', 'xDm', 'xFinal', 'xAtkPct', 'hlGaugeTo', 'resDm', 'dotDm', 'dotFinal', 'resFinal', 'curse', 'ail', 'tp', 'burn', 'downDm'];
+  'hlDm', 'hlFinal', 'hlx', 'hlxDm', 'hlGauge', 'thGauge', 'hlCdRate', 'hlCd', 'hlFree', 'xturns', 'xDm', 'xFinal', 'xAtkPct', 'hlGaugeTo', 'resDm', 'dotDm', 'dotFinal', 'resFinal', 'curse', 'ail', 'tp', 'burn', 'downDm', 'skillAmp'];
 const TC_FROM_K = { 'atk%': 'atkPct', atk: 'atk', dmg: 'dm', cr: 'cr', cm: 'cm', pierce: 'pierce', defdown: 'defdown', final: 'final', weak: 'weak', turns: 'turns' };
 TC_KEYS.slice(10).forEach(k => { TC_FROM_K[k] = k; });
 const TC_LABEL = { atkPct: 'ATK', atk: 'ATK', dm: 'damage', cr: 'crit rate', cm: 'crit multiplier', pierce: 'Pierce', defdown: 'enemy DEF', final: 'final damage', weak: 'weakness damage', turns: 'extra actions in 6 turns',
@@ -8371,7 +8397,7 @@ const TC_LABEL = { atkPct: 'ATK', atk: 'ATK', dm: 'damage', cr: 'crit rate', cm:
   hlGauge: 'Highlight gauge a turn', thGauge: 'Theurgy gauge a turn', hlCdRate: 'Highlight cooldown turns cut in 6 turns', hlCd: 'Highlight cooldown', hlFree: 'Highlights cost no gauge', hlGaugeTo: 'Highlight gauge refilled to',
   xturns: 'extra actions in the fight', xDm: 'damage on extra actions', xFinal: 'final damage on extra actions', xAtkPct: 'ATK on extra actions',
   resDm: 'Resonance damage', dotDm: 'damage over time', dotFinal: 'damage over time (separate multiplier)', resFinal: 'Resonance damage (separate multiplier)', curse: 'turns the foe is Cursed', ail: 'elemental ailments kept on the foe',
-  tp: 'Technical Precision', burn: 'Burn on the foe', downDm: 'damage taken while knocked down' };
+  tp: 'Technical Precision', burn: 'Burn on the foe', downDm: 'damage taken while knocked down', skillAmp: 'Skill Amplification on the other allies\' skills' };
 /* Keys that are a rate or a count rather than a percentage the damage formula adds. */
 const TC_RATE_KEYS = ['ail', 'tp', 'burn','hlx', 'hlGauge', 'thGauge', 'hlCdRate', 'hlCd', 'hlFree', 'xturns', 'hlGaugeTo'];
 /* Uses per battle of a once-per-battle effect, by name (TEAM_BUFFS `battle`): Manaka's Da Capo starts
@@ -8512,11 +8538,13 @@ const TEAM_BUFFS = {
     { k: 'defdown', ladder: [33, 43, 43, 53, 53, 63, 63], to: 'enemy', src: 'weapon', on: '1', dur: 2, weapon: '5', why: 'Jolting Pulse: after she inflicts an elemental ailment (Skill 1 always does), target DEF down for 2 turns, does not stack' }
   ],
   'Yumi Shiina': [
-    { k: 'atk', v: 0, per: { s: 'ATK', rate: 8.7, cap: [4600, 5060, 5980, 6440] }, to: 'party', src: '1', on: '1', dur: 3, why: 'Tempting Build (Skill 1): party flat ATK equal to 8.7% of Yumi\'s ATK (her ATK capped at 4600/5060/5980/6440) for 3 turns; Cocktail strengthening not counted' },
+    { k: 'atk', v: 0, per: { s: 'ATK', rate: 8.7, cap: [4600, 5060, 5980, 6440] }, to: 'party', src: '1', on: '1', dur: 3, ck: 'one', why: 'Tempting Build (Skill 1): party flat ATK equal to 8.7% of Yumi\'s ATK (her ATK capped at 4600/5060/5980/6440) for 3 turns; it spends her best Cocktail to raise this by 120/100/50% (Korean text: when cast), which the fight plays out (TC_CK)' },
+    { k: 'dmg', v: 0, per: { s: 'ATK', rate: 0.5217, cap: [4600, 5060, 5980, 6440] }, to: 'ally', src: '3', on: '3', dur: 2, ck: 'all', why: 'Invigorating Blend (Skill 3): spends all Cocktails; attribute damage +1% per 230 of Yumi\'s ATK (capped) per 100% of Cocktail strength spent (Tailor-Made/Standard/Basic 120/100/50%, A6 135/120/75%), x1.2 on the targeted ally (0.4348 x 1.2 per 100 ATK), 2 turns; the fight counts the Cocktails (TC_CK)' },
+    { k: 'cm', v: [20, 22, 22.4, 24.4], to: 'ally', src: '3', on: '3', dur: 2, ck: 'std2', why: 'Invigorating Blend (Skill 3): the targeted ally\'s crit damage +20.0/22.0/22.4/24.4% for 2 turns if 2+ Standard or better Cocktails are spent (the fight counts them, TC_CK)' },
     { k: 'dmg', v: 0, per: { s: 'ATK', rate: 0.4348, cap: [4600, 5060, 5980, 6440] }, to: 'ally', src: '2', on: '2', dur: 2, why: 'Enchanting Stir (Skill 2): one ally\'s damage +1% per 230 of Yumi\'s ATK (0.4348 per 100), ATK capped at 4600/5060/5980/6440, 2 turns' },
     { k: 'dmg', v: 4, to: 'party', src: 'passive', why: 'Cocktail Party (passive): +4% attribute damage for the attributes of party members, always on (the DPS\'s own attribute is one of them)' },
     { k: 'atk%', v: 10, to: 'ally', src: 'aw', on: 'dpsHL', dur: 1, aw: 4, why: 'Bloody Mary (A4): an ally who uses a Highlight or Theurgy gets ATK +10% for 1 turn' },
-    { k: 'dmg', v: 16, to: 'party', src: 'aw', up: 0.75, aw: 2, why: 'Screwdriver (A2): party damage +16% for 2 turns whenever a Cocktail forms; one forms per 3 ally skill hits (max held 3, and her rotation spends them), so judged up most of the fight, ~75%' },
+    { k: 'dmg', v: 16, to: 'party', src: 'aw', on: 'cocktail', dur: 2, upQ: 0.75, aw: 2, why: 'Screwdriver (A2): party damage +16% for 2 turns whenever a Cocktail is gained; the fight plays the Cocktails out (TC_CK), the quick screen takes it up ~75% of the fight (one forms per 3 ally hits)' },
     { k: 'dmg', ladder: [4.8, 6, 6, 7.2, 7.2, 8.4, 8.4], to: 'ally', src: 'weapon', on: '3', dur: 2, weapon: '4', why: 'Starrynight Soothsayer (4-star weapon): main target\'s damage up for 2 turns after any skill; keyed to Skill 3 (Skill 2 on the same ally refreshes it too)' },
     { k: 'dmg', ladder: [3.6, 4.5, 4.5, 5.4, 5.4, 6.3, 6.3], to: 'ally', src: 'weapon', on: '3', dur: 2, weapon: '4', why: 'Starrynight Soothsayer (4-star weapon): extra main-target damage when the skill spends Cocktails; Skill 3 always spends them' }
   ],
@@ -8595,6 +8623,7 @@ const TEAM_BUFFS = {
     { k: 'atk%', v: [39, 43, 41.4, 45.4], to: 'party', src: '1', on: '1', dur: 3, pair: ['MA','MS'], why: 'Selected Skill 1 = Mask of Mischief & Innocence: party ATK +39-45.4% per 100 Desire Level, 3 turns; encoded at Desire 100' },
     { k: 'pierce', v: [9.8, 10.8, 10.4, 11.4], to: 'ally', src: '2', on: '2', dur: 3, arch: ['AoE DPS', 'ST DPS'], pair: ['MA'], why: 'Selected Skill 2 = Mask of Absurdity & Nonsense: pierce for the highest-ATK Sweeper/Assassin, 4.9% + 4.9% per 100 Desire, 3 turns; encoded at Desire 100' },
     { k: 'cm', v: [19.5, 21.5, 20.7, 22.7], to: 'party', src: '3', on: '3', dur: 2, pair: ['MA'], why: 'Two Masks as One (Mischief + Absurdity Facades): party critical damage +19.5-22.7% per 100 Desire, duration taken as the same 2 turns; encoded at Desire 100' },
+    { k: 'skillAmp', v: [14.6, 16.1, 15.5, 17.0], to: 'party', src: '3', on: '3', dur: 2, own: false, pair: ['MA'], why: 'Two Masks as One (Mischief + Absurdity Facades): other allies get Skill Amplification 14.6-17% for 2 turns: "increase the values of skills... calculated separately from other effects". The fight multiplies the damage dealer\'s skill hits (and a Ram, a Persona skill) by it, and raises the skill buffs the other allies cast while it is up (TC_SKILL_SRC); not Highlights, follow-ups, Resonance or damage over time' },
     { k: 'atk%', v: [24.4, 26.9, 25.9, 28.4], to: 'party', src: 'HL', on: 'HL', dur: 2, pair: ['MA','MS'], why: 'Highlight, Mischief & Innocence version: party ATK up for 2 turns' },
     { k: 'dmg', v: [34.2, 37.7, 36.3, 39.8], to: 'party', src: 'HL', on: 'HL', dur: 2, pair: ['MA','MS'], why: 'Highlight, Mischief & Innocence version: party damage up for 2 turns' },
     { k: 'atk%', v: 30, to: 'party', src: 'aw', on: '1', dur: 2, aw: 2, pair: ['MA','MS'], why: 'A2 Callous Kindness: gaining the Mischief & Innocence Facade (Selected Skill 1) gives party ATK +30% for 2 turns' },
@@ -8617,7 +8646,9 @@ const TEAM_BUFFS = {
     { k: 'dmg', v: 30, to: 'party', src: 'aw', on: '3', dur: 1, aw: 2, elem: ['Ice'], why: 'Swan\'s Gaze (A2, Winter mode): party Ice damage +30% while Winter\'s Edge is active; Frozen Wings (Skill 3) opens the Edge for 1 turn. Winter mode is assumed with an Ice damage dealer' }
   ],
   'Runa Dogenzaka': [
-    { k: 'defdown', v: [14.6, 14.6, 15.5, 15.5], per: { s: 'Ailment Accuracy', rate: 31.4, cap: [171, 188.5, 181.6, 199.1] }, to: 'enemy', src: '2', on: '2', dur: 2, why: 'Furrious Bark (Skill 2): DEF down 14.6% + 31.4% of ailment accuracy, max 53.7/59.2/57.0/62.5%, 2 turns (3 at A6, not encoded) (the printed maximum caps the scaled part; the fixed 14.6% comes on top)' },
+    { k: 'defdown', v: [14.6, 14.6, 15.5, 15.5], per: { s: 'Ailment Accuracy', rate: 31.4, cap: [171, 188.5, 181.6, 199.1] }, to: 'enemy', foes: 'one', src: '2', on: '2', dur: 2, durAw: [6, 3], excl: 'def', why: 'Furrious Bark (Skill 2, 1 foe): DEF down 14.6% + 31.4% of ailment accuracy, max 53.7/59.2/57.0/62.5%, 2 turns, 3 from A6 (Station Square Superstar) (every language puts the cap on the ailment-accuracy part, so 68.3% at most, as lufel\'s defence calculator); does not stack with Welcome Hug\'s' },
+    { k: 'defdown', v: 0, per: { s: 'Ailment Accuracy', rate: 15.4, cap: [171.4, 189, 181.8, 199.4] }, to: 'enemy', foes: 'all', src: '1', on: '1', dur: 2, durAw: [6, 3], excl: 'def', why: 'Welcome Hug (Skill 1, all foes): DEF down 15.4% of ailment accuracy, max 26.4/29.1/28.0/30.7%, 2 turns, 3 from A6; does not stack with Furrious Bark\'s, the larger applies' },
+    { k: 'defdown', v: [26.4, 26.4, 28, 28], to: 'enemy', foes: 'all', src: '1', on: '1', dur: 2, durAw: [6, 3], excl: 'def', elem: ['Fire', 'Ice', 'Electric', 'Wind'], why: 'Welcome Hug: a foe with it that takes Fire, Ice, Electric or Wind skill damage loses 26.4/26.4/28.0/28.0% more DEF (52.8% in all at level 10, as lufel\'s defence calculator); counted for a damage dealer of those elements, whose own hits set it off' },
     { k: 'dmg', v: 0, per: { s: 'Ailment Accuracy', rate: 34.3, cap: [170.8, 188.3, 181.3, 198.8] }, to: 'enemy', src: '3', on: '3', dur: 2, cond: 'Furrocious Follow-Up active (Skill 2 before Skill 3, as in the single-target rotation)', why: 'Woof Woof Blaze (Skill 3) via Furrocious Follow-Up: target damage taken +34.3% of ailment accuracy, max 58.6/64.6/62.2/68.2%, 2 turns' },
     { k: 'dmg', v: [20.5, 22.6, 21.8, 23.9], to: 'enemy', src: '3', on: '3', dur: 2, aw: 6, elem: ['Fire', 'Ice', 'Electric', 'Wind'], cond: 'Big Welcome active (Skill 1 before Skill 3); the A0 single-target rotation 2>3 never triggers it, the A6 one does both', why: 'Woof Woof Blaze via Big Welcome: Fire/Ice/Electric/Wind damage taken +20.5-23.9% for 2 turns' },
     { k: 'dmg', v: 36, to: 'enemy', src: 'aw', on: '3', dur: 2, aw: 6, elem: ['Fire', 'Ice', 'Electric', 'Wind'], cond: 'Big Welcome activated by Skill 3; node is A1 but the single-target rotation only triggers Big Welcome from A6', why: 'A1 Legendary Devotion: after Big Welcome\'s Woof Woof Blaze, Fire/Ice/Electric/Wind damage taken +36% for 2 turns' },
@@ -8631,9 +8662,10 @@ const TEAM_BUFFS = {
     { k: 'cm', v: 30, to: 'enemy', src: 'aw', on: '1', dur: 2, aw: 1, why: 'Colors of Dawn (A1): Falling Petals target takes +30% crit damage' },
     { k: 'atk%', v: -12.8, per: { s: 'Crit Multiplier', rate: 12.8, cap: [388, 418, 418, 448] }, to: 'party', src: '2', on: '2', dur: 2, why: 'Arrival of Spring (Skill 2): party ATK +12.8% of Riko\'s crit multiplier above 100%' },
     { k: 'atk%', v: 25, to: 'party', src: 'aw', on: '2', dur: 2, aw: 1, arch: ['AoE DPS'], why: 'Colors of Dawn (A1): Arrival of Spring gives Sweeper allies +25% ATK more' },
-    { k: 'cr', v: [16, 17, 17, 18], to: 'ally', src: '3', on: '3', dur: 2, why: 'Blossoming Season (Skill 3): one other ally crit rate +16-18%. The \'+1% per 2 SP spent\' scaling is not applied (see skip); A6 makes it all allies but Riko' },
-    { k: 'atk', v: -240, per: { s: 'Crit Multiplier', rate: 240, cap: [388, 418, 418, 448] }, to: 'ally', src: '3', on: '3', dur: 2, cond: 'at least 50 SP spent: her skill 1 or 2 alone refunds about 72 SP at her 450% SP Recovery target', why: 'Blossoming Season (Skill 3), 50 SP tier: flat ATK +2.4 per 1% of crit multiplier above 100' },
-    { k: 'cm', v: -12, per: { s: 'Crit Multiplier', rate: 12, cap: [388, 418, 418, 448] }, to: 'ally', src: '3', on: '3', dur: 2, aw: 2, cond: 'at least 100 SP spent: from A2 the 50 SP refund after each cast plus ~72 from skills covers it', why: 'Blossoming Season (Skill 3), 100 SP tier: crit damage +12% of crit multiplier above 100. Encoded from A2 only, where reaching 100 SP is reliable' },
+    { k: 'cr', v: [16, 17, 17, 18], to: 'ally', src: '3', on: '3', dur: 2, why: 'Blossoming Season (Skill 3): one other ally crit rate +16-18%, whatever SP it spends; A6 makes it all allies but Riko' },
+    { k: 'atk', v: -240, per: { s: 'Crit Multiplier', rate: 240, cap: [388, 418, 418, 448] }, to: 'ally', src: '3', on: '3', dur: 2, spT: 50, cond: 'at least 50 SP spent', why: 'Blossoming Season (Skill 3), 50 SP tier: flat ATK +2.4 per 1% of crit multiplier above 100, at 1% strength per 2 SP spent (the value is at 200 SP); the fight follows her SP (TC_RK)' },
+    { k: 'cm', v: -12, per: { s: 'Crit Multiplier', rate: 12, cap: [388, 418, 418, 448] }, to: 'ally', src: '3', on: '3', dur: 2, spT: 100, cond: 'at least 100 SP spent', why: 'Blossoming Season (Skill 3), 100 SP tier: crit damage +12% of crit multiplier above 100, at 1% strength per 2 SP spent; the fight follows her SP (TC_RK)' },
+    { k: 'cm', v: -6, per: { s: 'Crit Multiplier', rate: 6, cap: [388, 418, 418, 448] }, to: 'ally', src: '3', on: '3', dur: 2, spT: 150, cond: 'at least 150 SP spent', why: 'Blossoming Season (Skill 3), 150 SP tier: crit damage +6% more of crit multiplier above 100, at 1% strength per 2 SP spent; the fight follows her SP (TC_RK)' },
     { k: 'atk', v: 30, to: 'ally', src: 'passive', on: '3', dur: 3, stacks: 3, why: 'Vernal Splendor (passive 1): Blossoming Season target gets +30 ATK per skill-damage instance for 3 turns; 3 stacks assumed (one skill a turn). The 5- and 10-stack bonuses are in skip' },
     { k: 'atk', v: -250, per: { s: 'Crit Multiplier', rate: 250, cap: [388, 418, 418, 448] }, to: 'ally', src: 'HL', on: 'HL', dur: 2, why: 'Highlight: one other ally flat ATK +2.5 per 1% of crit multiplier above 100. A4 extends it to all allies but Riko' },
     { k: 'cm', v: [24.4, 26.9, 25.9, 28.4], to: 'ally', src: 'HL', on: 'HL', dur: 2, why: 'Highlight: one other ally crit damage +24.4-28.4%' },
@@ -8775,7 +8807,7 @@ const TEAM_BUFFS = {
     { k: 'cm', v: -16.66, per: { s: 'Crit Multiplier', rate: 16.66, cap: [213.4, 229.9, 229.9, 246.4] }, to: 'ally', src: '3', on: TC_MED_ON, dur: 1, why: 'Gentle Sea Breeze passive: medicine on an ally gives its target 1 turn of crit damage +16.66% of crit multiplier above 100; on her medicine turns (ⓘA/ⓘB/ⓘC, TC_MEDS)' },
     { k: 'dmg', v: [24.4, 26.9, 25.9, 28.4], to: 'ally', src: 'HL', on: 'HL', dur: 2, durAw: [4, 3], why: 'Highlight: one other ally damage +24.4-28.4%, 2 turns (3 from A4 Lingering Ripples of Summer)' },
     { k: 'cm', v: -16.66, per: { s: 'Crit Multiplier', rate: 16.66, cap: [213.4, 229.9, 229.9, 246.4] }, to: 'ally', src: 'HL', on: 'HL', dur: 2, durAw: [4, 3], why: 'Highlight: one other ally crit damage +16.66% of crit multiplier above 100, 2 turns (3 from A4)' },
-    { k: 'dmg', v: 6, to: 'party', src: 'passive', stacks: 3, why: 'Soothing Sunlight (passive 1): +6% damage per Blessing stack on an ally (max 6). No duration printed; she grants about 2 per 3 turns (Summer Garden to all, Gentle Sea Breeze/Highlight to the target), 3 held assumed as a conservative steady state' },
+    { k: 'dmg', v: 6, to: 'party', src: 'passive', on: ['2', '3'], dur: 99, stacks: 6, build: { '2': 2, '3': 1 }, why: 'Soothing Sunlight (passive 1): each skill she uses on allies gives its targets 1 Blessing stack, and while she is present an ally deals +6% damage per stack (max 36%). No duration is printed, so the stacks are taken as permanent (the user\'s reading, Nov 2026), built up over the fight to 6: Summer Garden gives all allies 2 (its own "grant all allies 1 Blessing stack" and this passive\'s one, the user\'s reading), Gentle Sea Breeze its target 1; the Highlight is not a Persona skill (Korean 페르소나 스킬) and gives none' },
     { k: 'atk%', v: 12, to: 'party', src: 'passive', why: 'Blossoms by the Beach (passive 2): allies\' ATK +12% while Minami is present' },
     { k: 'final', v: 15, to: 'ally', src: 'aw', on: TC_MED_ON, dur: 1, aw: 6, why: 'Angel in White (A6): medicine with Flower Basket Pharmacy grants Summertime Refresh, final damage +15% for 1 turn; every medicine turn in her rotations uses Pharmacy' },
     { k: 'atk%', ladder: [10, 13, 13, 16, 16, 19, 19], to: 'ally', src: 'weapon', on: '3', dur: 3, weapon: '5', why: 'Everlasting Garden (5-star weapon): a skill on an ally gives its main target ATK +10-19% for 2 turns; Summer Garden refreshes it the turn after or before Gentle Sea Breeze in every lufel rotation, so encoded as covering the 3-turn skill-3 cycle' },
@@ -8891,9 +8923,9 @@ const TEAM_BUFFS = {
     { k: 'cm', v: [5.9, 6.5, 6.2, 6.8], per: { s: 'HP', rate: [0.1199, 0.1199, 0.1202, 0.1202], cap: [19520, 21520, 20720, 22720] }, to: 'party', src: '3', on: '3', dur: 2, why: 'Hero Focus (Skill 3): party crit damage +5.9% plus up to 23.4% more with Junpei\'s max HP, 2 turns' },
     { k: 'cm', v: [11.7, 12.9, 12.4, 13.6], per: { s: 'HP', rate: [0.2398, 0.2398, 0.2399, 0.2399], cap: [19520, 21520, 20720, 22720] }, to: 'party', src: '3', on: '3', dur: 2, elem: ['Fire'], arch: ['ST DPS', 'AoE DPS'], why: 'Hero Focus (Skill 3): Fire Assassins and Sweepers gain a further crit damage +11.7% plus up to 46.8% more with Junpei\'s max HP, 2 turns' },
     { k: 'atk%', v: 0, per: { s: 'HP', rate: 0.0999, cap: [19520, 21520, 20720, 22720] }, to: 'party', src: 'TH', on: 'TH', dur: 4, why: 'Heck \'n Blast (Theurgy): Fired Up gives the party ATK up to 19.5-22.7% with Junpei\'s max HP, 4 turns, max 2 stacks' },
-    { k: 'atk%', v: 0, per: { s: 'HP', rate: 0.0999, cap: [19520, 21520, 20720, 22720] }, to: 'party', src: 'TH', up: 0.7, why: 'Heck \'n Blast (Theurgy): second Fired Up stack; his Theurgy every other turn lasts 4 turns, so two casts overlap from the second one on' },
+    { k: 'atk%', v: 0, per: { s: 'HP', rate: 0.0999, cap: [19520, 21520, 20720, 22720] }, to: 'party', src: 'TH', up: 0.5, why: 'Heck \'n Blast (Theurgy): second Fired Up stack; his Theurgy every other turn lasts 4 turns, so two casts overlap from the second one on: rounds 4-6 of the default 6 (0.7 over 12 rounds)' },
     { k: 'cm', v: 0, per: { s: 'HP', rate: 0.0748, cap: [19520, 21520, 20720, 22720] }, to: 'party', src: 'TH', on: 'TH', dur: 4, why: 'Heck \'n Blast (Theurgy): Fired Up gives the party crit damage up to 14.6-17% with Junpei\'s max HP, 4 turns, max 2 stacks' },
-    { k: 'cm', v: 0, per: { s: 'HP', rate: 0.0748, cap: [19520, 21520, 20720, 22720] }, to: 'party', src: 'TH', up: 0.7, why: 'Heck \'n Blast (Theurgy): second Fired Up stack, overlapping as above' },
+    { k: 'cm', v: 0, per: { s: 'HP', rate: 0.0748, cap: [19520, 21520, 20720, 22720] }, to: 'party', src: 'TH', up: 0.5, why: 'Heck \'n Blast (Theurgy): second Fired Up stack, overlapping as above' },
     { k: 'atk%', v: 30, to: 'party', src: 'passive', why: 'Serious (passive 1): while Junpei is on the field, party ATK +30%' },
     { k: 'dmg', v: 12, to: 'party', src: 'passive', elem: ['Fire'], arch: ['ST DPS', 'AoE DPS'], why: 'Serious (passive 1): with a Fire Assassin or Sweeper on the field at the start of battle, party damage +12%' },
     { k: 'atk%', v: 20, to: 'party', src: 'aw', fromAw: [[0, 2], [1, 1]], aw: 0, why: 'Wannabe Hero (A0): at 10 Competitive Heart stacks, party ATK +20%. One stack per ally turn plus 6 per Power Swing reaches 10 in the second round; the fight counts it from round 2 (from the start at A1, Mood Maker)' },
@@ -9142,10 +9174,7 @@ const TEAM_BUFF_SKIPS = {
     'A3/A5 skill level increases: tier selection, handled by the calculator\'s tiers'
   ],
   'Yumi Shiina': [
-    'Invigorating Blend (Skill 3): party attribute damage +1% per 230 of Yumi\'s ATK (up to ~28% at 6440 ATK), scaled by each Cocktail spent (120%/100%/50% by quality) and x1.2 on the targeted ally - how several Cocktails combine (sum or not) and how many are held is not pinned down',
-    'Invigorating Blend (Skill 3): targeted ally crit damage +20.0/22.0/22.4/24.4% only if 2+ Standard-or-better Cocktails are spent - Cocktail count per cast not pinned down',
-    'Tempting Build (Skill 1) / Cocktails: \'spend 1 Cocktail to strengthen an ally\'s skill effects\' by 120/100/50% - skill effect amplification',
-    'Mojito (A1), XYZ (A6): Cocktail upgrades and stronger Cocktail multipliers (135/120/75%) - skill effect amplification',
+    'Cocktails (TC_CK): Wonder\'s hits give no Mixer (his element is his Persona\'s), and Mojito\'s (A1) Mixer back is taken as the most common element of the three, where the text says random',
     'Moonlit Feather (5-star weapon): per Cocktail spent, one RANDOM party buff (ATK +6-11.4%, damage +4-7.6% or crit rate +5-9.5%, 2 turns, x quality) - random pick and Cocktail count not priceable',
     'Elucidator 20% stat share - handled by the calculator'
   ],
@@ -9164,7 +9193,7 @@ const TEAM_BUFF_SKIPS = {
     'Elucidator 15% stat share - handled by the calculator'
   ],
   'Motoha Arai [Tropical]': [
-    'Every effect in the kit is her own (Summer Hype / Blowout, healing-triggered damage and crit, HP-to-ATK conversion, Colorful Coast and Sunlight), already in the planner'
+    'Every effect in the kit is her own (Summer Hype / Blowout, healing-triggered damage and crit, HP-to-ATK conversion, Colorful Coast and Sunlight), already in the planner; as a damage dealer she gains from the team\'s heals (TC_HEALS)'
   ],
   'Tomoko Noge [Seaside]': [
     'Hale Summer Days: +ATK equal to 25% of the target\'s ailment accuracy (cap 22.5%) - depends on the DPS\'s own ailment accuracy, and unclear whether the skill\'s own +58.6% AA counts',
@@ -9201,7 +9230,6 @@ const TEAM_BUFF_SKIPS = {
   'Justine & Caroline': [
     'Persona pair: three pairs are entered and the fight plays the one that does most for each team, named on her seat (TC_PAIRS): Strategist (Mischief & Innocence + Absurdity & Nonsense), Medic (Mischief + Service & Admonition) and Saboteur (Service + Luck & Loss). Rotation slot 1 is the first mask, 2 the second, 3 Two Masks as One; lufel writes her rotations for the Strategist pair, and the others are read with the same turns. Sweeper and Assassin buff only her, Guardian only defends: not entered',
     'Desire Level: values encoded at Desire 100 (25 from A0 + 45 ATK + 15 Damage Mult + 15 Crit Mult caps); A6\'s +20% and Warden\'s Judgement\'s Desire gain not encoded',
-    'Two Masks as One (Mischief + Absurdity): Skill Amplification 14.6-17% to other allies; skill effect amplification not priced',
     'Highlight, Absurdity & Nonsense version: ATK +34.2-39.8% for the highest-ATK ally; Highlights share the gauge, so only the party Mischief version is encoded',
     'A6 Power to Resist Ruin: True Desire every 8 actions activates all Facade effects at once; periodic, not encoded',
     'A0/A6 Wonder skill level increases: not a team damage buff here',
@@ -9219,19 +9247,16 @@ const TEAM_BUFF_SKIPS = {
     'Performance Scoring (passive 1), A0/A1/A4 Vestige effects, Spiral Sequence crit damage, both weapons\' ATK and crit lines - self buffs'
   ],
   'Runa Dogenzaka': [
-    'Welcome Hug (Skill 1) DEF down: does not stack with Furrious Bark\'s (encoded), and Furrious Bark covers every turn of the rotation',
     'Big Welcome\'s generic damage taken (24% of ailment accuracy): does not stack with Follow-Up\'s larger one; the greater applies',
     'Furrocious Follow-Up / A1 / A6: Resonance damage taken increases; Resonance not modelled',
     'Highlight Enthusiastic Fuse: per-hit consumable damage boost (2 or 4 stacks), not a timed buff',
     'A0 Station Square Mascot: 18% DEF down on Woof Woof Blaze is only a 60% chance',
-    'A6: debuff durations +1 turn not encoded (durations kept at 2); \'increase FIEW damage taken effect by 30%\' and Resonance +60% unclear whether points or relative',
+    'A6: debuff durations +1 turn encoded on the two DEF downs only (the damage-taken lines kept at 2); \'increase FIEW damage taken effect by 30%\' and Resonance +60% unclear whether points or relative',
     'Cerberus Claws Big Welcome DEF down: does not stack with the Follow-Up one (encoded)',
     'Faithful Dog: the Resonance-damage trigger is not modelled (FIEW elements encoded)'
   ],
   'Riko Tanemura [Tempest]': [
-    'Blossoming Season: \'+1% effect per 2 SP spent\' multiplier - SP actually spent per cast is not known, so all tiers are encoded at base value',
-    'Blossoming Season 150 SP tier (+6% of crit multiplier above 100 as crit damage) - reaching 150 SP each cast is not reliable',
-    'Blossoming Season at A0-A1, 100 SP tier - reaching 100 SP each cast without A2\'s 50 SP refund is not reliable',
+    'Blossoming Season (TC_RK): her SP is followed turn by turn from full at the start; the refill each turn (about 10.4 SP x SP Recovery) is taken from lufel\'s note that casting it every turn needs 480.1% SP Recovery, and SP other allies give her is not counted',
     'Vernal Splendor 5/10 Blossom stack bonuses (ATK +8% and crit damage +5% of crit multiplier above 100, doubled at A2) - stacks held depend on the DPS\'s hit count',
     'Storm of Petals at A6: Falling Petals lasts 1 turn longer, and an automatic extra Storm of Petals when the main target uses a skill - not expressible per Awareness / automatic cast',
     'A6 Full Blossom: crit damage +2% per 1% of the attacker\'s crit rate above 100% - depends on the DPS\'s crit rate exceeding 100',
@@ -9314,14 +9339,13 @@ const TEAM_BUFF_SKIPS = {
     'Blue-Green Sea (A2): Virtual Concert grants \'all effects of Feel the Beat and Clear Sound\' for 2 turns - unclear whether that includes every song\'s extra effect (e.g. crit damage from Fire on Skill 1); not priced beyond the base entries',
     'Crit Multiplier build alternative: Play-With-Fire on Skill 1 gives party crit damage up to 18/19.8/20.2/22% (0.41% per 100 ATK) instead of Skill 2\'s crit rate - only one of the two is encoded (the Crit Rate build, lufel\'s first rotation)',
     'Off-element build: Spring Storm on Skill 1 gives party damage up to 15-18.3% instead of Skill 2\'s weakness damage - not encoded',
-    'Hologram Screen (A1): 15% Skill Amplification, and the 5-star weapon\'s Skill Amplification during Virtual Concert - effect amplification not priced',
     'Hologram Screen (A1): doubled Theurgy gauge gain during Virtual Concert - not counted (the shared Highlight gauge filling twice as fast, the cooldown reset and the +10% Highlight final damage are)',
     'Neverending Song (A6): Almighty damage equal to all damage foes took during Virtual Concert - a separate damage instance, not a multiplier here',
     'Clear Sound on Heaven: party heal - not damage'
   ],
   'Minami Miyashita [Beachflower]': [
-    'Medicines (TC_MEDS): the DEF medicine (no damage line reads DEF) and the One More / All-Out Attack medicine (neither is played out) add only Blossoms by the Beach\'s +15% ATK; the next-medicine increases from her Highlight (+9.8-11.4%) and A4 (+5%) are not counted',
-    'Soothing Sunlight: Blessing stack duration not printed; 3 of 6 stacks is a judgement',
+    'Medicines (TC_MEDS): the DEF medicine (no damage line reads DEF) and the One More / All-Out Attack medicine (neither is played out) add only Blossoms by the Beach\'s +15% ATK; the next-medicine increase from her Highlight (+9.8-11.4%, +5% more at A4) is counted in the fight only, not on the quick screen',
+    'Soothing Sunlight: Blessing stacks are taken as permanent (no duration printed); Blessing other kits give (Shoki\'s Followspot) is not added to hers',
     'Flower Basket Pharmacy (A0): medicine without spending a turn - action economy not modelled',
     'Tea Time Delight (4-star weapon): raises Minami\'s own crit multiplier (feeds her scaling), not a team buff',
     'Summer Garden: removes 1 debuff - cleanse not modelled'
@@ -9352,7 +9376,7 @@ const TEAM_BUFF_SKIPS = {
   'Kotone Shiomi': [
     'Lunar Phaseshift copying (priced in the fight): which "special buffs cannot be copied" the game does not say, so every stat buff the target has on the damage dealer is copied; Skill Effect Amplification (J&C) is not modelled anywhere, so it is not copied either; she casts it on her copy target, so its Leader\'s Guidance stack and Lunar Bond go to that ally rather than the damage dealer (not counted against it)',
     'Fortune state (Go for Broke, once per battle; twice at A6): extends durations by 1-2 turns, A2 adds 1 more - not modelled (its free Highlight from A1 is counted, on the burst turn of her rotation)',
-    'Vetri Vel Muruga: Skill Amplification 10-19% at Lunar Bond 5+ - skill effect amplification not modelled',
+    'Vetri Vel Muruga: its Skill Amplification is priced on her skill buffs (TC_SELF_AMP), not on Lunar Phaseshift\'s copy rate',
     'Moment of Truth: +1% final damage per additional Strategist on the team - depends on team composition',
     'Lunar Bond and Powerful Bond uptimes assume the DPS is the Arcana Link ally for the whole fight; rotation \'Fatigue\' turns may drop Lyre\'s Melody stacks below 3',
     'A1: permanent Powerful Bond stack and Lunar Bond set to 5 on grant - makes the encoded stack effects more reliable, not separately encoded'
@@ -9460,7 +9484,6 @@ const TEAM_BUFF_SKIPS = {
   ],
   'Ichigo Shikano [Summer]': [
     'Heart\'s Desire (Skill 3) with Ocean\'s Seal: crit damage for [Summer] characters, and the weapon\'s crit damage on gaining Ocean\'s Seal - needs a [Summer] ally, a tag the calculator cannot test',
-    'Magical Ichigo Sets Sail (A0) / Heart\'s Desire: Ram: Miracle Ichi-Boat, a hit by the Helmsman at the end of their turn, and A6\'s +30% Ram skill damage - a separate damage instance (summon-like), not priced',
     'Magical Ichigo Sets Sail (A0): the start-of-turn heal may also trigger Words of Love (ATK +30%) every turn; unclear whether healing taken by the Boat counts, so only Heart\'s Desire\'s heal is counted',
     'Magical Ichigo Sets Sail (A0) / Ocean\'s First Glimmer (A1): the shared Ichi-Boat HP pool, Null Insta-Kill and revival - defensive',
     'The Course Guides the Way (A4): healing received +10% - not damage',
@@ -9481,7 +9504,7 @@ const WONDER_BUFFS = {
       { k: 'cr', v: 10, to: 'party', src: 'passive', dur: 2, up: 0.85, why: 'Divine Exultation I: inflicting Shock gives all allies crit rate +10% for 2 turns; the unique has a 110% base Shock chance, so judged up most of the time it is cast every 2 turns' }
     ],
     'Andras': [
-      { k: 'dmg', v: 7.5, to: 'enemy', src: 'passive', dur: 2, onCast: true, elem: ['Ice'], cond: 'after a Persona skill on a foe', why: 'Release of Grudges I (top rank): after Wonder uses a skill on a foe, the main target takes 7.5% more Ice damage for 2 turns; Andras\'s own skill (Mabufu) hits foes, so every cast while it is in use refreshes it' }
+      { k: 'dmg', v: 7.5, to: 'enemy', src: 'passive', dur: 2, onCast: true, castOn: 'foe', elem: ['Ice'], cond: 'after a Persona skill on a foe', why: 'Release of Grudges I (top rank): after Wonder uses a skill on a foe, the main target takes 7.5% more Ice damage for 2 turns; Andras\'s own skill (Mabufu) hits foes, so every cast while it is in use refreshes it' }
     ],
     'Apsaras': [
       { k: 'cr', v: 10.2, per: { s: 'Crit Rate', rate: 18, cap: 38.9 }, to: 'ally', src: 'unique', dur: 3, why: 'Rebellion: one ally crit rate +10.2%, plus 1.8% per 10% of Wonder\'s crit rate (at most 7% more, 17.2% in all), 3 turns' },
@@ -9501,7 +9524,7 @@ const WONDER_BUFFS = {
     ],
     'Belphegor': [
       { k: 'defdown', v: 42.7, to: 'enemy', src: 'unique', dur: 3, why: 'Rakunda: one foe\'s DEF -42.7% for 3 turns' },
-      { k: 'dmg', v: 14.4, to: 'enemy', src: 'passive', dur: 2, onCast: true, elem: ['Ice'], cond: 'after a Persona skill on a foe', why: 'Ice the Slackers II (top rank): after Wonder casts a Persona skill on a foe, the main target takes 14.4% more Ice damage for 2 turns; every skill Belphegor has (Rakunda, Bufula, Mabufula) targets foes, so each cast while it is in use refreshes it (was a judged 2 turns in 3)' },
+      { k: 'dmg', v: 14.4, to: 'enemy', src: 'passive', dur: 2, onCast: true, castOn: 'foe', elem: ['Ice'], cond: 'after a Persona skill on a foe', why: 'Ice the Slackers II (top rank): after Wonder casts a Persona skill on a foe, the main target takes 14.4% more Ice damage for 2 turns; every skill Belphegor has (Rakunda, Bufula, Mabufula) targets foes, so each cast while it is in use refreshes it (was a judged 2 turns in 3)' },
       { k: 'dmg', v: 22.3, to: 'enemy', src: 'HL', dur: 2, why: 'Highlight: foes take 22.3% more damage for 2 turns' }
     ],
     'Berith': [
@@ -9509,7 +9532,7 @@ const WONDER_BUFFS = {
       { k: 'dmg', v: 33.6, to: 'party', src: 'HL', dur: 2, why: 'Highlight: party damage +33.6% for 2 turns' }
     ],
     'Bishamonten': [
-      { k: 'dmg', v: 10, to: 'enemy', src: 'passive', dur: 2, onCast: true, perAil: 3, elem: ['Nuclear'], why: 'Tower of Purification III: each skill Wonder uses on a foe makes the main target take 10% more Nuclear damage for each elemental ailment on it, up to 3, for 2 turns (other foes 40%; the main target only here) - read off the ailments the fight puts on the boss. lufel: Rakunda sets it off too' },
+      { k: 'dmg', v: 10, to: 'enemy', src: 'passive', dur: 2, onCast: true, castOn: 'foe', perAil: 3, elem: ['Nuclear'], why: 'Tower of Purification III: each skill Wonder uses on a foe makes the main target take 10% more Nuclear damage for each elemental ailment on it, up to 3, for 2 turns (other foes 40%; the main target only here) - read off the ailments the fight puts on the boss. lufel: Rakunda sets it off too' },
       { k: 'atk%', v: 22, to: 'party', src: 'unique', dur: 2, elem: ['Nuclear'], why: 'Imperial Purge: Nuclear allies ATK +22% for 2 turns (Global text reads it unconditional; the KR wording may tie it to hitting a foe with an elemental ailment)' }
     ],
     'Black Ooze': [
@@ -9525,7 +9548,7 @@ const WONDER_BUFFS = {
     ],
     'Dionysus': [
       { k: 'cr', v: 7.2, per: { s: 'Crit Rate', rate: 12, cap: 40 }, to: 'party', src: 'unique', dur: 3, why: 'Revolution: party crit rate +7.2%, plus 1.2% per 10% of Wonder\'s crit rate (at most 4.8% more, 12% in all), 3 turns' },
-      { k: 'cm', v: 30, to: 'ally', src: 'passive', dur: 2, onCast: true, cond: 'when a Persona skill targets an ally', why: 'Feast of the Frenzied III: casting a Persona skill on an ally gives the main target crit damage +30% for 2 turns; lufel: it triggers on any skill that targets an ally, and Revolution (the unique) is one, so each such cast while Dionysus is in use refreshes it (was a judged 0.9)' },
+      { k: 'cm', v: 30, to: 'ally', src: 'passive', dur: 2, onCast: true, castOn: 'ally', cond: 'when a Persona skill targets an ally', why: 'Feast of the Frenzied III: casting a Persona skill on an ally gives the main target crit damage +30% for 2 turns; lufel: it triggers on any skill that targets an ally, and Revolution (the unique) is one, so each such cast while Dionysus is in use refreshes it (was a judged 0.9)' },
       { k: 'dmg', v: 33.6, to: 'party', src: 'HL', dur: 2, why: 'Highlight: party damage +33.6% for 2 turns' }
     ],
     'Dominion': [
@@ -9538,7 +9561,7 @@ const WONDER_BUFFS = {
     'Gabriel': [
       { k: 'dmg', v: 16.5, to: 'enemy', src: 'unique', dur: 3, why: 'Revelation of Fate: the target takes 16.5% more damage for 3 turns (Global text prints only the rank-1 15%; 16.5% is the top rank in the KR text)' },
       { k: 'defdown', v: 22, to: 'enemy', src: 'unique', dur: 3, arch: ['ST DPS'], why: 'Revelation of Fate: the target\'s DEF drops 22% more when an Assassin attacks it, 3 turns (top rank; Global prints 20%)' },
-      { k: 'defdown', v: 30, to: 'enemy', src: 'passive', dur: 3, onCast: true, cond: 'after a Persona skill on a foe', why: 'Silver Wings in God\'s Presence I (top rank): after Wonder casts a Persona skill on a foe, the main target\'s DEF -30% for 3 turns, and Gospel replays the last recorded effect on the next cast; Gabriel\'s own skills (Revelation of Fate, Mabufudyne, God\'s Judgment) all target foes, so each cast while it is in use refreshes it (was a judged 0.85)' },
+      { k: 'defdown', v: 30, to: 'enemy', src: 'passive', dur: 3, onCast: true, castOn: 'foe', cond: 'after a Persona skill on a foe', why: 'Silver Wings in God\'s Presence I (top rank): after Wonder casts a Persona skill on a foe, the main target\'s DEF -30% for 3 turns, and Gospel replays the last recorded effect on the next cast; Gabriel\'s own skills (Revelation of Fate, Mabufudyne, God\'s Judgment) all target foes, so each cast while it is in use refreshes it (was a judged 0.85)' },
       { k: 'cm', v: 30, to: 'ally', src: 'passive', dur: 3, up: 0.85, why: 'Silver Wings in God\'s Presence I: a Persona skill on an ally gives the main target crit damage +30% for 3 turns, and Gospel replays it; judged mostly up with support casts between the unique' },
       { k: 'final', v: 6, to: 'party', src: 'passive', dur: 3, up: 0.9, arch: ['ST DPS'], why: 'Silver Wings in God\'s Presence I: spending Gospel (gained 2 turns after each Persona skill) gives Assassin allies total damage amplification +6% for 3 turns; renewed about every other cast' },
       { k: 'atk%', v: 22, to: 'party', src: 'HL', dur: 3, why: 'Highlight grants Divine Oracle: Gabriel\'s next Persona skill spends it for all allies ATK +22% for 3 turns' },
@@ -9565,7 +9588,7 @@ const WONDER_BUFFS = {
     ],
     'Jikokuten': [
       { k: 'atk%', v: 12, per: { s: 'ATK', rate: 0.2, cap: 3950 }, to: 'party', src: 'unique', dur: 3, why: 'Matarukaja: party ATK +12%, plus 1% per 500 of Wonder\'s ATK (at most 7.9% more, 19.9% in all), 3 turns' },
-      { k: 'atk%', v: 15.5, to: 'ally', src: 'passive', onCast: true, dur: 2, cond: 'a skill Wonder casts on an ally (a buff); his Highlight triggers it too', why: 'Wisdom of the East I: casting a skill on an ally gives the main target ATK +15.5% for 2 turns (KR: "when casting a skill targeting an ally"); refreshed by each buff Wonder casts with Jikokuten in use, Matarukaja included. Debuff cards cast on a foe do not trigger it in the game; the Highlight does' },
+      { k: 'atk%', v: 15.5, to: 'ally', src: 'passive', onCast: true, castOn: 'ally', dur: 2, cond: 'a skill Wonder casts on an ally (a buff); his Highlight triggers it too', why: 'Wisdom of the East I: casting a skill on an ally gives the main target ATK +15.5% for 2 turns (KR: "when casting a skill targeting an ally"); refreshed by each buff Wonder casts with Jikokuten in use, Matarukaja included. Debuff cards cast on a foe do not trigger it in the game; the Highlight does' },
       { k: 'dmg', v: 33.6, to: 'party', src: 'HL', dur: 2, why: 'Highlight: party damage +33.6% for 2 turns' }
     ],
     'Kaiwan': [
@@ -9601,7 +9624,7 @@ const WONDER_BUFFS = {
     'Macabre': [
       { k: 'dmg', v: 13.2, to: 'enemy', src: 'unique', dur: 3, why: 'Death\'s Mercy: all foes take 13.2% more damage for 3 turns' },
       { k: 'cr', v: 11, to: 'enemy', src: 'unique', dur: 3, arch: ['AoE DPS'], why: 'Death\'s Mercy: foes take crit hits 11% more often from Sweepers, 3 turns' },
-      { k: 'cm', v: 15, to: 'enemy', src: 'passive', onCast: true, dur: 3, cond: 'a Persona skill Wonder casts on foes', why: 'Memento Mori I: when Wonder casts a Persona skill on foes, all foes take 15% more crit damage for 3 turns; Death\'s Mercy (3 turns) refreshes it, so do debuff cards and his attacks with Macabre in use. Buff cards cast on allies do not trigger it in the game' },
+      { k: 'cm', v: 15, to: 'enemy', src: 'passive', onCast: true, castOn: 'foe', dur: 3, cond: 'a Persona skill Wonder casts on foes', why: 'Memento Mori I: when Wonder casts a Persona skill on foes, all foes take 15% more crit damage for 3 turns; Death\'s Mercy (3 turns) refreshes it, so do debuff cards and his attacks with Macabre in use. Buff cards cast on allies do not trigger it in the game' },
       { k: 'final', v: 3, to: 'enemy', src: 'passive', dur: 3, up: 0.9, arch: ['AoE DPS'], why: 'Memento Mori I: at 3 Dance of Death stacks (starts full, +1 per ally skill hit) they are spent so the target takes 3% more total damage amplification from Sweepers for 3 turns; refills within a turn or two' },
       { k: 'dmg', v: 22.3, to: 'enemy', src: 'HL', dur: 3, why: 'Highlight: all foes take 22.3% more damage for 3 turns' },
       { k: 'cm', v: 16.8, to: 'enemy', src: 'HL', dur: 3, why: 'Highlight: all foes take 16.8% more crit damage for 3 turns' }
@@ -9643,7 +9666,7 @@ const WONDER_BUFFS = {
       { k: 'dmg', v: 14, to: 'party', src: 'passive', elem: ['Curse'], cond: 'only 1 foe on the field (a lone boss)', why: 'Grudge of Hunger: party Curse damage +14% while only one foe is on the field' }
     ],
     'Orobas': [
-      { k: 'dmg', v: 8.2, to: 'enemy', src: 'passive', onCast: true, dur: 2, elem: ['Fire'], cond: 'a skill Wonder casts on a foe', why: 'Fanatical Prophet I: casting a skill on a foe makes it take 8.2% more Fire damage for 2 turns; Fire Break (on the foe, 2 turns) refreshes it, as do debuff cards and attacks with Orobas in use. Buff cards on allies do not trigger it in the game' },
+      { k: 'dmg', v: 8.2, to: 'enemy', src: 'passive', onCast: true, castOn: 'foe', dur: 2, elem: ['Fire'], cond: 'a skill Wonder casts on a foe', why: 'Fanatical Prophet I: casting a skill on a foe makes it take 8.2% more Fire damage for 2 turns; Fire Break (on the foe, 2 turns) refreshes it, as do debuff cards and attacks with Orobas in use. Buff cards on allies do not trigger it in the game' },
       { k: 'dmg', v: 22.3, to: 'enemy', src: 'HL', dur: 2, why: 'Highlight: foes take 22.3% more damage for 2 turns' }
     ],
     'Ose': [
@@ -9665,7 +9688,7 @@ const WONDER_BUFFS = {
     'Raphael': [
       { k: 'atk%', v: 27.5, to: 'ally', src: 'unique', dur: 3, why: 'Soul Catalysis: one ally ATK +27.5% for 3 turns' },
       { k: 'atk%', v: 20, to: 'party', src: 'passive', why: 'Tree of Life\'s Guidance I: all allies ATK +20% for the whole battle from its start' },
-      { k: 'final', v: 4.2, to: 'ally', src: 'passive', dur: 3, onCast: true, up: 0.9, why: 'Tree of Life\'s Guidance I: a Persona skill cast on an ally gives that ally total damage amplification +4.2% for 3 turns; set off by each skill Wonder casts with Raphael (Soul Catalysis and support cards on the DPS), judged 90% for the casts that target someone else' },
+      { k: 'final', v: 4.2, to: 'ally', src: 'passive', dur: 3, onCast: true, castOn: 'ally', up: 0.9, why: 'Tree of Life\'s Guidance I: a Persona skill cast on an ally gives that ally total damage amplification +4.2% for 3 turns; set off by each skill Wonder casts with Raphael (Soul Catalysis and support cards on the DPS), judged 90% for the casts that target someone else' },
       { k: 'atk%', v: 21.9, to: 'party', src: 'HL', dur: 4, why: 'Highlight: all allies ATK +21.9% for 4 turns' },
       { k: 'cm', v: 13.7, to: 'party', src: 'HL', dur: 4, why: 'Highlight: all allies crit damage +13.7% for 4 turns' }
     ],
@@ -9674,9 +9697,9 @@ const WONDER_BUFFS = {
     ],
     'Sahimochi-no-Kami': [
       { k: 'dmg', v: 8.8, to: 'enemy', src: 'unique', dur: 2, elem: ['Ice'], why: 'One-Fathom Fang: all foes take 8.8% more Ice damage for 2 turns' },
-      { k: 'dmg', v: 1.5, to: 'enemy', src: 'passive', dur: 2, onCast: true, up: 0.9, stacks: 5, why: 'Ocean\'s Blade Bearer III: with 5 Shark\'s Blade stacks (full at battle start, +1 per ally skill, even in reserve), a Persona skill Wonder casts on foes spends them for all foes taking 1.5% more damage per stack for 2 turns; set off by his casts with Sahimochi, and refills within about two turns of ally skills (90%)' },
+      { k: 'dmg', v: 1.5, to: 'enemy', src: 'passive', dur: 2, onCast: true, castOn: 'foe', up: 0.9, stacks: 5, why: 'Ocean\'s Blade Bearer III: with 5 Shark\'s Blade stacks (full at battle start, +1 per ally skill, even in reserve), a Persona skill Wonder casts on foes spends them for all foes taking 1.5% more damage per stack for 2 turns; set off by his casts with Sahimochi, and refills within about two turns of ally skills (90%)' },
       { k: 'resFinal', v: 8.8, to: 'enemy', src: 'unique', dur: 2, why: 'One-Fathom Fang: all foes\' Resonance (KR: Additional Effect) damage amplification taken +8.8% for 2 turns - a separate multiplier (lufel: "strengthens the separate multiplier for Additional Effect damage amplification"), so it multiplies Resonance damage rather than joining the damage bonus' },
-      { k: 'dmg', v: 1.5, to: 'enemy', src: 'passive', dur: 2, onCast: true, up: 0.9, resStacks: 5, why: 'Ocean\'s Blade Bearer III: each Resonance activated gives a Serrated Shark\'s Blade stack (up to 5, even in reserve), spent with the Shark\'s Blade stacks for another 1.5% damage taken each, 2 turns. Stacks = the damage dealer\'s Resonance activations in the two turns between casts (TC_RES_RATE), up to 5' }
+      { k: 'dmg', v: 1.5, to: 'enemy', src: 'passive', dur: 2, onCast: true, castOn: 'foe', up: 0.9, resStacks: 5, why: 'Ocean\'s Blade Bearer III: each Resonance activated gives a Serrated Shark\'s Blade stack (up to 5, even in reserve), spent with the Shark\'s Blade stacks for another 1.5% damage taken each, 2 turns. Stacks = the damage dealer\'s Resonance activations in the two turns between casts (TC_RES_RATE), up to 5' }
     ],
     'Sandalphon': [
       { k: 'dmg', v: 22.4, to: 'ally', src: 'unique', dur: 2, up: 0.8, why: 'Devoted Guard: party shield; the main target deals 22.4% more damage for 2 turns while the shield holds (judged broken early about a fifth of the time). Global text reads as party-wide, KR names the main target - the smaller reading is used' }
@@ -9705,7 +9728,7 @@ const WONDER_BUFFS = {
     ],
     'Succubus': [
       { k: 'cr', v: 10.2, per: { s: 'Crit Rate', rate: 18, cap: 38.9 }, to: 'ally', src: 'unique', dur: 3, why: 'Rebellion: one ally crit rate +10.2%, plus 1.8% per 10% of Wonder\'s crit rate (at most 7% more, 17.2% in all), 3 turns' },
-      { k: 'cr', v: 11.7, to: 'ally', src: 'passive', dur: 1, onCast: true, up: 0.9, why: 'Intoxicated Whisper I (KR: on casting a Persona skill on an ally): that ally\'s crit rate +11.7% for 1 turn; set off by each skill Wonder casts with Succubus (Rebellion on the DPS), judged 90% for casts on someone else' },
+      { k: 'cr', v: 11.7, to: 'ally', src: 'passive', dur: 1, onCast: true, castOn: 'ally', up: 0.9, why: 'Intoxicated Whisper I (KR: on casting a Persona skill on an ally): that ally\'s crit rate +11.7% for 1 turn; set off by each skill Wonder casts with Succubus (Rebellion on the DPS), judged 90% for casts on someone else' },
       { k: 'dmg', v: 33.6, to: 'party', src: 'HL', dur: 2, why: 'Highlight: party damage +33.6% for 2 turns' }
     ],
     'Surt': [
@@ -9718,7 +9741,7 @@ const WONDER_BUFFS = {
     ],
     'Throne': [
       { k: 'atk%', v: 13.2, per: { s: 'ATK', rate: 0.16, cap: 3750 }, to: 'party', src: 'unique', dur: 3, why: 'Purifying Flames: party ATK +13.2%, plus 0.8% per 500 of Wonder\'s ATK (at most 6% more, 19.2% in all), 3 turns' },
-      { k: 'dmg', v: 1.5, to: 'party', src: 'passive', dur: 2, onCast: true, up: 0.9, stacks: 5, why: 'Flaming Chariot III: when Wonder casts a Persona skill on an ally (lufel\'s note) with 4+ Holy Flame stacks, all are spent for party damage +1.5% per stack for 2 turns; set off by his casts with Throne. Starts with 8; Throne\'s own Burns and the team\'s elemental ailments refill it, judged 5 stacks a cast (up to 10)' },
+      { k: 'dmg', v: 1.5, to: 'party', src: 'passive', dur: 2, onCast: true, castOn: 'ally', up: 0.9, stacks: 5, why: 'Flaming Chariot III: when Wonder casts a Persona skill on an ally (lufel\'s note) with 4+ Holy Flame stacks, all are spent for party damage +1.5% per stack for 2 turns; set off by his casts with Throne. Starts with 8; Throne\'s own Burns and the team\'s elemental ailments refill it, judged 5 stacks a cast (up to 10)' },
       { k: 'dmg', v: 33.6, to: 'party', src: 'HL', dur: 2, why: 'Highlight: party damage +33.6% for 2 turns' }
     ],
     'Titania': [
@@ -9822,7 +9845,12 @@ const WONDER_BUFFS = {
       { k: 'cm', v: 8, to: 'ally', src: 'card', dur: 6, stacks: 2.5, why: 'Yggdrasil Evolution: the ally gains +8% crit damage each turn up to 24%, about 20% on average over the 6 turns' }
     ]
   },
+  /* Every weapon lufel lists as released on Global is here, so the Teams tab can select it; one whose effects
+     are all Wonder's own or cannot be priced has no lines and says why in WONDER_SKIPS. Midnight Sun is left
+     out: lufel lists it with no shop, Palace or release (not on Global yet). */
   weapons: {
+    'Abyss Fang': [],
+    'All In': [],
     'Arc Knife': [
       { k: 'defdown', ladder: [4.5, 6, 6, 7.5, 7.5, 9, 9], to: 'enemy', src: 'weapon', dur: 2, up: 0.5, perAil: 3, cond: 'Wonder damages the foe', why: 'Arc Knife: one more Mark of Nature for each elemental ailment on the foe, up to 4 stacks in all - read off the fight\'s ailments, at the same half of his turns' },
       { k: 'defdown', ladder: [4.5, 6, 6, 7.5, 7.5, 9, 9], to: 'enemy', src: 'weapon', dur: 2, up: 0.5, stacks: 1, cond: 'Wonder damages the foe', why: 'Arc Knife: each attack by Wonder puts a Mark of Nature on the foe, DEF -4.5-9% a stack for 2 turns, plus one more stack per elemental ailment on it, up to 4 (36%); counted as one stack half the time, since Wonder\'s turns also go to support skills' }
@@ -9851,21 +9879,30 @@ const WONDER_BUFFS = {
       { k: 'defdown', ladder: [5, 6.7, 6.7, 8.3, 8.3, 10, 10], to: 'enemy', src: 'weapon', dur: 3, up: 0.5, stacks: 1, cond: 'Wonder inflicts a status ailment on the foe', why: 'Eye of Obsequies: when Wonder inflicts an ailment, the foe\'s DEF -5-10% for 3 turns, up to 2 stacks (20%); counted as one stack half the time, since it needs his turn and the ailment to land' },
       { k: 'dmg', ladder: [14, 18.7, 18.7, 23.3, 23.3, 28, 28], to: 'enemy', src: 'weapon', dur: 3, up: 0.5, elem: ['Physical'], cond: 'Wonder inflicts a status ailment on the foe', why: 'Eye of Obsequies: with a stack on it the foe takes +14-28% Physical damage for 3 turns; counted at 50% as above' }
     ],
+    'Glimmer': [
+      { k: 'dmg', ladder: [8, 10.7, 10.7, 13.3, 13.3, 16, 16], to: 'ally', src: 'weapon', why: 'Glimmer: at the start of the turn, and again every 2 turns, one ally gets Blessing, damage +8-16%; the text does not say which ally, so it is taken to be the damage dealer (the user\'s call), and reapplied every 2 turns it is counted as always on' },
+      { k: 'dmg', ladder: [13.5, 18, 18, 22.5, 22.5, 27, 27], to: 'ally', src: 'weapon', elem: ['Bless'], why: 'Glimmer: a Bless ally with Blessing also gets Bless damage +13.5-27% (as above)' }
+    ],
     'Ice Age': [
-      { k: 'dmg', ladder: [8, 9.3, 10.7, 12, 13.3, 14.7, 16], to: 'ally', src: 'weapon', dur: 3, up: 0.8, cond: 'Wonder casts a skill on the damage dealer at least every 3 turns', why: 'Ice Age: Ancient Frost, damage +8-16% for 3 turns, one ally at a time; given at battle start and to the main target whenever Wonder casts a Persona skill on an ally; counted at 80%' },
-      { k: 'dmg', ladder: [11, 12.8, 14.7, 16.5, 18.3, 20.2, 22], to: 'ally', src: 'weapon', dur: 3, up: 0.8, elem: ['Ice'], cond: 'Wonder casts a skill on the damage dealer at least every 3 turns', why: 'Ice Age: Ancient Frost also gives Ice damage +11-22%; counted at 80%' }
+      { k: 'dmg', ladder: [8, 9.3, 10.7, 12, 13.3, 14.7, 16], to: 'ally', src: 'weapon', dur: 3, allyCast: true, cond: 'renewed only when Wonder casts a skill on an ally', why: 'Ice Age: Ancient Frost, damage +8-16% for 3 turns, one ally at a time; given at battle start and to the main target whenever Wonder casts a Persona skill on an ally (taken to be the damage dealer), so it lasts past the third turn only if his setup casts on allies' },
+      { k: 'dmg', ladder: [11, 12.8, 14.7, 16.5, 18.3, 20.2, 22], to: 'ally', src: 'weapon', dur: 3, allyCast: true, elem: ['Ice'], cond: 'renewed only when Wonder casts a skill on an ally', why: 'Ice Age: Ancient Frost also gives Ice damage +11-22%, on the same terms' }
     ],
     'Pheromone Sting': [
       { k: 'dmg', ladder: [10, 11.7, 13.3, 15, 16.7, 18.3, 20], to: 'enemy', src: 'weapon', dur: 3, up: 0.5, cond: 'the foe is given an elemental or spiritual ailment', why: 'Pheromone Sting: a foe that falls into any ailment also gets Infestation and takes +10-20% damage for 3 turns; bosses resist many ailments, so counted at 50%' }
     ],
+    'Plasma Blade': [],
     'Purgatory': [
       { k: 'atk', ladder: [150, 200, 200, 249, 249, 300, 300], to: 'party', src: 'weapon', dur: 3, up: 0.9, elem: ['Fire'], why: 'Purgatory: at 1+ Trial by Fire stacks other allies ATK +150-300; starts with 2, gains 1 on any Fire Persona-skill damage, stacks last 3 turns, so a Fire damage dealer keeps them (90%)' },
       { k: 'dmg', ladder: [3, 4, 4, 5, 5, 6, 6], to: 'party', src: 'weapon', dur: 3, up: 0.9, elem: ['Fire'], why: 'Purgatory: at 2+ stacks other allies damage +3-6% (90%, as above)' },
       { k: 'dmg', ladder: [12, 16, 16, 20, 20, 24, 24], to: 'party', src: 'weapon', dur: 3, up: 0.9, elem: ['Fire'], why: 'Purgatory: at 3 stacks the party\'s Fire damage +12-24% (90%, as above)' }
     ],
+    'Sennight Inferno': [
+      { k: 'defdown', ladder: [15, 20, 20, 25, 25, 30, 30], to: 'enemy', src: 'weapon', on: 'knock', dur: 1, why: 'Sennight Inferno: when a foe is knocked down, its DEF -15-30% for 1 turn (lufel\'s Korean text: any knockdown, 100% fixed chance; the English reads as Wonder\'s own) - played out by the fight\'s Down gauge, so 0 unless the boss\'s Down Points are set' }
+    ],
     'Starry Compass': [
       { k: 'defdown', ladder: [11, 14.7, 14.7, 18.3, 18.3, 22, 22], to: 'enemy', src: 'weapon', why: 'Starry Compass: at 5 or more Guidance stacks (starts at 10) all foes\' DEF -11-22%; lufel\'s defence calculator treats it as permanent' }
-    ]
+    ],
+    'Whisperer\'s Sting': []
   },
 };
 const WONDER_SKIPS = {
@@ -9901,13 +9938,15 @@ const WONDER_SKIPS = {
     'Yggdrasil Evolution': ['Yggdrasil Evolution: Wonder gains 1 extra turn after casting it; extra actions not modelled']
   },
   weapons: {
+    'Abyss Fang': ['Abyss Fang: ATK and Hunter\'s Instinct (damage, crit rate and crit damage) are all Wonder\'s own; his own damage is not counted'],
+    'All In': ['All In: party DEF +15-30% while Wonder is on the field, healing and shields +20-40%, and a heal after each skill on an ally - survival, not priced'],
     'Cursed Ties': ['Cursed Ties: a non-Curse damage dealer benefits only if Wonder spends turns on Curse skills himself; not counted'],
     'Cyclotron': ['Cyclotron: a non-Electric damage dealer gets the damage bonus only when someone else (e.g. Wonder\'s own Electric Persona) deals Electric skill damage; not counted'],
     'Event Horizon': ['Event Horizon: for a non-Nuclear damage dealer only the 2 battle-start stacks apply, for 2 turns; not counted'],
-    'Glimmer': ['Glimmer: every 2 turns one ally gets Blessing, damage +8-16% (+13.5-27% Bless damage if Bless); the text does not say which ally is chosen'],
+    'Glimmer': ['Glimmer: Bless damage and healing +11-22% are Wonder\'s own', 'Glimmer: Blessing is counted on the damage dealer; the text does not say which ally gets it, so in the game it may sometimes go to someone else'],
     'Plasma Blade': ['Plasma Blade: Harmonic Element (allies +15% ATK and +9% Almighty damage at max, party +18% crit damage) depends on how many Flames of Desire effects the party has active, which could not be pinned down'],
     'Purgatory': ['Purgatory: for a non-Fire damage dealer only the 2 battle-start stacks apply, for 3 turns; not counted'],
-    'Sennight Inferno': ['Sennight Inferno: after a Down, the foe\'s DEF -15-30% for 1 turn; Downs are not modelled'],
+    'Sennight Inferno': ['Sennight Inferno: damage +6-12% per Persona of a different element he has equipped (up to 3) is Wonder\'s own'],
     'Starry Compass': ['Starry Compass: 15 Guidance stacks give allies +11-22% Psychokinesis damage; stacks drop 5 at the end of each of Wonder\'s turns and how often 15 is held is not known'],
     'Whisperer\'s Sting': ['Whisperer\'s Sting: at 5+ Wind Whisper Crystals all foes take +10-20% damage; crystals come one per foe hit by Wind Persona skills or Resonance and expire after 2 turns, so on a single boss holding 5 is not reliable', 'Whisperer\'s Sting: at 10 crystals foes take +5-10% crit damage and +12.5-25% Wind crit damage; 10 crystals on a single boss is not realistic']
   },
@@ -9966,6 +10005,20 @@ function tcCover(seq, on, dur) {
   for (let j = n; j < 2 * n; j++) if (up.has(j)) c++;
   return c / n;
 }
+/* A line gained by the stack on each cast and kept to the end (`build`, up to `stacks`): `build` is true for one
+   stack a cast, or the stacks each skill gives ({ '2': 2, '3': 1 }). The stacks one turn's skills (a Set) add: */
+const tcBuildGain = (e, toks) => [].concat(e.on).reduce((s, o) => s + (toks.has(o) ? (e.build === true ? 1 : e.build[o] || 1) : 0), 0);
+// the share of the full stack held, averaged over the fight's rounds, each round counting what its own cast has added
+function tcBuildMean(seq, e, F) {
+  const n = seq.length, stacks = e.stacks || 1;
+  if (!n || !F) return null;
+  let held = 0, sum = 0;
+  for (let r = 0; r < F; r++) {
+    held = Math.min(stacks, held + tcBuildGain(e, tcTurnSkills(seq[r % n])));
+    sum += held / stacks;
+  }
+  return held ? sum / F : null;
+}
 
 /* ---- Highlights and Theurgies on a cadence, and the fight length (Nov 2026; see the header) ---- */
 const tcSel = (id, dflt) => { const el = $(id); const v = el ? +el.value : dflt; return isFinite(v) ? v : dflt; };
@@ -10009,10 +10062,12 @@ function tcAtkCount(n, step) {
 const tcHlEvery = () => 5;
 const tcThEvery = n => Math.ceil((((n && SKILL_DMG[n]) || {}).th || 70) / TC_TH_TURN);
 /* The build model's own fight (kitMix) is played at the page's defaults whatever the Teams page is set to —
-   12 rounds, the Auto boss and enemies, every hit on a weakness, no knockdowns, lufel's rotations as written —
-   so a build score never moves because a Teams control did. */
+   6 rounds, the Auto boss and enemies, every hit on a weakness, no knockdowns, lufel's rotations as written —
+   so a build score never moves because a Teams control did. Six rounds is the default since Nov 2026 (the
+   user: most Sea of Souls and Nightmare's Gateway fights last about that long); it was 12. */
 let tcKitRun = false;
-const tcFight = () => tcKitRun ? 12 : Math.max(1, tcSel('#tmFight', 12));
+const TC_FIGHT_DEFAULT = 6;
+const tcFight = () => tcKitRun ? TC_FIGHT_DEFAULT : Math.max(1, tcSel('#tmFight', TC_FIGHT_DEFAULT));
 /* The boss, from lufel's list (BOSSES), whether hits land on a weakness, and how many enemies there are.
    The boss's DEF goes into TC_BOSS when the memo turns over (tcMemoFor). A hit is on a weakness by the
    boss's resistances for that element (every hit, for a boss lufel lists none for), or by the page's
@@ -10142,6 +10197,17 @@ function tcSkillUses(step) {
    rotation writes per turn, `r0` their casts per turn alone, `share` the Highlight's part of their
    own damage. No skill numbers, or a Highlight that deals none: q is 0 and Highlight-only buffs add
    nothing. */
+/* The damage dealer's mean skill coefficient a turn (% of ATK), over their lufel rotation alone: what one of their
+   turns is worth on the quick screen, against which a hit of theirs that a teammate sets off is priced (TC_RAM). */
+function tcTurnCoef(dps) {
+  const S = SKILL_DMG[dps.n] ? tcSkillD(dps.n) : null;
+  if (!S) return 0;
+  const rp = tmRotPick(dps.n, new Set([dps.n])), seq = rp && rp.pick[0] ? rp.pick[0].seq : null;
+  let per = 0;
+  if (seq && seq.length) { seq.forEach(step => tcSkillUses(step).forEach((c, i) => { if (i < 3) per += c * S[i]; })); per /= seq.length; }
+  if (!per) { const hits = S.slice(0, 3).filter(x => x > 0); per = hits.length ? hits.reduce((a, b) => a + b) / hits.length : 0; }
+  return per;
+}
 function tcDpsHl(dps) {
   const kind = tcHlKind(dps.n), S0 = SKILL_DMG[dps.n], S = S0 && { d: tcSkillD(dps.n) };
   // a Highlight cannot crit unless its text says so; a Theurgy can (`share` is set once the crit is known, tcEvalFor)
@@ -10434,7 +10500,7 @@ const KIT_ROT = (() => {
         '3+1↺': { aw: 6, why: 'Full Blossom (A6): Storm of Petals auto-casts once per Blossoming Season' }
       },
       aw: { 6: { moves: { '3': null } } },
-      caveats: ['Blossoming Season\'s effects grow with the SP spent (50/100/150+ thresholds); the composer can cast it every turn (cooldown 0) and only the SP budget holds it back, while the real kit needs one or two SP-restoring skills between casts at low SP Recovery.']
+      caveats: ['Blossoming Season\'s effects grow with the SP spent (50/100/150 thresholds, 1% strength per 2 SP); the fight follows her SP (TC_RK), so a cast on little SP is priced low, but the rules still allow one below 50 SP, which the game would not.']
     },
 
     'Mayumi Hashimoto': {
@@ -11088,22 +11154,30 @@ const KIT_ROT = (() => {
     },
 
     'Motoha Arai [Tropical]': {
-      why: 's3 counts half-casts of Surf \'n\' Shine (3), which has a 1-turn cooldown (one cast per two turns: +1 at each turn start, a cast costs 2) unless she spends Tropical Heart (A0: gained after receiving healing 5 times), which lifts the cooldown for that cast. Up to 2 for the cooldown and 2 for one banked Heart (cap 4). Heals: ally 0.34 (a Heart is 2 units per 5 heals, so about 0.85 heals a round: the least that keeps lufel\'s A0 3, 3, 1 cycle going, 4 casts in 6 turns); Summer \'Splosion (2) heals her (+0.4). A1 Exciting Summer: her own action counts one more heal (turn +1.4). A6 Everlasting Summer: the Heart is never spent, so Skill 3 has no cooldown once she has it (lufel casts it every turn from turn 1). The lufel cooldown is replaced by this counter (cool).',
-      res: { s3: [2, 4] },
-      turn: { s3: 1 },
-      ally: { s3: 0.34 },
+      why: 'Surf \'n\' Shine (3) has a 1-turn cooldown (cd: +1 at each turn start, cap 2, a cast spends 2) unless she spends Tropical Heart (A0: gained after receiving healing 5 times; ht counts heals, cap 5), which lifts the cooldown for that cast. Heals: the team\'s (ally, per heal; TC_HEALS); Summer \'Splosion (2) heals her (+1). A1 Exciting Summer: her own action counts one more heal (turn ht +1). A6 Everlasting Summer: the Heart is never spent, so Skill 3 has no cooldown once she has it (lufel casts it every turn from turn 1). The lufel cooldown is replaced by these counters (cool).',
+      /* Rewritten Nov 2026 with the team's heals (TC_HEALS): one counter of half-casts, capped at 4, let turns
+         without a Surf bank cooldown, so alone she could cast it three turns running; the game's cooldown is one
+         turn, banked never. Now `cd` is the cooldown (+1 a turn, cap 2, a cast needs 2) and `ht` the heals toward
+         Tropical Heart (cap 5: one Heart held); a Surf with a Heart spends it and leaves the cooldown alone (`alt`,
+         taken first: the text spends a Heart whenever one is held). */
+      res: { cd: [2, 2], ht: [0, 5] },
+      turn: { cd: 1 },
+      // with no team known, heals enough for a Heart whenever lufel's rotations want one (their 3, 3 opening needs
+      // one by her second turn); in a known team, the heals its members give her a round (allyHeal, tcTeamHeals)
+      ally: { ht: 5 },
+      allyHeal: { ht: 1 },
       cool: [0, 0, 0],
       moves: {
         '1': {},
-        '2': { gain: { s3: 0.4 } },
-        '3': { need: { s3: 2 }, spend: { s3: 2 } }
+        '2': { gain: { ht: 1 } },
+        '3': { need: { cd: 2 }, spend: { cd: 2 }, alt: { need: { ht: 5 }, spend: { ht: 5 } } }
       },
       aw: {
-        1: { turn: { s3: 1.4 } },
+        1: { turn: { cd: 1, ht: 1 } },
         6: { moves: { '3': {} } }
       },
       caveats: [
-        'The cap of 4 lets the cooldown\'s own recharge stand in for a Heart: after two turns without Skill 3 she may cast it twice in a row even with no healing.',
+        'The 1-turn wait after a Heart is spent before the next can be gained is not modelled.',
         'At A6 the turns before her first Heart (5 heals) are not modelled; Skill 3 is free from turn 1, as in lufel\'s rotation.'
       ]
     },
@@ -11401,6 +11475,9 @@ function tcKitRot(n, aw, mind, team) {
   });
   Object.keys(R.moves).forEach(m => { const e = R.moves[m]; if (!e || (e.aw != null && aw < e.aw) || (e.mind && mind === false)) delete R.moves[m]; });
   if (R.res.prep && tcPrepCut(team)) R.res.prep = [Math.max(0, R.res.prep[0] - 1), R.res.prep[1]];
+  /* A counter fed by the heals she receives (Tropical Motoha's Tropical Heart, `allyHeal` per heal): in a known
+     team, at the heals its members give her a round (tcTeamHeals); with no team, the judged `ally` rate. */
+  if (K.allyHeal && team) { const h = tcTeamHeals(n, team); Object.keys(K.allyHeal).forEach(k => { R.ally[k] = K.allyHeal[k] * h; }); }
   return R;
 }
 
@@ -11440,9 +11517,11 @@ function tcRotStep(S, m, info) {
     const g = e.group || m;
     if (S.ready[g] != null && i < S.ready[g]) return no(`"${g}" is on cooldown`);
     if (e.uses != null && (S.used[m] || 0) >= e.uses) return no(`"${m}" has no uses left`);
-    for (const k in e.need || {}) if (!((st[k] || 0) >= e.need[k])) return no(`needs ${k} >= ${e.need[k]}, has ${st[k] || 0}`);
+    // `alt`: another way to pay for the move, taken whenever its needs are met (Tropical Motoha's Heart)
+    const p = e.alt && Object.keys(e.alt.need || {}).every(k => (st[k] || 0) >= e.alt.need[k]) ? e.alt : e;
+    for (const k in p.need || {}) if (!((st[k] || 0) >= p.need[k])) return no(`needs ${k} >= ${p.need[k]}, has ${st[k] || 0}`);
     for (const k in e.max || {}) if (!((st[k] || 0) <= e.max[k])) return no(`needs ${k} <= ${e.max[k]}, has ${st[k] || 0}`);
-    for (const k in e.spend || {}) st[k] = (st[k] || 0) - e.spend[k];
+    for (const k in p.spend || {}) st[k] = (st[k] || 0) - p.spend[k];
     for (const k in e.gain || {}) add(k, e.gain[k]);
     for (const k in e.set || {}) st[k] = e.set[k];
     (e.flip || []).forEach(k => { st[k] = st[k] ? 0 : 1; });
@@ -11709,6 +11788,14 @@ function tcMedBoost() {
   const lo = charLoadout(TC_MEDS_OF);
   return 1 + ((+lo.awareness || 0) >= 1 ? 0.2 : 0) + (String(lo.weapon) === '5' ? [20, 20, 26, 26, 32, 32, 38][Math.max(1, Math.min(7, +lo.refine || 1)) - 1] / 100 : 0);
 }
+/* Her Highlight raises the effect of her next medicine by 9.8-11.4% (its skill-level tier), and Lingering Ripples
+   of Summer (A4) by 5% more: lufel's Korean text for both says the next medicine (다음번 약품 사용 시), where the
+   English reads as every one. Added to her other medicine effect increases, like them; the fight spends it on
+   the first medicine after each of her Highlights (tcSimRun's `medNext`). */
+function tcMedHlBoost() {
+  const lo = charLoadout(TC_MEDS_OF);
+  return [9.8, 10.8, 10.4, 11.4][kitTierIndex(charDef(TC_MEDS_OF), lo)] / 100 + ((+lo.awareness || 0) >= 4 ? 0.05 : 0);
+}
 // "atk.dmg.hl": the medicines in ⓘA, ⓘB and ⓘC
 function tcMedInfo(id) {
   const ms = id.split('.').map(tcMed);
@@ -11717,13 +11804,14 @@ function tcMedInfo(id) {
 // the TEAM_BUFFS lines one choice adds, kept per choice and boost so they are the same objects each time
 const tcMedLineMemo = new Map();
 function tcMedLines(id) {
-  const b = tcMedBoost(), key = id + '|' + b;
+  const b = tcMedBoost(), key = id + '|' + b + '|' + tcMedHlBoost();
   if (!tcMedLineMemo.has(key)) {
     const out = [];
     id.split('.').forEach((m, i) => {
       const M = tcMed(m), on = TC_MED_ON[i], slot = 'ⓘ' + 'ABC'[i];
-      if (M.k) out.push({ k: M.k, v: Math.round(M.v * b * 100) / 100, to: 'ally', src: 'item', on, dur: 2, durAw: [6, 3], med: m,
-        why: `${M.name} (${slot}): ${M.eff}, ×${b.toFixed(2)} from her medicine effect increases; 2 turns through Flower Basket Pharmacy (3 from Angel in White, A6)` });
+      // `fx`: the medicine's own number, which the fight scales again for the one after a Highlight (tcMedHlBoost)
+      if (M.k) out.push({ k: M.k, v: Math.round(M.v * b * 100) / 100, fx: M.v, to: 'ally', src: 'item', on, dur: 2, durAw: [6, 3], med: m,
+        why: `${M.name} (${slot}): ${M.eff}, ×${b.toFixed(2)} from her medicine effect increases (×${(b + tcMedHlBoost()).toFixed(2)} for the first after each of her Highlights); 2 turns through Flower Basket Pharmacy (3 from Angel in White, A6)` });
       out.push({ k: 'atk%', v: 15, to: 'ally', src: 'passive', on, dur: 2, durAw: [6, 3], med: m,
         why: `Blossoms by the Beach (passive 2): ATK +15% while the ally holds the ${M.name} (${slot}), one kind of medicine buff` });
     });
@@ -11781,6 +11869,100 @@ const tcCopyRate = () => TC_COPY.rate * (tmAw(TC_COPY.n) >= 2 ? TC_COPY.a2 : 1) 
 // whether `name` copies buffs onto this damage dealer (she does only onto a Sweeper or Assassin in Arcana Link)
 const tcCopies = (dps, name) => name === TC_COPY.n && dps.n !== name && TC_COPY.arch.includes(dps.arch);
 const tcCopyable = (e, k) => e.to !== 'enemy' && !e.noCopy && TC_COPY.keys.includes(k);
+/* Summer Ichigo's Ram: Miracle Ichi-Boat (Nov 2026; the largest gap the Teams fight had, measured on the real
+   save before it was entered). Heart's Desire (her Skill 3) makes its main target — the damage dealer — the
+   Helmsman; at the end of the Helmsman's turn they deal 48.3-56.2% of the Boat's max HP plus 173.7-202.2% of
+   their ATK to all foes (347.4-404.3% when that Heart's Desire spent a Seal), +25% damage per foe fewer than 5,
+   and step down. From A6 they stay Helmsman, so it comes at the end of every turn of theirs, with +30% skill
+   damage. The Boat's max HP is every ally on the field's max HP summed (the Elucidator is not on it), +20% from
+   A1; Wonder's is not tracked, so he is taken at the mean of the other three. The Korean text has it counted as
+   one of the Helmsman's Persona skills with their Pierce, damage bonus, amp, crit, weakness damage and Down
+   bonus, so the HP part is everything but ATK. Seals: Romantic Pearl (Skill 1) gives Illusion Seal with another
+   Psy character in the party, Astral Anchor (Skill 2) Ocean's Seal with another [Summer] one (lufel's "·여름"
+   names). At A6 a Seal raises only the Ram right after the Heart's Desire that spent it ("this damage"). */
+const TC_RAM = { n: 'Ichigo Shikano [Summer]', hp: [48.3, 53.3, 51.3, 56.2], atk: [173.7, 191.5, 184.4, 202.2], seal: [347.4, 382.9, 368.7, 404.3],
+  fewer: 25, boatA1: 1.2, a6Dm: 30 };
+const tcIsSummer = n => n && n !== 'Wonder' && /·여름$/.test((charDef(n) || {}).kr || '');
+/* What Skill Amplification raises: a line that comes from a skill — a thief's numbered skills, Wonder's skill cards
+   and Persona unique skills — not a passive, an Awareness, a weapon or a Highlight (the twins' Two Masks as One:
+   "the values of skills and Thief Tactics that are increased when leveled up"). */
+const TC_SKILL_SRC = new Set(['1', '2', '3', 'card', 'unique']);
+/* The Ram as it applies with this lineup: its numbers at Ichigo's Setup, the Boat's max HP, and which of her
+   skills give a Seal here. null when she is not in a thief seat (the backup never takes the helm). */
+function tcRamFor(D, names) {
+  if (!names || ![0, 1].some(i => names[i] === TC_RAM.n)) return null;
+  const sup = charDef(TC_RAM.n), lo = charLoadout(TC_RAM.n), aw = +lo.awareness || 0, ti = kitTierIndex(sup, lo);
+  const crew = [D.n, names[0], names[1]].filter(Boolean);
+  const hps = crew.map(n => tcStat(n, 'HP') || 0);
+  const boat = (hps.reduce((a, b) => a + b, 0) + hps.reduce((a, b) => a + b, 0) / hps.length) * (aw >= 1 ? TC_RAM.boatA1 : 1);
+  const other = crew.concat(names[2] ? [names[2]] : []).filter(n => n !== TC_RAM.n);
+  return { hp: TC_RAM.hp[ti] * boat / 100, boat, atk: TC_RAM.atk[ti], seal: TC_RAM.seal[ti], a6: aw >= 6,
+    sealOn: { 1: other.some(n => (charDef(n) || {}).e === 'Psychokinesis'), 2: other.some(tcIsSummer) },
+    dm: TC_RAM.fewer * Math.max(0, 5 - tcFoes()) + (aw >= 6 ? TC_RAM.a6Dm : 0) };
+}
+/* Yumi Shiina's Cocktails, played out in the fight (tcSimRun) when she is the Elucidator. From her English and
+   Korean text: each skill, Resonance, Highlight or Theurgy hit an ally deals gives a Mixer of its element; three
+   Mixers make a Cocktail — Tailor-Made if all three match, Standard if two do, Basic otherwise — held up to 3 (4 at
+   A6). Taking Orders (passive 2) gives 3 Mixers of the party's most common element at battle start, so one Cocktail.
+   Tempting Build (Skill 1) spends her best Cocktail to raise its own effect by 120/100/50% (the Korean text: "when
+   casting the skill ... spend 1 Cocktail to strengthen the skill effect"); Enchanting Stir (Skill 2) turns a Basic or
+   Standard into a Tailor-Made; Invigorating Blend (Skill 3) spends all of them, its damage bonus at 120/100/50% of
+   strength per Cocktail (the sum: "each Cocktail spent"), and the target's crit damage only with 2+ Standard or
+   better. A1 (Mojito): a Mixer back per Cocktail formed (of the most common element of the three, judged — the text
+   says random), and Skills 1 and 3 first turn a Basic into a Standard or a Standard into a Tailor-Made. A2
+   (Screwdriver): each Cocktail gained gives the party +16% damage for 2 turns. A4 (Bloody Mary): a Tailor-Made per
+   ally Highlight or Theurgy. A6 (XYZ): 135/120/75%, a Tailor-Made at battle start and one more per 3 gained.
+   Wonder's hits give no Mixer (his element is his Persona's, which is not tracked). A Cocktail formed at the cap
+   is lost. `quick`: what the quick screen takes per cast — the sum of strengths Skill 3 spends, the share of its
+   casts with 2+ Standard or better, Skill 1's factor — measured over the fight on the real save (2 Nov 2026, her
+   best team with each of 16 damage dealers, 6 rounds): 2.65 / 0.95 / 2.16 at A0, 5.16 / 1 / 2.35 at A6. */
+const TC_CK = { n: 'Yumi Shiina', q: { T: 120, S: 100, B: 50 }, qA6: { T: 135, S: 120, B: 75 },
+  quick: { all: 2.65, std2: 0.95, one: 2.15 }, quickA6: { all: 5.15, std2: 1, one: 2.35 } };
+const tcCkQuick = (f, aw) => (aw >= 6 ? TC_CK.quickA6 : TC_CK.quick)[f] || 1;
+function tcCkFor(D, names) {
+  if (!names || names[2] !== TC_CK.n) return null;
+  const aw = tmAw(TC_CK.n);
+  const els = [D.n, names[0], names[1]].filter(n => n && n !== 'Wonder').map(n => (charDef(n) || {}).e).filter(Boolean);
+  // the most common element; a tie goes to the damage dealer's
+  const start = els.slice().sort((a, b) => els.filter(x => x === b).length - els.filter(x => x === a).length || (b === D.e) - (a === D.e))[0] || D.e;
+  return { aw, q: aw >= 6 ? TC_CK.qA6 : TC_CK.q, cap: aw >= 6 ? 4 : 3, start };
+}
+/* Tempest Riko's SP, played out for Blossoming Season (Skill 3), which spends all of it. Its tier effects (ATK from
+   50 SP, crit damage from 100 and 150) are granted at 1% strength per 2 SP spent: the Japanese text says it outright
+   ("ＳＰ消費２ごとに１%分の効果量で付与する", an effect amount of 1% per 2 SP), the Korean and Chinese as "triggers
+   additionally at 1% strength per 2 SP"; the English "increase the effect by 1%" is the ambiguous one. So the
+   printed values are at 200 SP, her A0 max, and A2's +50 max SP takes them to 125%. Her crit-rate line is not
+   scaled. Her SP: full at the start of battle (assumed); each of her turns restores `turn` x SP Recovery, a refill
+   nothing publishes, taken from lufel's note that casting Blossoming Season every turn needs 480.1% SP Recovery
+   (50 SP a turn); Storm of Petals +16 and Arrival of Spring +4 +12 (the 12 once an ally deals skill damage while it
+   is up, taken as at once), both x SP Recovery (A0: her own skills' SP is); from A2 +50 after each Blossoming
+   Season. SP other allies give her (Highlights, items) is not counted. `tcRkStep` plays one of her turns and returns
+   the strength of each tier for the lines she casts in it (`spT` on her TEAM_BUFFS lines). */
+const TC_RK = { n: 'Riko Tanemura [Tempest]', turn: 50 / 4.801, max: 200, maxA2: 250, s1: 16, s2: 16, a2: 50, tiers: [50, 100, 150] };
+const tcRkInit = () => {
+  const aw = tmAw(TC_RK.n), max = aw >= 2 ? TC_RK.maxA2 : TC_RK.max;
+  return { aw, max, sp: max, rec: (tcStat(TC_RK.n, 'SP Recovery') || 100) / 100, casts: 0, spent: 0, low: 0 };
+};
+function tcRkStep(st, step) {
+  st.sp = Math.min(st.max, st.sp + TC_RK.turn * st.rec);
+  const u = tcSkillUses(step), f = {};
+  if (u[2]) {
+    const s = st.sp;
+    TC_RK.tiers.forEach(t => { f[t] = s >= t ? s / 200 : 0; });
+    st.casts++; st.spent += s; if (s < TC_RK.tiers[0]) st.low++;
+    st.sp = st.aw >= 2 ? TC_RK.a2 : 0;
+  }
+  st.sp = Math.min(st.max, st.sp + (u[0] * TC_RK.s1 + u[1] * TC_RK.s2) * st.rec);
+  return f;
+}
+// the quick screen's strength for a tier: the mean over her casts in a fight on this rotation (a floor keeps a tier
+// lufel's rotation never reaches as a line, for the fight to play)
+function tcRkQuick(seq, tier) {
+  if (!seq || !seq.length) return 1;
+  const st = tcRkInit(), fs = [];
+  for (let i = 0; i < tcFight(); i++) { const f = tcRkStep(st, seq[i % seq.length]); if (f[tier] != null) fs.push(f[tier]); }
+  return Math.max(0.001, fs.length ? fs.reduce((a, b) => a + b, 0) / fs.length : 0);
+}
 function tcMember(dps, name, inTeam, backup, fit) {
   if (!tcMemo.hot) tcMemoFor(dps);
   const pair = tcPairFor(dps, name);
@@ -11788,6 +11970,52 @@ function tcMember(dps, name, inTeam, backup, fit) {
   let m = tcMemo.member.get(key);
   if (!m) { m = tcMemberCalc(dps, name, inTeam, backup, fit, pair); if (pair) m.pair = pair; tcMemo.member.set(key, m); }
   return m;
+}
+/* Effects that do not stack (TEAM_BUFFS `excl`), on the quick screen: per group and stat, the effect worth
+   most at full strength keeps its share of turns, and each smaller one counts only on the turns the larger
+   ones leave uncovered, as if they alternated rather than overlapped (lines of one skill are one effect).
+   Scales the `up` of the usable lines in place. */
+function tcExclQuick(usable) {
+  const groups = new Map();
+  usable.forEach(u => {
+    if (!u.e.excl) return;
+    const key = u.e.excl + '|' + u.k, g = groups.get(key) || new Map(); groups.set(key, g);
+    const s = g.get(u.e.src) || { v: 0, up: 0, us: [] }; g.set(u.e.src, s);
+    s.v += u.v; s.up = Math.max(s.up, u.up); s.us.push(u);
+  });
+  groups.forEach(g => {
+    if (g.size < 2) return;
+    let covered = 0;
+    [...g.values()].sort((a, b) => b.v - a.v).forEach(s => {
+      const up = Math.max(0, Math.min(s.up, 1 - covered));
+      if (s.up > 0) s.us.forEach(u => { u.up *= up / s.up; });
+      covered += up;
+    });
+  });
+}
+/* Skill Amplification a supporter gives her own skills (Korean 스킬 효과 증폭: the values her skills grant, caps
+   included): Hatsune Miku's Hologram Screen (A1) 15%, and her 5-star weapon's 10-19% while Virtual Concert is active,
+   which reaches a line cast in it (Showstopper's crit damage); her other skills are cast before it. Applied to the
+   line's value, so the quick screen and the fight both see it. Kotone Shiomi's 5-star weapon (Vetri Vel Muruga)
+   gives her 10-19% once the Arcana Link ally reaches Lunar Bond 5 (`lb`): the round her Moment of Truth pierce
+   line judges for it (3 at A0, 1 from A1, where Arcana Link sets Lunar Bond to 5). The fight reads it at the
+   round of the cast (an event's `ampAt`), the quick screen at its share of the fight's rounds. */
+const TC_SELF_AMP = {
+  'Hatsune Miku': { aw: 1, v: 15, vc: { weapon: '5', ladder: [10, 13, 13, 16, 16, 19, 19] } },
+  'Kotone Shiomi': { lb: { weapon: '5', ladder: [10, 13, 13, 16, 16, 19, 19], fromAw: [[0, 3], [1, 1]] } }
+};
+function tcSelfAmp(name, e, lo, aw, round) {
+  const A = TC_SELF_AMP[name];
+  // a count is not a value (Showstopper's 2 extra turns)
+  if (!A || !TC_SKILL_SRC.has(String(e.src)) || /^(turns|xturns|hlx|hlGauge|thGauge|hlCd|hlCdRate|hlFree)$/.test(e.k)) return 1;
+  const ri = Math.max(1, Math.min(7, +lo.refine || 1)) - 1;
+  let p = A.v && aw >= A.aw ? A.v : 0;
+  if (A.vc && tcIsVc(e) && lo.weapon === A.vc.weapon) p += A.vc.ladder[ri];
+  if (A.lb && lo.weapon === A.lb.weapon) {
+    const g = tcGate({ fromAw: A.lb.fromAw }, aw);
+    p += A.lb.ladder[ri] * (round != null ? g(round) : tcGateMean(g, tcFight()));
+  }
+  return 1 + p / 100;
 }
 function tcMemberCalc(dps, name, inTeam, backup, fit, pair) {
   const sup = charDef(name);
@@ -11834,8 +12062,11 @@ function tcMemberCalc(dps, name, inTeam, backup, fit, pair) {
     const trig = e.on === 'dpsHL' || e.on === 'anyHL';
     // a waiting backup's passives are off; its start-of-battle lines come on at its first swap
     if (backup && ((!e.on && !e.start) || trig || e.battle != null)) continue;
-    const v = tcLineValue(e, sup, lo);
-    if (v == null || !v) continue;
+    // Yumi's Cocktail lines (TC_CK) at a typical cast's Cocktails here; the fight's events get the line as written
+    // and Tempest Riko's Blossoming Season tiers at the strength her SP gives on this rotation (TC_RK)
+    const ckQ = (e.ck ? tcCkQuick(e.ck, aw) : 1) * (e.spT ? tcRkQuick(seq, e.spT) : 1);
+    const v = tcLineValue(e, sup, lo) * ckQ * tcSelfAmp(name, e, lo, aw);
+    if (v == null || !v || isNaN(v)) continue;
     const k = TC_FROM_K[e.k];
     if (!k) continue;
     let dur = e.durAw && aw >= e.durAw[0] ? e.durAw[1] : (e.dur || 1);
@@ -11854,6 +12085,8 @@ function tcMemberCalc(dps, name, inTeam, backup, fit, pair) {
       const uses = typeof e.battle === 'number' ? e.battle : TC_BATTLE[e.battle](F, lo);
       up = k === 'xturns' ? uses / F : Math.min(1, uses * dur / F);
     } else if (e.up != null) up = e.up;
+    // a judged uptime for the quick screen only, where the fight plays the trigger out (Yumi's 'cocktail')
+    else if (e.upQ != null) up = e.upQ;
     else if (!e.on) up = 1;
     // on each Oracle Shift: twice in six turns (4 at A6), and never in a team with no backup (the fight plays it out)
     else if (e.on === 'shift') up = inTeam && !inTeam.backup ? null : Math.min(1, TC_SWAPS() * dur / 6);
@@ -11861,6 +12094,8 @@ function tcMemberCalc(dps, name, inTeam, backup, fit, pair) {
       const r = e.on === 'dpsHL' ? dRate : (pRate == null ? (pRate = tcPartyHl(dps, name, inTeam)) : pRate);
       up = r > 0 ? Math.min(1, r * dur) : null;
     } else if (!dur) up = null;
+    // stacks gained one a cast and kept (`build`: Soothing Sunlight): the share of the full stack held over the fight
+    else if (e.build) up = tcBuildMean(tcSeqHL(seq.length ? seq : ['-'], name), e, F);
     // with no lufel rotation at all, the cadence's Highlights still count (on an otherwise idle turn)
     else { up = tcCover(tcSeqHL(seq.length ? seq : ['-'], name), e.on, dur); rotDep = !!seq.length; }
     const offRot = up == null;
@@ -11882,6 +12117,8 @@ function tcMemberCalc(dps, name, inTeam, backup, fit, pair) {
     // the fit prices a Technical's line at the team's Burn too (copies: the covers below go on the lines)
     fitted = tcRotFit(dps, name, inTeam, rot, fixed, dep.map(u => u.cov < 1 ? Object.assign({}, u, { v: u.v * u.cov }) : u));
     if (fitted && !fitted.same) {
+      // Tempest Riko's Blossoming Season tiers at the strength the fitted rotation's SP gives (TC_RK)
+      usable.forEach(u => { if (u.e.spT) u.v *= tcRkQuick(fitted.seq, u.e.spT) / tcRkQuick(seq, u.e.spT); });
       seq = fitted.seq;
       dep.forEach(u => { const up = tcCover(tcSeqHL(seq, name), u.e.on, u.dur); u.offRot = up == null; u.up = up == null ? 0 : up; });
     }
@@ -11910,6 +12147,7 @@ function tcMemberCalc(dps, name, inTeam, backup, fit, pair) {
   /* A line that needs a Burning foe goes to `need` at its full uptime: tcMultiplier puts it at the share of
      turns the whole lineup keeps the foe Burning, which a member priced beside the damage dealer alone (the
      sweep) cannot know, and scales a Technical's by the lineup's Technical Precision. */
+  tcExclQuick(usable);
   vec.need = [];
   /* What Kotone Shiomi's Lunar Phaseshift could copy from this member (TC_COPY): their buffs on the damage
      dealer, averaged — a thief on the field only, not the Elucidator nor a backup waiting off it — and, for
@@ -11919,6 +12157,11 @@ function tcMemberCalc(dps, name, inTeam, backup, fit, pair) {
   if (!backup && tcCopies(dps, name)) {
     const share = tcCover(seq.length ? seq : ['-'], TC_COPY.on, TC_COPY.dur);
     if (share) vec.copyBy = { rate: tcCopyRate(), share, a6: aw >= TC_COPY.a6 };
+  }
+  // the part of it that comes from skills, which the twins' Skill Amplification raises (tcMultiplier)
+  if (!backup && !self) {
+    vec.skillPart = {};
+    usable.forEach(u => { if (TC_SKILL_SRC.has(String(u.e.src)) && u.k !== 'skillAmp' && u.e.needAil !== 'Burn') vec.skillPart[u.k] = (vec.skillPart[u.k] || 0) + u.v * u.up * u.cov * tcAilQuick(u.e); });
   }
   usable.forEach(u => {
     if (copySrc && tcCopyable(u.e, u.k) && u.e.needAil !== 'Burn') vec.allyCopy[u.k] = (vec.allyCopy[u.k] || 0) + u.v * u.up * u.cov * tcAilQuick(u.e);
@@ -11934,8 +12177,12 @@ function tcMemberCalc(dps, name, inTeam, backup, fit, pair) {
   // copied as the fight has them up, their gated ones at the round's share)
   const consts = Object.assign({}, shareVec), events = [], gated = [], constsOne = {}, constsMin = [], ally = {}, downConsts = [];
   usable.forEach((u, i) => {
+    // a Skill Amplification that comes on mid-fight (Kotone's Lunar Bond 5) is read at the cast's round
+    const sa = TC_SELF_AMP[name] && TC_SELF_AMP[name].lb ? tcSelfAmp(name, u.e, lo, aw) : 1;
     if (!backup && (u.e.battle != null || (u.e.on && u.e.up == null)))
-      events.push({ e: u.e, k: u.k, v: u.v, dur: u.e.dur === 'next' ? 'next' : u.dur, ref: shareN + i, gate: u.gate, stackMax: u.e.stackMax || 0 });
+      // a `build` line lands one stack a cast, up to the whole (`full`, which the page's uptime is a share of)
+      events.push({ e: u.e, k: u.k, v: (u.e.build ? u.v / (u.e.stacks || 1) : u.v) / (u.e.ck ? tcCkQuick(u.e.ck, aw) : 1) / (u.e.spT ? tcRkQuick(seq, u.e.spT) : 1) / sa, dur: u.e.dur === 'next' ? 'next' : u.dur, ref: shareN + i, gate: u.gate,
+        stackMax: u.e.stackMax || (u.e.build ? u.e.stacks || 1 : 0), full: u.e.build ? u.v : 0, ampAt: sa !== 1 ? r => tcSelfAmp(name, u.e, lo, aw, r) : null });
     // always on, but only while the boss is knocked down
     else if (!backup && u.down) downConsts.push({ k: u.k, v: u.v * (u.e.up != null ? u.e.up : 1), one: u.e.to === 'enemy' && tcOneFoe(u.e) });
     // the fight switches a gated line on round by round; any judged uptime it also carries stays
@@ -11956,6 +12203,23 @@ function tcMemberCalc(dps, name, inTeam, backup, fit, pair) {
   if (!backup && !self) vec.ail = tcAilSupply(name, seq);
   // and the share of turns they keep it Burning, for the Technicals (tcMultiplier combines the lineup's)
   if (!backup && !self) vec.burn = tcBurnSupply(name, seq);
+  /* Summer Ichigo's Ram (TC_RAM) for the quick screen: one a Heart's Desire (every turn of the damage dealer's
+     from her A6), with the Seal her rotation's Skill 1 or 2 gives in this lineup, and the Boat taken as the damage
+     dealer's and her max HP twice over (the other seats are not known here); tcMultiplier prices it */
+  if (name === TC_RAM.n && !backup && !self) {
+    const ti = kitTierIndex(sup, lo), s = seq.length ? seq : ['3'];
+    const others = [...(inTeam || [dps.n])].filter(n => n !== name);
+    const sealed = s.some(t => { const k = tcTurnSkills(t); return (k.has('1') && others.some(n => (charDef(n) || {}).e === 'Psychokinesis')) || (k.has('2') && others.some(tcIsSummer)); });
+    // Rams a turn over the fight: one after each Heart's Desire in her first F turns, the last one landing after
+    // the fight half the time (she may act after the damage dealer); from A6, every turn after the first cast
+    const F = tcFight(), casts = [];
+    for (let t = 0; t < F; t++) if (tcTurnSkills(s[t % s.length]).has('3')) casts.push(t);
+    vec.ram = { rate: !casts.length ? 0 : Math.max(0, (aw >= 6 ? F - casts[0] : casts.length) - 0.5) / F,
+      coef: sealed ? TC_RAM.seal[ti] : TC_RAM.atk[ti], hp: TC_RAM.hp[ti] * 2 * ((tcStat(dps.n, 'HP') || 0) + (tcStat(name, 'HP') || 0)) * (aw >= 1 ? TC_RAM.boatA1 : 1) / 100,
+      dm: TC_RAM.fewer * Math.max(0, 5 - tcFoes()) + (aw >= 6 ? TC_RAM.a6Dm : 0) };
+  }
+  // and the heals they give a damage dealer whose kit reads them (tcMultiplier prices the lines those heals keep up)
+  if (!backup && !self && tcHealReads(dps.n)) { const h = tcHealSupply(name, seq, false); if (h.heal || h.bless) vec.heal = h; }
   const base = seq.length ? seq : ['-'];
   const hlAdded = !backup && tcSeqHL(base, name) !== base;
   return { vec, lines, known: !!TEAM_BUFFS[name], rot: fitted, hlEvery: hlAdded ? tcEvery(name) : 0, sim: { consts, events, seq, gated, constsOne, constsMin, ally, start, downConsts } };
@@ -11980,32 +12244,139 @@ function tcMemberCalc(dps, name, inTeam, backup, fit, pair) {
    passives count for the share of turns it is in use (times their own judged uptime). His
    Highlight is not counted (no rotation says when), nor his own damage. */
 const WONDER_SLOTS = 3, WONDER_CARDS = 3;
+/* ---- The Personas section: which Personas the player owns, and at what level, talent rank and skill
+   level, with the skill cards each has learned (the user asked, Nov 2026). `state.personas` is a record
+   per Persona, saved as settings.personas; the first time — a save from before it, or a new page —
+   every Persona out on Global is owned at the top of everything, which is what the Teams tab assumed
+   before, so nothing moves until the user says otherwise; the skill cards of the old Wonder setup move
+   onto their Personas then. After that a Persona with no record is not owned: one released since.
+   What each field does to the numbers:
+     level        an innate skill counts from the level lufel says it is learned at (WONDER_PERSONA.learn)
+     talent rank  a passive line takes its value at that rank (WONDER_PERSONA.tv), or is not there yet
+     skill level  a unique-skill, Highlight or innate line takes its value at 6, 7 or 8 (WONDER_PERSONA.sv)
+   A line whose number lufel's text does not tie to a rank keeps its top value. A skill card taught to a
+   Persona keeps its value (cards have no level here). Wonder's own stats still are not tracked, so a
+   Persona's level does nothing to a line that grows with them (taken at its cap, as before). */
+const PERSONA_LV = { def: 80, max: 120 }, PERSONA_SK = [6, 7, 8], PERSONA_CARDS = 3;
+// every Persona the section lists: lufel's, out on Global
+const personaNames = () => Object.keys(WONDER_PERSONA).filter(n => !WONDER_UNRELEASED.includes(n)).sort((a, b) => a.localeCompare(b));
+const personaTop = n => Math.max(0, ((WONDER_PERSONA[n] || {}).t || ['']).length - 1);
+const personaDefault = n => ({ own: true, lv: PERSONA_LV.def, tal: personaTop(n), sk: 8, cards: [] });
+const personaCardsOk = l => [...new Set((Array.isArray(l) ? l : []).filter(c => typeof c === 'string' && WONDER_BUFFS.cards[c]))].slice(0, PERSONA_CARDS);
+/* A saved collection (settings.personas: name -> the fields that differ from personaDefault, own only when
+   false), or the first time's: every released Persona owned, with the old Wonder setup's cards. */
+function personasFrom(o, wonder) {
+  const out = {}, released = personaNames();
+  if (o && typeof o === 'object' && !Array.isArray(o)) {
+    released.forEach(n => {
+      const s = o[n];
+      if (!s || typeof s !== 'object') return;
+      const d = personaDefault(n), lv = Math.round(+s.lv), tal = Math.round(+s.tal), sk = Math.round(+s.sk);
+      out[n] = { own: s.own !== false, lv: lv >= 1 ? Math.min(PERSONA_LV.max, lv) : d.lv, tal: tal >= 0 ? Math.min(personaTop(n), tal) : d.tal,
+        sk: PERSONA_SK.includes(sk) ? sk : d.sk, cards: personaCardsOk(s.cards) };
+    });
+    return out;
+  }
+  released.forEach(n => { out[n] = personaDefault(n); });
+  const w = wonder && typeof wonder === 'object' ? wonder : {};
+  (Array.isArray(w.personas) ? w.personas : [{ name: w.persona, cards: w.cards }]).forEach(s => {
+    if (s && out[s.name]) out[s.name].cards = personaCardsOk(s.cards);
+  });
+  return out;
+}
+function personasSaved() {
+  const P = personasState(), out = {};
+  personaNames().forEach(n => {
+    const r = P[n];
+    if (!r) return;
+    const d = personaDefault(n), x = {};
+    if (!r.own) x.own = false;
+    ['lv', 'tal', 'sk'].forEach(k => { if (r[k] !== d[k]) x[k] = r[k]; });
+    if (r.cards.length) x.cards = r.cards.slice();
+    out[n] = x;
+  });
+  return out;
+}
+function personasState() { if (!state.personas) state.personas = personasFrom(null, state.wonder); return state.personas; }
+// a Persona's record; one with none (released after the collection was set up) is not owned
+const personaRec = n => personasState()[n] || Object.assign(personaDefault(n), { own: false });
+const personaOwned = n => !WONDER_UNRELEASED.includes(n) && !!(personasState()[n] || {}).own;
+const personaCards = n => { const c = n ? personaRec(n).cards : []; return [0, 1, 2].map(j => c[j] || ''); };
+// writes a record, creating it (owned) if the Persona had none
+function personaSet(n, fields) {
+  const P = personasState();
+  const r = P[n] || (P[n] = personaDefault(n));
+  if ('cards' in fields) fields = Object.assign({}, fields, { cards: personaCardsOk(fields.cards) });
+  Object.assign(r, fields);
+}
+/* A line's value at the Persona's talent rank or skill level: `tv` for a passive, `sv` for a unique skill,
+   Highlight or innate skill, each falling back on the other (16 unique-skill lines are a talent's: Janosik's
+   Hunting, Shiva's, Zaou-Gongen's). null: the talent rank does not have it yet. */
+function personaValue(n, v, src, rec) {
+  const d = WONDER_PERSONA[n];
+  if (!d || typeof v !== 'number') return v;
+  const T = d.tv[String(v)], S = d.sv[String(v)];
+  const byT = () => T[Math.min(rec.tal, T.length - 1)], byS = () => S[PERSONA_SK.indexOf(rec.sk)];
+  if (src === 'passive') return T ? byT() : S ? byS() : v;
+  return S ? byS() : T ? byT() : v;
+}
+// a Persona's WONDER_BUFFS lines as its record has them (memoised on the list itself and the record's fields)
+const personaLineMemo = new WeakMap();
+function personaLines(n) {
+  const list = WONDER_BUFFS.personas[n] || [], rec = personaRec(n), key = n + '|' + rec.tal + '|' + rec.sk;
+  if (!personaLineMemo.has(list)) personaLineMemo.set(list, new Map());
+  const m = personaLineMemo.get(list);
+  if (!m.has(key)) m.set(key, list.map(e => {
+    const v = personaValue(n, e.v, e.src, rec);
+    return v == null ? null : v === e.v ? e : Object.assign({}, e, { v });
+  }).filter(Boolean));
+  return m.get(key);
+}
+// an innate skill's lines (its skill card's) at the Persona's skill level
+function personaInnateLines(n, card) {
+  const rec = personaRec(n);
+  return (WONDER_BUFFS.cards[card] || []).map(e => { const v = personaValue(n, e.v, 'unique', rec); return v == null || v === e.v ? e : Object.assign({}, e, { v }); });
+}
 // a Persona's innate skills that are priced: those with a skill card of the same name (WONDER_INNATE, from lufel)
 const wonderInnate = n => (WONDER_INNATE[n] || []).filter(x => WONDER_BUFFS.cards[x]);
-// every Persona the setup and the suggestion can use: with lines of their own, or a priced innate skill
-const wonderPersonas = () => [...new Set(Object.keys(WONDER_BUFFS.personas).concat(Object.keys(WONDER_INNATE).filter(n => wonderInnate(n).length)))].sort();
+// ... and learned at the Persona's level
+const wonderInnateHere = n => { const lv = personaRec(n).lv, L = (WONDER_PERSONA[n] || {}).learn || {}; return wonderInnate(n).filter(x => (L[x] || 1) <= lv); };
+// every Persona the setup and the suggestion can use: owned (the Personas section; never one not out on
+// Global, WONDER_UNRELEASED) and doing something priced — lines of its own, a priced innate skill it has
+// learned, or a priced skill card taught to it
+const wonderPersonas = () => personaNames().filter(n => personaOwned(n) &&
+  (WONDER_BUFFS.personas[n] || wonderInnateHere(n).length || personaRec(n).cards.length));
+/* Wonder's setup: three Personas, a weapon and its refinement. A Persona's skill cards are its own (the
+   Personas section), so a slot's cards are read from there, never from `o`. */
 function wonderFrom(o) {
   const w = o && typeof o === 'object' ? o : {};
   const ok = (part, n) => typeof n === 'string' && (part === 'personas' ? wonderPersonas().includes(n) : !!WONDER_BUFFS[part][n]);
   // saves from before three slots carried one Persona and three cards: they become slot 1
-  const slots = Array.isArray(w.personas) ? w.personas : [{ name: w.persona, cards: w.cards }];
+  const slots = Array.isArray(w.personas) ? w.personas : [{ name: w.persona }];
   const seen = new Set();
   return {
     personas: [0, 1, 2].map(i => {
       const s = slots[i] || {};
       const name = ok('personas', s.name) && !seen.has(s.name) ? s.name : '';
       if (name) seen.add(name);
-      return { name, cards: [0, 1, 2].map(j => ok('cards', (s.cards || [])[j]) ? s.cards[j] : '') };
+      return { name, cards: personaCards(name) };
     }),
     weapon: ok('weapons', w.weapon) ? w.weapon : '',
     refine: Math.max(1, Math.min(7, Math.round(+w.refine) || 1))
   };
 }
 function wonderSetup() { return wonderFrom(state.wonder); }
+// his setup as this team can field it: a Persona marked busy (Wonder uses it in another team) is
+// left out with its skill cards, the way a busy character is left out of the team
+function wonderHere() {
+  const W = wonderSetup();
+  W.personas = W.personas.map(p => tmBusyP.has(p.name) ? { name: '', cards: ['', '', ''] } : p);
+  return W;
+}
 const wonderEmpty = S => !S.weapon && !S.personas.some(p => p.name || p.cards.some(Boolean));
 
 function tcWonder(dps, setup) {
-  const S = setup || wonderSetup();
+  const S = setup || wonderHere();
   const vec = {}; TC_KEYS.forEach(k => { vec[k] = 0; });
   const lines = [], idle = [];
   const ri = S.refine - 1;
@@ -12019,7 +12390,7 @@ function tcWonder(dps, setup) {
   const sources = [];
   if (S.weapon) sources.push({ label: S.weapon, slot: -1, list: WONDER_BUFFS.weapons[S.weapon] || [] });
   S.personas.forEach((p, slot) => {
-    if (p.name) sources.push({ label: p.name, slot, list: WONDER_BUFFS.personas[p.name] || [] });
+    if (p.name) sources.push({ label: p.name, slot, list: personaLines(p.name) });
     // a card without its Persona cannot be cast
     if (p.name) p.cards.forEach(c => { if (c) sources.push({ label: c, slot, card: true, list: WONDER_BUFFS.cards[c] || [] }); });
   });
@@ -12029,9 +12400,9 @@ function tcWonder(dps, setup) {
   const taken = new Set(S.personas.flatMap(p => p.name ? p.cards.filter(Boolean) : []));
   S.personas.forEach((p, slot) => {
     if (!p.name) return;
-    wonderInnate(p.name).forEach(n => { if (taken.has(n)) return; taken.add(n); sources.push({ label: n, slot, card: true, innate: true, list: WONDER_BUFFS.cards[n] }); });
+    wonderInnateHere(p.name).forEach(n => { if (taken.has(n)) return; taken.add(n); sources.push({ label: n, slot, card: true, innate: true, list: personaInnateLines(p.name, n) }); });
   });
-  const items = [], hls = [];
+  const items = [], hls = [], knockEv = [];
   const N = tcHlEvery();
   /* `ifBlessHl`: what a line becomes for a Bless damage dealer whose lufel rotation uses Highlights
      (Sraosha's God's Ear stacks, 2 a Bless ally's Highlight, are then always full) */
@@ -12051,10 +12422,17 @@ function tcWonder(dps, setup) {
     }
     const k = TC_FROM_K[e.k], v = val(e);
     if (!k || !v) return;
+    /* a line a knockdown sets off is the fight's alone (its Down gauge, #tmDown), as for a teammate: the quick
+       screen leaves it at 0 */
+    if (e.on === 'knock' || e.on === 'knockSelf') {
+      knockEv.push({ e: { on: e.on, to: e.to, dur: e.dur || 1, cond: e.cond }, k, v, dur: e.dur || 1, ref: lines.length });
+      lines.push({ k, v, up: 0, why: `${s.label}: ${e.why}` });
+      return;
+    }
     if (e.minHits && !tcHits(dps.n).some(h => h >= e.minHits)) return;   // no skill of theirs hits that often
     const active = (e.src === 'unique' || e.src === 'card') && !!e.dur;
     // a line reading the foe's ailments: the quick value at TC_AIL_QUICK, the fight's by the count (vAil)
-    items.push({ s, e, k, v: v * tcAilQuick(e), vAil: v, active, passive: !active && s.slot >= 0 });
+    items.push({ s, e, k, v: v * tcAilQuick(e), vAil: v, active, passive: !active && s.slot >= 0, allyCast: !!e.allyCast });
   }));
   /* One skill from two sources — two Personas' unique Rebellion, one's innate Rakunda and another's
      unique one, a card and an innate skill, Auto-Mataru III and IV — is the same buff: it refreshes, it
@@ -12091,29 +12469,54 @@ function tcWonder(dps, setup) {
   // a line on for part of the fight only counts its share of the fight
   const F = tcFight(), judgedUp = e => { const g = tcGate(e, 0); return (e.up != null ? e.up : 1) * (g ? tcGateMean(g, F) : 1); };
   const alone = list => tcMultiplier(dps, [sum(list.map(i => [i, judgedUp(i.e)]))]) - 1;
+  /* What each skill is cast on, for the on-cast passives whose trigger names it (`castOn`: Dionysus and
+     Succubus on an ally, Bishamonten on a foe): its lines' targets. A skill with no priced line is not
+     counted, which is safe: nothing priced is cast with it. */
+  const aims = s => new Set(s.list.filter(e => e.src === 'unique' || e.src === 'card').map(e => e.to === 'enemy' ? 'foe' : 'ally'));
+  const aimOf = new Map(sources.map(s => [s, aims(s)]));
+  // a Persona that can cast something on an ally: its unique, a card or an innate skill (a duplicate dropped above is still castable)
+  const allySkill = [0, 1, 2].map(slot => sources.find(s => s.slot === slot && aimOf.get(s).has('ally')) || null);
+  const fires = (e, mode) => !e.onCast || !e.castOn || e.castOn === mode;
+  /* `allyCast` (Ice Age's Ancient Frost): put on the damage dealer at battle start for `dur` turns and again
+     by each skill he casts on an ally, so after its opening turns it is up only as often as those casts
+     renew it — `a` of them in six turns. The fight plays it out ('wStart' and his ally-skill turns). */
+  const onAlly = s => aimOf.get(s).has('ally') && !aimOf.get(s).has('foe');
+  const allyCastUp = (dur, a) => { const F0 = tcFight(), d = Math.min(dur, F0); return (d + (F0 - d) * Math.min(1, a * dur / 6)) / F0; };
   const build = given => {
-    // turns each slot's Persona is in use: its casts, plus the idle turns for whichever Persona's
-    // passives are worth most (he attacks with it)
-    const inUse = [0, 0, 0];
+    /* turns each slot's Persona is in use: its casts, plus the idle turns for whichever Persona's
+       passives are worth most. On an idle turn he attacks with it ('foe': a skill on a foe), or, when
+       the passives worth most need a skill cast on an ally, recasts one of its ally skills ('ally') — a
+       turn that then does not hit the boss. `cast` counts the turns of each kind per slot. */
+    const inUse = [0, 0, 0], cast = { ally: [0, 0, 0], foe: [0, 0, 0] };
+    let onAllyN = 0;   // casts on an ally alone (onAlly), for `allyCast`
     let used = 0;
-    given.forEach((f, s) => { const a = f * 6 / need.get(s); inUse[s.slot] += a; used += a; });
-    let idleSlot = S.personas.findIndex(p => p.name);
+    given.forEach((f, s) => { const a = f * 6 / need.get(s); inUse[s.slot] += a; used += a; aimOf.get(s).forEach(t => { cast[t][s.slot] += a; }); if (onAlly(s)) onAllyN += a; });
+    let idleSlot = S.personas.findIndex(p => p.name), idleMode = 'foe';
     if (used < 6) {
-      const pv = [0, 1, 2].map(slot => S.personas[slot].name ? alone(items.filter(i => i.passive && i.s.slot === slot)) : -Infinity);
-      idleSlot = pv.indexOf(Math.max(...pv));
-      if (idleSlot >= 0) inUse[idleSlot] += 6 - used;
+      let bv = -Infinity;
+      [0, 1, 2].forEach(slot => {
+        if (!S.personas[slot].name) return;
+        (allySkill[slot] ? ['foe', 'ally'] : ['foe']).forEach(mode => {
+          const pv = alone(items.filter(i => i.passive && i.s.slot === slot && fires(i.e, mode)));
+          if (pv > bv + 1e-9) { bv = pv; idleSlot = slot; idleMode = mode; }
+        });
+      });
+      if (idleSlot >= 0) { inUse[idleSlot] += 6 - used; cast[idleMode][idleSlot] += 6 - used; if (idleMode === 'ally' && onAlly(allySkill[idleSlot])) onAllyN += 6 - used; }
     }
     const ups = items.map(i => {
       const judged = judgedUp(i.e);
       /* a passive: while its Persona is in use; `reserve`, whatever is in use; `onCast` (set off by each skill
-         he casts with it, for `dur` turns), the turns in use times that duration */
+         he casts with it, for `dur` turns), the turns he casts a skill of the kind it names (any while it
+         is in use, when it names none) times that duration */
+      const casts = i.e.castOn ? cast[i.e.castOn][i.s.slot] : inUse[i.s.slot];
       return [i, i.active ? Math.min(1, (given.get(i.s) || 0) * i.e.dur / need.get(i.s), judged)
+        : i.allyCast ? allyCastUp(i.e.dur, onAllyN) * judged
         : !i.passive || i.e.reserve ? judged
-        : i.e.onCast && i.e.dur ? Math.min(1, inUse[i.s.slot] * i.e.dur / 6) * judged
+        : i.e.onCast && i.e.dur ? Math.min(1, casts * i.e.dur / 6) * judged
         : Math.min(1, inUse[i.s.slot] / 6) * judged];
     });
     const v = sum(ups);
-    return { ups, inUse, idleSlot, vec: v, value: tcMultiplier(dps, [v]) };
+    return { ups, inUse, idleSlot, idleMode, vec: v, value: tcMultiplier(dps, [v]) };
   };
   const order = [...need.keys()].map(s => ({ s, acts: 6 / need.get(s), gain: alone(items.filter(i => i.s === s)) }))
     .sort((a, b) => b.gain / b.acts - a.gain / a.acts);
@@ -12164,7 +12567,12 @@ function tcWonder(dps, setup) {
     lines.push({ k: i.k, v: i.v, up, why: `${where}${i.s.label}${i.s.innate ? ' (innate)' : ''}: ${i.e.why}` });
     if ((i.e.minHits || i.e.ailMin || i.e.perAil) && !(i.active && tokOf.has(i.s))) wMin.push({ k: i.k, v: i.vAil * up, minHits: i.e.minHits || 0, ailMin: i.e.ailMin || 0, perAil: i.e.perAil || 0, one: i.e.to === 'enemy' && tcOneFoe(i.e) });
     else if (i.active && tokOf.has(i.s)) castEv.push({ e: { on: tokOf.get(i.s), to: i.e.to, dur: i.e.dur, cond: i.e.cond, minHits: i.e.minHits, ailMin: i.e.ailMin, perAil: i.e.perAil, noCopy: i.e.noCopy }, k: i.k, v: i.vAil * (i.e.up != null ? i.e.up : 1), dur: i.e.dur, ref });
-    else if (tcGate(i.e, 0)) {
+    else if (i.allyCast) {
+      /* at battle start, then on each turn he casts a skill on an ally (his idle ally recasts, 'wr', too): a skill
+         with any line on a foe is cast on the foe, however much it gives allies (Janosik's Tatra Shot) */
+      const on = ['wStart'].concat([...tokOf].filter(([src]) => onAlly(src)).map(([, tok]) => tok), best.idleMode === 'ally' && onAlly(allySkill[best.idleSlot]) ? ['wr'] : []);
+      castEv.push({ e: { on, to: i.e.to, dur: i.e.dur, cond: i.e.cond, noCopy: i.e.noCopy }, k: i.k, v: i.vAil, dur: i.e.dur, ref });
+    } else if (tcGate(i.e, 0)) {
       // the fight switches it on round by round: its value without the gate's share of the fight
       const g = tcGate(i.e, 0);
       wGated.push({ k: i.k, v: i.v * up / tcGateMean(g, F), gate: g, one: i.e.to === 'enemy' && tcOneFoe(i.e), ally: cp });
@@ -12210,6 +12618,8 @@ function tcWonder(dps, setup) {
       placed.forEach((t, p) => { sched[p] = t; });
     }
   }
+  // his idle turns recast an ally skill rather than attack ('wr': no lines of its own, does not hit the boss)
+  if (best.idleMode === 'ally') sched.forEach((t, p) => { if (t === '-') sched[p] = 'wr'; });
   /* His Highlight, from whichever of his Personas' Highlights does most for this damage dealer — he
      switches to it for the cast; the fight fires it from the shared gauge. */
   const noHl = wConst, hlEv = [];
@@ -12239,54 +12649,73 @@ function tcWonder(dps, setup) {
   const skillName = src => src.card ? src.label + (src.innate ? ' (innate)' : '') : ((src.list.find(e => e.src === 'unique') || {}).why || 'unique skill').split(':')[0].replace(/\s*\(unique\)\s*$/, '');
   const turns = sched.map(tok => {
     const src = byTok.get(tok);
+    if (tok === 'wr') return { persona: S.personas[best.idleSlot].name, what: skillName(allySkill[best.idleSlot]) + ' again' };
     if (!src) return { persona: best.idleSlot >= 0 ? S.personas[best.idleSlot].name : '', what: 'attack' };
     return { persona: S.personas[src.slot].name, what: skillName(src) };
   });
-  return { vec, lines, idle, uncast, turns, busy: asked > 6, inUse: best.inUse.map(x => x / 6), sim: { consts: noHl, constsOne: wOne, constsMin: wMin, events: hlEv, gated: wGated, ally: wAlly, cast: { seq: sched, events: castEv } } };
+  return { vec, lines, idle, uncast, turns, busy: asked > 6, inUse: best.inUse.map(x => x / 6), sim: { consts: noHl, constsOne: wOne, constsMin: wMin, events: hlEv, knock: knockEv, gated: wGated, ally: wAlly, cast: { seq: sched, events: castEv } } };
 }
 
-/* The setup that helps this team most, assuming the player owns it, which nothing here can tell: the
-   weapon, then three Personas and no skill cards — each brings its own unique skill, passives, innate
-   skills and Highlight. Slot by slot, the Persona that adds most to what is already chosen; when none adds
+/* The setup that helps this team most from what the player owns (the Personas section; the weapon is
+   still assumed owned, which nothing here can tell): the weapon, then three Personas, each with the skill
+   cards it has learned — each brings its own unique skill, passives, innate skills and Highlight. Slot by slot, the Persona that adds most to what is already chosen; when none adds
    anything (his six actions are already spent), the one that would do most on its own, so all three
    slots hold the best of the rest. No Persona twice.
    Chosen by the fight (`names`: the lineup, tcSim with the cheaper fit), which plays his casts turn by
    turn: the quick screen's averages misjudge short effects (Shiva's 1-turn DEF cut ranks low averaged
    and first in the fight for Haru). A fight costs tens of milliseconds, so the quick screen shortlists
-   each slot (its best TC_WB_SHORT, plus any Persona with a line the quick screen cannot price: continuous
-   damage, Resonance) and the fight picks among them; one improvement pass follows. Without `names` the
+   each slot (its best TC_WB_SHORT, its best TC_WB_IDLE that take none of his turns, plus any Persona with a
+   line the quick screen cannot price: continuous damage, Resonance) and the fight picks among them; one improvement pass follows. Without `names` the
    quick screen decides. `adds` (not saved, not compared) is what each slot adds: the team's value with it
-   over without. */
-const TC_WB_SHORT = 6;
+   over without. A Persona marked busy (tmBusyP: Wonder is using it in another team) is never suggested. */
+const TC_WB_SHORT = 6, TC_WB_IDLE = 3, TC_WB_WEAPONS = 3;
+// a slot's shortlist from its quick-screen rows [name, value, value alone, takes none of his turns]
+const tcWbShort = rows => {
+  const by = rows.slice().sort((x, y) => (y[1] - x[1]) || (y[2] - x[2]));
+  return [...new Set(by.slice(0, TC_WB_SHORT).concat(by.filter(x => x[3]).slice(0, TC_WB_IDLE)).map(x => x[0]))];
+};
 function tcWonderBest(dps, vecs, names) {
   const S = { personas: [0, 1, 2].map(() => ({ name: '', cards: ['', '', ''] })), weapon: '', refine: wonderSetup().refine };
   const value = s => tcMultiplier(dps, vecs.concat(tcWonder(dps, s).vec));
   const fight = s => names ? tcSim(dps, names, false, false, s).mult : value(s);
+  // a slot holds the Persona with the skill cards it has learned (the Personas section)
+  const slotOf = k => ({ name: k, cards: personaCards(k) });
   const copy = s => ({ personas: s.personas.map(p => ({ name: p.name, cards: p.cards.slice() })), weapon: s.weapon, refine: s.refine });
   let wv = value(S);
   Object.keys(WONDER_BUFFS.weapons).forEach(k => { const t = copy(S); t.weapon = k; const v = value(t); if (v > wv + 1e-9) { wv = v; S.weapon = k; } });
   // each Persona alone with that weapon (quick): the tie-break when a slot adds nothing
   const solo = new Map();
-  const soloOf = k => { if (!solo.has(k)) { const t = copy(S); t.personas = t.personas.map(() => ({ name: '', cards: ['', '', ''] })); t.personas[0].name = k; solo.set(k, value(t)); } return solo.get(k); };
+  const soloOf = k => { if (!solo.has(k)) { const t = copy(S); t.personas = t.personas.map(() => ({ name: '', cards: ['', '', ''] })); t.personas[0] = slotOf(k); solo.set(k, value(t)); } return solo.get(k); };
   const unseen = new Set(['dotDm', 'dotFinal', 'resDm', 'resFinal', 'curse']);
-  const special = wonderPersonas().filter(k => (WONDER_BUFFS.personas[k] || []).some(e => unseen.has(e.k) || e.perAil || e.ailMin));
+  const special = wonderPersonas().filter(k => personaLines(k).some(e => unseen.has(e.k) || e.perAil || e.ailMin));
   const pick = slot => {
-    const free = wonderPersonas().filter(k => !S.personas.some((p, i) => i !== slot && p.name === k));
-    // the shortlist: the quick screen's best in this slot, the Personas it cannot price, and the current one
-    const quick = free.map(k => { const t = copy(S); t.personas[slot].name = k; return [k, value(t), soloOf(k)]; })
-      .sort((x, y) => (y[1] - x[1]) || (y[2] - x[2])).slice(0, TC_WB_SHORT).map(x => x[0]);
-    const pool = [...new Set(quick.concat(special.filter(k => free.includes(k)), S.personas[slot].name ? [S.personas[slot].name] : []))];
+    const free = wonderPersonas().filter(k => !tmBusyP.has(k) && !S.personas.some((p, i) => i !== slot && p.name === k));
+    /* the shortlist: the quick screen's best in this slot, its best that take none of his turns, the
+       Personas it cannot price, and the current one. The quick screen misjudges a Persona that takes turns
+       from the others (Dionysus taking Janosik's Tatra Shot turns rates first and loses in the fight for
+       Wavecatcher Miyu), so with his turns spent those fill its top and a reserve passive that takes no
+       turn (Kohryu's +15% ATK) fell out of the shortlist; its own TC_WB_IDLE keep it in. */
+    const quick = free.map(k => { const t = copy(S); t.personas[slot] = slotOf(k); const W = tcWonder(dps, t); return [k, tcMultiplier(dps, vecs.concat(W.vec)), soloOf(k), !W.inUse[slot]]; });
+    const pool = [...new Set(tcWbShort(quick).concat(special.filter(k => free.includes(k)), S.personas[slot].name ? [S.personas[slot].name] : []))];
     let top = '', tv = -Infinity, ts = -Infinity;
     pool.forEach(k => {
-      const t = copy(S); t.personas[slot].name = k;
+      const t = copy(S); t.personas[slot] = slotOf(k);
       const v = fight(t), so = soloOf(k);
       if (v > tv + 1e-9 || (v > tv - 1e-9 && so > ts + 1e-9)) { top = k; tv = Math.max(tv, v); ts = so; }
     });
-    S.personas[slot].name = top;
+    S.personas[slot] = slotOf(top);
   };
   for (let slot = 0; slot < WONDER_SLOTS; slot++) pick(slot);
   // one improvement pass: each slot again, against the other two as they now stand
   for (let slot = 0; slot < WONDER_SLOTS; slot++) pick(slot);
+  /* The weapon again, now with his Personas: it was chosen with none, which no weapon whose effect hangs on
+     his casts can win (Ice Age's Ancient Frost, renewed only by a skill on an ally). The quick screen's best
+     TC_WB_WEAPONS and the current one are fought; a change gets one more pass over the slots. */
+  const wq = Object.keys(WONDER_BUFFS.weapons).map(k => { const t = copy(S); t.weapon = k; return [k, value(t)]; })
+    .sort((x, y) => y[1] - x[1]).slice(0, TC_WB_WEAPONS).map(x => x[0]);
+  let wTop = S.weapon, wBest = fight(S);
+  wq.forEach(k => { if (k === S.weapon) return; const t = copy(S); t.weapon = k; const v = fight(t); if (v > wBest + 1e-9) { wBest = v; wTop = k; } });
+  if (wTop !== S.weapon) { S.weapon = wTop; for (let slot = 0; slot < WONDER_SLOTS; slot++) pick(slot); }
   const full = fight(S);
   const adds = S.personas.map((p, i) => { if (!p.name) return 0; const t = copy(S); t.personas[i].name = ''; return full / fight(t) - 1; });
   Object.defineProperty(S, 'adds', { value: adds, enumerable: false });
@@ -12313,7 +12742,7 @@ function tcMemoFor(D) {
   // the "Auto" boss and enemies follow the damage dealer the fight is for; the key holds what they resolve to
   if (D) tcFocus = D.n || D;
   // composing or not changes every fitted rotation, so it turns the memo over like the fight's assumptions
-  const key = dataSignature() + '|' + [...tmBusy].sort().join(',') + '|' + tcAssumeKey() + (tmComposeOn() ? '|compose' : '');
+  const key = dataSignature() + '|' + [...tmBusy].sort().join(',') + '|' + [...tmBusyP].sort().join(',') + '|' + tcAssumeKey() + (tmComposeOn() ? '|compose' : '');
   if (key !== tcMemo.key) {
     tcMemo = tcMemoNew(key);
     // the fight is against the boss the page picks
@@ -12387,11 +12816,39 @@ function tcCopyQuick(dps, vecs) {
   pick.forEach(v => Object.keys(v.allyCopy).forEach(k => { out[k] = (out[k] || 0) + v.allyCopy[k] * f; }));
   return Object.entries(out);
 }
+/* A damage dealer's "when healed" lines (KIT_STAT_BUFFS `on: 'healed'`/'healedHype') on the quick screen, which
+   the fight plays out heal by heal: heals a round taken as a Poisson rate (TC_HEALS through tcHealSupply, Blessing
+   as the share of turns it is held), a line up when a heal fell in its last `dur` turns (with `upTo`, its expected
+   stacks), 'healedHype' at the share of turns Summer Hype is on; the lineup's heals over the damage dealer's own.
+   [key, value] pairs. */
+function tcHealQuick(D, hv) {
+  const mk = 'healq|' + D.n;
+  let O = tcMemo.member.get(mk);
+  if (!O) {
+    const seq = tcRotSeq(D.n, null), own = tcHealSupply(D.n, seq, true), hy = TC_HEAL_HYPE[D.n];
+    O = { own, hype: hy ? tcCover(seq, hy, 2) || 0 : 1,
+      lines: kitStatBuffs(D, null, { fight: true }).filter(b => (b.on === 'healed' || b.on === 'healedHype') && TC_KIT_STAT_K[b.s] && b.v) };
+    tcMemo.member.set(mk, O);
+  }
+  let heal = O.own.heal, miss = 1 - O.own.bless;
+  const p0 = heal + (1 - miss);
+  hv.forEach(v => { heal += v.heal.heal; miss *= 1 - v.heal.bless; });
+  const p1 = heal + (1 - miss);
+  // E[min(s, N)] for N ~ Poisson(m)
+  const up = (m, s) => { let r = s, pk = Math.exp(-m); for (let k = 0; k < s; k++) { r -= (s - k) * pk; pk *= m / (k + 1); } return r; };
+  return O.lines.map(b => {
+    const d = b.dur || 1, s = b.upTo || 1;
+    return [TC_KIT_STAT_K[b.s], b.v * (up(p1 * d, s) - up(p0 * d, s)) * (b.on === 'healedHype' ? O.hype : 1)];
+  });
+}
 function tcMultiplier(dps, vecs) {
   if (!tcMemo.hot) tcMemoFor(dps);
   const X = {}; TC_KEYS.forEach(k => { X[k] = 0; });
   vecs.forEach(v => TC_KEYS.forEach(k => { X[k] += v[k] || 0; }));
   tcCopyQuick(dps, vecs).forEach(([k, v]) => { X[k] += v; });
+  /* the twins' Skill Amplification (`skillAmp`, at its share of turns): the other members' skill lines that much
+     stronger; the damage dealer's skill hits too, below */
+  if (X.skillAmp > 0) vecs.forEach(v => { if (v && v.skillPart && !(v.skillAmp > 0)) Object.keys(v.skillPart).forEach(k => { X[k] += v.skillPart[k] * X.skillAmp / 100; }); });
   const E = tcEvalFor(dps);
   if (TC_AIL_SELF[dps.n] && X.ail) {
     const R = tmRotPick(dps.n, new Set([dps.n])), own = tcAilSupply(dps.n, R && R.pick[0] ? R.pick[0].seq : null);
@@ -12409,6 +12866,8 @@ function tcMultiplier(dps, vecs) {
   const cov = 1 - miss;
   need.forEach(n => { if (n.k === 'tp') X.tp += n.v * cov; });
   need.forEach(n => { if (n.k !== 'tp') X[n.k] += n.v * cov * (1 + tcTechScale(n.tech, X.tp)); });
+  // the lines a damage dealer's kit turns on when healed, at what the lineup's heals add (tcHealQuick)
+  if (vecs.some(v => v && v.heal)) tcHealQuick(dps, vecs.filter(v => v && v.heal)).forEach(([k, v]) => { X[k] += v; });
   const mix = tcTechMix(dps);
   X.flat = E.den.flat; X.cr += E.den.cr; X.cm += E.den.cm;
   const keep = state.teamCrit;
@@ -12446,7 +12905,16 @@ function tcMultiplier(dps, vecs) {
       const amp = (1 + cov * (mix.ta * sc + mix.pa) / 100) / (1 + burn0 * (mix.ta + mix.pa) / 100);
       tech = 1 + mix.s * ((1 + add) * amp - 1);
     }
-    return ((Ms + hl) * (1 + X.turns / 6) + extra) * tech / (1 + H.q * H.r0 * (H.hc0 || 1));
+    /* Summer Ichigo's Ram (vec.ram, TC_RAM): a skill hit of the damage dealer's, in their turns' worth (their mean
+       skill coefficient a turn alone, tcTurnCoef); its HP part does not scale with ATK, so it is taken off ⓐ */
+    let ram = 0;
+    const rv = vecs.filter(v => v && v.ram);
+    if (rv.length) {
+      const per = tcTurnCoef(dps);
+      if (per > 0) rv.forEach(v => { const r = v.ram; ram += r.rate * (r.coef + 100 * r.hp / f1.atk) / per * plus(r.dm, 1); });
+    }
+    const sa = 1 + X.skillAmp / 100;
+    return ((Ms * sa + hl) * (1 + X.turns / 6) + (extra + ram) * sa) * tech / (1 + H.q * H.r0 * (H.hc0 || 1));
   } finally { state.teamCrit = keep; }
 }
 /* The share of a damage dealer's damage their own bonuses on a Burning foe reach (DPS_KIT_BONUS `needAil`), and
@@ -12585,7 +13053,7 @@ const DPS_KIT = {
     { kind: 'fu', v: [27.3, 30.1, 29, 31.8], on: 'tok:Gunshot', aw: 6, cond: '2+ Thoughtful Round stacks', why: 'A6: same reading for Painpoint Round at 70% (0.7 x 39.0%).' }
   ],
   'Justine & Caroline': [
-    { kind: 'fu', v: 40, n: 8, on: 'turnStart', chance: 0.167, aw: 6, noWeak: true, why: 'Power to Resist Ruin (A6): True Desire at battle start and again every 8 turns; spending it enhances the next Two Masks as One with 8 bonus hits of 40% ATK on the main target (at Persona performance/Desire 100, as the team buffs assume). Judged: 2 uses in the default 12-round fight (turn 1 and turn 9) = 1/6 of her turns' },
+    { kind: 'fu', v: 40, n: 8, on: 'turnStart', chance: 0.167, aw: 6, noWeak: true, why: 'Power to Resist Ruin (A6): True Desire at battle start and again every 8 turns; spending it enhances the next Two Masks as One with 8 bonus hits of 40% ATK on the main target (at Persona performance/Desire 100, as the team buffs assume). Judged: 1 use in the default 6-round fight (turn 1; the next is turn 9) = 1/6 of her turns (2 in 12 rounds is the same share)' },
     { kind: 'fu', v: [126.9, 139.9, 134.7, 147.7], on: 'turnStart', chance: 0.167, aw: 6, why: 'Power to Resist Ruin (A6): the enhanced Two Masks as One activates every Facade combination, including Absurdity + Luck\'s "1 more hit of Almighty damage" (126.9%); same cadence' }
   ],
   'Kotone Montagne [Frostgale]': [
@@ -12704,7 +13172,7 @@ const DPS_KIT_SKIPS = {
     'Trifire bonus (+30% of the damage dealt when in La Vie en Rose and the foe is under 50% HP): depends on boss HP and Trifire is not in lufel\'s rotation; not priced.'
   ],
   'Ryuji Sakamoto': [
-    'No damage outside his numbered skills and Highlight. Rebound\'s +30% on the next skill and Grand Presser depend on his own HP, and Fearless Charge (A2) is DEF ignore: not priced. His other damage bonuses are.',
+    'No damage outside his numbered skills and Highlight. Rebound\'s +30% on the next skill and Grand Presser depend on his own HP: not priced. His other damage bonuses are, and Fearless Charge (A2) as Pierce 35 on his skills.',
     'God Hand Burst (Skill 3) charges on one turn and hits automatically on his NEXT turn (Korean text: "next turn automatically deals 341.6%"). lufel\'s rotation writes 3 on all six turns; if the simulator prices SKILL_DMG d[2] on every "3" token it counts the hit twice. Read it as one hit per two "3" tokens (charge, release).'
   ],
   'Motoha Arai': [
@@ -12746,7 +13214,9 @@ const DPS_KIT_SKIPS = {
     'Nuclear Finisher\'s ATK is a stat, not priced here (A2\'s pierce is, by the ailments on the boss: TC_AIL_SELF).'
   ],
   'Motoha Arai [Tropical]': [
-    'Her Highlight\'s +25% above 50% HP depends on her own HP; below Awareness 1 the healing-triggered bonuses need a healer and are not counted; the crit lines are stats.'
+    'Her Highlight\'s +25% above 50% HP depends on her own HP; the crit lines are stats.',
+    'Her "when healed" bonuses (Energy Overload! +30%, Summer Starts Here! +25%, Stay Cool!, Bubble Puff Star) follow the heals the fight gives her: her own Skill 2 and Highlight, her Awareness 1 Blessing, and the team\'s healers (TC_HEALS). Every heal counts the same; a heal on "the ally with the lowest HP" is taken to reach her half the time.',
+    'Tropical Heart (5 heals lift Surf \'n\' Shine\'s cooldown) follows the heals the team gives her a round, by their lufel rotations; a lufel rotation the team cannot heal for is replaced by one composed for it.'
   ],
   'Tomoko Noge [Seaside]': [
     'Whether "after an ally acts" includes Tomoko\'s own action is not stated; only other thieves\' actions are counted.',
@@ -12839,7 +13309,7 @@ const DPS_KIT_SKIPS = {
     'Spotlight Unleashed / Promised Meeting extra actions are already written into lufel\'s rotations (2+3, 2+3+3).'
   ],
   'Motoha Arai [Radiance]': [
-    'Twilight Radiance: +29.3% ATK for Spear of Light per Light stack spent (3 per Highlight; at A1 Flowing Light counts as both) is a stat for that hit, not in KIT_STAT_BUFFS; same-target +30% crit damage and A4 +10% per Flowing Light are stats too.',
+    'Twilight Radiance on two foes (x1.15 skill damage, when more than one foe is up) is not priced; its ATK per Light and same-foe crit damage are, as stats on the Highlight.',
     'Resolute Maiden lasts 2 turns from Skill 3, and lufel writes "HL+3" (Highlight before Skill 3?), so how many Highlights fall inside it depends on the in-turn order, which the notation does not settle. "+55.8% skill multiplier" may instead be a x1.558; the text does not say.'
   ],
   'Aran Hirano': [
@@ -12869,9 +13339,6 @@ const DPS_KIT_SKIPS = {
     'A6: all Persona skills count as Resonance, Improvised Song permanent, 25% energy per Starscape - no damage of their own. More energy could mean HL(4)+ at A6; lufel writes HL(3), which is what is entered.',
     'Her own Highlight deals no damage (SKILL_DMG 0 is right).'
   ],
-  'Ichigo Shikano [Summer]': [
-    'Ram: Miracle Ichi-Boat is damage by the Helmsman (Heart\'s Desire\'s main target ally) at the end of their turn: 48.3/53.3/51.3/56.2% of the Boat\'s max HP (sum of all allies\' max HP) + 173.7% of the Helmsman\'s ATK (347.4% when a Seal was spent, which lufel\'s rotations do), +25% damage per foe fewer than 5 (+100% on one boss), counts as a Persona skill. A6: every Helmsman turn, +30% skill damage. This belongs to the damage dealer seated with Ichigo as a teammate-triggered follow-up, not to Ichigo\'s own kit, and it mixes HP and ATK scaling - it cannot be written in this format.'
-  ]
 };
 
 /* A damage dealer's own damage bonuses on their hits (Nov 2026): "Resonance damage +30%", "Highlight
@@ -12901,14 +13368,14 @@ const DPS_KIT_BONUS = {
     { to: 'all', ladder: [2.4, 3.1, 3.1, 3.8, 3.8, 4.5, 4.5], weapon: '4', stacks: 3, why: 'Edelweiss (4-star weapon): each time she gains Ice Crystals, Ice damage +2.4-4.5% for 1 turn, up to 10 stacks; all her damage is Ice. Judged 3 held at her hits: one gain per other thief\'s action since her last turn (the 1-turn stacks gained before that have run out). Could equally be a timed Damage Multiplier line in KIT_STAT_BUFFS' }
   ],
   'Seiji Shiratori': [
-    { to: 'all', ladder: [3.8, 4.9, 4.9, 6, 6, 7.1, 7.1], weapon: '4', stacks: 4, why: 'Knight\'s Reward (4-star weapon): each hit on the same foe has a 30% chance to raise his damage against it by 3.8-7.1%, up to 5 stacks. At 4-6 hits a turn on one boss it reaches the cap around turn 4 and holds it: a 12-round mean of about 4 stacks.' },
+    { to: 'all', ladder: [3.8, 4.9, 4.9, 6, 6, 7.1, 7.1], weapon: '4', stacks: 3.5, why: 'Knight\'s Reward (4-star weapon): each hit on the same foe has a 30% chance to raise his damage against it by 3.8-7.1%, up to 5 stacks. At 4-6 hits a turn on one boss (about 1.5 stacks a turn) it reaches the cap around turn 4 and holds it: about 0.8, 2.3, 3.8, 4.6, 5, 5 over the default 6 rounds, a mean of about 3.5 (about 4 over 12).' },
     { to: 'all', ladder: [7.5, 9.8, 9.8, 12.1, 12.1, 14.4, 14.4], weapon: '5', stacks: 2.5, chance: 0.9, why: 'Venus Sunrise (5-star weapon): each time he gains Right to Strike, damage +(current stacks x 7.5-14.4%) for 1 turn. Below A1 (cap 3) judged 2.5 stacks mean, between DPS_KIT\'s half of casts at 3+ and KIT_STAT_BUFFS\' 3; a gain lands on about 90% of turns (40% per skill hit, 60% at turn end).' },
     { to: 'all', ladder: [7.5, 9.8, 9.8, 12.1, 12.1, 14.4, 14.4], weapon: '5', stacks: 1, chance: 0.9, aw: 1, why: 'Pression (A1): cap 5, judged 3.5 stacks mean (increment of 1).' }
   ],
   'Toshiya Sumi': [
     { to: 'res', match: '^(?!Tragicomedy)', v: 10, stacks: 5, why: 'This Beautiful Woman (passive 2): Sonnet of Fate +10% per special Verse among the 14 it spends. All-Skill-1 rotation: 3 Verses of Hate per cast plus the 25% conversions (about 0.5 a cast) out of about 10 Verses a round, so about 5 of each 14. The match keeps it off the Verse of Passion Almighty bonus, a separate hit' },
     { to: 'res', match: '^(?!Tragicomedy)', v: 50, chance: 0.5, curse: true, why: 'The Other Prison (passive 1): Sonnet +50% on a Cursed foe. Below A2 the Curse comes only from spent Verses of Hate (30% base each, about 5 a Sonnet, so about 0.83 per Sonnet before the boss\'s resistance) and has to last until the next Sonnet about 1.5 rounds later: judged 0.5' },
-    { to: 'res', match: '^(?!Tragicomedy)', v: 50, chance: 0.4, aw: 2, curse: true, why: 'Flight and Conflict (Awareness 2): every Sonnet inflicts Curse, so from the second Sonnet on the foe is Cursed; total judged 0.9 (first Sonnet and ailment resistance)' },
+    { to: 'res', match: '^(?!Tragicomedy)', v: 50, chance: 0.2, aw: 2, curse: true, why: 'Flight and Conflict (Awareness 2): every Sonnet inflicts Curse, so from the second Sonnet on the foe is Cursed; at a Sonnet about every 1.5 rounds that is 3 of 4 in the default 6 rounds: total judged 0.7 (first Sonnet and ailment resistance; 0.9 over 12 rounds)' },
     { to: 'res', match: '^(?!Tragicomedy)', v: 40, aw: 1, why: 'Fishing Pond Master (Awareness 1): after he uses a skill the next Sonnet +40%; he casts a skill every turn and a Sonnet fires about every 1.5 rounds, so every Sonnet has it. Korean "each time an active skill is used" could stack (about 1.5 skills per Sonnet); counted once' },
     { to: 'res', match: '^(?!Tragicomedy)', ladder: [33, 43, 43, 53, 53, 63, 63], weapon: '5', why: 'Babel\'s Verdict (5-star weapon): Sonnet of Fate damage +33-63%' },
     { to: 'res', match: '^(?!Tragicomedy)', v: 10, stacks: 1.4, weapon: '5', why: 'Babel\'s Verdict: each Verse gained has a 10% (R0) chance to give a Verse of Zenith, a special Verse: about 1.4 more per 14-Verse Sonnet for This Beautiful Woman (2.7 at R6, not laddered)' },
@@ -12939,10 +13406,10 @@ const DPS_KIT_BONUS = {
     { to: 'fu', v: 30, after: 'HL', dur: 3, aw: 4, why: 'Still Life: the Natural Talent follow-up is a counterattack too' },
     { to: 'res', ladder: [30, 39, 39, 48, 48, 57, 57], weapon: '5', why: 'Shadowkiller (5-star weapon): counterattack damage +30-57% for the whole battle' },
     { to: 'fu', ladder: [30, 39, 39, 48, 48, 57, 57], weapon: '5', why: 'Shadowkiller: as above, on the Natural Talent counterattack' },
-    { to: 'res', v: 2, stacks: 4.5, weapon: '5', why: 'Shadowkiller: +2% counterattack damage per Blade Spirit (1 per shield gained, permanent, up to 6). Alone, Keen Eye\'s shield every other turn averages 3.5 over 12 rounds; every lufel party has a shielder (Yukimi, Miyu, Ashiya), which fills it in 3-4 rounds: judged 4.5' },
-    { to: 'fu', v: 2, stacks: 4.5, weapon: '5', why: 'Shadowkiller Blade Spirit, as above' },
-    { to: 'res', ladder: [30, 40, 40, 50, 50, 60, 60], weapon: '5', chance: 0.5, why: 'Shadowkiller: at 6 Blade Spirit, counterattack damage +30-60% more. Alone it arrives in round 11 of 12 (0.17); with a shielding teammate by round 3-4 (0.7): judged 0.5' },
-    { to: 'fu', ladder: [30, 40, 40, 50, 50, 60, 60], weapon: '5', chance: 0.5, why: 'Shadowkiller 6-stack bonus, as above' },
+    { to: 'res', v: 2, stacks: 3.5, weapon: '5', why: 'Shadowkiller: +2% counterattack damage per Blade Spirit (1 per shield gained, permanent, up to 6). Over the default 6 rounds: alone, Keen Eye\'s shield every other turn averages about 1.75; every lufel party has a shielder (Yukimi, Miyu, Ashiya), which fills it in 3-4 rounds, about 4.2 on average: judged 3.5 (4.5 over 12 rounds)' },
+    { to: 'fu', v: 2, stacks: 3.5, weapon: '5', why: 'Shadowkiller Blade Spirit, as above' },
+    { to: 'res', ladder: [30, 40, 40, 50, 50, 60, 60], weapon: '5', chance: 0.35, why: 'Shadowkiller: at 6 Blade Spirit, counterattack damage +30-60% more. Alone it arrives in round 11, never in the default 6 rounds (0); with a shielding teammate by round 3-4 (about 0.5 of 6 rounds): judged 0.35 (0.5 over 12 rounds)' },
+    { to: 'fu', ladder: [30, 40, 40, 50, 50, 60, 60], weapon: '5', chance: 0.35, why: 'Shadowkiller 6-stack bonus, as above' },
     { to: 'all', ladder: [7.4, 9.6, 9.6, 11.8, 11.8, 14, 14], weapon: '4', stacks: 1.7, why: 'Jagato (4-star weapon): each counterattack, Ice damage +7.4-14% for 2 turns, durations separate, up to 2; about one counter a round with a 2-turn duration keeps 2 most of the time: judged 1.7. All his damage is Ice' },
     { to: 'skill:2', v: 30, after: '3', dur: 2, chance: 0.75, why: 'Bone-Chilling Cold (Skill 2): +30% damage while he has a shield. Keen Eye\'s shield lasts 2 turns and lufel\'s 3,2 rotation casts Skill 2 the turn after; judged 0.75 for the shield surviving the taunted boss\'s hits. Not in SKILL_DMG\'s 185.8' }
   ],
@@ -12956,10 +13423,7 @@ const DPS_KIT_BONUS = {
   'Motoha Arai [Tropical]': [
     { to: 'skill:3', v: 80, after: 'HL', dur: 1, aw: 4, why: 'The Fun Never Ends! (Awareness 4): after a Highlight the next Surf \'n\' Shine +80%. The fight spends her gauge just before she acts, so the next Surf is that round\'s when her rotation casts it (2 of 3 turns at A0, every turn at A6); a Surf a round later is missed' },
     { to: 'hit', match: 'Surf', v: 80, after: 'HL', dur: 1, aw: 4, why: 'The Fun Never Ends!: as above, on the A6 Surf \'n\' Shine multiplier part of the same cast' },
-    { to: 'all', v: 30, chance: 0.9, aw: 1, why: 'Energy Overload! (passive 1): +30% damage for 2 turns when healed. From Awareness 1 she gains Blessing every turn, whose heal counts as healing received (Awareness 0 text), so she is healed every turn: judged 0.9. Below A1 it needs a healer (both lufel parties have one), not counted' },
-    { to: 'all', v: 25, chance: 0.9, aw: 1, why: 'Summer Starts Here! (Awareness 0 text): +25% damage for 2 turns when healed; on from Awareness 1 by her own Blessing, as above' },
-    { to: 'all', ladder: [7.6, 9.9, 9.9, 12.2, 12.2, 14.5, 14.5], weapon: '4', stacks: 1.3, aw: 1, why: 'Bubble Puff Star (4-star weapon): healed while in Summer Hype, damage +7.6-14.5% for 2 turns, up to 2. Healed every turn from A1 (Blessing); lufel\'s A0 rotations hold Hype at about 2 of 3 turn starts: judged 1.3' },
-    { to: 'all', ladder: [7.6, 9.9, 9.9, 12.2, 12.2, 14.5, 14.5], weapon: '4', stacks: 0.7, aw: 6, why: 'Bubble Puff Star: Summer Blowout is held every turn in the A6 all-Skill-3 rotation, so 2 stacks' },
+    // Energy Overload!, Summer Starts Here! and Bubble Puff Star follow the heals she receives: KIT_STAT_BUFFS `on: 'healed'`
     { to: 'skill:3', ladder: [34, 44, 44, 54, 54, 64, 64], weapon: '5', why: 'Colorful Coast (5-star weapon): Surf \'n\' Shine +34-64% (Korean: the skill that enters the summer state; English: when cast in Summer Hype). Read as every cast, as Surf enters Hype itself' },
     { to: 'hit', match: 'Surf', ladder: [34, 44, 44, 54, 54, 64, 64], weapon: '5', why: 'Colorful Coast: as above, on the A6 Surf \'n\' Shine multiplier part' },
     { to: 'skill:1', ladder: [34, 44, 44, 54, 54, 64, 64], weapon: '5', why: 'Colorful Coast: each Surf gives 1 Sunlight, spent by the next skill or Highlight for the same increase; every Skill 1 in lufel\'s rotations follows a Surf' },
@@ -13013,10 +13477,10 @@ const DPS_KIT_BONUS = {
     { to: 'hl', ladder: [30, 39, 39, 48, 48, 57, 57], chance: 0.45, weapon: '5', why: 'Royal Etoile (5-star weapon): her Highlight damage +30-57% more at 2 Glass Slipper stacks; with the rate above, 2 are held about 45% of the time' }
   ],
   'Goro Akechi': [
-    { to: 'all', v: [19.5, 21.5, 20.7, 22.7], chance: 0.5, aw: 1, why: 'Detective Profile (A1): Deduction from battle start and 4 turns long. In lufel\'s A1 rotation (2,3,1,3,2,3) it covers about 10 of 12 rounds against the 4 the 2-turn window above gives: +0.5 as an average' },
+    { to: 'all', v: [19.5, 21.5, 20.7, 22.7], chance: 0.67, aw: 1, why: 'Detective Profile (A1): Deduction from battle start and 4 turns long. In lufel\'s A1 rotation (2,3,1,3,2,3) it covers all of the default 6 rounds (rounds 1-4 from battle start, 3-6 from the Skill 1 on turn 3) against the 2 the 2-turn window above gives: +0.67 as an average (10 of 12 against 4 over 12 rounds, +0.5)' },
     { to: 'all', v: [19.5, 21.5, 20.7, 22.7], after: '2', dur: 2, why: 'Decisive Scheme (Skill 2) Stratagem: his damage dealt +19.5-22.7% for 2 turns (Korean: 자신 ... 주는 대미지 증가)' },
-    { to: 'all', v: [19.5, 21.5, 20.7, 22.7], chance: 0.33, aw: 1, why: 'Detective Profile (A1): Stratagem 4 turns long; lufel\'s A1 rotation then keeps it up all fight, against 8 of 12 rounds from the 2-turn window above' },
-    { to: 'all', v: 25, chance: 0.83, aw: 1, why: 'Detective Profile (A1): his damage +25% while Deduction and Stratagem are both up - 10 of 12 rounds in lufel\'s A1 rotation (Deduction gap in rounds 7-8). The crit rate of the same line is in KIT_STAT_BUFFS' },
+    { to: 'all', v: [19.5, 21.5, 20.7, 22.7], chance: 0.33, aw: 1, why: 'Detective Profile (A1): Stratagem 4 turns long; lufel\'s A1 rotation then keeps it up all fight, against 4 of the default 6 rounds from the 2-turn window above (Skill 2 on turns 1 and 5; 8 of 12 over 12 rounds, the same share)' },
+    { to: 'all', v: 25, aw: 1, why: 'Detective Profile (A1): his damage +25% while Deduction and Stratagem are both up - all of the default 6 rounds in lufel\'s A1 rotation (its Deduction gap is in rounds 7-8; 10 of 12 over 12 rounds). The crit rate of the same line is in KIT_STAT_BUFFS' },
     { to: 'skill:3', v: [12.7, 14, 13.5, 14.8], after: '2', dur: 2, why: 'Rending Arrow (passive 2): Almighty damage +0.5% per 1% of the target\'s DEF decrease (max 120%). Counted for his own Stratagem only (DEF -25.4-29.5%, so +12.7-14.8%); teammates\' DEF downs would add more (see notes). Arrow of Perjury is his only Almighty skill' },
     { to: 'fu', match: '^(Decisive Scheme|Highlight):', v: [12.7, 14, 13.5, 14.8], after: '2', dur: 2, why: 'Rending Arrow, as above, on the extra Arrow of Perjury hits (Stratagem\'s and the Highlight\'s)' },
     { to: 'skill:3', v: [12.7, 14, 13.5, 14.8], chance: 0.33, aw: 1, why: 'Rending Arrow on Stratagem\'s DEF down, the A1 4-turn Stratagem\'s extra coverage as above' },
@@ -13054,12 +13518,12 @@ const DPS_KIT_BONUS = {
     { to: 'skill:2', v: 30, after: 'HL', dur: 2, aw: 4, why: 'Refreshing Beach Resort (A4): Aerial Tide is counted as a Resonance, so it takes the same +30%' }
   ],
   'Ichigo Shikano': [
-    { to: 'skill', v: 15, chance: 0.9, why: 'Melting Ichi-Go Butter (passive 2): party continuous damage +15%; from 2 Chains of Love (Mine Alone) all her skill damage counts as continuous damage. 2 Chains from her first Highlight (round 2), so about 0.9 of the fight' },
-    { to: 'hit', v: 15, chance: 0.9, why: 'As above, on the Lovesick-stack part of My Beloved Prince (same cast)' },
-    { to: 'skill', v: 25, chance: 0.6, why: 'Mine Alone (A0) 3 Chains of Love: continuous damage +25%, her skills counting as continuous. 3 Chains from her second Highlight (about round 6): judged 0.6 of the fight' },
-    { to: 'hit', v: 25, chance: 0.6, why: 'As above, on the Lovesick-stack part of My Beloved Prince' },
-    { to: 'skill', v: 25, chance: 0.3, aw: 2, why: 'Power of Love (A2): 1 Chains of Love at battle start, so 3 from her first Highlight: 0.9 of the fight (+0.3)' },
-    { to: 'hit', v: 25, chance: 0.3, aw: 2, why: 'As above, on the Lovesick-stack part of My Beloved Prince' },
+    { to: 'skill', v: 15, chance: 0.83, why: 'Melting Ichi-Go Butter (passive 2): party continuous damage +15%; from 2 Chains of Love (Mine Alone) all her skill damage counts as continuous damage. 2 Chains from her first Highlight (round 2), so rounds 2-6 of the default 6: 0.83 of the fight (about 0.9 over 12 rounds)' },
+    { to: 'hit', v: 15, chance: 0.83, why: 'As above, on the Lovesick-stack part of My Beloved Prince (same cast)' },
+    { to: 'skill', v: 25, chance: 0.17, why: 'Mine Alone (A0) 3 Chains of Love: continuous damage +25%, her skills counting as continuous. 3 Chains from her second Highlight (about round 6): the last of the default 6 rounds, 0.17 of the fight (judged 0.6 over 12 rounds)' },
+    { to: 'hit', v: 25, chance: 0.17, why: 'As above, on the Lovesick-stack part of My Beloved Prince' },
+    { to: 'skill', v: 25, chance: 0.67, aw: 2, why: 'Power of Love (A2): 1 Chains of Love at battle start, so 3 from her first Highlight: 0.83 of the default 6 rounds (+0.67; +0.3 over 12 rounds)' },
+    { to: 'hit', v: 25, chance: 0.67, aw: 2, why: 'As above, on the Lovesick-stack part of My Beloved Prince' },
     { to: 'all', ladder: [17.6, 23.2, 23.2, 28.8, 28.8, 34.4, 34.4], weapon: '4', after: 'HL', dur: 2, why: 'Love Letter (4-star weapon): her damage +17.6-34.4% for 2 turns after she uses a Highlight' }
   ],
   'YUI [Prism]': [
@@ -13068,9 +13532,9 @@ const DPS_KIT_BONUS = {
     { to: 'skill:3', v: 15, why: 'Vegetable Avatar (A0), Potato Yellow: her All-Out Attack damage +15% while in Potato Yellow. lufel\'s A0 rotation (2+1, 3) turns her Potato Yellow at the end of every Skill 1 turn, so every Skill 3 is cast in it; from A6 Prismatic holds every colour.' },
     { to: 'fu', match: 'Veg-Out', v: 15, chance: 0.5, why: 'Potato Yellow +15% All-Out Attack damage on the automatic Veg-Out: below A6 she alternates Potato Yellow and Eggplant Purple turn by turn, judged half the triggers.' },
     { to: 'fu', match: 'Veg-Out', v: 15, chance: 0.5, aw: 6, why: 'Prismatic Vegetables (A6): every colour at once, so Potato Yellow always holds (increment to 1).' },
-    { to: 'skill:3', v: [14.6, 16.1, 15.5, 17], chance: 0.9, why: 'Harvest Fest (Skill 1), Huge Harvest in Potato Yellow: Harvest Havoc grants Potato Power, All-Out Attack damage +14.6% for 3 turns. Gained at the end of each Skill 3 turn (Havoc in Potato Yellow), it covers the next Skill 3 two turns later; judged 0.9 because the first Skill 3 of the battle may come before any.' },
+    { to: 'skill:3', v: [14.6, 16.1, 15.5, 17], chance: 0.85, why: 'Harvest Fest (Skill 1), Huge Harvest in Potato Yellow: Harvest Havoc grants Potato Power, All-Out Attack damage +14.6% for 3 turns. Gained at the end of each Skill 3 turn (Havoc in Potato Yellow), it covers the next Skill 3 two turns later; judged 0.85 because the first Skill 3 of the battle may come before any (1 of 3 in the default 6 rounds; 0.9 over 12).' },
     { to: 'fu', match: 'Veg-Out', v: [14.6, 16.1, 15.5, 17], chance: 0.9, why: 'Potato Power on the automatic Veg-Out (All-Out Attack damage); 3 turns, refreshed every two, so almost always up.' },
-    { to: 'skill:3', v: [14.6, 16.1, 15.5, 17], chance: 0.1, aw: 2, why: 'Seed Potato Knight (A2): Potato Power at battle start for 2 turns covers the first Skill 3 too (increment to 1).' },
+    { to: 'skill:3', v: [14.6, 16.1, 15.5, 17], chance: 0.15, aw: 2, why: 'Seed Potato Knight (A2): Potato Power at battle start for 2 turns covers the first Skill 3 too (increment to 1).' },
     { to: 'fu', match: 'Veg-Out', v: [14.6, 16.1, 15.5, 17], chance: 0.1, aw: 2, why: 'Seed Potato Knight (A2): battle-start Potato Power, as above.' },
     { to: 'skill:3', v: 10, aw: 2, why: 'Seed Potato Knight (A2): Potato Power effects +10% more (Korean: +10% per unspent Potato Knight, A2 gives one). Read as +10 points of All-Out Attack damage, as Flickering Dance\'s "+10%" is read elsewhere; a x1.1 reading would be +1.5.' },
     { to: 'fu', match: 'Veg-Out', v: 10, aw: 2, why: 'Seed Potato Knight (A2): the same +10 on the automatic Veg-Out.' }
@@ -13094,17 +13558,23 @@ const DPS_KIT_BONUS = {
     { to: 'hl', v: 36, aw: 1, why: 'My Dearest Guest (A1): Heat on her Highlight.' }
   ],
   'Motoha Arai [Radiance]': [
+    { to: 'hl', k: 'atkPct', v: [29.3, 32.3, 31.1, 34.1], stacks: 3, why: 'Twilight Radiance: Spear of Light\'s ATK +29.3% per Light stack spent, 3 a Highlight, and Spear of Shadow deals 100% of Spear of Light\'s damage, so the whole Highlight. Light is spent first; lufel\'s rotations never cast Unsetting Sun (the one Shadow source), and from A1 Flowing Light counts as both, so 3 Light every time.' },
+    { to: 'hit', match: 'Spear of Shadow repeats', k: 'atkPct', v: [29.3, 32.3, 31.1, 34.1], stacks: 3, why: 'The same ATK on the Resolute Maiden part of the Highlight (DPS_KIT hit).' },
+    { to: 'hl', k: 'cm', v: 30, fewer: 2, why: 'Twilight Radiance: both spears on the same foe, the Highlight\'s crit damage +30%; with one foe they always are (with more she would pick two for x1.15, not priced).' },
+    { to: 'hit', match: 'Spear of Shadow repeats', k: 'cm', v: 30, fewer: 2, why: 'The same crit damage on the Resolute Maiden part of the Highlight.' },
+    { to: 'hl', k: 'cm', v: 10, stacks: 3, aw: 4, why: 'A4 (Twilight Radiance enhanced): +10% crit damage per Flowing Light spent, 3 a Highlight.' },
+    { to: 'hit', match: 'Spear of Shadow repeats', k: 'cm', v: 10, stacks: 3, aw: 4, why: 'A4 on the Resolute Maiden part of the Highlight.' },
     { to: 'skill:3', v: 20, amp: true, after: '1', dur: 2, why: 'Skyfall Bolt (Skill 3): on a Flashover target, skill damage becomes 120% of normal. Flashover is Thunder Thrust\'s (Skill 1) 2-turn debuff; lufel\'s rotations cast Skill 3 the turn after Skill 1 except the opening 3 of the 3-turn cycle.' },
     { to: 'hit', match: 'Skyfall Bolt enters', v: 20, amp: true, after: '1', dur: 2, aw: 2, why: 'The same x1.2 on the A2 Resolute Maiden part of Skyfall Bolt (a DPS_KIT hit of the same cast).' },
-    { to: 'hl', v: 5, stacks: 4, amp: true, aw: 6, why: 'Crown of Reshaped Destiny (A6): each Twilight Radiance gives a Reshape stack, +5% Twilight Radiance skill damage each, up to 5, an independent bonus. lufel\'s A6 rotation casts 7 Highlights per 6 turns; over a 12-round fight the mean is about 4.' },
-    { to: 'hit', match: 'Spear of Shadow repeats', v: 5, stacks: 4, amp: true, aw: 6, why: 'Reshape on the Resolute Maiden part of the Highlight (DPS_KIT hit on the Highlight).' },
-    { to: 'hl', ladder: [2, 2.6, 2.6, 3.2, 3.2, 3.8, 3.8], weapon: '5', stacks: 5.5, amp: true, why: 'Expedition\'s Edge (5-star weapon): +2-3.8% Highlight damage amplification per Light/Shadow stack gained, permanent, up to 6. She gains 1 each turn start and 1 per Skill 1/2, so 3-4 at her first Highlight and 6 from the second on: judged 5.5.' },
-    { to: 'hit', match: 'Spear of Shadow repeats', ladder: [2, 2.6, 2.6, 3.2, 3.2, 3.8, 3.8], weapon: '5', stacks: 5.5, amp: true, why: 'Expedition\'s Edge on the Resolute Maiden part of the Highlight.' },
-    { to: 'hl', ladder: [2, 2.6, 2.6, 3.2, 3.2, 3.8, 3.8], weapon: '5', stacks: 0.5, amp: true, aw: 6, why: 'A6: 9 Flowing Light at battle start, so all 6 stacks from the first Highlight (increment to 6).' },
-    { to: 'hit', match: 'Spear of Shadow repeats', ladder: [2, 2.6, 2.6, 3.2, 3.2, 3.8, 3.8], weapon: '5', stacks: 0.5, amp: true, aw: 6, why: 'A6 increment, as above.' },
-    { to: 'skill', ladder: [2, 2.6, 2.6, 3.2, 3.2, 3.8, 3.8], weapon: '5', stacks: 5.5, amp: true, aw: 2, why: 'Golden Nightsail (A2): her Persona skill damage counts as Highlight damage, so Expedition\'s Edge\'s Highlight amplification reaches Skills 1 and 3.' },
-    { to: 'skill', ladder: [2, 2.6, 2.6, 3.2, 3.2, 3.8, 3.8], weapon: '5', stacks: 0.5, amp: true, aw: 6, why: 'A6 increment on the skills.' },
-    { to: 'hit', match: 'Thunder Thrust while Maiden|Skyfall Bolt enters', ladder: [2, 2.6, 2.6, 3.2, 3.2, 3.8, 3.8], weapon: '5', stacks: 6, amp: true, aw: 2, why: 'Golden Nightsail (A2): the amplification on the Resolute Maiden parts of Skills 1 and 3 (DPS_KIT hits), at 6 stacks (5.5 below A6 would be marginally lower).' },
+    { to: 'hl', v: 5, stacks: 3, amp: true, aw: 6, why: 'Crown of Reshaped Destiny (A6): each Twilight Radiance gives a Reshape stack, +5% Twilight Radiance skill damage each, up to 5, an independent bonus. lufel\'s A6 rotation casts 7 Highlights per 6 turns, which see 0, 1, 2, 3, 4, 5, 5: over the default 6-round fight the mean is about 3 (about 4 over 12).' },
+    { to: 'hit', match: 'Spear of Shadow repeats', v: 5, stacks: 3, amp: true, aw: 6, why: 'Reshape on the Resolute Maiden part of the Highlight (DPS_KIT hit on the Highlight).' },
+    { to: 'hl', ladder: [2, 2.6, 2.6, 3.2, 3.2, 3.8, 3.8], weapon: '5', stacks: 5.3, amp: true, why: 'Expedition\'s Edge (5-star weapon): +2-3.8% Highlight damage amplification per Light/Shadow stack gained, permanent, up to 6. She gains 1 each turn start and 1 per Skill 1/2, so about 4 at her first Highlight and 6 from the second on; lufel\'s A0 rotation (3, 1, HL+1, 3, 1, HL×2+3) casts 3 Highlights in the default 6 rounds, at 4, 6, 6: judged 5.3 (5.5 over 12 rounds).' },
+    { to: 'hit', match: 'Spear of Shadow repeats', ladder: [2, 2.6, 2.6, 3.2, 3.2, 3.8, 3.8], weapon: '5', stacks: 5.3, amp: true, why: 'Expedition\'s Edge on the Resolute Maiden part of the Highlight.' },
+    { to: 'hl', ladder: [2, 2.6, 2.6, 3.2, 3.2, 3.8, 3.8], weapon: '5', stacks: 0.7, amp: true, aw: 6, why: 'A6: 9 Flowing Light at battle start, so all 6 stacks from the first Highlight (increment to 6).' },
+    { to: 'hit', match: 'Spear of Shadow repeats', ladder: [2, 2.6, 2.6, 3.2, 3.2, 3.8, 3.8], weapon: '5', stacks: 0.7, amp: true, aw: 6, why: 'A6 increment, as above.' },
+    { to: 'skill', ladder: [2, 2.6, 2.6, 3.2, 3.2, 3.8, 3.8], weapon: '5', stacks: 4.3, amp: true, aw: 2, why: 'Golden Nightsail (A2): her Persona skill damage counts as Highlight damage, so Expedition\'s Edge\'s Highlight amplification reaches Skills 1 and 3. Her skills come earlier than her Highlights: by lufel\'s A0 rotation they see about 1, 2, 5, 6, 6, 6 over the default 6 rounds, a mean of about 4.3 (about 5.2 over 12).' },
+    { to: 'skill', ladder: [2, 2.6, 2.6, 3.2, 3.2, 3.8, 3.8], weapon: '5', stacks: 1.7, amp: true, aw: 6, why: 'A6 increment on the skills (to 6: 9 Flowing Light at battle start).' },
+    { to: 'hit', match: 'Thunder Thrust while Maiden|Skyfall Bolt enters', ladder: [2, 2.6, 2.6, 3.2, 3.2, 3.8, 3.8], weapon: '5', stacks: 6, amp: true, aw: 2, why: 'Golden Nightsail (A2): the amplification on the Resolute Maiden parts of Skills 1 and 3 (DPS_KIT hits), at 6 stacks (about 4.3 below A6 would be somewhat lower).' },
     { to: 'fu', match: 'Unsetting Sun', ladder: [2, 2.6, 2.6, 3.2, 3.2, 3.8, 3.8], weapon: '5', stacks: 6, amp: true, aw: 2, why: 'Golden Nightsail (A2): Unsetting Sun\'s automatic Thunder Thrust is Persona skill damage too (not in lufel\'s rotations).' }
   ],
   'Aigis': [
@@ -13158,9 +13628,10 @@ const DPS_KIT_BONUS = {
   'Ryuji Sakamoto': [
     { to: 'skill:1', v: 30, why: 'Pirate Tactics (Skill 1): without Rebound he spends 20% HP for +30% damage, and with Rebound he has Rebound\'s +30%, so the cast always has it. Not in lufel\'s rotation.' },
     { to: 'skill:3', v: 20, aw: 1, why: 'Under the Skull and Bones (A1): God Hand Burst damage +20%.' },
+    { to: 'skill', k: 'pierce', v: 35, aw: 2, why: 'Fearless Charge (A2; Korean A3, English and Japanese A2): a skill that crits ignores 35% of the foe\'s DEF, which lufel\'s defence calculator lists as Pierce 35 on a crit. His skills always crit here (CRIT_PROFILE locked), so every skill hit; not his Highlight.' },
     { to: 'skill:3', v: [58.6, 58.6, 62.2, 62.2], after: 'HL', dur: 2, why: 'Highlight: next skill damage +58.6%. The fight prices God Hand Burst as half a hit on each of the two "3" tokens (charge, release), so 2 rounds from the Highlight carry one whole hit.' },
     { to: 'skill:3', v: 30, after: 'HL', dur: 2, aw: 4, why: 'Riding the Storm (A4): enhanced Highlight, next skill damage +30% more; same 2-token window.' },
-    { to: 'skill:3', v: 60, amp: true, chance: 0.83, aw: 6, why: 'Comeback Kid (A6): God Hand Burst inflicts Cower; his next skill on that foe deals +60% total damage (Korean: an independent bonus). Every God Hand Burst but the battle\'s first follows one (5 of 6 in 12 rounds).' },
+    { to: 'skill:3', v: 60, amp: true, chance: 0.67, aw: 6, why: 'Comeback Kid (A6): God Hand Burst inflicts Cower; his next skill on that foe deals +60% total damage (Korean: an independent bonus). Every God Hand Burst but the battle\'s first follows one: 2 of 3 in the default 6 rounds (5 of 6 in 12).' },
     { to: 'skill:3', ladder: [4.5, 5.8, 5.8, 7.2, 7.2, 8.6, 8.6], weapon: '5', stacks: 9, why: 'Revenge Axe (5-star weapon): 1 Fired Up each time a unit ends its turn (Korean), cap 10, all spent for +4.5-8.6% skill damage each when he deals damage. God Hand Burst hits every other turn, so about 10 units\' turns pass between hits; his Highlight sometimes spends them first: judged 9.' }
   ]
 };
@@ -13247,9 +13718,9 @@ const DPS_HITS_AW = {
 };
 const DPS_COUNTS_AS = {
   'Ichigo Shikano': [
-    { as: 'dot', skills: ['1', '2', '3'], share: 0.9, why: 'Mine Alone (A0): at 2 Chains of Love "all of Ichigo\'s skill damage is counted as continuous damage" (Korean: all damage she deals with Persona skills, so not the Highlight). Stacks: 1 from her first Vorpal Butterfly, 1 per Highlight, so the 2nd comes with her first Highlight and holds for the battle. lufel\'s A0 rotation (1, HL+2, ...) leaves only the opening Skill 1 (or the first two casts if the gauge makes the Highlight a round late) uncounted: about 11 of 12 casts in a 12-round fight, judged 0.9' },
-    { as: 'dot', skills: ['1', '2', '3'], aw: 2, share: 0.95, why: 'Power of Love (A2): +1 Chains of Love at battle start, so her first Vorpal Butterfly brings the 2nd; only that first cast itself may land before it. lufel\'s A1 rotation opens with Skill 1; judged 0.95' },
-    { as: 'dot', skills: ['1', '2', '3'], aw: 6, share: 0.9, why: 'lufel\'s A6 rotation opens with 2+2 (1 stack, A2\'s battle-start one) and reaches 2 only on turn 2 (HL+1+1), so its two opening Skill 2 casts are uncounted: 2 of about 18 casts in 12 rounds, judged 0.9' }
+    { as: 'dot', skills: ['1', '2', '3'], share: 0.9, why: 'Mine Alone (A0): at 2 Chains of Love "all of Ichigo\'s skill damage is counted as continuous damage" (Korean: all damage she deals with Persona skills, so not the Highlight). Stacks: 1 from her first Vorpal Butterfly, 1 per Highlight, so the 2nd comes with her first Highlight and holds for the battle. lufel\'s A0 rotation (1, HL+2, ...) leaves only the opening Skill 1 (or the first two casts if the gauge makes the Highlight a round late) uncounted: about 5 of 6 casts in the default 6-round fight (4 of 6 if late), judged 0.8 (0.9 over 12 rounds)' },
+    { as: 'dot', skills: ['1', '2', '3'], aw: 2, share: 0.9, why: 'Power of Love (A2): +1 Chains of Love at battle start, so her first Vorpal Butterfly brings the 2nd; only that first cast itself may land before it. lufel\'s A1 rotation opens with Skill 1; about half of 1 cast in the 6 of the default fight: judged 0.9 (0.95 over 12 rounds)' },
+    { as: 'dot', skills: ['1', '2', '3'], aw: 6, share: 0.8, why: 'lufel\'s A6 rotation opens with 2+2 (1 stack, A2\'s battle-start one) and reaches 2 only on turn 2 (HL+1+1), so its two opening Skill 2 casts are uncounted: 2 of about 9 casts in the default 6 rounds, judged 0.8 (2 of 18 over 12 rounds, 0.9)' }
   ],
   'Kira Kitazato': [
     { as: 'dot', skills: ['1', '2', 'hl'], aw: 0, koOnly: true, why: 'Korean A0 (사신의 승리), last line: all damage Kira deals with Persona skills and the Highlight counts as damage over time (지속 대미지 효과로 간주). The English A0 does not say so. Doctor and Ripper Skill 1/2 casts (the DPS_KIT Ripper "hit" lines are part of them) and the Highlight; Skill 3 (Nightfall) deals none. Bleed and Rending are damage over time already' }
@@ -13664,6 +14135,169 @@ const tcHlStart = n => {
    450, full SP and Surf at battle start, cap 8, Skill 1 +50% SP, Aerial Tide keeps Surf and its stacks
    are lost at the end of her turn, refilling her SP. Whether her own turn's end fires a catch is not
    clear from the text; only other thieves' turns do, as before. */
+/* Heals that reach the damage dealer, for a kit that reads them: Tropical Motoha's "when healed" lines
+   (KIT_STAT_BUFFS `on: 'healed'` / 'healedHype') and her Tropical Heart (KIT_ROT `allyHeal`). The user asked
+   (Nov 2026): lufel's partner notes give her healers for this ("prevents Skill 3 from entering cooldown
+   through Healing and Bless effects"), and the fight had counted no heal from anyone. From lufel's English
+   skill, Awareness and weapon text, read by hand (Nov 2026). Per entry:
+   `on`  what sets it off: a skill or token of the healer's own turn ('1'-'3'; 'iA'-'iC' Beachflower Minami's
+         medicines), 'HL'/'TH' their Highlight or Theurgy, 'anyHL' any ally's, 'ally' another thief's action,
+         'dpsSkill' the damage dealer's skill, 'dpsTurn' the start of the damage dealer's turn;
+   `to`  'party'; 'ally', one chosen ally — the damage dealer, as every one-ally buff here; 'lowest', the
+         ally with the lowest HP — the damage dealer at TC_HEAL_LOWEST, judged (Motoha spends 10-15% of her
+         max HP a skill); 'self', only when the healer is the damage dealer;
+   `n` heals per trigger; `heal: false` grants without healing at once;
+   `hot` [when, turns]: heals again at the 'start' or 'end' of that many of the damage dealer's next turns;
+   `bless` grants Blessing for that many of their turns: a heal at the start of each, once a turn however much
+         they hold (Motoha's text counts "healing received from Blessing" once per turn; lufel's partner note
+         credits Bless effects with it; that Blessing heals at the turn's start is assumed);
+   `chance` a running tally in the fight, a rate on the quick screen; `aw`, `weapon`, `pair` gates.
+   Not entered: heals that need an ally under 25-30% HP (Fuuka's Skill 3 option, Junpei's High-Spirited),
+   Manaka's automatic Prayer Refrain (every 12 Musical Notes), Ann's Carrot and Stick (when La Vie en Rose
+   ends), Toshiya's Verse of Healing, Tomoko Noge's Good Save, Miku's Heaven song (her lufel rotations never
+   play Clear Sound on it), weapon heals beside a skill's own (Morgana's Golden Legacy and Headhunter Ladle,
+   Minami's Hymn of Life Blessing), Yukimi's Blessing beyond her Skill 2 target, and Wonder's heal cards.
+   Healing amounts are not read: every heal counts the same. */
+const TC_HEAL_LOWEST = 0.5;
+// the skill that opens a damage dealer's Summer Hype, until the end of their next turn ('healedHype' lines)
+const TC_HEAL_HYPE = { 'Motoha Arai [Tropical]': '3' };
+const TC_HEALS = {
+  'Motoha Arai [Tropical]': [
+    { on: '2', to: 'self', why: "Summer 'Splosion (Skill 2): restores 20% of her max HP" },
+    { on: 'HL', to: 'self', why: 'Highlight: restores 20% of her max HP' },
+    { on: 'dpsTurn', to: 'self', heal: false, bless: 1, aw: 1, why: 'Exciting Summer! (Awareness 1): Blessing at the start of each of her turns (Korean: for 1 turn), a heal once a turn' }
+  ],
+  'Ichigo Shikano [Summer]': [
+    { on: '3', to: 'party', why: "Heart's Desire (Skill 3): restores all allies' HP" },
+    { on: 'HL', to: 'party', why: "Highlight: restores all allies' HP" },
+    { on: 'dpsTurn', to: 'party', why: "Magical Ichigo Sets Sail (Awareness 0): while the Miracle Ichi-Boat sails, each ally's HP is restored at the start of their turn. The boat also takes allies' healing in their place; whether that still counts as the ally being healed is not stated, and it is counted" }
+  ],
+  'Morgana [Starlight]': [
+    { on: 'HL', to: 'party', why: "Highlight: restores all allies' HP" }
+  ],
+  'Justine & Caroline': [
+    { on: '2', to: 'party', pair: ['MS'], why: "Mask of Service & Admonition (Skill 2 in the Medic pair): restores the party's HP" },
+    { on: '1', to: 'party', pair: ['SL'], why: "Mask of Service & Admonition (Skill 1 in the Saboteur pair): restores the party's HP" },
+    { on: '3', to: 'party', pair: ['MS'], why: "Two Masks as One on the Mischief & Innocence + Service & Admonition Facades: restores the party's HP" }
+  ],
+  'Yukari Takeba': [
+    { on: '3', to: 'party', why: "Arrow of Life (Skill 3): restores all allies' HP" },
+    { on: 'dpsSkill', to: 'party', chance: 0.75, why: "Unforgettable Feeling (Awareness 0): another ally's skill damage on a foe with Erosion restores all allies' HP, once between two of her turns; the damage dealer's skill is that hit, judged 0.75 for the foe having Erosion" },
+    { on: 'TH', to: 'lowest', aw: 4, why: 'Healing Mastery (Awareness 4): her Theurgy also restores the ally with the lowest HP' }
+  ],
+  'Manaka Nagao': [
+    { on: '2', to: 'party', why: "Prayer Refrain (Skill 2): restores the party's HP" }
+  ],
+  'Goro Akechi': [
+    { on: '1', to: 'party', bless: 2, why: "Flash of Intuition (Skill 1): restores all allies' HP and grants 1 Blessing" }
+  ],
+  'Tomoko Noge [Seaside]': [
+    { on: '2', to: 'ally', why: "Hale Summer Days (Skill 2): restores one ally's HP (all allies from Awareness 1)" },
+    { on: '2', to: 'lowest', why: 'Soothing Waves (passive 2): Hale Summer Days also restores the ally with the lowest HP' },
+    { on: 'ally', to: 'party', chance: 0.4, why: "Summer Reminiscence (Awareness 0 Resonance): after an ally acts with 3 Sparks on the foes, restores the party's HP. Sparks come from her Skill 1 and Skill 2's buffed ally: judged 0.4 an action of another thief, about one a round" }
+  ],
+  'Ayaka Sakai': [
+    { on: 'anyHL', to: 'lowest', why: 'Chorus Effect (passive 2): after an ally uses a Highlight or Theurgy, restores the ally with the lowest HP' }
+  ],
+  'Riko Tanemura': [
+    { on: '3', to: 'ally', why: "Verngale Petals (Skill 3): restores the targeted ally's HP" }
+  ],
+  'Yumi Shiina': [
+    { on: '2', to: 'ally', heal: false, hot: ['end', 1], why: "Enchanting Stir (Skill 2): for 1 turn the target is healed by 2% of the damage they deal, so the damage dealer's next action heals them" }
+  ],
+  'Makoto Niijima': [
+    { on: '2', to: 'ally', why: "President's Prowess (Skill 2): restores one ally's HP" }
+  ],
+  'Minami Miyashita': [
+    { on: '1', to: 'party', heal: false, bless: 2, why: 'Skill 1: grants all allies 1 Blessing' },
+    { on: '2', to: 'ally', hot: ['start', 2], bless: 2, why: 'Healing Grace (Skill 2): restores the lowest-HP ally and one chosen ally, grants them Blessing, and restores them again at the start of each turn for 2 turns' },
+    { on: '3', to: 'ally', why: 'Compassionate Cure (Skill 3): restores the chosen ally' },
+    { on: '3', to: 'lowest', n: 2, why: 'Compassionate Cure: and the ally with the lowest HP twice more (once more per Diagnosis spent, not counted)' },
+    { on: 'HL', to: 'party', hot: ['end', 1], why: "Highlight: restores the party's HP, and restores again at the end of an action for 1 turn" }
+  ],
+  'Morgana': [
+    { on: '2', to: 'party', why: "Healing Breeze (Skill 2): restores the party's HP" },
+    { on: 'dpsSkill', to: 'party', chance: 0.5, why: "Morgana's Favor (Awareness 0): an ally under 70% HP attacking with a skill sets off a Resonance that heals the party, spending a Chivalry stack (she gains one each time she changes skill, every turn of her 1 › 3 rotation); judged 0.5" }
+  ],
+  'Leo Kamiyama': [
+    { on: 'HL', to: 'ally', chance: 0.5, why: "Highlight: restores its target (another ally) to 60% of their HP if they are below it; judged half the time" }
+  ],
+  'Lufel': [
+    { on: '2', to: 'ally', why: "Owl Green (Skill 2): restores one ally's HP" },
+    { on: '3', to: 'party', why: "Healing Satellite (Skill 3): restores the party's HP" },
+    { on: 'HL', to: 'party', why: "Highlight: restores the party's HP" }
+  ],
+  'Shun Kano': [
+    { on: '3', to: 'party', why: "Icy Defense (Skill 3): restores the party's HP" },
+    { on: 'HL', to: 'party', why: "Highlight: restores the party's HP" }
+  ],
+  'Minami Miyashita [Beachflower]': [
+    { on: ['iA', 'iB', 'iC'], to: 'ally', why: "Seaside First Aid (Awareness 0): medicine restores the main target's HP" },
+    { on: '2', to: 'party', heal: false, bless: 2, why: 'Skill 2: grants all allies 1 Blessing' }
+  ],
+  'Shoki Ikenami': [
+    { on: '1', to: 'party', heal: false, bless: 2, why: 'Skill 1: grants all allies 2 Blessing' },
+    { on: 'HL', to: 'party', heal: false, bless: 2, why: 'Highlight: grants Blessing (2 more to all allies from Awareness 4)' }
+  ],
+  'Yukimi Fujikawa': [
+    { on: '2', to: 'ally', heal: false, bless: 2, why: 'Skill 2: one ally other than herself gets 2 Blessing (and Oath)' },
+    { on: 'HL', to: 'party', heal: false, bless: 2, aw: 4, why: 'Highlight (Awareness 4): grants all allies 2 Blessing' }
+  ]
+};
+// a character's heals at their Setup (and pair, for the twins)
+function tcHealsOf(n) {
+  if (!n || n === 'Wonder' || !TC_HEALS[n]) return [];
+  const lo = charLoadout(n), aw = +lo.awareness || 0, pair = tcPairCtx && tcPairCtx[n];
+  return TC_HEALS[n].filter(h => (h.aw == null || aw >= h.aw) && (!h.weapon || lo.weapon === h.weapon) && (!h.pair || h.pair.includes(pair)))
+    .map(h => Object.assign({}, h, { on: [].concat(h.on).map(String) }));
+}
+// whether a damage dealer's kit reads the heals it receives
+const tcHealReads = n => !!(KIT_STAT_BUFFS[n] || []).some(b => b.on === 'healed' || b.on === 'healedHype') || !!(KIT_ROT[n] && KIT_ROT[n].allyHeal);
+/* Heals per round a member gives the damage dealer, on lufel's rotation (`seq`): `heal` the heals that land at
+   once or over time, `bless` the share of the damage dealer's turns they keep Blessing on (healing once a
+   turn), for the quick screen and the damage dealer's Tropical Heart (tcTeamHeals). The fight counts them as
+   they happen instead. */
+function tcHealSupply(n, seq, isDps) {
+  const H = tcHealsOf(n);
+  if (!H.length) return { heal: 0, bless: 0 };
+  const steps = seq && seq.length ? seq : ['-'];
+  let heal = 0, bless = 0;
+  H.forEach(h => {
+    if (h.to === 'self' && !isDps) return;
+    const reach = h.to === 'lowest' ? TC_HEAL_LOWEST : 1;
+    let rate = 0;
+    h.on.forEach(o => {
+      if (o === 'dpsTurn' || o === 'dpsSkill') rate += 1;
+      else if (o === 'ally') rate += 3;
+      else if (o === 'anyHL') rate += 4 * TC_GAUGE_ACT / 100;
+      else if (o === 'HL' || o === 'TH') rate += tcOwnRate(n, steps);
+      else rate += steps.filter(st => tcAilToks(st).has(o)).length / steps.length;
+    });
+    rate *= reach * (h.chance == null ? 1 : h.chance);
+    if (h.heal !== false) heal += rate * (h.n || 1);
+    if (h.hot) heal += rate * h.hot[1];
+    if (h.bless) bless = 1 - (1 - bless) * (1 - Math.min(1, rate * h.bless));
+  });
+  return { heal, bless };
+}
+/* Heals per round the damage dealer `n` receives from the rest of `team` (a tcTeamSet), on their lufel
+   rotations, for the rotation rule of a kit that counts them (KIT_ROT `allyHeal`): her own Highlight
+   counts too, at its cadence, and Blessing only where she does not give it to herself every turn. */
+function tcTeamHeals(n, team) {
+  const key = 'heals|' + n + '|' + [...team].sort().join(',') + '|' + (team.backup || '');
+  if (tcMemo.member.has(key)) return tcMemo.member.get(key);
+  const self = tcHealsOf(n), mine = self.some(h => h.bless && h.on.includes('dpsTurn'));
+  let heal = self.some(h => h.on.includes('HL')) ? tcOwnRate(n, null) : 0, miss = 1;
+  [...team].forEach(m => {
+    if (m === n || m === team.backup) return;
+    const s = tcHealSupply(m, tcRotSeq(m, team), false);
+    heal += s.heal; miss *= 1 - s.bless;
+  });
+  const v = heal + (mine ? 0 : 1 - miss);
+  tcMemo.member.set(key, v);
+  return v;
+}
+
 const TC_SURF = {
   'Miyu Sahara [Wavecatcher]': { spMax: 200, ally: 15, s1: 40, enter: 60, cost: 30, step: 30, cap: 4, wave: 5, tide: 10, hlOff: 329.4 / 494.1, marks: [100, 200, 300, 400],
     aw: { 1: { cut: 0.4, cap: 6 }, 2: { free: 4 }, 6: { spMax: 450, full: true, cap: 8, s1x: 1.5, keep: true } } }
@@ -13677,11 +14311,30 @@ function tcSurfFor(D) {
   o.rec = (tcStat(D.n, 'SP Recovery') || 100) / 100;
   return o;
 }
-const TC_DMG_KEYS = ['atkPct', 'atk', 'dm', 'cr', 'cm', 'pierce', 'defdown', 'final', 'weak', 'hlDm', 'hlFinal', 'xDm', 'xFinal', 'xAtkPct', 'resDm', 'dotDm', 'dotFinal', 'resFinal', 'curse', 'tp', 'downDm'];
+const TC_DMG_KEYS = ['atkPct', 'atk', 'dm', 'cr', 'cm', 'pierce', 'defdown', 'final', 'weak', 'hlDm', 'hlFinal', 'xDm', 'xFinal', 'xAtkPct', 'resDm', 'dotDm', 'dotFinal', 'resFinal', 'curse', 'tp', 'downDm', 'skillAmp'];
 const tcIsVc = e => /Virtual Concert/.test(e.cond || '');
 /* An enemy-side effect that lands on one foe ("the target", "a foe"), not on all of them; an entry can say
    so outright with `foes: 'one'` or `'all'`. Only matters when the page sets more than one enemy. */
 const tcOneFoe = e => e.foes ? e.foes === 'one' : !/all foes|all enemies|\bfoes\b/i.test(e.why || '') && /\b(foe|target|attacker)\b/i.test(e.why || '');
+/* Effects that do not stack (TEAM_BUFFS `excl`), in the fight: `list` is what is up on one foe now, as
+   { b, v } (the buff and what it adds); a buff's `excl` names its owner, group and stat, its `xs` the skill
+   it comes from. Lines of one skill add up as one effect, and of the effects in a group only the largest
+   counts; the buffs to leave out come back as a Set. */
+function tcExclDrop(list) {
+  const groups = new Map();
+  list.forEach(x => {
+    const g = groups.get(x.b.excl) || new Map(); groups.set(x.b.excl, g);
+    const s = g.get(x.b.xs) || { v: 0, bs: [] }; g.set(x.b.xs, s);
+    s.v += x.v; s.bs.push(x.b);
+  });
+  const drop = new Set();
+  groups.forEach(g => {
+    if (g.size < 2) return;
+    const best = [...g.values()].reduce((a, s) => s.v > a.v ? s : a);
+    g.forEach(s => { if (s !== best) s.bs.forEach(b => drop.add(b)); });
+  });
+  return drop;
+}
 
 /* A kit line that needs a particular teammate (`mate: { n, aw }`: that character in one of the two thief
    seats, at that Awareness or above) counts only in a team that has them; with no team (`names` absent)
@@ -13726,11 +14379,12 @@ function tcCurseBonus(list, curse) {
 const TC_KIT_STAT_K = { 'ATK%': 'atkPct', 'Damage Multiplier': 'dm', 'Crit Rate': 'cr', 'Crit Multiplier': 'cm', 'Resistance Pierce': 'pierce' };
 function tcTimedKit(D) {
   const aw = +charLoadout(D.n).awareness || 0;
-  // `stack`: each use adds one more, permanently, up to that many; `durAw`: a longer duration from an Awareness;
+  // `stack`: each use adds one more, permanently, up to that many; `upTo`: stacks up to that many, for its
+  // duration (refreshed by each use); `durAw`: a longer duration from an Awareness;
   // `notSelf` on 'anyHL': another ally's Highlight or Theurgy only; `hold`: on until the kit's state ends it
-  // (Wavecatcher Miyu's Surf lines, TC_SURF)
+  // (Wavecatcher Miyu's Surf lines, TC_SURF); 'healed'/'healedHype': a heal reaching them (TC_HEALS)
   return kitStatBuffs(D, null, { fight: true }).filter(b => b.on && TC_KIT_STAT_K[b.s] && b.v).map((b, i) =>
-    ({ e: { on: b.on, to: 'self', notSelf: !!b.notSelf }, k: TC_KIT_STAT_K[b.s], v: b.v, ref: 'self' + i, self: true, why: b.why, stackMax: b.stack || 0,
+    ({ e: { on: b.on, to: 'self', notSelf: !!b.notSelf }, k: TC_KIT_STAT_K[b.s], v: b.v, ref: 'self' + i, self: true, why: b.why, stackMax: b.stack || b.upTo || 0,
       dur: b.stack || b.hold ? Infinity : b.durAw && aw >= b.durAw[0] ? b.durAw[1] : b.dur || 1 }));
 }
 
@@ -13757,7 +14411,7 @@ function tcSimPrep(D, names, fit, blank, opt) {
     const spd = n ? tmSpeed(n) : null;
     // whether their hits land on the boss's weakness (Wonder and a blank teammate: unless the page says none do)
     const weak = n && n !== 'Wonder' ? tcWeakFor((charDef(n) || {}).e) === 'weak' : tcWeakMode() !== 'none';
-    const a = { n, isDps, kind, weak, speed: spd == null ? 100 : spd, events: [], aw, acts: 0, since: Infinity, seq: null, free: false, ail: tcAilSources(n), cut: tcDownCuts(n) };
+    const a = { n, isDps, kind, weak, speed: spd == null ? 100 : spd, events: [], aw, acts: 0, since: Infinity, seq: null, free: false, ail: tcAilSources(n), cut: tcDownCuts(n), heals: tcHealsOf(n) };
     if (kind === 'TH') {
       const T = TC_THEURGY[n] || {};
       const lv = list => (list || []).filter(([l]) => aw >= l).map(([, v]) => v);
@@ -13791,7 +14445,7 @@ function tcSimPrep(D, names, fit, blank, opt) {
       thieves.push(a);
     });
     // her opening wait happens once (tcUnroll): a rotation written with it is not cycled with it
-    if (names[2] && ms[2]) { elu = { n: names[2], events: ms[2].sim.events, seq: tcUnroll(names[2], ms[2].sim.seq || [], F + 2), raw: ms[2].sim.seq || [], member: ms[2], aw: tmAw(names[2]) }; addSim(ms[2].sim); }
+    if (names[2] && ms[2]) { elu = { n: names[2], heals: tcHealsOf(names[2]), events: ms[2].sim.events, seq: tcUnroll(names[2], ms[2].sim.seq || [], F + 2), raw: ms[2].sim.seq || [], member: ms[2], aw: tmAw(names[2]) }; addSim(ms[2].sim); }
     /* Fuuka's backup (Oracle Shift, played out in tcSimRun): an actor that takes no turns of its own.
        Its passives are off while it waits, so only what its cast and its Highlight set off counts:
        its lines as a full member, and the one skill it uses when swapped in, the one whose lines
@@ -13811,8 +14465,8 @@ function tcSimPrep(D, names, fit, blank, opt) {
     const w = actor('Wonder', false);
     if (!(opt && opt.noWonder)) {
       const W = tcWonder(D, opt && opt.wset);
-      // his skills on their schedule, and his Highlight's lines on his Highlight
-      w.events = W.sim.cast.events.concat(W.sim.events.map(ev => Object.assign({}, ev, { e: Object.assign({}, ev.e, { on: 'HL' }) })));
+      // his skills on their schedule, his Highlight's lines on his Highlight, his weapon's on a knockdown
+      w.events = W.sim.cast.events.concat(W.sim.events.map(ev => Object.assign({}, ev, { e: Object.assign({}, ev.e, { on: 'HL' }) })), W.sim.knock || []);
       w.seq = W.sim.cast.seq;
       w.wonder = W; addSim(W.sim);
     }
@@ -13847,7 +14501,7 @@ function tcSimPrep(D, names, fit, blank, opt) {
     ailSelf: (TC_AIL_SELF[D.n] || []).filter(c => c.aw == null || (+charLoadout(D.n).awareness || 0) >= c.aw)
       // their own stat lines on a foe with an ailment (Rin's Prosperity in Red), left out of the baseline (`noTimed`)
       .concat(kitStatBuffs(D, null).filter(b => b.needAil && TC_KIT_STAT_K[b.s] && b.v).map(b => ({ k: TC_KIT_STAT_K[b.s], v: b.v, needAil: b.needAil }))),
-    radCounts: names.includes('Chizuko Nagao') || D.n === 'Chizuko Nagao', surf: tcSurfFor(D),
+    radCounts: names.includes('Chizuko Nagao') || D.n === 'Chizuko Nagao', surf: tcSurfFor(D), healRead: tcHealReads(D.n), ram: blank ? null : tcRamFor(D, names), ck: blank ? null : tcCkFor(D, names), rk: blank || !names.includes(TC_RK.n) ? null : tcRkInit(),
     // the Down gauge, and what counts only on a knocked-down boss: members' lines and the damage dealer's own stats
     downMax: tcDownPts(), downX,
     downSelf: kitStatBuffs(D, null, { fight: true }).filter(b => b.down && !b.on && TC_KIT_STAT_K[b.s] && b.v).map(b => ({ k: TC_KIT_STAT_K[b.s], v: b.v })),
@@ -13859,7 +14513,7 @@ function tcSimPrep(D, names, fit, blank, opt) {
    before the damage dealer acts (unless the next action would overflow it). */
 function tcSimRun(P, order, hold) {
   const { D, E, F, skill, kit, dps, elu, concerto } = P;
-  const T = P.thieves.map(a => Object.assign({}, a, { th: a.th || 0, acts: 0, since: Infinity, hlN: 0, fortune: 0 }));
+  const T = P.thieves.map(a => Object.assign({}, a, { th: a.th || 0, acts: 0, since: Infinity, hlN: 0, fortune: 0, rk: P.rk && a.n === TC_RK.n && !a.isDps ? Object.assign({}, P.rk) : null }));
   // Fuuka's Oracle Shift: her Over Oracle stacks, and the backup who acts when she spends them
   const FU = P.fuuka, BK = FU ? Object.assign({}, FU.backup, { hlN: 0, acts: 0, since: Infinity, th: 0 }) : null;
   let stacks = FU ? Math.min(FU.max, FU.start) : 0, shiftRound = 0, lastA2 = -99;
@@ -13900,6 +14554,15 @@ function tcSimRun(P, order, hold) {
   const perRound = new Map();
   // Wavecatcher Miyu's Surf (TC_SURF): her SP, Surf, Offshore stacks, SP recovered, catches, her turns in Surf
   const SF = P.surf ? Object.assign({}, P.surf, { sp: P.surf.full ? P.surf.spMax : 0, on: false, off: 0, got: 0, mark: 0, n: 0, catches: 0, inSurf: 0 }) : null;
+  /* Heals reaching the damage dealer (TC_HEALS), for a kit that reads them (Tropical Motoha): how many and from
+     whom, the Blessing they hold and heals over time still to come (in their turns), Summer Hype (TC_HEAL_HYPE:
+     the skill that opens it, until the end of their next turn), and each source's running tally. */
+  const HR = P.healRead ? { n: 0, by: {}, bless: 0, hotS: 0, hotE: 0, hype: 0, acc: new Map() } : null;
+  let healToks = null, usedSkill = false;   // the damage dealer's turn, for the heals it sets off once it is over
+  // Summer Ichigo's Ram (TC_RAM): the damage dealer holds the helm, whether that Heart's Desire spent a Seal, her Seal, Rams dealt
+  let helm = false, ramSeal = false, ichSeal = false, rams = 0;
+  // Yumi's Cocktails (TC_CK): Mixers waiting, Cocktails held (best first is not kept: sorted when spent), gained, what her casts spent
+  const CKP = P.ck, CK = CKP ? { mix: [], cks: [], got: 0, casts: 0, sum: 0, std2: 0, one: 0, oneSum: 0, lost: 0, spent: { T: 0, S: 0, B: 0 } } : null;
   /* Elemental ailments on the main target: type -> turns left. Radiation counts only with Chizuko (P.radCounts).
      `inflicted`: ailments the team has inflicted (Queen's Nuclear Finisher Heat reads it between Transforms). */
   const ail = new Map(), ailAcc = new Map();
@@ -13941,7 +14604,10 @@ function tcSimRun(P, order, hold) {
       const h = hits || 1;
       const X = Object.assign({}, P.X0);
       if (others && P.X0one) Object.keys(P.X0one).forEach(k => { X[k] -= P.X0one[k]; });
-      buffs.forEach(b => { if ((!b.vc || vc) && !(others && b.one) && !(b.minHits > h) && !(b.down && (!downed || others))) X[b.k] = (X[b.k] || 0) + b.v * ailF(b); });
+      // effects that do not stack (`excl`) are gathered and only the largest of each group counts
+      let ex = null;
+      buffs.forEach(b => { if ((!b.vc || vc) && !(others && b.one) && !(b.minHits > h) && !(b.down && (!downed || others))) { if (b.excl) (ex = ex || []).push(b); else X[b.k] = (X[b.k] || 0) + b.v * ailF(b); } });
+      if (ex) { const drop = tcExclDrop(ex.map(b => ({ b, v: b.v * ailF(b) }))); ex.forEach(b => { if (!drop.has(b)) X[b.k] = (X[b.k] || 0) + b.v * ailF(b); }); }
       // what holds only while the boss is knocked down (the main target's Down; the other foes are not tracked)
       if (downed && !others) { (P.downX || []).forEach(c => { X[c.k] = (X[c.k] || 0) + c.v; }); (P.downSelf || []).forEach(c => { X[c.k] = (X[c.k] || 0) + c.v; }); }
       (P.constsMin || []).forEach(c => { if (c.minHits <= h && !(others && c.one)) X[c.k] = (X[c.k] || 0) + c.v * ailF(c); });
@@ -13969,9 +14635,25 @@ function tcSimRun(P, order, hold) {
       }
       return m * fin;
     };
+    // the damage dealer's ⓐ in ATK points with what is up, for damage that does not scale with ATK (the Ram's HP part)
+    const atkMemo = new Map();
+    const atkAt = (X, atkPct) => {
+      const key = Math.round((X.atkPct + atkPct) * 100) + '|' + Math.round((X.atk || 0) * 100);
+      let v = atkMemo.get(key);
+      if (v == null) { v = damageFactors(E.worn, D, E.t, E.lo, Object.assign({}, X, { atkPct: X.atkPct + atkPct, flat: E.den.flat, cr: X.cr + E.den.cr, cm: X.cm + E.den.cm })).atk; atkMemo.set(key, v); }
+      return v;
+    };
     /* A hit, on every foe when it is an area hit and the fight has more than one: the main target with
        everything up, the others without the debuffs that sit on one foe. */
-    const spread = (aoe, X, dm, atkPct, fin, dot, noWeak, hits) => {
+    // `xs`: stats of the damage dealer's own on this hit alone (DPS_KIT_BONUS with `k`), on every foe it hits
+    const addXs = (X, xs) => {
+      if (!xs) return X;
+      const Y = Object.assign({}, X);
+      Object.keys(xs).forEach(k => { Y[k] = (Y[k] || 0) + xs[k]; });
+      return Y;
+    };
+    const spread = (aoe, X0, dm, atkPct, fin, dot, noWeak, hits, xs) => {
+      const X = addXs(X0, xs);
       let v = mult(X, dm, atkPct, fin, dot, noWeak);
       if (TR) {
         // the crit factor this hit carried, so its damage can be read before crit
@@ -13980,7 +14662,7 @@ function tcSimRun(P, order, hold) {
         if (cf == null) { cf = dot ? 1 : damageFactors(E.worn, D, E.t, E.lo, Object.assign({}, X, { dm: X.dm + dm, atkPct: X.atkPct + atkPct, flat: E.den.flat, cr: X.cr + E.den.cr, cm: X.cm + E.den.cm })).crit; TR.cf.set(ck, cf); }
         TR.last = { X, dm, atkPct, dot: !!dot, cf: cf > 0 ? cf : 1 };
       }
-      if (aoe && P.foes > 1) v += (P.foes - 1) * mult(curX(true, hits), dm, atkPct, fin, dot, noWeak);
+      if (aoe && P.foes > 1) v += (P.foes - 1) * mult(addXs(curX(true, hits), xs), dm, atkPct, fin, dot, noWeak);
       return v;
     };
     // the shared gauge: 21% for a thief's action that hits the boss's weakness, 17% for one that does
@@ -13992,7 +14674,7 @@ function tcSimRun(P, order, hold) {
        grows with the Technical Precision in `X`; `tf`/`pf` (added) and `ta`/`pa` (multiplying) are their values
        whether or not (tcTechMix). */
     const own = (to, comp, X) => {
-      let add = 0, amp = 1, tf = 0, pf = 0, ta = 0, pa = 0;
+      let add = 0, amp = 1, tf = 0, pf = 0, ta = 0, pa = 0, xs = null;
       for (const b of P.bonus || []) {
         if ((b.down && !downed) || (b.state && dpsA.stateOn !== b.state)) continue;
         if (b.after != null && !(lastUse[b.after] != null && round - lastUse[b.after] < (b.dur || 1))) continue;
@@ -14006,9 +14688,11 @@ function tcSimRun(P, order, hold) {
         const f = (b.perAil ? Math.max(0, Math.min(b.perAil[1], ailN()) - b.perAil[0]) : b.perHeat ? Math.min(b.perHeat, heat) : 1) *
           (1 + tcTechScale(b.tech, X && X.tp));
         if (!f) continue;
-        if (b.amp) amp *= 1 + b.val * f / 100; else add += b.val * f;
+        // `k`: a stat on those hits, not damage (Ryuji's Pierce, Radiance Motoha's Highlight ATK and crit damage)
+        if (b.k) { xs = xs || {}; xs[b.k] = (xs[b.k] || 0) + b.val * f; }
+        else if (b.amp) amp *= 1 + b.val * f / 100; else add += b.val * f;
       }
-      return { add, amp, tf, pf, ta, pa };
+      return { add, amp, tf, pf, ta, pa, xs };
     };
     const kitFire = (on, X, opts) => {
       kit.forEach((c, i) => {
@@ -14034,13 +14718,17 @@ function tcSimRun(P, order, hold) {
         const add = c.kind === 'res' ? X.resDm || 0 : c.kind === 'dot' ? X.dotDm || 0 : 0;
         const ob = own(c.kind, c, X);
         const dotFin = c.kind === 'dot' ? 1 + (X.dotFinal || 0) / 100 : c.kind === 'res' ? 1 + (X.resFinal || 0) / 100 : 1;
-        const x = c.val * af * ob.amp * dotFin * spread(c.aoe, X, add + ob.add + ((opts && opts.dm) || 0), (opts && opts.xAtk) || 0, (opts && opts.fin) || 1, dot, !!c.noWeak);
+        const x = c.val * af * ob.amp * dotFin * spread(c.aoe, X, add + ob.add + ((opts && opts.dm) || 0), (opts && opts.xAtk) || 0, (opts && opts.fin) || 1, dot, !!c.noWeak, undefined, ob.xs);
         gain(c.kind, x); techGain(ob, x);
+        if (c.kind === 'res') ckMix(D.e);
       });
     };
     const markCover = () => {
       dpsActs++;
-      buffs.forEach(b => { if (b.ref == null || b.self || (b.vc && !vc)) return; const m = cover.get(b.owner) || new Map(); cover.set(b.owner, m); m.set(b.ref, (m.get(b.ref) || 0) + 1); });
+      // a non-stacking effect the larger one outweighs on the main target is not up for this hit
+      const ex = buffs.filter(b => b.excl && !(b.vc && !vc) && !(b.down && !downed));
+      const drop = ex.length ? tcExclDrop(ex.map(b => ({ b, v: b.v * ailF(b) }))) : null;
+      buffs.forEach(b => { if (b.ref == null || b.self || (b.vc && !vc) || (drop && drop.has(b))) return; const m = cover.get(b.owner) || new Map(); cover.set(b.owner, m); m.set(b.ref, (m.get(b.ref) || 0) + (b.full ? b.v / b.full : 1)); });
     };
     const addBuff = (a, ev) => {
       if (tcIsVc(ev.e) && !vc) return;
@@ -14050,11 +14738,24 @@ function tcSimRun(P, order, hold) {
       const ex = buffs.find(b => b.owner === a.n && b.ref === ev.ref);
       // `noRefresh`: cannot be put on again while it lasts (Scald)
       if (ex && ev.e.noRefresh) return;
-      // a cast line on for part of the fight only lands at its share in this round
-      const v = ev.gate ? ev.v * ev.gate(Math.max(1, round)) : ev.v;
-      if (ex) { ex.left = ev.dur; if (ev.gate) ex.v = v; if (ev.stackMax) ex.v = Math.min(ex.v + v, v * ev.stackMax); return; }
+      // a cast line on for part of the fight only lands at its share in this round; Beachflower Minami's first
+      // medicine after her Highlight is the stronger one (tcMedHlBoost), and a medicine put on again holds what
+      // this use gives
+      let v =ev.e.fx != null && a.medNext ? ev.e.fx * (tcMedBoost() + a.medNext) : ev.gate ? ev.v * ev.gate(Math.max(1, round)) : ev.v;
+      /* a skill cast under the twins' Skill Amplification is that much stronger (TC_SKILL_SRC): any ally on the field
+         but the twins (it is up on the damage dealer, and the others got it with them); the line is kept as cast */
+      const ampF = a !== elu && TC_SKILL_SRC.has(String(ev.e.src)) && ev.k !== 'skillAmp' ? 1 + buffs.reduce((s, b) => s + (b.k === 'skillAmp' && !b.enemy && b.owner !== a.n ? b.v : 0), 0) / 100 : 1;
+      v *= ampF;
+      // her own Skill Amplification as it stands this round (TC_SELF_AMP's Lunar Bond part)
+      if (ev.ampAt) v *= ev.ampAt(Math.max(1, round));
+      // Yumi's lines cast at what her Cocktails gave this cast (TC_CK; none spent: the line does not land)
+      if (ev.e.ck && a === elu && ckNow) { v *= ckNow[ev.e.ck]; if (!v) return; }
+      // Tempest Riko's Blossoming Season tiers at the strength the SP this cast spent gives (TC_RK)
+      if (ev.e.spT && a.rkF) { v *= a.rkF[ev.e.spT] || 0; if (!v) return; }
+      if (ex) { ex.left = ev.dur; if (ev.gate || ev.ampAt || ev.e.fx != null || ev.e.ck || ev.e.spT ||(!ev.stackMax && (ampF !== 1 || ex.amped))) ex.v = v; ex.amped = ampF !== 1; if (ev.stackMax) ex.v = Math.min(ex.v + v, ev.full ? ev.full * ampF : v * ev.stackMax); return; }
       if (!v) return;
-      buffs.push({ k: ev.k, v, left: ev.dur, enemy, down: !!ev.e.down, one: enemy && tcOneFoe(ev.e), minHits: ev.e.minHits || 0, ailMin: ev.e.ailMin || 0, perAil: ev.e.perAil || 0, ailOfElem: !!ev.e.ailOfElem, tech: ev.e.tech || null, owner: a.n, ref: ev.ref, self: !!ev.self, vc: tcIsVc(ev.e), cp: !ev.self && tcCopyable(ev.e, ev.k) });
+      buffs.push({ k: ev.k, v, left: ev.dur, enemy, down: !!ev.e.down, one: enemy && tcOneFoe(ev.e), minHits: ev.e.minHits || 0, ailMin: ev.e.ailMin || 0, perAil: ev.e.perAil || 0, ailOfElem: !!ev.e.ailOfElem, tech: ev.e.tech || null, owner: a.n, ref: ev.ref, self: !!ev.self, vc: tcIsVc(ev.e), cp: !ev.self && tcCopyable(ev.e, ev.k),
+        excl: ev.e.excl ? a.n + '|' + ev.e.excl + '|' + ev.k : null, xs: ev.e.src, full: ev.full || 0 });
     };
     /* Kotone Shiomi's Lunar Phaseshift (TC_COPY): the buffs its target has on the damage dealer now — their
        timed ones as they stand, their always-on and gated ones — go onto the damage dealer again at the
@@ -14114,11 +14815,49 @@ function tcSimRun(P, order, hold) {
       const evs = (a.events || []).filter(ev => ev.e.on && ev.e.battle == null && [].concat(ev.e.on).some(o => toks.has(o)) && (!pick || pick(ev)) &&
         (!ev.e.state || a.stateOn === ev.e.state) && (!ev.e.afterHl || a.hlN > 0));
       const hlxDm = evs.filter(ev => ev.k === 'hlxDm').reduce((s, ev) => s + ev.v, 0);
-      evs.forEach(ev => apply(a, ev, { hlxDm }));
+      // her Highlight readies the stronger medicine; her next medicine spends it
+      if (a.n === TC_MEDS_OF && toks.has('HL')) a.medNext = tcMedHlBoost();
+      // a `build` line lands as many stacks as this turn's skills give (Summer Garden 2, Gentle Sea Breeze 1)
+      evs.forEach(ev => apply(a, ev.e.build ? Object.assign({}, ev, { v: ev.v * tcBuildGain(ev.e, toks) }) : ev, { hlxDm }));
+      if (a.medNext && evs.some(ev => ev.e.fx != null)) a.medNext = 0;
     };
     const trigger = (on, who) => T.concat(elu ? [elu] : []).forEach(a => (a.events || []).forEach(ev => {
       if (ev.e.on === on && (on !== 'dpsHL' || who === dpsA) && !(ev.e.notSelf && who === a)) apply(a, ev);
     }));
+    /* Yumi's Cocktails (TC_CK). `ckGain`: a Cocktail of that quality (lost at the cap), which sets off Screwdriver
+       (A2, her 'cocktail' lines) and, from A6, a Tailor-Made per 3 gained; `ckMix`: a Mixer of an element from a hit;
+       `ckCast`: what her turn's skills do with them, returned as the factors her `ck` lines are cast at. */
+    const ckRank = { T: 3, S: 2, B: 1 };
+    const ckGain = (q, bonus) => {
+      if (CK.cks.length < CKP.cap) CK.cks.push(q); else CK.lost++;
+      castBy(elu, new Set(['cocktail']));
+      if (!bonus && CKP.aw >= 6 && ++CK.got % 3 === 0) ckGain('T', true);
+    };
+    const ckMix = el => {
+      if (!CK || !el) return;
+      CK.mix.push(el);
+      if (CK.mix.length < 3) return;
+      const m = CK.mix.splice(0, 3), n = x => m.filter(y => y === x).length, same = Math.max(...m.map(n));
+      ckGain(same === 3 ? 'T' : same === 2 ? 'S' : 'B');
+      if (CKP.aw >= 1) CK.mix.push(m.slice().sort((a, b) => n(b) - n(a))[0]);
+    };
+    const ckUp = (from, to) => { const i = CK.cks.findIndex(q => from.includes(q)); if (i >= 0) CK.cks[i] = to[from.indexOf(CK.cks[i])]; };
+    let ckNow = null;
+    const ckCast = toks => {
+      const f = { all: 0, std2: 0, one: 1 };
+      CK.cks.sort((a, b) => ckRank[b] - ckRank[a]);
+      // Enchanting Stir: a Basic (else a Standard) into a Tailor-Made; Mojito (A1): Skills 1 and 3 upgrade one first
+      if (toks.has('2')) { CK.cks.sort((a, b) => ckRank[a] - ckRank[b]); ckUp(['B', 'S'], ['T', 'T']); }
+      if (CKP.aw >= 1 && (toks.has('1') || toks.has('3'))) { CK.cks.sort((a, b) => ckRank[a] - ckRank[b]); ckUp(['B', 'S'], ['S', 'T']); }
+      CK.cks.sort((a, b) => ckRank[b] - ckRank[a]);
+      if (toks.has('1') && CK.cks.length) { const q = CK.cks.shift(); f.one = 1 + CKP.q[q] / 100; CK.one++; CK.oneSum += f.one; CK.spent[q]++; }
+      if (toks.has('3') && CK.cks.length) {
+        f.all = CK.cks.reduce((s, q) => s + CKP.q[q], 0) / 100;
+        f.std2 = CK.cks.filter(q => q !== 'B').length >= 2 ? 1 : 0;
+        CK.casts++; CK.sum += f.all; CK.std2 += f.std2; CK.cks.forEach(q => { CK.spent[q]++; }); CK.cks = [];
+      }
+      return f;
+    };
     /* The Down gauge. `downAct`: one action's skill uses (and a Wonder or blank attack) take their Down Points;
        `downHl`: a damaging Highlight or Theurgy. At 0 the boss is knocked down: every member's 'knock' lines and
        the knocker's 'knockSelf' lines fire, the damage dealer's 'knock' components too, and a knocker's
@@ -14199,6 +14938,29 @@ function tcSimRun(P, order, hold) {
       // Roaring Surf Line (A2): every 4th catch fires one more, free, with no stack
       if (SF.free && ++SF.n % SF.free === 0) { kitFire('wave', X, { dm: SF.wave * SF.off }); SF.catches++; }
     };
+    /* Heals reaching the damage dealer (TC_HEALS; HR above). Each sets off their 'healed' lines, and 'healedHype'
+       ones while Summer Hype is on; Blessing and heals over time are kept to land at the start or end of their
+       turns. A source's share (`to: 'lowest'`, a `chance`) is a running tally, so the fight plays the same every time. */
+    const healDps = by => {
+      HR.n++; HR.by[by] = (HR.by[by] || 0) + 1;
+      castBy(dpsA, new Set(HR.hype > 0 ? ['healed', 'healedHype'] : ['healed']));
+    };
+    const healFrom = (a, toks) => {
+      if (!HR || !a || !a.heals || !a.heals.length) return;
+      a.heals.forEach((h, i) => {
+        if (!h.on.some(o => toks.has(o)) || (h.to === 'self' && a !== dpsA)) return;
+        const key = a.n + '|' + i, acc = (HR.acc.get(key) || 0) + (h.to === 'lowest' ? TC_HEAL_LOWEST : 1) * (h.chance == null ? 1 : h.chance);
+        const k = Math.floor(acc + 1e-9);
+        HR.acc.set(key, acc - k);
+        if (!k) return;
+        if (h.heal !== false) for (let j = 0; j < k * (h.n || 1); j++) healDps(a.n);
+        if (h.bless) HR.bless = Math.max(HR.bless, h.bless);
+        if (h.hot && h.hot[0] === 'start') { HR.hotS = Math.max(HR.hotS, h.hot[1]); HR.hotSBy = a.n; }
+        if (h.hot && h.hot[0] === 'end') { HR.hotE = Math.max(HR.hotE, h.hot[1]); HR.hotEBy = a.n; }
+      });
+    };
+    // what a trigger sets off in every member's heals but `not`'s (an ally's action is not their own)
+    const healAll = (trig, not) => { if (HR) T.concat(elu ? [elu] : []).forEach(b => { if (b !== not) healFrom(b, new Set([trig])); }); };
     function fireHl(a, opt) {
       opt = opt || {};
       if (!opt.free) { if (a.kind === 'TH') a.th = 0; else gauge -= 100; }
@@ -14213,7 +14975,7 @@ function tcSimRun(P, order, hold) {
         pending.length = 0;
         if (skill && skill.d[3]) {
           const ob = own('hl', null, X), as = P.as[3];
-          const x = skill.d[3] * (SF && !SF.on ? SF.hlOff : 1) * ob.amp * (1 + as.dot * (X.dotFinal || 0) / 100) * (1 + as.res * (X.resFinal || 0) / 100) * spread(P.aoe[3], X, X.hlDm + (opt.bonus || 0) + ob.add + as.dot * (X.dotDm || 0) + as.res * (X.resDm || 0), 0, 1 + X.hlFinal / 100, !P.hlCrit, !!P.alm[3], P.hits[3]);
+          const x = skill.d[3] * (SF && !SF.on ? SF.hlOff : 1) * ob.amp * (1 + as.dot * (X.dotFinal || 0) / 100) * (1 + as.res * (X.resFinal || 0) / 100) * spread(P.aoe[3], X, X.hlDm + (opt.bonus || 0) + ob.add + as.dot * (X.dotDm || 0) + as.res * (X.resDm || 0), 0, 1 + X.hlFinal / 100, !P.hlCrit, !!P.alm[3], P.hits[3], ob.xs);
           gain('hl', x); techGain(ob, x);
         }
         castBy(a, tok, toFoe);
@@ -14221,11 +14983,18 @@ function tcSimRun(P, order, hold) {
         kitFire('selfHL', X);
         trigger('dpsHL', a);
       } else kitFire('allyHL', curX(), { by: a });
+      // a damaging Highlight or Theurgy gives Yumi a Mixer; from her A4 any ally's gives a Tailor-Made
+      if (CK) {
+        if (a.n && a.n !== 'Wonder' && ((SKILL_DMG[a.n] || {}).d || [])[3] > 0) ckMix(a === dpsA ? D.e : (charDef(a.n) || {}).e);
+        if (CKP.aw >= 4) ckGain('T');
+      }
       inflict(a, tok);
       downHl(a);
       T.concat(elu ? [elu] : []).forEach(x => downMark(x, 'anyHL'));
       kitFire('anyHL', curX());
       trigger('anyHL', a);
+      // its heals land after its damage, then those set off by any Highlight (Ayaka's Chorus Effect)
+      if (HR) { healFrom(a, tok); healAll('anyHL', null); }
     }
     const hlReady = a => a.kind === 'HL' && !a.freeHl && a.since >= (concerto ? TC_HL_COOL - 1 : TC_HL_COOL) &&
       (a.isDps || (a.events || []).some(ev => [].concat(ev.e.on || []).some(o => o === 'HL')));
@@ -14269,6 +15038,13 @@ function tcSimRun(P, order, hold) {
         if (pick) { fireHl(pick, { free: true }); if (concerto.aw >= 2) gauge = Math.min(cap, gauge + 25); }
       }
       if (a.isDps) kitFire('turnStart', curX());
+      /* Heals at the start of the damage dealer's turn, before their hit: what heals them then (Summer Ichigo's
+         boat; their own Awareness 1 Blessing), a heal over time, and Blessing — one heal however much they hold. */
+      if (HR && a.isDps && !extra) {
+        healAll('dpsTurn', null);
+        if (HR.hotS > 0) { HR.hotS--; healDps(HR.hotSBy); }
+        if (HR.bless > 0) { HR.bless--; healDps('Blessing'); }
+      }
       /* Oracle Shift, once a round as soon as the stacks allow, swapped in during the damage dealer's
          turn so the backup's buffs land before their hit: the backup takes one action (its best skill),
          Fuuka's swap lines fire, and from her A2 the backup's Highlight or Theurgy fires with it (once
@@ -14288,7 +15064,8 @@ function tcSimRun(P, order, hold) {
         if (BK.kind === 'TH' && BK.th >= BK.req) fireHl(BK);
         if (FU.a2 && BK.kind && round - lastA2 >= 3) { lastA2 = round; fireHl(BK, { free: true, keepCool: true }); }
         stateStart(BK);
-        if (BK.skill) { castBy(BK, new Set([BK.skill])); inflict(BK, new Set([BK.skill])); downAct(BK, BK.skill); }
+        if (BK.skill) { castBy(BK, new Set([BK.skill])); inflict(BK, new Set([BK.skill])); downAct(BK, BK.skill); if (HR) healFrom(BK, new Set([BK.skill])); }
+        if (HR) healAll('ally', null);
         stateEnd(BK, BK.skill || '-');
         castBy(elu, new Set(['shift']));
         BK.acts++;
@@ -14303,6 +15080,8 @@ function tcSimRun(P, order, hold) {
       stateStart(a);
       // Wonder's schedule names his casts ("w0"); everyone else's steps are skills and tokens
       const toks = a.wonder ? new Set([step]) : tcTurnSkills(step);
+      // Tempest Riko's SP this turn, and what her Blossoming Season spends of it (TC_RK)
+      if (a.rk) a.rkF = tcRkStep(a.rk, step);
       // a free Highlight lufel writes into the rotation (no gauge, no cooldown)
       if (a.freeHl) for (let i = tcKindCount(step, 'HL'); i > 0; i--) fireHl(a, { free: true, keepCool: true });
       // Kotone Shiomi's Echoing Strings (A1): entering Fortune (her burst turn) fires her Highlight free
@@ -14318,6 +15097,8 @@ function tcSimRun(P, order, hold) {
         // their own buffs the turn's skills and tokens set off, on before the hit (a Theurgy's or a
         // Highlight's are set off where it fires)
         const mine = new Set([...toks, ...raw].filter(t => t !== 'HL' && t !== 'TH'));
+        // the heals this turn sets off land after its hits (below); Summer Hype opens at once
+        if (HR) { healToks = mine; usedSkill = uses.some(u => u > 0); if (TC_HEAL_HYPE[D.n] && uses[+TC_HEAL_HYPE[D.n] - 1]) HR.hype = 2; }
         if (raw.includes('Transform')) { heat = inflicted - heatAt; heatAt = inflicted; }
         inflict(a, new Set(raw.filter(m => !/^[1-3]$/.test(m) && m !== 'HL' && m !== 'TH')));
         if (a.events.length) castBy(a, mine, toAlly);
@@ -14331,8 +15112,10 @@ function tcSimRun(P, order, hold) {
           if (!u) return;
           const Xi = P.hits[i] > 1 ? curX(false, P.hits[i]) : X, ob = own('skill:' + (i + 1), null, Xi), as = P.as[i];
           const asDm = as.dot * (Xi.dotDm || 0) + as.res * (Xi.resDm || 0) + (SF && i === 1 && SF.on ? SF.tide * SF.off : 0), asFin = (1 + as.dot * (Xi.dotFinal || 0) / 100) * (1 + as.res * (Xi.resFinal || 0) / 100);
-          const x = u * skill.d[i] * ob.amp * asFin * spread(P.aoe[i], Xi, xd + ob.add + asDm, xa, fin, false, !!P.alm[i], P.hits[i]);
+          // Skill Amplification on them (the twins' Two Masks as One) is a multiplier of its own on a skill
+          const x = u * skill.d[i] * ob.amp * asFin * (1 + (Xi.skillAmp || 0) / 100) * spread(P.aoe[i], Xi, xd + ob.add + asDm, xa, fin, false, !!P.alm[i], P.hits[i], ob.xs);
           gain(extra ? 'extra' : 'skill', x); techGain(ob, x);
+          if (skill.d[i] > 0) for (let k = 0; k < u; k++) ckMix(D.e);
         });
         if (a.events.length) castBy(a, mine, toFoe);
         downAct(a, step);
@@ -14341,6 +15124,15 @@ function tcSimRun(P, order, hold) {
         uses.forEach((u, i) => { if (u) kitFire('self:' + (i + 1), X, { xAtk: xa, fin }); });
         raw.forEach(m => kitFire('tok:' + m, X, { xAtk: xa, fin }));
         kitFire('turnEnd', X, { xAtk: xa, fin });
+        /* Summer Ichigo's Ram at the end of the Helmsman's turn (TC_RAM): a Persona skill of theirs on every foe,
+           its HP part priced with everything but ATK; below her A6 the Helmsman then steps down */
+        if (P.ram && helm && !extra) {
+          const R = P.ram, ob = own('skill:ram', null, X);
+          const x = ((ramSeal ? R.seal : R.atk) + 100 * R.hp / atkAt(X, 0)) * ob.amp * (1 + (X.skillAmp || 0) / 100) * spread(true, X, ob.add + R.dm, 0, 1, false, false);
+          gain('ram', x); techGain(ob, x);
+          rams++; ramSeal = false;
+          if (!R.a6) helm = false;
+        }
         if (SF) {
           // Jellyfish Splash restores SP, up to twice the max; Aerial Tide ends Surf and clears the stacks
           // (from A6 it keeps Surf, and the stacks go at the end of her turn, refilling her SP)
@@ -14354,7 +15146,15 @@ function tcSimRun(P, order, hold) {
         inflict(a, new Set(uses.map((u, i) => u ? String(i + 1) : null).filter(Boolean)));
       } else {
         // their skills, and the turn's other tokens ("Special", "Punch") for lines tied to one
-        castBy(a, a.wonder ? toks : new Set([...toks, ...String(step).split('+').map(t => t.trim().replace(/↺/g, '')).filter(t => t && !/^[1-3]+$/.test(t))]));
+        const mates = a.wonder ? toks : new Set([...toks, ...String(step).split('+').map(t => t.trim().replace(/↺/g, '')).filter(t => t && !/^[1-3]+$/.test(t))]);
+        castBy(a, mates);
+        // Summer Ichigo: Romantic Pearl / Astral Anchor give a Seal (with another Psy / [Summer] member); Heart's
+        // Desire spends it and makes the damage dealer the Helmsman (TC_RAM)
+        if (P.ram && a.n === TC_RAM.n) {
+          if ((toks.has('1') && P.ram.sealOn[1]) || (toks.has('2') && P.ram.sealOn[2])) ichSeal = true;
+          if (toks.has('3')) { helm = true; ramSeal = ichSeal; ichSeal = false; }
+        }
+        if (HR) healFrom(a, mates);
         if (CP && a.n === CP.by && toks.has(TC_COPY.on)) copyCast();
         downAct(a, a.wonder ? (step === '-' ? '-' : '') : step);
         // Wonder's schedule tokens are his own; a teammate's skills and tokens inflict
@@ -14364,7 +15164,7 @@ function tcSimRun(P, order, hold) {
         kitFire('ally', curX(), byA);
         // once per damaging skill the turn uses (the twins' automatic Two Masks as One is a second one),
         // and once per basic attack (Wonder's and a blank teammate's turns, Gunshot and Melee tokens)
-        for (let i = tcDmgSkills(a.n, step); i > 0; i--) kitFire('allySkill', curX(), byA);
+        for (let i = tcDmgSkills(a.n, step); i > 0; i--) { kitFire('allySkill', curX(), byA); ckMix((charDef(a.n) || {}).e); }
         for (let i = tcAtkCount(a.n, step); i > 0; i--) kitFire('allyAtk', curX(), byA);
         Object.values(mateActs).forEach(m => { if (a.n) m.set(a.n, (m.get(a.n) || 0) + 1); });
         surfCatch();
@@ -14384,6 +15184,18 @@ function tcSimRun(P, order, hold) {
       charge((!a.n ? true : a.wonder ? step === '-' : tcStepHits(a.n, step)) && a.weak);
       // buffs on the damage dealer count down after their own action (not after Da Capo's repeat)
       if (a.isDps && !extra) for (let i = buffs.length - 1; i >= 0; i--) { const b = buffs[i]; if (!b.enemy && (!b.vc || vc)) { b.left--; if (b.left <= 0) buffs.splice(i, 1); } }
+      /* The heals the damage dealer's own action sets off come after that count-down, so a "2 turns" they start
+         covers their next two actions: their own healing skill, a teammate's heal on their skill hit (Yukari's
+         Erosion, Morgana's Chivalry), the end-of-action heal over time; then Summer Hype ticks. Any thief's
+         action sets off "after an ally acts" heals (Seaside Tomoko's Resonance). */
+      if (HR && a.isDps) {
+        if (healToks) healFrom(a, healToks);
+        if (usedSkill) healAll('dpsSkill', a);
+        if (HR.hotE > 0) { HR.hotE--; healDps(HR.hotEBy); }
+        if (!extra && HR.hype > 0) HR.hype--;
+        healToks = null; usedSkill = false;
+      }
+      if (HR) healAll('ally', a);
     };
     // Manaka's Da Capo: the rounds it is used in, over the fight
     const dacapo = new Set();
@@ -14400,13 +15212,18 @@ function tcSimRun(P, order, hold) {
     P.mikuA1 = mikuA1;
     // from A6 Miyu starts in Surf with full SP (which counts as recovered)
     if (SF && SF.full) { surfGot(SF.spMax); surfSet(true); }
+    // Yumi's battle-start Cocktails: Taking Orders' 3 Mixers of one element, and from A6 a Tailor-Made
+    if (CK) { [0, 1, 2].forEach(() => ckMix(CKP.start)); if (CKP.aw >= 6) ckGain('T', true); }
     for (round = 1; round <= F; round++) {
       let vcNow = false;
       // the Elucidator, at the start of the round
       if (elu && elu.seq.length) {
         const step = elu.seq[(round - 1) % elu.seq.length];
         const toks = tcTurnSkills(step);
+        if (CK) ckNow = ckCast(toks);
         castBy(elu, toks);
+        ckNow = null;
+        if (HR) healFrom(elu, toks);
         toks.forEach(t => downMark(elu, t));
         { const t = tcAilToks(step); t.delete('HL'); t.delete('TH'); inflict(elu, t); }
         // Fuuka's Over Oracle stacks: one per Skill 1 or 3, two per Divine Prayer from A6
@@ -14415,6 +15232,8 @@ function tcSimRun(P, order, hold) {
       }
       T.concat(elu ? [elu] : []).forEach(a => inflict(a, new Set(round === 1 ? ['round', 'start'] : ['round'])));
       if (round === 1) T.concat(elu ? [elu] : []).forEach(a => downMark(a, 'start'));
+      // what Wonder's weapon gives at battle start (Ice Age's Ancient Frost, 'wStart')
+      if (round === 1) T.forEach(a => { if (a.wonder) castBy(a, new Set(['wStart'])); });
       if (crescendo && dacapo.has(round)) addBuff(elu, Object.assign({}, crescendo, { dur: 1 }));
       T.forEach(a => {
         act(a, false);
@@ -14446,7 +15265,9 @@ function tcSimRun(P, order, hold) {
   if (BK && BK.hlN) hl[BK.n] = BK.hlN;
   // ailMean: the ailments the foe carried at the end of each round, on average (the seat reports it)
   return { total, parts, hl, shifts, downs, cover: share, order: T.map(a => a.n || '—'), gaugeLeft: Math.round(gauge), ailMean: F ? ailSum / F : 0, tech, copy: copyLog, track: TR,
-    surf: SF ? { catches: SF.catches, inSurf: SF.inSurf, acts: dpsActs } : null };
+    surf: SF ? { catches: SF.catches, inSurf: SF.inSurf, acts: dpsActs } : null, heals: HR ? { n: HR.n, by: HR.by } : null, rams: P.ram ? rams : null,
+    cocktails: CK ? { casts: CK.casts, sum: CK.sum, std2: CK.std2, one: CK.one, oneSum: CK.oneSum, lost: CK.lost, spent: CK.spent } : null,
+    rikoSp: (T.find(x => x.rk) || {}).rk || null };
 }
 
 /* The fight under the spending orders worth trying, the best kept. */
@@ -14497,7 +15318,10 @@ function tcSimFitDps(P, fit, search) {
     if (!c) return asWritten;
     if (search && !pool.some(s => s.join(' ') === c.seq.join(' '))) tcMemo.pool.set(P.D.n, pool.concat([c.seq]));
     const res = tcSimBest(withSeq(c.seq));
-    if (!(res.total > asWritten.total * (1 + TC_DPS_FIT_MIN))) return asWritten;
+    // lufel's as written is kept only where this team can play it (a kit that needs the team's heals: KIT_ROT `allyHeal`)
+    const C = KIT_ROT[P.D.n].allyHeal ? tcComposeSetup(P.D.n, r) : null;
+    const playable = !C || C.legal(C.unroll(r.pick[0].seq));
+    if (!(res.total > asWritten.total * (1 + TC_DPS_FIT_MIN)) && playable) return asWritten;
     res.dpsRot = tcComposedInfo(r, c, res.total / asWritten.total - 1);
     return res;
   }
@@ -14530,7 +15354,13 @@ function tcSimFitDps(P, fit, search) {
    Elucidator's are all tried: Fuuka's stacks come from her skills). It starts from the quick fit
    (tcRotFit). `fits[name]` is what each got: the rotation, lufel's option it came from, the turns
    changed, its gain over that member's lufel first option as written with the others as fitted. */
-const TC_FIT_PASSES = 3;
+/* TC_FIT_STEPS: how many changes a composed member's rotation may take in one pass (tcCompose's passes). At 1 a
+   rotation could move at most three changes from where the quick fit started it, and where it ended depended on
+   that start: once Kotone Shiomi's numbers changed, Ichigo's best team settled at 24.7× where the rotations it had
+   found before priced 25.7×. At 2, over the real save's 48 leading lineups (Nov 2026), +0.4% on average, never
+   lower, in the same time (Ichigo's team 25.9×); 4 lost to 2 on two lineups, and a second start from lufel's
+   rotations as written added 0.07% for 30% more time. */
+const TC_FIT_PASSES = 3, TC_FIT_STEPS = 2;
 /* `opt` narrows it (the search's cheaper passes, tcSim): `only` the members named, the damage dealer fitted
    only with `dpsFit`, at most `passes` passes. */
 function tcSimFitTeam(P, opt) {
@@ -14560,42 +15390,48 @@ function tcSimFitTeam(P, opt) {
     }
     m.vars = vars;
   });
-  let Q = first.dpsRot && !first.dpsRot.same ? setSeq(P, { n: P.D.n, dps: true }, first.dpsRot.seq) : P;
-  let cur = first;
-  for (let pass = 0; pass < (opt && opt.passes || TC_FIT_PASSES); pass++) {
-    let moved = false;
-    for (const m of members) {
-      if (m.compose) {
-        // the damage dealer's was composed by tcSimFitDps; after the first pass it is searched again with the team as it stands
-        if (m.dps && !pass) continue;
-        const now = seqOf(Q, m), here = tcSimRun(Q, cur.spend, cur.hold).total;
-        const c = tcCompose(m.n, m.r, seq => tcSimRun(setSeq(Q, m, seq), cur.spend, cur.hold).total, now, 1);
-        if (c) m.tried = (m.tried || 0) + c.tried;
-        if (c && c.val > here * (1 + TC_DPS_FIT_MIN) && c.seq.join(' ') !== now.join(' ')) { Q = setSeq(Q, m, c.seq); moved = true; cur = tcSimBest(Q); m.lufel = c.lufel; }
-        else if (c && !m.lufel) m.lufel = c.lufel;
-        continue;
+  // one member at a time, the best change kept, until a pass changes nothing; `info` is per member what was composed
+  const descend = (Q, cur) => {
+    const info = new Map(members.map(m => [m, { tried: 0, lufel: null }]));
+    for (let pass = 0; pass < (opt && opt.passes || TC_FIT_PASSES); pass++) {
+      let moved = false;
+      for (const m of members) {
+        const I = info.get(m);
+        if (m.compose) {
+          // the damage dealer's was composed by tcSimFitDps; after the first pass it is searched again with the team as it stands
+          if (m.dps && !pass) continue;
+          const now = seqOf(Q, m), here = tcSimRun(Q, cur.spend, cur.hold).total;
+          const c = tcCompose(m.n, m.r, seq => tcSimRun(setSeq(Q, m, seq), cur.spend, cur.hold).total, now, TC_FIT_STEPS);
+          if (c) I.tried += c.tried;
+          if (c && c.val > here * (1 + TC_DPS_FIT_MIN) && c.seq.join(' ') !== now.join(' ')) { Q = setSeq(Q, m, c.seq); moved = true; cur = tcSimBest(Q); I.lufel = c.lufel; }
+          else if (c && !I.lufel) I.lufel = c.lufel;
+          continue;
+        }
+        if (m.vars.length < 2) continue;
+        const now = seqOf(Q, m).join(' ');
+        const here = tcSimRun(Q, cur.spend, cur.hold).total;
+        let top = null, tv = here * (1 + TC_DPS_FIT_MIN);
+        m.vars.forEach(v => {
+          if (v.seq.join(' ') === now) return;
+          const t = tcSimRun(setSeq(Q, m, v.seq), cur.spend, cur.hold).total;
+          if (t > tv) { tv = t; top = v; }
+        });
+        if (top) { Q = setSeq(Q, m, top.seq); moved = true; cur = tcSimBest(Q); }
       }
-      if (m.vars.length < 2) continue;
-      const now = seqOf(Q, m).join(' ');
-      const here = tcSimRun(Q, cur.spend, cur.hold).total;
-      let top = null, tv = here * (1 + TC_DPS_FIT_MIN);
-      m.vars.forEach(v => {
-        if (v.seq.join(' ') === now) return;
-        const t = tcSimRun(setSeq(Q, m, v.seq), cur.spend, cur.hold).total;
-        if (t > tv) { tv = t; top = v; }
-      });
-      if (top) { Q = setSeq(Q, m, top.seq); moved = true; cur = tcSimBest(Q); }
+      if (!moved) break;
     }
-    if (!moved) break;
-  }
+    return { Q, cur, info };
+  };
+  const won = descend(first.dpsRot && !first.dpsRot.same ? setSeq(P, { n: P.D.n, dps: true }, first.dpsRot.seq) : P, first);
+  const Q = won.Q;
   const res = tcSimBest(Q);
   res.fits = {};
   members.forEach(m => {
     if (m.compose) {
-      const seq = seqOf(Q, m), written = m.r.pick[0].seq;
+      const seq = seqOf(Q, m), written = m.r.pick[0].seq, I = won.info.get(m);
       if (seq.join(' ') === written.join(' ')) return;
       const asW = tcSimRun(setSeq(Q, m, written), res.spend, res.hold).total;
-      res.fits[m.n] = tcComposedInfo(m.r, { seq, lufel: m.lufel || (m.dps && first.dpsRot ? first.dpsRot.lufelSeq : null) || null, tried: (m.tried || 0) + ((m.dps && first.dpsRot) ? first.dpsRot.tried : 0) }, res.total / asW - 1);
+      res.fits[m.n] = tcComposedInfo(m.r, { seq, lufel: I.lufel || (m.dps && first.dpsRot ? first.dpsRot.lufelSeq : null) || null, tried: I.tried + ((m.dps && first.dpsRot) ? first.dpsRot.tried : 0) }, res.total / asW - 1);
       return;
     }
     if (!m.r || !m.r.pick.length || m.vars.length < 2) return;
@@ -14645,7 +15481,9 @@ function tcSim(D, names, fit, noWonder, wset) {
      who may have to put the Burn on (Rin's Skill 2, TC_ROT_ADD). */
   const timed = new Set(P.thieves.concat(P.elu ? [P.elu] : []).filter(a => a.n && !a.isDps && (a.events || []).some(ev => ev.e.needAil)).map(a => a.n));
   // the damage dealer alone is fitted whenever their rotation is (fit true or 'full', or for such a teammate)
-  const dfit = fit === true || fit === 'full' || (!!fit && timed.size > 0);
+  // and a damage dealer whose rotation hangs on the team's heals (KIT_ROT `allyHeal`), so a team that cannot
+  // heal enough for lufel's rotation is never priced on it
+  const dfit = fit === true || fit === 'full' || (!!fit && (timed.size > 0 || !!(KIT_ROT[D.n] && KIT_ROT[D.n].allyHeal)));
   const bk = D.n + '|blank' + (dfit ? '|fit' : '') + (pairs[D.n] ? '|p=' + pairs[D.n] : '');
   let base = tcMemo.sim.get(bk);
   if (!base) { base = tcSimFitDps(tcSimPrep(D, [null, null, null], false, true), dfit, true); tcMemo.sim.set(bk, base); }
@@ -14701,7 +15539,8 @@ function tcLineupAt(dps, names) {
      damage dealer's actions it was up for (copies: the members themselves are remembered). */
   const asRun = (m, n) => {
     if (!m || !m.sim) return m;
-    const cov = S.cover.get(n) || new Map(), refs = new Set(m.sim.events.map(ev => ev.ref));
+    // (Wonder's knockdown lines, `sim.knock`, are fight-only too)
+    const cov = S.cover.get(n) || new Map(), refs = new Set(m.sim.events.concat(m.sim.knock || []).map(ev => ev.ref));
     return Object.assign({}, m, { lines: m.lines.map((l, j) => refs.has(j) && !TC_RATE_KEYS.includes(l.k) && l.k !== 'hlxDm'
       ? Object.assign({}, l, { up: Math.min(1, cov.get(j) || 0), offRot: l.offRot && !cov.get(j), sim: true }) : l) });
   };
@@ -14833,18 +15672,24 @@ function tcSearchCalc(dps, limit) {
   /* Fuuka's backup is chosen by the fight for the leading TC_BACKUP_FIGHT lineups shown: the screen's
      averaged single action misjudges Theurgies, first-swap effects and when the swaps fall (at her A1 it
      preferred Kumi for Makoto Yuki where the fight gives Yukari 7 points more), and the fight's choice was
-     always among the screen's best few. */
+     always among the screen's best few. It is chosen at the fit the list is ranked on: chosen with only the
+     teammates' rotations fitted, Tempest Riko beat Kumi as Tropical Motoha's backup (17.7× to 17.3×) where
+     the list's fit and the full one both give Kumi more (18.5× to 17.7×, 19.9× to 18.3×). */
   const shown = exact.slice(0, (limit || 8) + 2).map((t, i) => {
-    const names = i < TC_BACKUP_FIGHT ? tcFightBackup(dps, t.names, t.backups, fit ? 'mates' : false) : t.names;
+    const names = i < TC_BACKUP_FIGHT ? tcFightBackup(dps, t.names, t.backups, fit) : t.names;
     return { names, mult: tcSim(dps, names, fit).mult };
   });
   shown.sort((x, y) => y.mult - x.mult);
   /* The leading TC_FULL_TOP are fought again with every member's rotation fitted in the fight (the
      dearest pass, tcSimFitTeam), and the best of them leads: a team whose members' rotations fit it
-     better can overtake. The list keeps the cheaper fit's numbers; the page scales them to the
-     headline. */
+     better can overtake. So is the best shown team of each other Elucidator, since the full fit is the
+     only one that fits hers, and what it gains depends most on her: Miku's team for Akihiko (her at A1)
+     was 4th at 20.7× and 27.0× fully fitted, above the 25.6× that led. The list keeps the cheaper fit's
+     numbers; the page scales them to the headline. */
   if (fit && shown.length > 1) {
-    const top = shown.slice(0, TC_FULL_TOP).map(t => ({ t, full: tcSim(dps, t.names, 'full').mult })).sort((a, b) => b.full - a.full);
+    const cand = shown.slice(0, TC_FULL_TOP);
+    shown.forEach(t => { if (!cand.some(c => c.names[2] === t.names[2])) cand.push(t); });
+    const top = cand.map(t => ({ t, full: tcSim(dps, t.names, 'full').mult })).sort((a, b) => b.full - a.full);
     const lead = top[0].t;
     shown.splice(shown.indexOf(lead), 1); shown.unshift(lead);
   }
@@ -14980,6 +15825,7 @@ function tcTeamsCalc(dps) {
    says so. Build scores rank candidates with equal evidence; they never outrank lufel. */
 
 let tmBusy = new Set();   // characters fielded in another team, left out here; saved in the prefs
+let tmBusyP = new Set();  // Wonder's Personas used by his other teams, left out of his suggested setup; saved in the prefs
 let tmPick = {};          // per damage dealer: { key: chosen party, seats: {seat index: name} } — this session only
 let tmStale = true;       // the controls (picker, Wonder's setup, busy list) need redrawing on the way in
 let tmRunSig = null;      // tmInputSig() of the result on screen; null until Calculate is first pressed
@@ -15215,6 +16061,12 @@ function tmRotPick(n, inTeam) {
     const ok = pick.filter(r => !(tcRotWalk(n, r.seq, aw, K) >= 0 && tcRotWalk(n, r.seq, aw, W) < 0));
     if (ok.length) pick = ok;
   }
+  /* A kit whose rotation hangs on the heals the team gives (KIT_ROT `allyHeal`): an option this team does not
+     heal enough for is left out, unless none is legal — the fit then plays a composed one (tcSimFitDps). */
+  if (K && KIT_ROT[n].allyHeal) {
+    const ok = pick.filter(r => tcRotWalk(n, tcUnroll(n, r.seq, tcComposeLen(), aw), aw, K) < 0);
+    if (ok.length) pick = ok;
+  }
   return { pick, aw, lvl, below, all: R, team: inTeam };
 }
 
@@ -15232,6 +16084,15 @@ function tmTokenText(s, meds) {
 /* What a character's mechanic asks of the team, in our own words (from lufel's guide, which the
    Full guide link opens). Only kits whose use is not obvious from the rotation get one. */
 const TEAM_MECHANICS = {
+  'Ichigo Shikano [Summer]': {
+    title: 'The Miracle Ichi-Boat — Summer Ichigo\'s Ram',
+    body: [
+      'Before anyone acts, every ally on the field boards her Boat: its max HP is all of theirs added together (+20% from Awareness 1), and it takes their damage and healing for them.',
+      'Heart\'s Desire (her Skill 3) makes the damage dealer the Helmsman. At the end of their next turn they ram all foes for about half the Boat\'s max HP plus 174% of their ATK — 347% when that Heart\'s Desire spent a Seal — and +25% for every foe fewer than 5 (double on one boss). It is their own Persona skill, with their damage bonuses, crit and weakness; only the HP part ignores ATK buffs.',
+      'She gets a Seal from Romantic Pearl (Skill 1) when another Psy character is in the party, or from Astral Anchor (Skill 2) when another [Summer] one is. Below Awareness 6 the Helmsman steps down after each Ram, so with Heart\'s Desire every other turn it is one Ram every two of their turns; from Awareness 6 they keep the helm and ram at the end of every turn, with +30% skill damage.',
+      'Wonder\'s HP is not tracked, so his part of the Boat is taken as the mean of the other three members\'.'
+    ]
+  },
   'Fuuka Yamagishi': {
     title: 'Oracle Shift — choosing Fuuka\'s backup',
     body: [
@@ -15252,7 +16113,7 @@ const TEAM_MECHANICS = {
 const TM_INPUTS = ['#tmChar', '#tmBasis', '#tmRotFit', '#tmRotCompose', '#tmMedic', '#tmFight', '#tmBoss', '#tmWeak', '#tmFoes', '#tmDown'];
 function tmInputSig() {
   return TM_INPUTS.map(id => { const el = $(id); return el.type === 'checkbox' ? (el.checked ? 1 : 0) : el.value; }).join('|') +
-    '|' + [...tmBusy].sort().join(',') + '|' + dataSignature();
+    '|' + [...tmBusy].sort().join(',') + '|' + [...tmBusyP].sort().join(',') + '|' + dataSignature();
 }
 function tmMarkStale() {
   const box = $('#tmStatus');
@@ -15302,7 +16163,7 @@ function renderTmPicker() {
   const ws = $('#tmWonderSpd');
   // Wonder's setup: the choices WONDER_BUFFS knows, kept in step with the save
   const W = wonderSetup(), wopt = (part, cur) => '<option value="">—</option>' +
-    (part === 'personas' ? wonderPersonas() : Object.keys(WONDER_BUFFS[part])).slice().sort((a, b) => a.localeCompare(b)).map(n => `<option${n === cur ? ' selected' : ''}>${esc(n)}</option>`).join('');
+    (part === 'personas' ? wonderPersonas() : Object.keys(WONDER_BUFFS[part])).slice().sort((a, b) => a.localeCompare(b)).map(n => `<option value="${esc(n)}"${n === cur ? ' selected' : ''}>${esc(n)}${part === 'personas' && tmBusyP.has(n) ? ' (busy elsewhere)' : ''}</option>`).join('');
   const setSel = (id, html, v) => { const el = $(id); if (document.activeElement !== el) { el.innerHTML = html; el.value = v; } };
   const slots = $('#tmWonderSlots');
   if (!slots.children.length) {
@@ -15320,11 +16181,13 @@ function renderTmPicker() {
   setSel('#tmWRefine', [1, 2, 3, 4, 5, 6, 7].map(r => `<option value="${r}">${refineLabel(r)}</option>`).join(''), String(W.refine));
   if (document.activeElement !== ws) ws.value = wonderSpeed() == null ? '' : wonderSpeed();
   $('#tmWonderSum').textContent = '— ' + tmWonderSumText();
-  $('#tmBusy').innerHTML = tmBusy.size
-    ? `<span class="muted">Busy in another team, left out here:</span> ` + [...tmBusy].map(n =>
-        `<button class="sm ghost" data-tm-unbusy="${esc(n)}" title="Make ${esc(n)} available again">${esc(n)} ✕</button>`).join(' ') +
+  $('#tmWUnrel').textContent = ` Only the Personas marked obtained on the Personas tab are offered; a Persona's skill cards are its own, and setting them here sets them there.${WONDER_UNRELEASED.length ? ` Not out on Global yet, so never offered: ${WONDER_UNRELEASED.join(', ')}.` : ''}`;
+  const busyChip = (n, attr, what) => `<button class="sm ghost" ${attr}="${esc(n)}" title="Make ${esc(n)} available again">${esc(n)}${what} ✕</button>`;
+  $('#tmBusy').innerHTML = tmBusy.size || tmBusyP.size
+    ? `<span class="muted">Busy in another team, left out here:</span> ` +
+      [...tmBusy].map(n => busyChip(n, 'data-tm-unbusy', '')).concat([...tmBusyP].map(n => busyChip(n, 'data-tm-unbusy-p', ' (Persona)'))).join(' ') +
       ` <button class="sm ghost" data-tm-unbusy="*">Clear all</button>`
-    : '<span class="muted">Fielding someone in another team (another damage dealer\'s, a second team for the same fight)? Press Busy elsewhere on their seat and the whole team is worked out again without them.</span>';
+    : '<span class="muted">Fielding someone in another team (another damage dealer\'s, a second team for the same fight)? Press Busy elsewhere on their seat and the whole team is worked out again without them. Wonder\'s Personas are marked the same way on his seat.</span>';
 }
 
 function tmBuildTag(n) {
@@ -15372,7 +16235,7 @@ function tcSumHtml(lines) {
 }
 /* The fight beside the headline (tcFightNote), as HTML: what it was and who used the gauge in two short
    lines, how it was played folded under them; the damage dealer's damage mix is on their seat. */
-const TC_PART_LABEL = { skill: 'skills', hl: 'Highlight', extra: 'extra actions', res: 'Resonance', fu: 'follow-ups', dot: 'damage over time', hit: 'other hits' };
+const TC_PART_LABEL = { skill: 'skills', hl: 'Highlight', extra: 'extra actions', res: 'Resonance', fu: 'follow-ups', dot: 'damage over time', hit: 'other hits', ram: 'Ram (Summer Ichigo)' };
 function tcFightNote(dps, S) {
   const D = charDef(dps);
   if (!D || !S) return '';
@@ -15392,7 +16255,9 @@ function tcFightNote(dps, S) {
     `<div>Highlights and Theurgies used: ${used || 'none'} <span class="muted">(${short(dps)} alone: ${alone})</span></div>` +
     // the elemental ailments the team kept on the boss (Queen's kit and Bishamonten read them)
     (tcDownPts() ? `<div>Knocked down: ${S.downs && S.downs.length ? `round${S.downs.length > 1 ? 's' : ''} ${S.downs.join(', ')}` : 'never'} of ${F}, at ${tcDownPts()} Down Points <span class="muted">(${short(dps)} alone: ${(S.base.downs || []).length})</span></div>` : '') +
-    (S.ailMean || (S.base && S.base.ailMean) ? `<div>Elemental ailments on the boss: ${S.ailMean.toFixed(1)} on average at the end of a round <span class="muted">(${short(dps)} alone: ${(S.base.ailMean || 0).toFixed(1)})</span></div>` : '');
+    (S.ailMean || (S.base && S.base.ailMean) ? `<div>Elemental ailments on the boss: ${S.ailMean.toFixed(1)} on average at the end of a round <span class="muted">(${short(dps)} alone: ${(S.base.ailMean || 0).toFixed(1)})</span></div>` : '') +
+    // the heals that reached a damage dealer whose kit reads them (Tropical Motoha), and from whom
+    (S.heals ? `<div>${short(dps)} healed ${S.heals.n} time${S.heals.n === 1 ? '' : 's'}${S.heals.n ? ` (${Object.entries(S.heals.by).sort((x, y) => y[1] - x[1]).map(([n, c]) => `${n === dps ? 'own skills' : short(n)} ${c}`).join(', ')})` : ''} <span class="muted">(alone: ${S.base.heals ? S.base.heals.n : 0})</span></div>` : '');
   const how = [
     'Turn by turn in Speed order (set at the top); the Elucidator at the start of each round, the enemy last.',
     wm === 'boss' ? `A thief's hit counts as a weakness hit when their element is weak on ${esc(B ? B.name : 'the boss')}; ${esc(dps)}'s ${esc(D.e)} hits are ${wk === 'weak' ? 'on its weakness' : wk === 'resist' ? 'resisted' : 'neutral'}.` : '',
@@ -15539,13 +16404,18 @@ function renderTeams() {
           const W = s.wonder, B = W.best, say = S => S.personas.filter(p => p.name).map((p, i) => `${i + 1}. ${p.name}${p.cards.some(Boolean) ? ' (' + p.cards.filter(Boolean).join(', ') + ')' : ''}`).join(' · ') + (S.weapon ? ` · ${S.weapon} ${refineLabel(S.refine)}` : '');
           const same = JSON.stringify(B) === JSON.stringify(W.setup);
           // which Persona he is using how often, and what his six actions cannot fit
-          const use = W.setup.personas.map((p, i) => p.name ? `${esc(p.name)} ${Math.round(100 * (W.inUse[i] || 0))}%` : '').filter(Boolean);
+          const use = W.setup.personas.map((p, i) => p.name && !tmBusyP.has(p.name) ? `${esc(p.name)} ${Math.round(100 * (W.inUse[i] || 0))}%` : '').filter(Boolean);
           // the suggested Personas that add nothing here (his six actions are spent by the others)
           const idleNames = B.personas.filter((p, i) => p.name && !((B.adds || [])[i] > 0.0005)).map(p => p.name);
+          const busyIn = W.setup.personas.filter(p => tmBusyP.has(p.name)).map(p => p.name);
           status = (wonderEmpty(W.setup) ? '<span class="muted">Set his Personas, their skill cards and his weapon above to count what he brings.</span>' : status) +
+            (busyIn.length ? `<div class="tiny" style="margin-bottom:4px"><span class="tag miss">left out</span> <span class="muted">${esc(busyIn.join(' and '))} ${busyIn.length > 1 ? 'are' : 'is'} busy in another team, so ${busyIn.length > 1 ? 'they and their' : 'it and its'} skill cards are not counted here.</span></div>` : '') +
             (use.length ? `<div class="tiny muted">In use (share of his turns): ${use.join(' · ')}. A Persona's passives count only while it is in use.</div>` : '') +
             ((W.uncast || []).length ? `<div class="tiny muted">Not cast — no turns left for them, or they would cost more than they bring: ${W.uncast.map(esc).join(', ')}.</div>` : '') +
             (W.idle.length ? `<div class="tiny muted">Not counted: ${W.idle.map(esc).join('; ')}</div>` : '') +
+            // what his weapon, Personas and cards do that is not priced (WONDER_SKIPS)
+            ((skips => skips.length ? `<details class="tiny" style="margin-top:4px"><summary class="muted">Not priced (${skips.length})</summary><ul style="margin:4px 0 0 16px">${skips.map(x => `<li class="muted">${esc(x)}</li>`).join('')}</ul></details>` : '')(
+              (W.setup.weapon ? WONDER_SKIPS.weapons[W.setup.weapon] || [] : []).concat(...W.setup.personas.filter(p => p.name).map(p => (WONDER_SKIPS.personas[p.name] || []).concat(...p.cards.filter(Boolean).map(c => WONDER_SKIPS.cards[c] || [])))))) +
             (same || W.bestGain < 1.0005 ? '' : `<div class="tiny" style="margin-top:6px">Best setup for this team, if you own it: <b>${esc(say(B))}</b> — team damage +${(100 * (W.bestGain - 1)).toFixed(1)}% over yours.
               <button class="sm ghost" data-tm-wonder="${esc(JSON.stringify(B))}">Use it</button>` +
               `<div class="muted">No skill cards: each Persona brings its own unique skill, passives, innate skills and Highlight. His turns with it are under Rotation.</div>` +
@@ -15562,7 +16432,11 @@ function renderTeams() {
           <button class="sm ghost" data-tm-use="${i}" data-name="${esc(a.n)}">Use</button>
           <b>${esc(a.n)}</b> ${tmBuildTag(a.n)} <span class="tiny muted">Awareness ${tmAw(a.n)}</span>
           <span class="tiny muted" style="flex-basis:100%">${a.why.map(esc).join(' · ')}</span></div>`).join('');
-      const actions = s.fixed || !s.name || s.name === 'Wonder' ? '' :
+      // Wonder's own seat: a button per Persona in his setup or the suggestion, to mark it in use in another team
+      const wonderBusy = s.wonder ? [...new Set(s.wonder.setup.personas.concat(s.wonder.best.personas).map(p => p.name).filter(n => n && !tmBusyP.has(n)))] : [];
+      const actions = s.wonder ? (wonderBusy.length ? `<span class="tiny muted">Persona busy elsewhere:</span> ` + wonderBusy.map(n =>
+          `<button class="sm ghost" data-tm-busy-p="${esc(n)}" title="Wonder uses ${esc(n)} in another team: leave it out here and suggest without it">${esc(n)}</button>`).join(' ') : '')
+        : s.fixed || !s.name || s.name === 'Wonder' ? '' :
         `<button class="sm ghost" data-tm-busy="${esc(s.name)}" title="${esc(s.name)} is fighting in another team: rebuild this one without them">Busy elsewhere</button>`;
       // one card per seat: who (striped in their element), their share of the team, what they add, buttons
       const el = ELEMENT_COLORS[d ? d.e : 'None'] || ELEMENT_COLORS['None'];
@@ -15694,7 +16568,7 @@ function renderTeams() {
       const sug = B && W.bestGain >= 1.0005 && JSON.stringify(B) !== JSON.stringify(W.setup) ? tcWonder(D, B).turns : null;
       wonderRot = `<div class="tmMember"><div class="hd"><span class="nm">Wonder</span> <span class="tag">every party</span> <span class="tiny muted">his six turns, repeated; his Highlight comes from the shared gauge</span></div>` +
         (mine ? `<div class="tiny"><b>Your setup</b></div>${wgrid(W.turns)}` : '<div class="tiny muted">Your setup has no Persona yet: set them under Wonder\'s setup at the top.</div>') +
-        (sug ? `<div class="tiny" style="margin-top:6px"><b>Suggested setup</b> <span class="muted">— ${esc(B.personas.filter(p => p.name).map(p => p.name).join(', '))}, no skill cards</span></div>${wgrid(sug)}` : '') + '</div>';
+        (sug ? `<div class="tiny" style="margin-top:6px"><b>Suggested setup</b> <span class="muted">— ${esc(B.personas.filter(p => p.name).map(p => p.name).join(', '))}, with the skill cards each has learned</span></div>${wgrid(sug)}` : '') + '</div>';
     }
 
     // synergies lufel names between members of this team, and the mechanics that need explaining
@@ -15739,7 +16613,7 @@ function renderTeams() {
 }
 
 function tmSetBusy(n, on) {
-  if (n === '*') tmBusy.clear(); else if (on) tmBusy.add(n); else tmBusy.delete(n);
+  if (n === '*') { tmBusy.clear(); tmBusyP.clear(); } else if (on) tmBusy.add(n); else tmBusy.delete(n);
   // a result on screen is worked out again without them; before the first Calculate, only noted
   if (tmRunSig != null) renderTeams(); else tmRefresh();
 }
@@ -15765,16 +16639,26 @@ $('#tmMedic').onchange = () => tmRefresh();
     `<optgroup label="Other bosses">${BOSSES.filter(b => !b.sea).map(opt).join('')}</optgroup>`;
 })();
 function tmWonderChanged() {
-  state.wonder = wonderFrom({
-    personas: [0, 1, 2].map(i => ({ name: $('#tmWP' + i).value, cards: [0, 1, 2].map(j => $(`#tmWC${i}_${j}`).value) })),
-    weapon: $('#tmWWeapon').value, refine: $('#tmWRefine').value
-  });
+  /* a slot's skill cards are its Persona's (the Personas section): written there while the slot keeps its
+     Persona; a slot given another Persona shows that one's cards after the redraw */
+  const was = wonderSetup().personas.map(p => p.name), names = [0, 1, 2].map(i => $('#tmWP' + i).value);
+  names.forEach((n, i) => { if (n && n === was[i]) personaSet(n, { cards: [0, 1, 2].map(j => $(`#tmWC${i}_${j}`).value) }); });
+  state.wonder = wonderFrom({ personas: names.map(name => ({ name })), weapon: $('#tmWWeapon').value, refine: $('#tmWRefine').value });
   commit();
 }
 $('#tmWWeapon').onchange = tmWonderChanged;
 $('#tmWRefine').onchange = tmWonderChanged;
 $('#tmWonderSpd').onchange = e => { state.wonderSpd = wonderSpeedFrom(e.target.value); commit(); };
-$('#tmBusy').addEventListener('click', e => { const b = e.target.closest('[data-tm-unbusy]'); if (b) tmSetBusy(b.dataset.tmUnbusy, false); });
+// Wonder's Personas, the same way: left out of his setup here and of the suggestion
+function tmSetBusyP(n, on) {
+  if (on) tmBusyP.add(n); else tmBusyP.delete(n);
+  if (tmRunSig != null) renderTeams(); else tmRefresh();
+}
+$('#tmBusy').addEventListener('click', e => {
+  const b = e.target.closest('[data-tm-unbusy], [data-tm-unbusy-p]');
+  if (!b) return;
+  if (b.dataset.tmUnbusyP) tmSetBusyP(b.dataset.tmUnbusyP, false); else tmSetBusy(b.dataset.tmUnbusy, false);
+});
 $('#tmOut').addEventListener('click', e => {
   const b = e.target.closest('button');
   if (!b) return;
@@ -15783,6 +16667,7 @@ $('#tmOut').addEventListener('click', e => {
   const dps = $('#tmChar').value;
   if (!dps) return;
   if (b.dataset.tmBusy) { tmSetBusy(b.dataset.tmBusy, true); return; }
+  if (b.dataset.tmBusyP) { tmSetBusyP(b.dataset.tmBusyP, true); return; }
   if (b.dataset.tmWonder) { state.wonder = wonderFrom(JSON.parse(b.dataset.tmWonder)); commit(); renderTeams(); return; }
   if (b.dataset.tmReset) { delete tmPick[dps]; renderTeams(); return; }
   if (b.dataset.tmParty) { tmPick[dps] = { key: b.dataset.tmParty, seats: {} }; renderTeams(); return; }
@@ -15798,7 +16683,183 @@ $('#tmOut').addEventListener('click', e => {
 /* ------------------------------ wiring ------------------------------ */
 /* The Vault is the second view of the Triage tab now ("Lock for later"); 'vault' stays a name
    showTab accepts, so an old link or a hand-typed call still lands on it. */
-const TABS = ['opt','teams','inv','triage','upgrades','roster','data','howto'];
+const TABS = ['opt','teams','personas','inv','triage','upgrades','roster','data','howto'];
+/* ---- Personas tab: the collection (personasState) as cards like the Roster's — the Persona's art,
+   rarity, element and what is set — each opening a popup (openPersona) where it is edited. Every edit
+   goes through commit(), which redraws the cards (or marks them stale while the tab is hidden); the
+   popup keeps its fields and redraws only its list of what the Teams tab counts. Art is optional, like
+   the Roster's portraits: art/persona-<slug>.webp next to the page (tools/fetch-persona-art.js), the
+   initials underneath when it is missing. */
+let psStale = true;
+const personaArt = n => `art/persona-${artSlug(n)}.webp`;
+// what the Teams tab turns into numbers for this Persona
+function psPricedText(n) {
+  const L = WONDER_BUFFS.personas[n] || [], inn = wonderInnate(n), bits = [];
+  if (L.some(e => e.src === 'unique')) bits.push('unique skill');
+  if (L.some(e => e.src === 'passive')) bits.push('talent');
+  if (L.some(e => e.src === 'HL')) bits.push('Highlight');
+  if (inn.length) bits.push(`${inn.join(', ')} (innate)`);
+  return bits.join(' · ');
+}
+const psTalLabel = (n, i) => i === 0 ? 'Base' : (((WONDER_PERSONA[n] || {}).t || [])[i] || String(i));
+/* The Personas tab's orders (#psSort, kept in the save's prefs like the Roster's). Rarity, highest first, is the
+   default; every order falls back on rarity and then the name, so ties read the same in each. */
+const psByRarity = (a, b) => (WONDER_PERSONA[b].r - WONDER_PERSONA[a].r) || a.localeCompare(b);
+const PS_SORTERS = {
+  rarity: psByRarity,
+  'rarity-asc': (a, b) => (WONDER_PERSONA[a].r - WONDER_PERSONA[b].r) || a.localeCompare(b),
+  name: (a, b) => a.localeCompare(b),
+  element: (a, b) => WONDER_PERSONA[a].e.localeCompare(WONDER_PERSONA[b].e) || psByRarity(a, b),
+  level: (a, b) => (personaRec(b).own - personaRec(a).own) || (personaRec(b).lv - personaRec(a).lv) || psByRarity(a, b),
+  owned: (a, b) => (personaRec(b).own - personaRec(a).own) || psByRarity(a, b),
+  priced: (a, b) => (!!psPricedText(b) - !!psPricedText(a)) || psByRarity(a, b)
+};
+function psRows() {
+  const show = $('#psShow').value, rar = $('#psRar').value, pr = $('#psPriced').value, q = $('#psQ').value.trim().toLowerCase();
+  return personaNames().filter(n => {
+    const r = personaRec(n), d = WONDER_PERSONA[n];
+    if ((show === 'own' && !r.own) || (show === 'not' && r.own)) return false;
+    if (rar && String(d.r) !== rar) return false;
+    if (pr && !psPricedText(n)) return false;
+    return !q || [n, d.e, ...r.cards, ...(WONDER_INNATE[n] || [])].some(x => String(x).toLowerCase().includes(q));
+  }).sort(PS_SORTERS[$('#psSort').value] || psByRarity);
+}
+function psCountText() {
+  const names = personaNames();
+  $('#psCount').textContent = `${names.filter(n => personaRec(n).own).length} of ${names.length} obtained`;
+}
+const psPortrait = (n, cls) => `<div class="portrait persona${cls ? ' ' + cls : ''}"><div class="initials">${esc(initials(n))}</div>` +
+  `<img src="${esc(personaArt(n))}" alt="" loading="lazy" onload="this.parentNode.classList.add('art')" onerror="this.remove()"><div class="veil"></div>`;
+function renderPersonas() {
+  psStale = false;
+  psCountText();
+  if (!$('#psExplain').innerHTML) $('#psExplain').innerHTML = explainHtml(
+    'Click a Persona to set whether you have it, its level, talent rank, skill level and the skill cards it has learned. The Teams tab offers, suggests and prices only the Personas you have, at these settings.',
+    `<p><b>Level</b>: an innate skill counts once the Persona reaches the level it is learned at. <b>Talent</b>: the passive's rank
+    (Base, then I, II, ...); a passive line takes its value at that rank, and a clause the talent only gains at a higher rank is left out.
+    <b>Skill level</b>: lufel prints each Persona skill at levels 6, 7 and 8; the unique skill, Highlight and innate skills take that level's values.
+    A number lufel's text does not tie to a rank keeps its top value. The popup lists what the Teams tab counts at the settings you pick.</p>
+    <p><b>Skill cards</b> are learned by one Persona and cast only while it is in use. Only the cards the Teams tab prices are listed;
+    setting a slot's cards under Wonder's setup on the Teams tab writes them here too.</p>
+    <p>New pages and saves from before this section start with every Persona out on Global marked obtained, at the top of every rank.
+    A Persona released later starts as not obtained. Wonder's own stats are not tracked, so a Persona's level does nothing beyond its innate skills.
+    The pictures come from an <code>art</code> folder beside the page, like the Roster's portraits; without it each card shows initials.</p>`);
+  const rows = psRows();
+  $('#psGrid').innerHTML = rows.map(n => {
+    const r = personaRec(n), d = WONDER_PERSONA[n], pr = psPricedText(n);
+    return `<div class="cc psCard${r.own ? ' owned' : ' psOff'}" data-ps="${esc(n)}" style="--el:${esc(ELEMENT_COLORS[d.e] || ELEMENT_COLORS['None'])}"
+        tabindex="0" role="button" aria-label="Edit ${esc(n)}">
+      ${psPortrait(n)}
+        <div class="corner l"><span class="tag r${d.r}">${d.r}★</span></div>
+        <div class="corner r"><span class="tag el"><i class="el-dot"></i>${esc(d.e)}</span></div>
+        <div class="cap"><div class="nm">${esc(n)}</div></div>
+      </div>
+      <div class="body">
+        <div class="mt">${r.own ? `<span class="tag">Lv ${r.lv}</span><span class="tag">Talent ${esc(psTalLabel(n, r.tal))}</span><span class="tag">Skill Lv ${r.sk}</span>` : '<span class="tag">not obtained</span>'}</div>
+        ${r.cards.length ? `<div class="tiny" style="margin-top:7px">Skill cards: ${esc(r.cards.join(', '))}</div>` : ''}
+        <div class="tiny muted" style="margin-top:7px">${pr ? `Teams tab: ${esc(pr)}` : 'Teams tab: nothing priced'}</div>
+        <div class="row acts"><button class="sm ghost" data-ps-own aria-pressed="${r.own}">${r.own ? '✓ Obtained' : 'Mark obtained'}</button></div>
+      </div></div>`;
+  }).join('') || '<div class="muted">No Persona matches these filters.</div>';
+  $('#psFoot').textContent = WONDER_UNRELEASED.length ? `Not out on Global yet, so not listed: ${WONDER_UNRELEASED.join(', ')}.` : '';
+}
+function renderPersonasIfShown() {
+  if ($('#tab-personas').classList.contains('hide')) { psStale = true; return; }
+  renderPersonas();
+}
+// a change to the collection: Wonder's setup drops a Persona no longer owned, and everything redraws
+function psCommit() { state.wonder = wonderFrom(state.wonder); commit(); }
+function psToggleOwn(n) {
+  const snap = snapshotState(), own = !personaRec(n).own;
+  personaSet(n, { own });
+  psCommit();
+  offerUndo(`${n} marked ${own ? '' : 'not '}obtained.`, snap);
+}
+['#psShow', '#psRar', '#psPriced', '#psSort'].forEach(id => { $(id).onchange = renderPersonas; });
+$('#psQ').oninput = renderPersonas;
+// the card opens the popup, from the mouse or — as a focusable button — the keyboard; its own button is its own
+$('#psGrid').addEventListener('click', e => {
+  const card = e.target.closest('#psGrid [data-ps]');
+  if (!card) return;
+  if (e.target.closest('[data-ps-own]')) psToggleOwn(card.dataset.ps); else openPersona(card.dataset.ps);
+});
+$('#psGrid').addEventListener('keydown', e => {
+  const card = e.target.closest('#psGrid [data-ps]');
+  if (!card || e.target !== card || (e.key !== 'Enter' && e.key !== ' ')) return;
+  e.preventDefault(); openPersona(card.dataset.ps);
+});
+function psMarkShown(own) {
+  const names = psRows().filter(n => personaRec(n).own !== own);
+  if (!names.length) return;
+  const snap = snapshotState();
+  names.forEach(n => personaSet(n, { own }));
+  psCommit();
+  offerUndo(`Marked ${names.length} Persona${names.length === 1 ? '' : 's'} as ${own ? '' : 'not '}obtained.`, snap);
+}
+$('#psAllOn').onclick = () => psMarkShown(true);
+$('#psAllOff').onclick = () => psMarkShown(false);
+
+/* The Persona popup: the fields, then what the Teams tab counts for this Persona at them — each line at its
+   value now beside its top one, the innate skills with the level each is learned at, and the skill cards'
+   lines. Edits apply at once (commit); only the list below the fields redraws, so a field keeps its focus. */
+function openPersona(n) {
+  const r = personaRec(n), d = WONDER_PERSONA[n];
+  if (!d) return;
+  const cards = Object.keys(WONDER_BUFFS.cards).sort((a, b) => a.localeCompare(b));
+  const opt = (v, cur, label) => `<option value="${esc(v)}"${String(v) === String(cur) ? ' selected' : ''}>${esc(label == null ? v : label)}</option>`;
+  setDlgView('persona', n);
+  $('#dlgBody').innerHTML = `<div class="psHead" style="--el:${esc(ELEMENT_COLORS[d.e] || ELEMENT_COLORS['None'])}">
+      ${psPortrait(n, 'small')}</div>
+      <div><h2 style="margin:0">${esc(n)}</h2>
+        <div class="tiny muted" style="margin:4px 0 10px">${d.r}★ · ${esc(d.e)}</div>
+        <label class="psOwn"><input type="checkbox" id="psDOwn"${r.own ? ' checked' : ''}> I have this Persona</label></div>
+    </div>
+    <div class="row" style="margin-top:14px">
+      <div class="field"><label>Level</label><input id="psDLv" type="number" min="1" max="${PERSONA_LV.max}" value="${r.lv}" style="width:80px"></div>
+      <div class="field"><label>Talent rank</label><select id="psDTal">${d.t.map((_, i) => opt(i, r.tal, psTalLabel(n, i))).join('')}</select></div>
+      <div class="field"><label>Skill level</label><select id="psDSk">${PERSONA_SK.map(v => opt(v, r.sk)).join('')}</select></div>
+    </div>
+    <div class="row" style="margin-top:10px">${[0, 1, 2].map(j => `<div class="field"><label>Skill card ${j + 1}</label>` +
+      `<select data-psd-card="${j}"><option value="">—</option>${cards.map(c => opt(c, r.cards[j] || '')).join('')}</select></div>`).join('')}</div>
+    <div id="psDOut" style="margin-top:14px"></div>`;
+  const B = $('#dlgBody'), edit = fields => { personaSet(n, fields); psCommit(); psDialogOut(n); };
+  $('#psDOwn', B).onchange = e => edit({ own: e.target.checked });
+  $('#psDLv', B).onchange = e => {
+    const lv = Math.round(+e.target.value);
+    if (lv >= 1) edit({ lv: Math.min(PERSONA_LV.max, lv) });
+    e.target.value = personaRec(n).lv;
+  };
+  $('#psDTal', B).onchange = e => edit({ tal: +e.target.value });
+  $('#psDSk', B).onchange = e => edit({ sk: +e.target.value });
+  $$('[data-psd-card]', B).forEach(s => { s.onchange = () => edit({ cards: $$('[data-psd-card]', B).map(x => x.value) }); });
+  psDialogOut(n);
+  showDlg();
+}
+function psDialogOut(n) {
+  const out = $('#psDOut');
+  if (!out) return;
+  const r = personaRec(n), d = WONDER_PERSONA[n], L = d.learn || {};
+  const SRC = { unique: 'Unique skill', passive: 'Talent', HL: 'Highlight' };
+  const fmt = v => Array.isArray(v) ? v[v.length - 1] : v;
+  const lines = (WONDER_BUFFS.personas[n] || []).map(e => {
+    const v = personaValue(n, e.v, e.src, r), top = fmt(e.v);
+    const now = v == null ? '<span class="muted">not at this talent rank</span>' : v === e.v ? `${esc(String(top))}` : `<b>${esc(String(v))}</b> <span class="muted">(top ${esc(String(top))})</span>`;
+    return `<tr><td class="tiny">${SRC[e.src] || esc(e.src)}</td><td class="right tiny" style="white-space:nowrap">${now}</td><td class="tiny">${esc(e.why)}</td></tr>`;
+  });
+  const priced = new Set(wonderInnate(n)), here = new Set(wonderInnateHere(n));
+  const innate = (WONDER_INNATE[n] || []).map(x => {
+    const lv = L[x] || 1, got = lv <= r.lv;
+    return `<li>${esc(x)} <span class="tiny muted">learned at Lv ${lv}${got ? '' : ' — not yet'}${priced.has(x) ? (here.has(x) ? ' · counted, as the skill card of that name' : ' · counted once learned') : ''}</span></li>`;
+  });
+  const cardLines = r.cards.map(c => `<li>${esc(c)} <span class="tiny muted">— ${esc((WONDER_BUFFS.cards[c] || []).map(e => e.why).join(' / '))}</span></li>`);
+  out.innerHTML = (r.own ? '' : '<div class="notice info" style="margin-bottom:10px">Not marked as yours, so the Teams tab will not offer it.</div>') +
+    `<h3 style="margin:0 0 6px">What the Teams tab counts at these settings</h3>` +
+    (lines.length ? `<table class="tiny"><thead><tr><th>From</th><th class="right">Value</th><th>What it does</th></tr></thead><tbody>${lines.join('')}</tbody></table>`
+      : '<div class="tiny muted">Nothing of its own: its unique skill, talent and Highlight do not change a teammate\'s damage, or are not priced.</div>') +
+    (innate.length ? `<h3 style="margin:12px 0 6px">Innate skills</h3><ul class="tiny" style="margin:0;padding-left:18px">${innate.join('')}</ul>` : '') +
+    (cardLines.length ? `<h3 style="margin:12px 0 6px">Skill cards it has learned</h3><ul class="tiny" style="margin:0;padding-left:18px">${cardLines.join('')}</ul>` : '');
+}
+
 function showTab(tab) {
   // pane first, so the tab's first-visit run is the Vault's, not a Triage run on the way past
   if (tab === 'vault') { showTrPane('vault'); showTab('triage'); return; }
@@ -15817,6 +16878,7 @@ function showTab(tab) {
   if (tab === 'upgrades' && !$('#up-pane-fortune').classList.contains('hide')) { if (!frCache) runFortune(); else { renderFrChars(); markStaleRuns(); } }
   if (tab === 'triage') { autoRunTriage(); markStaleRuns(); }
   if (tab === 'teams') tmRefresh();   // controls and status only: the team waits for Calculate
+  if (tab === 'personas' && psStale) renderPersonas();
 }
 $$('nav button').forEach(b => b.onclick = () => showTab(b.dataset.tab));
 
@@ -16094,7 +17156,7 @@ document.addEventListener('drop', e => {
 
 $('#wipe').onclick = () => askToast('Clear every card and character setting? You can undo it for 15 seconds afterwards.', 'Clear everything', () => {
   const snap = snapshotState();
-  state.cards = []; state.nextId = 1; state.teamCrit = 0; state.teamBuffs = {}; state.den = {}; state.wonderSpd = 0; state.wonder = {}; syncTeamCritField();
+  state.cards = []; state.nextId = 1; state.teamCrit = 0; state.teamBuffs = {}; state.den = {}; state.wonderSpd = 0; state.wonder = {}; state.personas = null; syncTeamCritField();
   CHARACTERS.forEach(c => state.chars[c.n] = { owned: false, benched: false, targets: null, loadout: null });
   commit();
   offerUndo('Cleared every card and character setting.', snap);
