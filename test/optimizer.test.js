@@ -3011,6 +3011,22 @@ function awarenessOverrideDrift() {
   check('Wonder\'s Speed is unset until entered; entered, it places him in the turn order, counts as unsaved, and goes through the save file',
     wsBefore.spd === null && /Wonder Speed not set/.test(wsBefore.order) && /^Wonder 250/.test(ws.first) && ws.dirty && ws.saved === 250 && ws.restored === 250,
     JSON.stringify({ wsBefore, ws }));
+  // once his lead Persona's Speed is entered the box shows the worked-out Speed and cannot be typed in; the typed one
+  // stays saved and comes back when the lead has none
+  const wsCalc = await p.evaluate(() => {
+    const keepW = state.wonder, keepRec = JSON.stringify(personaRec('Kohryu'));
+    const box = () => ({ v: $('#tmWonderSpd').value, dis: $('#tmWonderSpd').disabled, note: $('#tmWonderSpdNote').textContent, spd: tmSpeed('Wonder') });
+    state.wonder = wonderFrom({ personas: [{ name: 'Kohryu' }], weapon: '', refine: 1 });
+    personaSet('Kohryu', { owned: true, st: { hp: 836, atk: 295, def: 197, spd: 100, lv: 99 } }); commit(); tmRefresh();
+    const on = box();
+    personaSet('Kohryu', { st: { hp: 836, atk: 295, def: 197, lv: 99 } }); commit(); tmRefresh();
+    const off = box();
+    state.personas.Kohryu = JSON.parse(keepRec); state.wonder = keepW; commit(); tmRefresh();
+    return { on, off };
+  });
+  check('Wonder\'s Speed box shows the Speed worked out from his lead Persona, read-only, and the typed one when the lead has none',
+    wsCalc.on.dis && wsCalc.on.v === '100' && wsCalc.on.spd === 100 && /worked out from Kohryu/.test(wsCalc.on.note) &&
+    !wsCalc.off.dis && wsCalc.off.v === '250' && wsCalc.off.spd === 250 && /enter Kohryu's Speed/.test(wsCalc.off.note), JSON.stringify(wsCalc));
   await p.evaluate(() => { state.wonderSpd = 0; commit(); });
 
   // another damage dealer picked above starts Wonder's setup over (Personas, weapon, refinement), undoably;

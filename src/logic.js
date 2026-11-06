@@ -17367,6 +17367,74 @@ const TEAM_MECHANICS = {
    the save redraws the controls and says the result on screen is out of date; the buttons inside a
    result (Use, Busy elsewhere, a lufel party, Wonder's suggested setup) still act at once, since they
    are a request for that team worked out again. */
+/* ---- The ? buttons (Nov 2026): every explanation on the Teams tab sits behind one, in #infoPop ----
+   `infoBtn` takes a key of TM_HELP (the controls, written in ui.html), `infoBtnHtml` a title and HTML
+   made at render time (a seat, a rotation), `infoLinkHtml` the same worded as a link ("How the fight
+   was played"). One popover for the page, put under the button pressed; its ✕, Escape or a click
+   elsewhere closes it, and focus goes back to the button. The HTML travels in a data attribute, which
+   esc() makes safe and the browser gives back as written. */
+const TM_HELP = {
+  dps: ['Damage dealer', '<p>The character the team is built around: every other seat is chosen for what it does for their damage (or for the whole team\'s — see <b>Rank teams by</b>). Wonder is in every party.</p><p>Owned characters are listed, damage dealers first; an Elucidator cannot be the damage dealer.</p>'],
+  basis: ['Build from', '<p><b>Calculated from the kits</b>: every team you can field is priced by playing the fight out from the members\' kits — their buffs, debuffs, Highlights, follow-ups and own hits — and the best is shown, with the next best under it.</p><p><b>lufel\'s recommended teams</b>: the parties lufel.net recommends for this character, filled from what you own. A pick you cannot field is replaced by whoever lufel links to the character most.</p>'],
+  rank: ['Rank teams by', '<p><b>The whole team\'s damage</b>: the damage dealer\'s hits and the teammates\' and Wonder\'s own hits all count, so a teammate who hits hard can win a seat over a support.</p><p><b>The damage dealer\'s damage</b>: only their hits count, as a team built to make one character hit hardest; the others\' own hits are still shown on their seats.</p><p>Calculated basis only.</p>'],
+  fit: ['Fit rotations to this team', '<p>Each member\'s plain skill turns are re-chosen for this damage dealer, within the skills and frequencies lufel\'s own rotations for them use; bursts, Highlights, Transformations, items, Fatigue and idle turns stay where lufel put them. The turns changed are ringed in green under Rotation.</p><p>Off: every rotation is lufel\'s as written.</p>'],
+  compose: ['Compose them from the kits', '<p>On: each member\'s rotation is written for this team from their kit\'s own moves, within what the kit allows (stacks, modes, Fatigue, cooldowns) and no more SP per turn than lufel\'s own rotations spend.</p><p>Off: lufel\'s rotations with only their plain skill turns re-chosen. Needs "Fit rotations" on.</p>'],
+  medic: ['Include a medic', '<p>On: one of the two thief seats goes to a medic (Morgana, Lufel, Minami, Seaside Tomoko, Yukari, Summer Ichigo, or Justine &amp; Caroline in their Medic masks), the one whose kit adds most to this damage dealer, and the rest of the team is chosen around the two.</p><p>Healing itself is not priced, so medics are compared on what they add to the damage. Calculated basis only.</p>'],
+  spd: ['Wonder\'s Speed', '<p>Wonder\'s Speed places him in the turn order.</p><p>It is worked out, not typed, once the Speed of his slot-1 Persona is entered on the Personas tab: that Persona\'s Speed plus its Agility Master or minus its Ironclad Resolve. The box then shows that number and cannot be typed in, and every setup the Teams tab tries uses its own lead\'s Speed.</p><p>Until then the box takes the Speed off his character screen (without the Thieves Den, which is added). That typed number is also what a suggested setup uses when its lead has no Speed entered. With neither, he is taken to act just before the damage dealer.</p>'],
+  stats: ['Wonder\'s own stats', '<p>The ATK, crit rate and crit damage on Wonder\'s character screen, saved in the save file. Until his ATK is set his own hits are not counted, only what he does for the others. Crit rate reads as 5% and crit damage as 150% when left empty.</p><p>Once his Personas\', dagger\'s and Schema\'s numbers are entered, his stats are worked out for every setup instead and these are only a fallback.</p>'],
+  fight: ['Fight length', '<p>Rounds in the fight you are building for. The calculated basis plays the fight out round by round: turn order, cooldowns, the shared Highlight gauge (empty at the start, so the first Highlight usually comes in round 2) and once-per-battle effects such as Manaka\'s Da Capo all count for this many rounds.</p><p>6 rounds is about how long most Sea of Souls and Nightmare\'s Gateway fights last.</p>'],
+  boss: ['Boss', '<p>The enemy the fight is against, from lufel\'s defence calculator: its DEF and DEF coefficient decide what DEF down and Pierce are worth, and its resistances which hits land on a weakness.</p><p><b>Auto</b> fights lufel\'s single-boss example (DEF 1280, like Baal or Atabaka in Nightmare\'s Gateway), or its area-boss example (DEF 821, like Vishnu) for a damage dealer built to hit every enemy.</p>'],
+  weak: ['Weakness', '<p>Whether hits land on a weakness: ×1.2 damage (weakness-damage buffs only count then) and 21% Highlight gauge instead of 17%. A resisted hit deals ×0.5.</p><p>The default: the boss is weak to the damage dealer\'s element, the one it is fought with; a teammate\'s hit of another element is neutral.</p>'],
+  foes: ['Enemies', '<p>How many enemies the fight has. The damage dealer\'s area skills hit each of them; a debuff on one foe reaches only one, a debuff on all foes reaches every hit.</p><p><b>Auto</b> is 5 (a boss and its 4 helpers, as Vishnu, Kartikeya and Dominion bring) for a damage dealer built to hit every enemy, else 1.</p>'],
+  down: ['Down Points', '<p>The boss\'s Down Points, as its gauge shows them. Each skill that hits its weakness takes 1 (some skills take more whatever the weakness, such as Kumi\'s Skill 3); at 0 it is knocked down until its next turn, which it still takes, and the gauge refills. Effects that need a downed foe count only then.</p><p>Most bosses cannot be knocked down: leave it on that unless yours can.</p>'],
+  setup: ['Wonder\'s setup', '<p>His three Personas and the skill cards each has learned, his weapon and its refinement. A Persona\'s passives count only while it is in use; the planner shares his six actions among the Personas and skill cards set here.</p><p><b>Slot 1 is his lead</b>: the Persona he starts the battle with, so only it does what a Persona does at the start of battle (Koumokuten, Janosik\'s Mark, Ex Machina\'s element).</p><p>Only the Personas marked obtained on the Personas tab are offered; a Persona\'s skill cards are its own, and setting them here sets them there. Skills it has through fusion are set there and count too. Only the weapons marked obtained on the Weapons tab are offered, each at its own refinement; changing the refinement here changes it there.</p>'],
+  schema: ['Schema and Ego', '<p>From the Schema screen in the Phantom Thieves menu: the total each bonus shows now, and the Ego level from its own node. Saved in the save file.</p><p>With each Persona\'s and the dagger\'s own stats (entered on their tabs) they work his character panel out, so his own hits and his Speed follow whatever setup is priced.</p>'],
+  busy: ['Busy elsewhere', '<p>Fielding someone in another team (another damage dealer\'s, a second team for the same fight)? Press <b>Busy elsewhere</b> on their seat and the whole team is worked out again without them. Wonder\'s Personas are marked the same way on his seat.</p><p>The list is kept in the save file\'s preferences.</p>']
+};
+function infoBtn(key) {
+  const h = TM_HELP[key];
+  return `<button type="button" class="infoBtn" data-help="${key}" aria-label="About: ${esc(h[0])}">?</button>`;
+}
+function infoBtnHtml(title, html) {
+  return `<button type="button" class="infoBtn" data-info-t="${esc(title)}" data-info="${esc(html)}" aria-label="About: ${esc(title)}">?</button>`;
+}
+function infoLinkHtml(title, html) {
+  return `<button type="button" class="infoBtn lnk" data-info-t="${esc(title)}" data-info="${esc(html)}">${esc(title)}</button>`;
+}
+let infoPopFor = null;
+function infoPopOpen(btn) {
+  const pop = $('#infoPop');
+  if (infoPopFor === btn && !pop.classList.contains('hide')) { infoPopClose(); return; }
+  if (infoPopFor) infoPopFor.classList.remove('open');
+  const key = btn.dataset.help, h = key ? TM_HELP[key] : null;
+  $('#infoPopTitle').textContent = h ? h[0] : btn.dataset.infoT || '';
+  $('#infoPopBody').innerHTML = h ? h[1] : btn.dataset.info || '';
+  pop.classList.remove('hide');
+  btn.classList.add('open');
+  infoPopFor = btn;
+  // under the button, kept inside the viewport; above it when there is no room below
+  const r = btn.getBoundingClientRect(), W = pop.offsetWidth, H = pop.offsetHeight;
+  const vw = document.documentElement.clientWidth, vh = window.innerHeight;
+  let left = r.left + window.scrollX - 8;
+  if (left + W > window.scrollX + vw - 10) left = Math.max(window.scrollX + 10, window.scrollX + vw - W - 10);
+  const below = r.bottom + 8 + H <= vh || r.top - 8 - H < 0;
+  pop.style.left = left + 'px';
+  pop.style.top = (below ? r.bottom + window.scrollY + 8 : r.top + window.scrollY - H - 8) + 'px';
+  $('#infoPopClose').focus({ preventScroll: true });
+}
+function infoPopClose() {
+  const pop = $('#infoPop');
+  if (pop.classList.contains('hide')) return;
+  pop.classList.add('hide');
+  const b = infoPopFor; infoPopFor = null;
+  if (b) { b.classList.remove('open'); if (document.contains(b)) b.focus({ preventScroll: true }); }
+}
+document.addEventListener('click', e => {
+  const b = e.target.closest('.infoBtn');
+  if (b) { e.preventDefault(); infoPopOpen(b); return; }
+  if (!$('#infoPop').classList.contains('hide') && !e.target.closest('#infoPop')) infoPopClose();
+});
+$('#infoPopClose').onclick = infoPopClose;
 const TM_INPUTS = ['#tmChar', '#tmBasis', '#tmRank', '#tmRotFit', '#tmRotCompose', '#tmMedic', '#tmFight', '#tmBoss', '#tmWeak', '#tmFoes', '#tmDown'];
 function tmInputSig() {
   return TM_INPUTS.map(id => { const el = $(id); return el.type === 'checkbox' ? (el.checked ? 1 : 0) : el.value; }).join('|') +
@@ -17442,20 +17510,27 @@ function renderTmPicker() {
   setSel('#tmWRefine', [1, 2, 3, 4, 5, 6, 7].map(r => `<option value="${r}">${refineLabel(r)}</option>`).join(''), String(W.refine));
   // the refinement is the weapon's own (the Weapons tab): nothing to set without one
   $('#tmWRefine').disabled = !W.weapon;
-  if (document.activeElement !== ws) ws.value = wonderSpeed() == null ? '' : wonderSpeed();
+  // worked out from the lead Persona's Speed once it is entered: then the box shows that and cannot be typed in;
+  // the typed number stays saved and is used only for a setup whose lead has no Speed entered
+  const wHere = wonderHere(), wLead = wHere.personas[0] && wHere.personas[0].name, wCalcSpd = wonderCalc(wHere).spd;
+  ws.disabled = wCalcSpd != null;
+  if (document.activeElement !== ws) ws.value = wCalcSpd != null ? Math.round(wCalcSpd * 10) / 10 : wonderSpeed() == null ? '' : wonderSpeed();
+  $('#tmWonderSpdNote').textContent = wCalcSpd != null ? `worked out from ${wLead}, his lead Persona`
+    : wLead ? `typed: enter ${wLead}'s Speed on the Personas tab to work it out` : 'typed: put a Persona in slot 1 to work it out';
   const wst = wonderStatsSaved();
   [['#tmWonderAtk', 'atk'], ['#tmWonderCr', 'cr'], ['#tmWonderCm', 'cm']].forEach(([id, k]) => { const el = $(id); if (el && document.activeElement !== el) el.value = wst[k] != null ? wst[k] : ''; });
   const sc = wonderSchemaSaved();
   Object.keys(WONDER_SCHEMA_KEYS).forEach(k => { const el = $('#tmWS_' + k); if (el && document.activeElement !== el) el.value = sc[k] != null ? sc[k] : ''; });
   $('#tmWCalc').innerHTML = tmWonderCalcHtml();
   $('#tmWonderSum').textContent = '— ' + tmWonderSumText();
-  $('#tmWUnrel').textContent = ` Only the Personas marked obtained on the Personas tab are offered; a Persona's skill cards are its own, and setting them here sets them there. Skills it has through fusion are set there and count too. Only the weapons marked obtained on the Weapons tab are offered, each at its own refinement; changing the refinement here changes it there.${WONDER_UNRELEASED.length ? ` Not out on Global yet, so never offered: ${WONDER_UNRELEASED.join(', ')}.` : ''}`;
+  // only what is obtained is offered (the ? button says so); what Global does not have yet is named here
+  $('#tmWUnrel').textContent = `Only Personas and weapons marked obtained on their tabs are offered.${WONDER_UNRELEASED.length ? ` Not out on Global yet, so never offered: ${WONDER_UNRELEASED.join(', ')}.` : ''}`;
   const busyChip = (n, attr, what) => `<button class="sm ghost" ${attr}="${esc(n)}" title="Make ${esc(n)} available again">${esc(n)}${what} ✕</button>`;
   $('#tmBusy').innerHTML = tmBusy.size || tmBusyP.size
     ? `<span class="muted">Busy in another team, left out here:</span> ` +
       [...tmBusy].map(n => busyChip(n, 'data-tm-unbusy', '')).concat([...tmBusyP].map(n => busyChip(n, 'data-tm-unbusy-p', ' (Persona)'))).join(' ') +
       ` <button class="sm ghost" data-tm-unbusy="*">Clear all</button>`
-    : '<span class="muted">Fielding someone in another team (another damage dealer\'s, a second team for the same fight)? Press Busy elsewhere on their seat and the whole team is worked out again without them. Wonder\'s Personas are marked the same way on his seat.</span>';
+    : `<span class="muted">No one is marked busy in another team.</span> ${infoBtn('busy')}`;
 }
 
 function tmBuildTag(n) {
@@ -17491,26 +17566,42 @@ function tcLineText(l) {
   if (TC_RATE_KEYS.includes(l.k)) { const a = tcAmount(l.k, l.v * l.up); return (a.label + ' ' + a.val).trim(); }
   return `${TC_LABEL[l.k]} ${l.k === 'defdown' ? '−' : '+'}${tcFmtLine(l.k, l.v)}${l.up < 0.999 ? ` (${Math.round(l.up * 100)}% of turns)` : ''}`;
 }
+/* Which part of the damage formula a factor moves, for the colour of its pill: ATK (and the DEF or HP an
+   HP or DEF kit scales off), damage, crit, the foe's defence, Highlights and actions, ailments. */
+const TC_FAMILY = (() => {
+  const f = {};
+  ['atkPct', 'atk', 'xAtkPct', 'defPct', 'def', 'hpPct', 'hp'].forEach(k => { f[k] = 'atk'; });
+  ['dm', 'final', 'weak', 'hlDm', 'hlFinal', 'xDm', 'xFinal', 'resDm', 'dotDm', 'dotFinal', 'resFinal', 'downDm', 'skillAmp', 'hlxDm'].forEach(k => { f[k] = 'dm'; });
+  ['cr', 'cm'].forEach(k => { f[k] = 'crit'; });
+  ['pierce', 'defdown'].forEach(k => { f[k] = 'def'; });
+  ['turns', 'xturns', 'hlx', 'hlGauge', 'thGauge', 'hlCdRate', 'hlCd', 'hlFree', 'hlGaugeTo'].forEach(k => { f[k] = 'hl'; });
+  ['tp', 'burn', 'ail', 'curse'].forEach(k => { f[k] = 'ail'; });
+  return f;
+})();
 function tcSumHtml(lines) {
   const tot = {};
   lines.forEach(l => { tot[l.k] = (tot[l.k] || 0) + l.v * l.up; });
   // one pill per factor; inline-block, not flex, so the pill's text reads "ATK +75.8%" as one line
   return TC_KEYS.filter(k => k !== 'hlxDm' && tot[k] > (TC_RATE_KEYS.includes(k) ? 1e-6 : 0.05)).map(k => {
-    if (k === 'turns') return `<span class="st"><b>+${tcFmtLine(k, tot[k])}</b> <small>${esc(TC_LABEL[k])}</small></span>`;
+    const cls = `st f-${TC_FAMILY[k] || 'dm'}`;
+    if (k === 'turns') return `<span class="${cls}"><b>+${tcFmtLine(k, tot[k])}</b> <small>${esc(TC_LABEL[k])}</small></span>`;
     const a = tcAmount(k, tot[k]);
-    return `<span class="st"><small>${esc(a.label)}</small>${a.val ? ` <b>${esc(a.val)}</b>` : ''}</span>`;
+    return `<span class="${cls}"><small>${esc(a.label)}</small>${a.val ? ` <b>${esc(a.val)}</b>` : ''}</span>`;
   }).join('');
 }
-/* The fight beside the headline (tcFightNote), as HTML: what it was and who used the gauge in two short
-   lines, how it was played folded under them; the damage dealer's damage mix is on their seat. */
+/* The fight beside the headline (tcFightNote), as a row of facts: what it was, who used the gauge, the
+   ailments, knockdowns and heals, and how it was played behind a ? button; the damage dealer's damage
+   mix is on their seat. */
 const TC_PART_LABEL = { skill: 'skills', hl: 'Highlight', extra: 'extra actions', res: 'Resonance', fu: 'follow-ups', dot: 'damage over time', hit: 'other hits', ram: 'Ram (Summer Ichigo)' };
+// the colour of each kind of the damage dealer's own damage, on their seat's bar and pills
+const TC_PART_COLOR = { skill: '#ee4265', hl: '#c08ae8', extra: '#e8b64c', res: '#3fbfbf', fu: '#e0955a', dot: '#3fbf7f', hit: '#9aa0aa', ram: '#6fa6ee' };
 function tcFightNote(dps, S) {
   const D = charDef(dps);
   if (!D || !S) return '';
   tcFocus = dps;
   const F = tcFight(), word = tcHlKind(dps) === 'TH' ? 'Theurgies' : 'Highlights';
   const short = n => esc(n);
-  const used = Object.entries(S.hl).filter(([, n]) => n > 0).map(([n, c]) => `${short(n)} ${c}`).join(', ');
+  const used = Object.entries(S.hl).filter(([, n]) => n > 0).map(([n, c]) => `${short(n)} <b>${c}</b>`).join(' · ');
   const alone = Object.values(S.base.hl).reduce((x, y) => x + y, 0);
   const B = tcBossNow(), wm = tcWeakMode(), foes = tcFoes(), wk = tcWeakFor(D.e);
   const weak = wm === 'none' ? 'no weakness hits' : wm === 'all' ? 'every hit on a weakness'
@@ -17518,32 +17609,34 @@ function tcFightNote(dps, S) {
   // "Auto" names what it chose and why, so a reader knows the fight followed the damage dealer
   const autoB = $('#tmBoss').value === 'auto', autoF = $('#tmFoes').value === 'auto';
   const bName = tcBossLabel();
-  const autoWhy = autoB || autoF ? ` <span class="muted">(Auto: ${tcFocusArea() ? `${esc(dps)} is built to hit every enemy` : `${esc(dps)} is not an area damage dealer`})</span>` : '';
-  const head = `<div>${F}-round fight against ${esc(bName)}${foes > 1 ? ` and ${foes - 1} more` : ''} · ${weak}${autoWhy}</div>` +
-    `<div>Highlights and Theurgies used: ${used || 'none'} <span class="muted">(${short(dps)} alone: ${alone})</span></div>` +
+  const autoWhy = autoB || autoF ? `Auto: ${tcFocusArea() ? `${esc(dps)} is built to hit every enemy` : `${esc(dps)} is not an area damage dealer`}` : '';
+  const fact = (label, val, note) => `<span class="tmFact"><small>${label}</small><span><b>${val}</b>${note ? ` <span class="muted">${note}</span>` : ''}</span></span>`;
+  const facts = fact('fight', `${F}-round fight`, `against ${esc(bName)}${foes > 1 ? ` and ${foes - 1} more` : ''}${autoWhy ? ` (${autoWhy})` : ''}`) +
+    fact('weakness', weak) +
+    fact('Highlights and Theurgies used', used || 'none', `(${short(dps)} alone: ${alone})`) +
+    (tcDownPts() ? fact('knocked down', S.downs && S.downs.length ? `round${S.downs.length > 1 ? 's' : ''} ${S.downs.join(', ')}` : 'never', `of ${F}, at ${tcDownPts()} Down Points (${short(dps)} alone: ${(S.base.downs || []).length})`) : '') +
     // the elemental ailments the team kept on the boss (Queen's kit and Bishamonten read them)
-    (tcDownPts() ? `<div>Knocked down: ${S.downs && S.downs.length ? `round${S.downs.length > 1 ? 's' : ''} ${S.downs.join(', ')}` : 'never'} of ${F}, at ${tcDownPts()} Down Points <span class="muted">(${short(dps)} alone: ${(S.base.downs || []).length})</span></div>` : '') +
-    (S.ailMean || (S.base && S.base.ailMean) ? `<div>Elemental ailments on the boss: ${S.ailMean.toFixed(1)} on average at the end of a round <span class="muted">(${short(dps)} alone: ${(S.base.ailMean || 0).toFixed(1)})</span></div>` : '') +
+    (S.ailMean || (S.base && S.base.ailMean) ? fact('ailments on the boss', S.ailMean.toFixed(1), `on average at the end of a round (${short(dps)} alone: ${(S.base.ailMean || 0).toFixed(1)})`) : '') +
     // the heals that reached a damage dealer whose kit reads them (Tropical Motoha), and from whom
-    (S.heals ? `<div>${short(dps)} healed ${S.heals.n} time${S.heals.n === 1 ? '' : 's'}${S.heals.n ? ` (${Object.entries(S.heals.by).sort((x, y) => y[1] - x[1]).map(([n, c]) => `${n === dps ? 'own skills' : short(n)} ${c}`).join(', ')})` : ''} <span class="muted">(alone: ${S.base.heals ? S.base.heals.n : 0})</span></div>` : '');
+    (S.heals ? fact(`${short(dps)} healed`, `${S.heals.n} time${S.heals.n === 1 ? '' : 's'}`, `${S.heals.n ? Object.entries(S.heals.by).sort((x, y) => y[1] - x[1]).map(([n, c]) => `${n === dps ? 'own skills' : short(n)} ${c}`).join(', ') + '; ' : ''}alone: ${S.base.heals ? S.base.heals.n : 0}`) : '');
   const how = [
-    'Turn by turn in Speed order (set at the top); the Elucidator at the start of each round, the enemy last.',
+    'Turn by turn in Speed order (the Turn order panel); the Elucidator at the start of each round, the enemy last.',
     wm === 'boss' ? `A thief's hit counts as a weakness hit when their element is weak on ${esc(B ? B.name : 'the boss')}; ${esc(dps)}'s ${esc(D.e)} hits are ${wk === 'weak' ? 'on its weakness' : wk === 'resist' ? 'resisted' : 'neutral'}.` : '',
     foes > 1 ? `${foes - 1} more foe${foes > 2 ? 's' : ''} like the boss: area skills hit them all, an effect on one foe stays on the main target.` : '',
     `The shared gauge fills 21% for a thief action that hits a weakness and 17% for one that does not; ${esc(dps)} alone would use ${alone} ${word}.`,
     S.spend && S.spend.length > 1 ? `The gauge was spent on ${S.spend.filter(n => S.hl[n] > 0).map(esc).join(', then ')}${S.hold ? `, held for just before ${esc(dps)} acts` : ', as soon as it filled'} (the best of the orders tried).` : '',
     S.shifts && S.shifts.length ? `Oracle Shift swapped the backup in on round${S.shifts.length > 1 ? 's' : ''} ${S.shifts.join(', ')}.` : ''
-  ].filter(Boolean).join(' ');
-  return head + explainHtml('How the fight was played', how);
+  ].filter(Boolean).map(x => `<p>${x}</p>`).join('');
+  return `<div class="tmFacts">${facts}</div><div class="tmLinks">${infoLinkHtml('How the fight was played', how)}</div>`;
 }
-/* A seat whose character picks a set-up before battle (the twins' mask pair): which one this team
-   was priced with, so the player knows what to equip. */
+/* A seat whose character picks a set-up before battle (the twins' mask pair, Minami's medicines): which
+   one this team was priced with, so the player knows what to equip; the reasoning behind a ? button. */
 function tmPairHtml(s) {
   const o = s && s.pair ? tcPairInfo(s.name, s.pair) : null;
   if (!o) return '';
-  if (s.name === TC_MEDS_OF) return s.fixed ? '' : `<div class="tiny" style="margin-bottom:4px">Medicines: ${tmMedsHtml(o)} <span class="muted">(the three that do most for this damage dealer; her rotation's ⓘ turns use them)</span></div>`;
+  if (s.name === TC_MEDS_OF) return s.fixed ? '' : `<div class="tiny" style="margin-bottom:4px"><span class="tag">medicines</span> ${tmMedsHtml(o, null, true)} ${infoBtnHtml('Her medicines', '<p>The three medicines that do most for this damage dealer, each held all fight in the damage dealer\'s own fight; her rotation\'s ⓘ turns use them (ⓘA the first, and so on). The DEF and One More / All-Out Attack medicines are never priced and only fill a slot.</p>')}</div>`;
   const others = TC_PAIRS[s.name].filter(x => x.id !== o.id).map(x => x.role).join(' and ');
-  return `<div class="tiny" style="margin-bottom:4px">${esc(TC_PAIR_LABEL[s.name] || 'Set-up')}: <b>${esc(o.role)}</b> — ${esc(o.masks)} <span class="muted">(does most in this team; ${esc(others)} were tried too)</span></div>`;
+  return `<div class="tiny" style="margin-bottom:4px"><span class="tag">${esc(TC_PAIR_LABEL[s.name] || 'Set-up')}</span> <b>${esc(o.role)}</b> — ${esc(o.masks)} ${infoBtnHtml(TC_PAIR_LABEL[s.name] || 'Set-up', `<p>${esc(o.role)} (${esc(o.masks)}) does most in this team; ${esc(others)} were tried too, each priced as the whole team.</p>`)}</div>`;
 }
 // the medicine a rotation turn of Minami's uses, under the turn's token
 function tmMedCell(step, meds) {
@@ -17552,7 +17645,12 @@ function tmMedCell(step, meds) {
 }
 // Minami's medicines, one per ⓘ slot, with what each does
 // (`seq`: the rotation shown, whose unused slots are said to be unused)
-const tmMedsHtml = (o, seq) => o.meds.map((M, i) => `<b>ⓘ${'ABC'[i]}</b> ${esc(M.name)} <span class="muted">(${esc(M.eff)}${M.bought ? ', bought' : ', free'}${seq && !seq.some(x => String(x).includes('ⓘ' + 'ABC'[i])) ? '; not used by this rotation' : ''})</span>`).join(' · ');
+// (`short`: the names only, what each does in its tooltip — the seat; the rotation card spells it out)
+const tmMedsHtml = (o, seq, short) => o.meds.map((M, i) => {
+  const unused = seq && !seq.some(x => String(x).includes('ⓘ' + 'ABC'[i]));
+  return short ? `<span title="${esc(M.eff)}${M.bought ? ', bought' : ', free'}"><b>ⓘ${'ABC'[i]}</b> ${esc(M.name)}</span>`
+    : `<b>ⓘ${'ABC'[i]}</b> ${esc(M.name)} <span class="muted">(${esc(M.eff)}${M.bought ? ', bought' : ', free'}${unused ? '; not used by this rotation' : ''})</span>`;
+}).join(' · ');
 /* The one line under "Wonder's setup" when it is folded: what is set, or that nothing is. */
 function tmWonderSumText() {
   const W = wonderSetup();
@@ -17589,6 +17687,11 @@ function tmSynergyItems(inTeam, backupName) {
   return out;
 }
 
+/* The Teams page (Nov 2026 pass; the user asked for less prose, explanations behind a button and more
+   colour). The answer first — the multiplier, lufel's team beside it, the fight as a row of facts — then
+   one card per seat with the member's share and their buffs as coloured pills, the next teams, the turn
+   order, the rotations as coloured tiles with a legend, and what lufel says about the team. Every
+   paragraph that explains how a number was made sits behind a ? button (infoBtn), never on the page. */
 function renderTeams() {
   tmStale = false;
   renderTmPicker();
@@ -17601,289 +17704,370 @@ function renderTeams() {
     const calcMode = $('#tmBasis').value === 'calc';
     const { list, team } = calcMode ? tcTeams(dps) : tmTeams(dps);
     const inTeam = new Set(team.seats.filter(s => s.name).map(s => s.name));
-    const P = team.party, C = team.calc;
-    const xFmt = m => '×' + m.toFixed(2);
-    const head = C
-      ? `Calculated from the kits: this team makes ${esc(dps)}'s hits <b>${xFmt(C.mult)}</b> as strong as ${esc(dps)} alone against ${esc(tcBossLabel())}` +
-        (C.lufel ? ` — lufel's recommended team (${C.lufel.names.filter(Boolean).map(esc).join(', ')}) comes to ${xFmt(C.lufel.mult)} ${tcRelHtml(C.lufel.mult, C.mult)} the same way.` : '.')
-      : P
-      ? `Built on a team lufel recommends${P.from[0] === dps ? ` on ${esc(dps)}'s page` : ` (listed on ${P.from.map(esc).join(', ')}'s page${P.from.length > 1 ? 's' : ''})`}: ` +
-        `${P.f.map(x => esc(x || 'free slot')).join(', ')}${P.e ? ' with ' + esc(P.e) : ''}${P.b ? ', backup ' + esc(P.b) : ''}.`
-      : `lufel lists no team with ${esc(dps)}, so this one is built from the characters lufel names as their partners and from your best-built characters.`;
-    // "Include a medic": who took the seat, or why no one did
-    const M = C && C.medic;
-    const medicNote = !M ? ''
-      : M.self ? `<div class="cmp tiny muted tmMedicNote">${esc(dps)} is a medic, so no other medic is added.</div>`
-      : M.none ? `<div class="cmp tiny tmMedicNote"><span class="tag miss">no medic</span> <span class="muted">No medic is available (owned, not benched, not busy), so this team is built without one.</span></div>`
-      : `<div class="cmp tiny muted tmMedicNote">With a medic: ${M.names.map(n => `<b>${esc(n)}</b>`).join(' and ')} — the medic that adds most to ${esc(dps)}'s damage, with the rest of the team chosen around them. Healing itself is not priced, so medics are compared on what they add to the damage.</div>`;
-
+    const P = team.party, C = team.calc, D = charDef(dps);
     // the largest share in the team, for the bars under the seats' numbers
     const maxShare = Math.max(1e-9, ...team.seats.filter(s => !s.fixed && s.part > 1.001).map(s => 100 * (s.part - 1)));
-    const rows = team.seats.map((s, i) => {
-      const d = s.name && charDef(s.name);
-      let status;
-      if (!s.name) status = '<span class="tag miss">empty</span> <span class="muted">no available character fits this seat</span>';
-      else if (s.fixed && C) {
-        // the damage dealer: what their own damage in the fight was made of, and their kit lines
-        const S = C.sim, sum = Object.values(S.parts || {}).reduce((a, b) => a + b, 0) || 1;
-        const pills = Object.entries(S.parts || {}).filter(([, v]) => v / sum >= 0.005).sort((a, b) => b[1] - a[1])
-          .map(([k, v]) => `<span class="st"><small>${esc(TC_PART_LABEL[k] || k)}</small> <b>${Math.round(100 * v / sum)}%</b></span>`).join('');
-        const mates = team.seats.filter(x => !x.fixed && x.seat === 'f').map(x => x.name);
-        const kit = tcKitFor(d, mates), bonus = tcKitBonusFor(d, mates), skips = DPS_KIT_SKIPS[s.name] || [];
-        const selfLines = (tcMember(d, s.name, null, null, false).lines || []);
-        status = tmPairHtml(s) + '<div class="muted" style="margin-bottom:4px">the character this team is built around — their own damage in this fight:</div>' +
-          (pills ? `<div class="tcSum" title="Shares of ${esc(s.name)}'s own damage over the fight, with this team">${pills}</div>` : '') +
-          // their own lines, each list folded the same way as "Not priced" below
-          [[`Their kit's other damage, counted`, kit.map(c => c.why)],
-           ['Their own damage bonuses, counted', bonus.map(b => b.why)],
-           ['Their own party buffs and enemy debuffs, which reach them too', selfLines.map(l => l.why), selfLines.filter(l => l.up > 0)]]
-            .filter(([, list]) => list.length).map(([title, list, sumOf]) => {
-              const sum = sumOf ? tcSumHtml(sumOf) : '';
-              return `<details class="tiny" style="margin-top:4px"><summary class="muted">${esc(title)} (${list.length})</summary>` +
-                (sum ? `<div class="tcSum" style="margin-top:4px" title="Averaged over the fight; the fight itself plays each one out turn by turn">${sum}</div>` : '') +
-                `<ul style="margin:4px 0 0 16px">${list.map(x => `<li class="muted">${esc(x)}</li>`).join('')}</ul></details>`;
-            }).join('') +
-          (skips.length ? `<details class="tiny" style="margin-top:4px"><summary class="muted">Not priced in their own damage (${skips.length})</summary><ul style="margin:4px 0 0 16px">${skips.map(x => `<li class="muted">${esc(x)}</li>`).join('')}</ul></details>` : '');
-      }
-      else if (s.fixed) status = '<span class="muted">the character this team is built around</span>';
-      else if (C) {
-        const live = (s.lines || []).filter(l => l.up > 0).sort((a, b) => b.v * b.up - a.v * a.up);
-        const off = (s.lines || []).filter(l => l.offRot);
-        const sum = tcSumHtml(live);
-        // the member's share is the tile beside the name (below); here only what needs words
-        status = (s.chosen ? '<div style="margin-bottom:4px"><span class="tag">your choice</span></div>' : '') + tmPairHtml(s) +
-          (s.shifts ? `<div class="tiny muted tmShifts" style="margin-bottom:4px">${s.shifts.length ? `Swapped in by Oracle Shift ${s.shifts.length} time${s.shifts.length > 1 ? 's' : ''} (round${s.shifts.length > 1 ? 's' : ''} ${s.shifts.join(', ')}), just before ${esc(dps)} acts${s.swapSkill ? `, using Skill ${s.swapSkill}` : ''}${tmAw(TM_FUUKA) >= 2 ? ', and their Highlight or Theurgy with it (Pros and Cons, once every 3 rounds)' : ''}.` : 'Never swapped in: Fuuka\'s stacks do not reach an Oracle Shift in this fight.'}</div>` : '') +
-          // Kotone Shiomi's Lunar Phaseshift (TC_COPY): what she copied, and from whom
-          (s.copyLog ? `<div class="tiny muted tmCopy" style="margin-bottom:4px">${s.copyLog.casts
-            ? (s.copyLog.made
-              ? `Lunar Phaseshift copied buffs onto ${esc(dps)} on ${s.copyLog.made} of her ${s.copyLog.casts} Skill 3 cast${s.copyLog.casts === 1 ? '' : 's'} (from ${esc(s.copyLog.who)}), at ${s.copyLog.rate}% for 1 turn (counted below).`
-              : `None of her ${s.copyLog.casts} Skill 3 cast${s.copyLog.casts === 1 ? '' : 's'} found a teammate's buff on ${esc(dps)} worth copying.`)
-            : `Her rotation here casts no Skill 3, so Lunar Phaseshift copies nothing.`}</div>` : '') +
-          (s.copiedBy ? `<div class="tiny muted tmCopy" style="margin-bottom:4px">${esc(TC_COPY.n)} copies ${s.name === 'Wonder' ? 'his' : 'their'} buffs onto ${esc(dps)} (${s.copiedBy.rate}%, 1 turn) on ${s.copiedBy.times} of her ${s.copiedBy.casts} Skill 3 cast${s.copiedBy.casts === 1 ? '' : 's'}; this seat's share counts it.</div>` : '') +
-          (!s.known ? '<div style="margin-bottom:4px"><span class="tag miss">kit not entered yet</span> <span class="muted">counted as adding nothing</span></div>'
-           : s.empty && !(s.part > 1.001) ? '<div style="margin-bottom:4px"><span class="tag">nothing to price</span> <span class="muted">their kit is entered and has no buff for the team\'s damage</span></div>'
-           : '') +
-          (sum ? `<div class="tcSum" title="What they add to ${esc(dps)}, each line counted at its share of turns">${sum}</div>` : '') +
-          (live.length ? `<details class="tiny" style="margin-top:4px"><summary class="muted">Where it comes from (${live.length} line${live.length === 1 ? '' : 's'})</summary><div class="muted" style="margin-top:4px">${live.map(l =>
-            `${esc(tcLineText(l))} — ${esc(l.why)}`).join('<br>')}</div></details>` : '') +
-          (off.length ? `<div class="tiny muted" title="${esc(off.map(l => l.why).join('\n'))}">Not counted, not in their rotation here: ${[...new Set(off.map(l => l.why.split(':')[0].trim()))].map(esc).join(', ')}</div>` : '') +
-          ((TEAM_BUFF_SKIPS[s.name] || []).length ? `<details class="tiny" style="margin-top:4px"><summary class="muted">Not priced (${TEAM_BUFF_SKIPS[s.name].length})</summary><ul style="margin:4px 0 0 16px">${TEAM_BUFF_SKIPS[s.name].map(x => `<li class="muted">${esc(x)}</li>`).join('')}</ul></details>` : '');
-        if (s.wonder) {
-          const W = s.wonder, B = W.best, say = S => S.personas.filter(p => p.name).map((p, i) => `${i + 1}. ${p.name}${i ? "" : " (leads)"}${wonderSkills(p).length ? ' (' + wonderSkills(p).join(', ') + ')' : ''}`).join(' · ') + (S.weapon ? ` · ${S.weapon} ${refineLabel(S.refine)}` : '');
-          const same = JSON.stringify(B) === JSON.stringify(W.setup);
-          // which Persona he is using how often, and what his six actions cannot fit
-          const use = W.setup.personas.map((p, i) => p.name && !tmBusyP.has(p.name) ? `${esc(p.name)} ${Math.round(100 * (W.inUse[i] || 0))}%` : '').filter(Boolean);
-          // the suggested Personas that add nothing here (his six actions are spent by the others)
-          const idleNames = B.personas.filter((p, i) => p.name && !((B.adds || [])[i] > 0.0005)).map(p => p.name);
-          const busyIn = W.setup.personas.filter(p => tmBusyP.has(p.name)).map(p => p.name);
-          status = (wonderEmpty(W.setup) ? '<span class="muted">Set his Personas, their skill cards and his weapon above to count what he brings.</span>' : status) +
-            (busyIn.length ? `<div class="tiny" style="margin-bottom:4px"><span class="tag miss">left out</span> <span class="muted">${esc(busyIn.join(' and '))} ${busyIn.length > 1 ? 'are' : 'is'} busy in another team, so ${busyIn.length > 1 ? 'they and their' : 'it and its'} skill cards are not counted here.</span></div>` : '') +
-            (use.length ? `<div class="tiny muted">In use (share of his turns): ${use.join(' · ')}. A Persona's passives count only while it is in use.</div>` : '') +
-            ((W.uncast || []).length ? `<div class="tiny muted">Not cast — no turns left for them, or they would cost more than they bring: ${W.uncast.map(esc).join(', ')}.</div>` : '') +
-            (W.idle.length ? `<div class="tiny muted">Not counted: ${W.idle.map(esc).join('; ')}</div>` : '') +
-            // what his weapon, Personas and cards do that is not priced (WONDER_SKIPS)
-            ((skips => skips.length ? `<details class="tiny" style="margin-top:4px"><summary class="muted">Not priced (${skips.length})</summary><ul style="margin:4px 0 0 16px">${skips.map(x => `<li class="muted">${esc(x)}</li>`).join('')}</ul></details>` : '')(
-              (W.setup.weapon ? WONDER_SKIPS.weapons[W.setup.weapon] || [] : []).concat(...W.setup.personas.filter(p => p.name).map(p => (WONDER_SKIPS.personas[p.name] || []).concat(...wonderSkills(p).map(c => WONDER_SKIPS.cards[c] || [])))))) +
-            (same || W.bestGain < 1.0005 ? '' : `<div class="tiny" style="margin-top:6px">Best setup for this team, if you own it: <b>${esc(say(B))}</b> — team damage +${(100 * (W.bestGain - 1)).toFixed(1)}% over yours.
-              <button class="sm ghost" data-tm-wonder="${esc(JSON.stringify(B))}">Use it</button>` +
-              `<div class="muted">${B.personas.some(p => p.name && wonderSkills(p).length) ? 'Each Persona with the skill cards and fused skills it has on the Personas tab, besides' : 'No skill cards or fused skills: each Persona brings'} its own unique skill, passives, innate skills and Highlight. His turns with it are under Rotation.</div>` +
-              (idleNames.length ? `<div class="muted">${esc(idleNames.join(' and '))} add${idleNames.length > 1 ? '' : 's'} nothing in this team — the others already fill his one action a turn, and a Persona's passives only work while it is in use — and ${idleNames.length > 1 ? 'are' : 'is'} the strongest of the rest on ${idleNames.length > 1 ? 'their' : 'its'} own.</div>` : '') + '</div>') +
-            '<div class="tiny muted">Anything that grows with his own stats is taken at its cap. His own attacks count once his ATK is entered beside his Speed: his attack turns, an attacking skill he casts, his Highlight.</div>';
-        }
-      }
-      else if (s.chosen) status = `<span class="tag">your choice</span>${s.orig && s.orig !== s.name ? ` <span class="muted">instead of ${esc(s.orig)}</span>` : ''}`;
-      else if (s.orig && s.name === s.orig) status = '<span class="tag hit">lufel\'s pick</span>';
-      else status = (s.orig ? `<span class="tag miss">replaces ${esc(s.orig)}</span> <span class="muted">${esc(tmWhyOut(s.orig))}</span>`
-                            : `<span class="tag">${s.fallback ? 'filler' : 'free slot'}</span>`) +
-        (s.pickWhy ? `<div class="tiny muted" style="margin-top:4px">${s.pickWhy.map(esc).join('<br>')}</div>` : '');
-      const alts = (s.alts || []).map(a => `<div class="alt">
-          <button class="sm ghost" data-tm-use="${i}" data-name="${esc(a.n)}">Use</button>
-          <b>${esc(a.n)}</b> ${tmBuildTag(a.n)} <span class="tiny muted">Awareness ${tmAw(a.n)}</span>
-          <span class="tiny muted" style="flex-basis:100%">${a.why.map(esc).join(' · ')}</span></div>`).join('');
-      // Wonder's own seat: a button per Persona in his setup or the suggestion, to mark it in use in another team
-      const wonderBusy = s.wonder ? [...new Set(s.wonder.setup.personas.concat(s.wonder.best.personas).map(p => p.name).filter(n => n && !tmBusyP.has(n)))] : [];
-      const actions = s.wonder ? (wonderBusy.length ? `<span class="tiny muted">Persona busy elsewhere:</span> ` + wonderBusy.map(n =>
-          `<button class="sm ghost" data-tm-busy-p="${esc(n)}" title="Wonder uses ${esc(n)} in another team: leave it out here and suggest without it">${esc(n)}</button>`).join(' ') : '')
-        : s.fixed || !s.name || s.name === 'Wonder' ? '' :
-        `<button class="sm ghost" data-tm-busy="${esc(s.name)}" title="${esc(s.name)} is fighting in another team: rebuild this one without them">Busy elsewhere</button>`;
-      // one card per seat: who (striped in their element), their share of the team, what they add, buttons
-      const el = ELEMENT_COLORS[d ? d.e : 'None'] || ELEMENT_COLORS['None'];
-      const who = s.name
-        ? `<div class="nm">${esc(s.name)}${d && d.a ? ` <span class="muted">(${esc(d.a)})</span>` : ''}</div>` +
-          `<div class="meta">${d ? `<i class="el-dot" title="${esc(d.e)}"></i> ${esc(d.arch)} · ${esc(d.e)}` : 'joins every party'}</div>` +
-          (s.name !== 'Wonder' ? `<div class="tags">${tmBuildTag(s.name)}<span class="tag">Awareness ${tmAw(s.name)}</span>${setupIsDefault(s.name) ? '<span class="tag" title="' + esc(DEFAULT_SETUP_NOTE) + '">default Setup</span>' : ''}</div>` : '')
-        : '<div class="nm muted">—</div>';
-      let part = '';
-      if (C) {
-        const share = s.part > 1.001 ? 100 * (s.part - 1) : 0;
-        /* how much of the team's damage is this seat's own hits (the damage dealer's: everything but the others'); Wonder's
-           are counted only once his ATK is entered */
-        const S = C.sim || {}, own = S.own || {}, others = Object.values(own).reduce((a, x) => a + x, 0), tot = (S.total || 0) + (S.ownInTotal === false ? others : 0);
-        const mine = !tot || !s.name ? null : s.fixed ? (tot - others) / tot : (own[s.name] || 0) / tot;
-        const ownTxt = s.name === 'Wonder' && !wonderStats() ? '<small class="muted" title="Enter his ATK next to his Speed to count his own attacks">own hits not counted</small>'
-          : mine != null && (s.fixed || mine >= 0.0005) ? `<small title="The share of the whole team's damage over the fight that ${esc(s.name)}'s own hits deal">${Math.round(100 * mine)}% of the damage</small>` : '';
-        part = s.fixed ? `<div class="tmPart">${ownTxt}</div>`
-          : !s.name ? '<div class="tmPart zero"><b>—</b></div>'
-          : s.wonder && wonderEmpty(s.wonder.setup) ? '<div class="tmPart zero"><b>—</b><small>not set</small></div>'
-          : !s.known ? '<div class="tmPart zero"><b>—</b><small>kit not entered</small></div>'
-          : !share ? `<div class="tmPart zero"><b>+0%</b><small>team damage</small>${ownTxt}</div>`
-          : `<div class="tmPart" title="How much stronger the whole team is with them than without them, their own hits included"><b>+${share.toFixed(1)}%</b><small>team damage</small>${ownTxt}<div class="bar"><i style="width:${Math.round(100 * share / maxShare)}%"></i></div></div>`;
-      }
-      return `<div class="tmSeat${s.fixed ? ' fixed' : ''}${s.name ? '' : ' empty'}" style="--el:${esc(el)}">
-        <div class="tmWho"><div class="role">${esc(s.role)}</div>${who}</div>${part}
-        <div class="tmWhat">${status}${alts ? `<details style="margin-top:6px"><summary class="muted">Replacements (${s.alts.length})</summary><div class="tmAlt">${alts}</div></details>` : ''}</div>
-        <div class="acts">${actions}</div>
-      </div>`;
-    }).join('');
+    const ctx = { dps, D, team, inTeam, C, P, list, calcMode, maxShare };
     const custom = C ? !!(tmPick[dps] && String(tmPick[dps].key).startsWith('calc:'))
       : tmPick[dps] && (tmPick[dps].key !== (list[0].party ? list[0].party.key : null) || Object.keys(tmPick[dps].seats || {}).length);
-
-    const others = C ? list.filter(t => t.calc.key !== C.key).slice(0, 6).map(t => `<div class="tmParty">
-        <button class="sm ghost" data-tm-party="${esc(t.calc.key)}">Use this team</button>
-        <div class="ms">${t.calc.names.filter(Boolean).map((x, i) => `<span class="m">${esc(x)}${i === 3 ? ' (backup)' : ''}</span>`).join('')}</div>
-        <div class="val"><b>${xFmt(t.calc.mult)}</b> ${tcRelHtml(t.calc.mult, C.mult)}</div></div>`).join('')
-    : list.filter(t => t !== team && t.party).slice(0, 6).map(t => {
-      const m = [...t.party.f.filter(x => x), t.party.e, t.party.b].filter(Boolean);
-      const avail = m.filter(x => !tmWhyOut(x)).length;
-      return `<div class="tmParty">
-        <button class="sm ghost" data-tm-party="${esc(t.party.key)}">Use this team</button>
-        <div class="ms">${m.map(x => `<span class="m${tmWhyOut(x) ? ' no' : ''}" title="${esc(tmWhyOut(x) || 'available')}">${esc(x)}${x === t.party.b ? ' (backup)' : ''}</span>`).join('')}</div>
-        <div class="val muted">${avail} of ${m.length} available${t.party.f.includes(null) ? ', one free slot' : ''}</div></div>`;
-    }).join('');
-
-    // turn order: the thieves (Wonder included), fastest first; the Elucidator and the backup act outside it
-    const thieves = team.seats.filter(s => s.seat === 'f' && s.name).map(s => ({ n: s.name, spd: tmSpeed(s.name) }));
-    if (!thieves.some(x => x.n === 'Wonder')) thieves.push({ n: 'Wonder', spd: tmSpeed('Wonder') });
-    // Wonder without a Speed acts just before the damage dealer, as the calculated team plays it
-    const dSpd = tmSpeed(dps), sk = x => x.spd != null ? x.spd : x.n === 'Wonder' && dSpd != null ? dSpd + 0.01 : -1;
-    thieves.sort((a, b) => sk(b) - sk(a));
-    const order = thieves.map((x, i) => `${i ? '<span class="sep">→</span>' : ''}<span class="tmStep">${esc(x.n)} ${x.spd == null ? `<span class="muted">Speed not set${x.n === 'Wonder' && dSpd != null ? `: taken as just before ${esc(dps)}` : ''}</span>` : `<b>${Math.round(x.spd)}</b> Speed`}</span>`).join(' ');
-
-    // the headline: the team's number first, lufel's team beside it for scale
-    const kept = team.seats.filter(s => !s.fixed && s.orig), keptN = kept.filter(s => s.name === s.orig).length;
-    const hero = C
-      ? `<div class="tmHero">
-          <div><div class="num">${xFmt(C.mult)}</div><div class="lbl">${tcRankMode() === 'team' ? `Calculated from the kits: the whole team's damage over the fight, as a multiple of ${esc(dps)} fighting alone` : `Calculated from the kits: how many times ${esc(dps)}'s own damage this team makes it (the others' own hits are not counted; their share is on their seats)`}, against ${esc(tcBossLabel())}.</div></div>
-          ${C.lufel ? `<div class="cmp">lufel's recommended team (${C.lufel.names.filter(Boolean).map(esc).join(', ')}) comes to <b>${xFmt(C.lufel.mult)}</b> ${tcRelHtml(C.lufel.mult, C.mult)} priced the same way.</div>` : ''}
-          ${medicNote}
-          <div class="cmp tiny tmHlNote">${tcFightNote(dps, C.sim)}</div>
-          ${custom ? '<div class="acts"><button class="sm ghost" data-tm-reset="1">Back to the best calculated team</button></div>' : ''}
-        </div>`
-      : `<div class="tmHero">
-          <div><div class="num plain">${P ? `${keptN} of ${kept.length}<small>lufel's picks fielded</small>` : '<small>no lufel team</small>'}</div><div class="lbl">${head}</div></div>
-          ${custom ? '<div class="acts"><button class="sm ghost" data-tm-reset="1">Back to the recommended team</button></div>' : ''}
-        </div>`;
-
-    const fitOn = tmFitOn(), D = charDef(dps);
+    const rows = team.seats.map((s, i) => tmSeatHtml(s, i, ctx)).join('');
+    const backup = team.seats.find(s => s.seat === 'b' && s.name);
+    const fitOn = tmFitOn();
     // both bases seat [the character, thief, thief, Elucidator, backup?, Wonder]: the same Set tcLineup prices with
     const team4 = tcTeamSet(dps, team.seats.filter(s => !s.fixed && s.seat !== 'w').map(s => s.name || null));
-    let fitAny = false;
-    const rot = team.seats.filter(s => s.name && s.name !== 'Wonder' && s.seat !== 'b').map(s => {
-      const r = tmRotPick(s.name, inTeam);
-      const T = TEAMS[s.name] || {};
-      const short = tmShortTargets(s.name);
-      // the fit: this member's rotation re-chosen for the damage dealer (tcRotFit), never the damage dealer's own
-      // the fit: a teammate's rotation re-chosen for the damage dealer (tcRotFit), and the damage dealer's
-      // own re-chosen in the fight for this team (tcSimFitDps)
-      const fits = C && C.sim && C.sim.fits;
-      const F = !fitOn || !D || !r ? null : fits ? fits[s.name] || null
-        : s.fixed ? (C && C.sim && C.sim.dpsRot) || null : tcMember(D, s.name, team4, null, true).rot;
-      // Minami's medicines for this team: named in each turn's tooltip and listed under her rotation
-      const medO = s.name === TC_MEDS_OF && D && D.n !== s.name ? tcPairInfo(s.name, s.pair || tcPairFor(D, s.name)) : null;
-      const grid = (seq, hot) => `<div class="tmRot">${seq.map((x, i) => `<div class="t${x === '-' ? ' idle' : ''}${hot && hot.includes(i) ? ' fit' : ''}" title="${esc(tmTokenText(x, medO && medO.meds))}${hot && hot.includes(i) ? ' (changed for this team)' : ''}"><small>Turn ${i + 1}</small><b>${esc(x === '-' ? '—' : x)}</b>${medO ? tmMedCell(x, medO.meds) : ''}</div>`).join('')}</div>`;
-      // the first option open, the rest folded: three six-turn grids per member made the panel a scroll
-      const opt = (v, k) => `<div class="tiny"><b>${esc(v.label || 'Rotation')}</b>${r && r.pick.length > 1 ? ` <span class="muted">— option ${k + 1} of ${r.pick.length}</span>` : ''}</div>${grid(v.seq)}`;
-      const lufelBody = !r ? '<div class="tiny muted">lufel publishes no rotation for this character.</div>'
-        : opt(r.pick[0], 0) + (r.pick.length > 1 ? `<details class="tiny tmMore"><summary class="muted">${r.pick.length - 1} more option${r.pick.length > 2 ? 's' : ''} lufel writes for this Awareness</summary>${r.pick.slice(1).map((v, k) => opt(v, k + 1)).join('')}</details>` : '');
-      let body = lufelBody;
-      if (F && F.composed && !F.same && F.gain > 1e-4) {
-        fitAny = true;
-        const n = F.changed.length;
-        body = `<div class="tiny"><b>Composed for this team</b> <span class="tag hit" title="Team damage for ${esc(dps)} with this rotation, over lufel's first option as written">+${(100 * F.gain).toFixed(1)}% team damage</span> <span class="muted">— written from ${esc(s.name)}'s own moves within what the kit allows; ${n} of its ${F.seq.length} turns differ from lufel's "${esc(F.base.label || 'Rotation')}" played over the fight</span></div>${grid(F.seq, F.changed)}` +
-          `<details class="tiny tmMore tmLufel"><summary class="muted">lufel's rotation${r.pick.length > 1 ? 's' : ''} as written</summary>${lufelBody}</details>`;
-      } else if (F && F.composed) {
-        body = lufelBody + `<div class="tiny muted tmFitSame">Already the best the kit allows: none of the ${Math.max(0, F.tried - 1)} other rotations tried does more for ${esc(dps)}.</div>`;
-      } else if (F && !F.same && F.gain > 1e-4) {
-        fitAny = true;
-        const turns = F.changed.map(i => i + 1);
-        const how = turns.length ? `turn${turns.length > 1 ? 's' : ''} ${turns.join(', ')} re-chosen` : 'as lufel writes it';
-        body = `<div class="tiny"><b>Fitted to this team</b> <span class="tag hit" title="Team damage for ${esc(dps)} with this rotation, over lufel's first option as written">+${(100 * F.gain).toFixed(1)}% team damage</span> <span class="muted">— lufel's "${esc(F.base.label || 'Rotation')}"${F.base.of > 1 ? ` (option ${F.base.index + 1} of ${F.base.of})` : ''}, ${how}</span></div>${grid(F.seq, F.changed)}` +
-          `<details class="tiny tmMore tmLufel"><summary class="muted">lufel's rotation${r.pick.length > 1 ? 's' : ''} as written</summary>${lufelBody}</details>`;
-      } else if (F) {
-        body = lufelBody + `<div class="tiny muted tmFitSame">Already the best fit: none of the ${F.tried - 1} other ways to choose its plain skill turns does more for ${esc(dps)}.</div>`;
-      }
-      const awNote = !r || r.lvl == null ? '' : r.below
-        ? `<span class="tag miss">written for Awareness ${r.lvl}</span> <span class="muted">their Setup says ${r.aw}; lufel has nothing lower</span>`
-        : `<span class="muted">for Awareness ${r.lvl}${r.lvl !== r.aw ? ` (their Setup says ${r.aw})` : ''}</span>`;
-      const more = r && r.all.length > r.pick.length
-        ? `<details class="tiny"><summary class="muted">All of lufel's rotations for ${esc(s.name)} (${r.all.length})</summary>${r.all.map(v => `<div><b>${esc(v.label)}</b></div>${grid(v.seq)}`).join('')}</details>` : '';
-      const notes = (T.notes || []).map(x => `<div class="tiny tmNote">${esc(x.replace(/^[·•]\s*/, ''))}</div>`).join('');
-      // their Highlights (Theurgies) come from the fight, not from lufel's HL/TH turns
-      const kind = tcHlKind(s.name), nHl = C && C.sim ? C.sim.hl[s.name] : null;
-      const hlNote = C && kind && nHl != null
-        ? `<div class="tiny muted tmHlAdd">${kind === 'TH' ? `Theurgies: ${nHl} in this fight, each as soon as their own gauge (+35 a turn) is full` : `Highlights: ${nHl} in this fight, from the team's shared gauge`}; lufel's ${kind} turns are where lufel writes them, the fight decides its own.</div>` : '';
-      const targets = short.length ? `<div class="tiny" style="margin:4px 0"><span class="tag miss">short of lufel's targets</span> ` +
-        short.map(x => `${esc(x.stat)} ${tmFmt(x.total, x.pct)} of ${tmFmt(x.bar, x.pct)}`).join(' · ') + '</div>' : '';
-      const dd = charDef(s.name), el = ELEMENT_COLORS[dd ? dd.e : 'None'] || ELEMENT_COLORS['None'];
-      return `<div class="tmMember" style="--el:${esc(el)}">
-        <div class="hd"><span class="nm">${esc(s.name)}</span> <span class="tag">${esc(s.role)}</span> <span class="tiny">${awNote}</span>
-          ${T.kr ? `<a class="tiny" href="https://lufel.net/character.html?name=${encodeURIComponent(T.kr)}" target="_blank" rel="noopener">Full guide on lufel.net</a>` : ''}</div>
-        ${targets}${body}${medO ? `<div class="tiny tmMeds">Medicines for this team: ${tmMedsHtml(medO, F && !F.same && F.gain > 1e-4 ? F.seq : r && r.pick[0] ? r.pick[0].seq : null)}</div>` : ''}${hlNote}${notes}${more}</div>`;
-    }).join('');
-    const backup = team.seats.find(s => s.seat === 'b' && s.name);
-    /* Wonder's six turns, repeated: the Persona in use and what it casts, or the Persona he attacks with;
-       with your setup, and with the suggested one when it differs. His Highlight comes from the gauge. */
-    const wseat = team.seats.find(s => s.seat === 'w');
-    let wonderRot = '';
-    if (C && wseat && wseat.wonder) {
-      const W = wseat.wonder, B = W.best;
-      const wgrid = turns => `<div class="tmRot wonder">${turns.map((t, i) => `<div class="t${t.what === 'attack' ? ' idle' : ''}" title="${esc(t.what === 'attack' ? `attacks with ${t.persona || 'no Persona'}` : `${t.persona} casts ${t.what}`)}"><small>Turn ${i + 1}</small><b>${esc(t.what === 'attack' ? 'Attack' : t.what)}</b><span class="who">${esc(t.persona || '—')}</span></div>`).join('')}</div>`;
-      const mine = !wonderEmpty(W.setup) && (W.turns || []).some(t => t.persona);
-      const sug = B && W.bestGain >= 1.0005 && JSON.stringify(B) !== JSON.stringify(W.setup) ? tcWonder(D, B).turns : null;
-      wonderRot = `<div class="tmMember"><div class="hd"><span class="nm">Wonder</span> <span class="tag">every party</span> <span class="tiny muted">his six turns, repeated; his Highlight comes from the shared gauge</span></div>` +
-        (mine ? `<div class="tiny"><b>Your setup</b></div>${wgrid(W.turns)}` : '<div class="tiny muted">Your setup has no Persona yet: set them under Wonder\'s setup at the top.</div>') +
-        (sug ? `<div class="tiny" style="margin-top:6px"><b>Suggested setup</b> <span class="muted">— ${esc(B.personas.filter(p => p.name).map((p, i) => p.name + (i ? '' : ' (leads)')).join(', '))}, with the skill cards each has learned</span></div>${wgrid(sug)}` : '') + '</div>';
-    }
-
-    // synergies lufel names between members of this team, and the mechanics that need explaining
-    const pairs = tmSynergyItems(inTeam, backup && backup.name);
-    const mech = [...inTeam].filter(n => TEAM_MECHANICS[n]).map(n => {
-      const M = TEAM_MECHANICS[n];
-      const extra = n === TM_FUUKA ? (backup
-        ? `<p class="tiny">Backup here: <b>${esc(backup.name)}</b>${backup.orig === backup.name ? ' — lufel\'s pick for this team.' : backup.pickWhy ? ' — ' + backup.pickWhy.map(esc).join(' · ').replace(/\.?$/, '.') : '.'} Other choices are under its Replacements above.</p>`
-        : '<p class="tiny"><span class="tag miss">no backup</span> None of the characters lufel recommends as Fuuka\'s backup is available.</p>') : '';
-      return `<div class="tmMember"><div class="hd"><span class="nm">${esc(M.title)}</span></div>${M.body.map(p => `<p class="tiny tmNote">${p}</p>`).join('')}${extra}</div>`;
-    }).join('');
-
+    const rotState = { fitAny: false };
+    const rot = team.seats.filter(s => s.name && s.name !== 'Wonder' && s.seat !== 'b').map(s => tmRotMemberHtml(s, ctx, team4, fitOn, rotState)).join('');
+    const wonderRot = tmWonderRotHtml(ctx);
     out.innerHTML = `
       <div class="panel">
         <h2>Team for ${esc(dps)}</h2>
-        ${hero}
+        ${tmHeroHtml(ctx, custom)}
         <div class="tmSeats${C ? ' calc' : ''}">${rows}</div>
-        <div class="tiny muted" style="margin-top:8px">Wonder joins every party${C ? '; what his Persona, skill cards and weapon add is in the last seat' : ''}.</div>
-        ${C ? explainHtml('How the team is calculated', `<p class="tiny">Every pair of your available thieves and every available Elucidator (with Fuuka, also her best backup) is priced by how much stronger they make ${esc(dps)}'s hits, using lufel's damage formula: ATK, damage bonus, enemy defence (DEF down and Pierce), crit, weakness and final damage multiply, and values of one kind add up (so three ATK buffs are one bigger ATK buff). ${esc(dps)}'s own cards and Setup are the starting point, with no buffs at all, which is why the number is large: a boss with +158% DEF takes little from an unbuffed hit. Each member's buffs are read from their kit, unlocked by their Awareness and weapon and scaled by their own stats where the kit says so; the bold line under a member sums them per factor, each at the share of ${esc(dps)}'s actions it was up for in the fight, and the lines behind it are folded under "Where it comes from". A member's percentage is what the team loses without them, so the percentages do not add up to the total. An Elucidator adds 20% of her ATK, crit, damage and Pierce (15% at 4★). The boss, the number of foes and whether hits land on a weakness are the settings at the top (by default lufel's example, the Lv82 guild-boss Vishnu, DEF 820.7, +158.4% DEF, one foe, hit as its resistances say).</p>
-          <p class="tiny">The number comes from the fight played out round by round, for the length set at the top: the Elucidator acts at the start of each round, the four thieves (Wonder included) once each in Speed order, the enemy last. Each member follows their lufel rotation (or the fitted one); a buff on ${esc(dps)} counts down after ${esc(dps)}'s own action and a debuff on the enemy after the enemy's, so a buff cast after ${esc(dps)} has acted waits for the next round. ${esc(dps)}'s damage is their skills as lufel's skill numbers give them, their Highlight or Theurgy when it fires, and what their kit deals besides (Resonance, follow-ups, damage over time — much of it set off by teammates' actions or Highlights), each hit with whatever is up at that moment. The team's number is that total over the same fight with teammates who add nothing.</p>
-          <p class="tiny">Highlights come from one gauge the team shares: 21% for each thief's action that hits the boss's weakness and 17% for one that does not (a buff, a shield, Wonder casting a card), never above 100%, and a Highlight spends it all and puts its user's own Highlight out of reach for their next 4 actions, so the first Highlight comes in round 2 and the gauge cannot give everyone theirs. A Highlight cannot crit unless its kit says it can (J&C, Kasumi, Radiance Motoha); a Theurgy can. Wonder casts his skills on a six-turn schedule (under Rotation) and attacks in between. The fight is played with the gauge spent in several orders (${esc(dps)} first, or a teammate whose Highlight buffs first) and spent as soon as it fills or held for just before ${esc(dps)} acts; the best is kept and named above. A Theurgy has its own gauge (+35 at its user's turn start) and fires as soon as it is full. Gauge and cooldown effects (Ayaka, Fuuka, Yukari, Miku's Virtual Concert), Summer Ayaka's Concerto of Time, free Highlights (Catchy Hook, Kotone Shiomi's Fortune, Kasumi's) and starting gauge are played out as their kits say. Manaka's Da Capo is an extra action for ${esc(dps)}, with what runs only on it. With Fuuka, Oracle Shift swaps her backup in for one action whenever her stacks allow, just before ${esc(dps)} acts, with her Awareness 2 Highlight from the backup; the backup's action is taken to fill the Highlight gauge like any thief's.</p>
-          <p class="tiny">${tcDownPts() ? `Down: the boss has ${tcDownPts()} Down Points; each skill on its weakness takes 1 (a damaging Highlight too, and more where a kit says so whatever the weakness), and at 0 it is knocked down until its own turn, which it still takes, then its gauge refills. Effects that need a downed foe count only then. All-Out Attacks and Dizzy are not counted.` : 'Down: the boss is set to "can\'t be knocked down" (Down Points at the top), so effects that need a downed foe count for nothing.'}</p>
-          <p class="tiny">Not counted: weakness creation, Technicals other than Fireburn and Iceburn (Mio's Cold Flames), ailments other than damage over time a kit prices, healing and survival, buffs that copy other buffs (except Kotone Shiomi's Lunar Phaseshift, which copies her target's buffs on the damage dealer at 30% for a turn and is counted), and what each kit's "Not priced" list names. Characters whose kit is not entered yet count as adding nothing. Treat the number as a ranking of teams for this damage dealer, not a damage forecast.</p>`) : ''}
-        ${C ? '' : explainHtml('How the team is chosen', `<p class="tiny">Every team lufel recommends with ${esc(dps)} is filled from the characters you own and have not benched or marked busy. The team shown keeps the most of lufel's own picks; ties go to a team from ${esc(dps)}'s own page, then to the better-geared team. A seat whose pick you cannot field goes to whoever lufel links to ${esc(dps)} most — the same seat in another of their teams, a synergy partner lufel lists (with its reason), or the same role — and only then to your best-built character, marked "filler". Build scores only break ties.</p>`)}
+        <div class="tmLinks">${C ? infoLinkHtml('How the team is calculated', tmCalcInfo(ctx)) : infoLinkHtml('How the team is chosen', tmChooseInfo(ctx))}</div>
       </div>
-      ${others ? `<div class="panel"><h2>${C ? 'Next best calculated teams' : 'Other teams lufel recommends'}</h2><div class="tmParties">${others}</div></div>` : ''}
+      ${tmOthersHtml(ctx)}
       <div class="panel">
-        <h2>Turn order</h2>
-        <div class="tmOrder">${order}</div>
-        <div class="tiny muted" style="margin-top:8px">Fastest first, by each thief's in-battle Speed with the cards they wear, their Setup and the Thieves Den. The Elucidator${backup ? ' and the backup act' : ' acts'} outside this order. ${tmSpeed('Wonder') == null ? 'Wonder\'s Speed is his first Persona\'s, with its Agility Master or Ironclad Resolve: enter that Persona\'s Speed on the Personas tab, or his in the field at the top, to place him. Until then he is taken to act just before the damage dealer, so his one-turn buffs and debuffs meet their hit.' : wonderCalc(wonderHere()).spd != null ? 'Wonder\'s is his first Persona\'s Speed with its skills (from the Personas tab), plus the Thieves Den.' : 'Wonder\'s is the Speed you entered at the top, plus the Thieves Den.'}${C ? ` The calculated team plays this order out: a buff cast before ${esc(dps)} acts is up for this round's hit, one cast after it waits a round, which is why damage dealers are usually slowest.` : ''}</div>
+        <div class="tmPanelHd"><h2>Turn order</h2>${infoLinkHtml('How the turn order is worked out', tmOrderInfo(ctx, backup))}</div>
+        <div class="tmOrder">${tmOrderHtml(ctx)}</div>
       </div>
       <div class="panel">
-        <h2>Rotation</h2>
-        ${explainHtml(`lufel's skill order per turn, at each member's Awareness. 1-3 are skills, HL Highlight, TH Theurgy, ↺ used automatically, — no action yet; hover a turn for the words.${fitOn ? ' Green turns were re-chosen for this team.' : ' Rotations are lufel\'s as written.'}`,
-          `<p>Rotations are lufel's, at each member's Awareness (from their Setup), preferring rotations written for a teammate in this team.${backup ? ` The backup, ${esc(backup.name)}, acts only when Fuuka swaps them in.` : ''}</p>` + (fitOn
-          ? `<p><b>Fitted to this team</b>: a member's plain skill turns (a bare 1, 2 or 3) are re-chosen for what they do for ${esc(dps)} in this team, within the skills and frequencies lufel's own rotations for them use, so no skill is cast more often than lufel ever writes it; bursts, Highlights, Transformations, items, Fatigue and idle turns stay where lufel put them, and no skill is cast again inside its cooldown. Every rotation here, ${esc(dps)}'s own included, is chosen by playing the fight with this team, one member at a time until no change helps (turn order, the Highlight gauge and what the members set off for each other all count); a change has to gain at least 0.1%. Highlighted turns are the ones changed; the gain is the team's damage as the calculated basis prices it, over lufel's first option as written.${fitAny ? '' : ' Here every member\'s rotation is already lufel\'s.'}</p>`
-          : '<p>Rotations are lufel\'s as written; tick "Fit rotations to this team" above to re-choose each member\'s plain skill turns for this team.</p>'))}
-        <div class="tmMembers" style="margin-top:12px">${rot}${wonderRot}</div>
+        <div class="tmPanelHd"><h2>Rotation</h2>${infoLinkHtml('How the rotations are chosen', tmRotInfo(ctx, backup, fitOn, rotState.fitAny))}</div>
+        ${tmLegendHtml(fitOn)}
+        <div class="tmMembers">${rot}${wonderRot}</div>
       </div>
-      ${pairs.length || mech ? `<div class="panel"><h2>How this team works</h2><div class="tmMembers">${mech}${pairs.length ? `<div class="tmMember"><div class="hd"><span class="nm">Synergies lufel names</span></div><ul class="tiny" style="margin:4px 0 0 18px">${pairs.join('')}</ul></div>` : ''}</div></div>` : ''}`;
+      ${tmWorksHtml(ctx, backup)}`;
   } finally { tmBuildMemo = null; tmMarkStale(); }
+}
+
+/* The headline: the team's number as one big figure, lufel's team beside it for scale, the medic note,
+   and the fight as a row of facts (tcFightNote). On the lufel basis, how many of lufel's picks are fielded. */
+function tmHeroHtml(ctx, custom) {
+  const { dps, team, C, P } = ctx;
+  const xFmt = m => '×' + m.toFixed(2);
+  if (C) {
+    // "Include a medic": who took the seat, or why no one did
+    const M = C.medic;
+    const medicNote = !M ? ''
+      : M.self ? `<div class="tmMedicNote">${esc(dps)} is a medic, so no other medic is added.</div>`
+      : M.none ? `<div class="tmMedicNote"><span class="tag miss">no medic</span> No medic is available (owned, not benched, not busy), so this team is built without one.</div>`
+      : `<div class="tmMedicNote"><span class="tag hit">medic</span> With a medic: ${M.names.map(n => `<b>${esc(n)}</b>`).join(' and ')} — the medic that adds most to ${esc(dps)}'s damage, with the rest of the team chosen around them. Healing itself is not priced.</div>`;
+    return `<div class="tmHero">
+        <div><div class="num">${xFmt(C.mult)}</div><div class="lbl">Calculated from the kits: ${tcRankMode() === 'team' ? `the whole team's damage over the fight, as a multiple of ${esc(dps)} fighting alone` : `${esc(dps)}'s own damage with this team, as a multiple of ${esc(dps)} fighting alone (the others' own hits are on their seats, not in the number)`}, against ${esc(tcBossLabel())}.</div></div>
+        ${C.lufel ? `<div class="cmp"><div><span class="tag">lufel's team</span> ${C.lufel.names.filter(Boolean).map(esc).join(', ')}</div><div>comes to <b>${xFmt(C.lufel.mult)}</b> ${tcRelHtml(C.lufel.mult, C.mult)} priced the same way.</div></div>` : ''}
+        ${custom ? '<div class="acts"><button class="sm ghost" data-tm-reset="1">Back to the best calculated team</button></div>' : ''}
+      </div>${medicNote}<div class="tmHlNote">${tcFightNote(dps, C.sim)}</div>`;
+  }
+  const head = P
+    ? `Built on a team lufel recommends${P.from[0] === dps ? ` on ${esc(dps)}'s page` : ` (listed on ${P.from.map(esc).join(', ')}'s page${P.from.length > 1 ? 's' : ''})`}: ` +
+      `${P.f.map(x => esc(x || 'free slot')).join(', ')}${P.e ? ' with ' + esc(P.e) : ''}${P.b ? ', backup ' + esc(P.b) : ''}.`
+    : `lufel lists no team with ${esc(dps)}, so this one is built from the characters lufel names as their partners and from your best-built characters.`;
+  const kept = team.seats.filter(s => !s.fixed && s.orig), keptN = kept.filter(s => s.name === s.orig).length;
+  return `<div class="tmHero">
+      <div><div class="num plain">${P ? `${keptN} of ${kept.length}<small>lufel's picks fielded</small>` : '<small>no lufel team</small>'}</div><div class="lbl">${head}</div></div>
+      ${custom ? '<div class="acts"><button class="sm ghost" data-tm-reset="1">Back to the recommended team</button></div>' : ''}
+    </div>`;
+}
+
+/* One seat: who (striped in their element, the role coloured by the kind of seat), their share of the
+   team, what they add, and the buttons. */
+function tmSeatHtml(s, i, ctx) {
+  const { dps, C, maxShare } = ctx;
+  const d = s.name && charDef(s.name);
+  let status;
+  if (!s.name) status = '<span class="tag miss">empty</span> <span class="muted">no available character fits this seat</span>';
+  else if (s.fixed && C) status = tmDpsWhat(s, ctx);
+  else if (s.fixed) status = '<span class="muted">the character this team is built around</span>';
+  else if (C) status = s.wonder ? tmWonderWhat(s, ctx) : tmMateWhat(s, ctx);
+  else if (s.chosen) status = `<span class="tag">your choice</span>${s.orig && s.orig !== s.name ? ` <span class="muted">instead of ${esc(s.orig)}</span>` : ''}`;
+  else if (s.orig && s.name === s.orig) status = '<span class="tag hit">lufel\'s pick</span>';
+  else status = (s.orig ? `<span class="tag miss">replaces ${esc(s.orig)}</span> <span class="muted">${esc(tmWhyOut(s.orig))}</span>`
+                        : `<span class="tag">${s.fallback ? 'filler' : 'free slot'}</span>`) +
+    (s.pickWhy ? `<div class="note">${s.pickWhy.map(esc).join('<br>')}</div>` : '');
+  const alts = (s.alts || []).map(a => `<div class="alt">
+      <button class="sm ghost" data-tm-use="${i}" data-name="${esc(a.n)}">Use</button>
+      <b>${esc(a.n)}</b> ${tmBuildTag(a.n)} <span class="tiny muted">Awareness ${tmAw(a.n)}</span>
+      <span class="tiny muted" style="flex-basis:100%">${a.why.map(esc).join(' · ')}</span></div>`).join('');
+  // Wonder's own seat: a button per Persona in his setup or the suggestion, to mark it in use in another team
+  const wonderBusy = s.wonder ? [...new Set(s.wonder.setup.personas.concat(s.wonder.best.personas).map(p => p.name).filter(n => n && !tmBusyP.has(n)))] : [];
+  const actions = s.wonder ? (wonderBusy.length ? `<span class="tiny muted">Persona busy elsewhere:</span> ` + wonderBusy.map(n =>
+      `<button class="sm ghost" data-tm-busy-p="${esc(n)}" title="Wonder uses ${esc(n)} in another team: leave it out here and suggest without it">${esc(n)}</button>`).join(' ') : '')
+    : s.fixed || !s.name || s.name === 'Wonder' ? '' :
+    `<button class="sm ghost" data-tm-busy="${esc(s.name)}" title="${esc(s.name)} is fighting in another team: rebuild this one without them">Busy elsewhere</button>`;
+  const el = ELEMENT_COLORS[d ? d.e : 'None'] || ELEMENT_COLORS['None'];
+  const who = s.name
+    ? `<div class="nm">${esc(s.name)}${d && d.a ? ` <span class="muted">(${esc(d.a)})</span>` : ''}</div>` +
+      `<div class="meta">${d ? `<i class="el-dot" title="${esc(d.e)}"></i> ${esc(d.arch)} · ${esc(d.e)}` : `joins every party ${infoBtnHtml('Wonder in the team', TM_WONDER_SEAT_INFO)}`}</div>` +
+      (s.name !== 'Wonder' ? `<div class="tags">${tmBuildTag(s.name)}<span class="tag">Awareness ${tmAw(s.name)}</span>${setupIsDefault(s.name) ? '<span class="tag" title="' + esc(DEFAULT_SETUP_NOTE) + '">default Setup</span>' : ''}</div>` : '')
+    : '<div class="nm muted">—</div>';
+  let part = '';
+  if (C) {
+    const share = s.part > 1.001 ? 100 * (s.part - 1) : 0;
+    /* how much of the team's damage is this seat's own hits (the damage dealer's: everything but the others'); Wonder's
+       are counted only once his ATK is entered */
+    const S = C.sim || {}, own = S.own || {}, others = Object.values(own).reduce((a, x) => a + x, 0), tot = (S.total || 0) + (S.ownInTotal === false ? others : 0);
+    const mine = !tot || !s.name ? null : s.fixed ? (tot - others) / tot : (own[s.name] || 0) / tot;
+    const ownTxt = s.name === 'Wonder' && !wonderStats() ? '<small class="muted" title="Enter his ATK under Wonder\'s setup to count his own attacks">own hits not counted</small>'
+      : mine != null && (s.fixed || mine >= 0.0005) ? `<small title="The share of the whole team's damage over the fight that ${esc(s.name)}'s own hits deal">${Math.round(100 * mine)}% of the damage</small>` : '';
+    part = s.fixed ? `<div class="tmPart">${ownTxt}</div>`
+      : !s.name ? '<div class="tmPart zero"><b>—</b></div>'
+      : s.wonder && wonderEmpty(s.wonder.setup) ? '<div class="tmPart zero"><b>—</b><small>not set</small></div>'
+      : !s.known ? '<div class="tmPart zero"><b>—</b><small>kit not entered</small></div>'
+      : !share ? `<div class="tmPart zero"><b>+0%</b><small>team damage</small>${ownTxt}</div>`
+      : `<div class="tmPart" title="How much stronger the whole team is with them than without them, their own hits included"><b>+${share.toFixed(1)}%</b><small>team damage</small>${ownTxt}<div class="bar"><i style="width:${Math.round(100 * share / maxShare)}%"></i></div></div>`;
+  }
+  const kind = s.fixed ? 'dps' : s.seat === 'w' ? 'wonder' : s.seat === 'b' ? 'backup' : s.seat === 'e' ? 'elu' : s.role === 'Medic' ? 'medic' : 'thief';
+  return `<div class="tmSeat kind-${kind}${s.fixed ? ' fixed' : ''}${s.name ? '' : ' empty'}" style="--el:${esc(el)}">
+    <div class="tmWho"><div class="role">${esc(s.role)}</div>${who}</div>${part}
+    <div class="tmWhat">${status}${alts ? `<div class="tmFolds"><details><summary>Replacements (${s.alts.length})</summary><div class="in"><div class="tmAlt">${alts}</div></div></details></div>` : ''}</div>
+    <div class="acts">${actions}</div>
+  </div>`;
+}
+const TM_WONDER_SEAT_INFO = '<p>Wonder joins every party. What his Personas, their skill cards and his weapon add is set under <b>Wonder\'s setup</b> at the top and priced here; the suggestion is the setup that does most for this team among what you own.</p><p>A Persona\'s passives count only while it is in use, so his six actions are shared among the Personas set. Anything that grows with his own stats is taken at its cap. His own attacks count once his ATK is entered (or worked out from his setup): his attack turns, an attacking skill he casts, his Highlight. His turns are under Rotation.</p>';
+
+// a folded list under a seat: "Title (n)" closed, the items when opened
+const tmFoldHtml = (title, items, lead) => items.length ? `<details><summary>${esc(title)} (${items.length})</summary><div class="in">${lead || ''}<ul>${items.map(x => `<li>${esc(x)}</li>`).join('')}</ul></div></details>` : '';
+
+/* The damage dealer's seat: what their own damage in the fight was made of (a stacked bar and the
+   shares), and their own kit lines folded under it. */
+function tmDpsWhat(s, ctx) {
+  const { C, team } = ctx, d = charDef(s.name);
+  const S = C.sim, sum = Object.values(S.parts || {}).reduce((a, b) => a + b, 0) || 1;
+  const parts = Object.entries(S.parts || {}).filter(([, v]) => v / sum >= 0.005).sort((a, b) => b[1] - a[1]);
+  const bar = parts.length ? `<div class="tmMix" title="What ${esc(s.name)}'s own damage over the fight was made of">${parts.map(([k, v]) => `<i style="--pc:${TC_PART_COLOR[k] || '#9aa0aa'};width:${(100 * v / sum).toFixed(1)}%"></i>`).join('')}</div>` : '';
+  const pills = parts.map(([k, v]) => `<span class="st f-mix" style="--pc:${TC_PART_COLOR[k] || '#9aa0aa'}"><small>${esc(TC_PART_LABEL[k] || k)}</small> <b>${Math.round(100 * v / sum)}%</b></span>`).join('');
+  const mates = team.seats.filter(x => !x.fixed && x.seat === 'f').map(x => x.name);
+  const kit = tcKitFor(d, mates), bonus = tcKitBonusFor(d, mates), skips = DPS_KIT_SKIPS[s.name] || [];
+  const selfLines = (tcMember(d, s.name, null, null, false).lines || []);
+  const selfSum = tcSumHtml(selfLines.filter(l => l.up > 0));
+  return tmPairHtml(s) + '<div class="note">their own damage in this fight, by kind:</div>' + bar +
+    (pills ? `<div class="tcSum">${pills}</div>` : '') +
+    `<div class="tmFolds">${tmFoldHtml("Their kit's other damage, counted", kit.map(c => c.why))}${tmFoldHtml('Their own damage bonuses, counted', bonus.map(b => b.why))}` +
+    tmFoldHtml('Their own party buffs and enemy debuffs, which reach them too', selfLines.map(l => l.why), selfSum ? `<div class="tcSum" style="margin-top:4px" title="Averaged over the fight; the fight itself plays each one out turn by turn">${selfSum}</div>` : '') +
+    tmFoldHtml('Not priced in their own damage', skips) + '</div>';
+}
+
+/* A teammate's, the Elucidator's or the backup's seat on the calculated basis: what they add as pills,
+   the notes that need words, and the lines behind it folded. */
+function tmMateWhat(s, ctx) {
+  const { dps } = ctx;
+  const live = (s.lines || []).filter(l => l.up > 0).sort((a, b) => b.v * b.up - a.v * a.up);
+  const off = (s.lines || []).filter(l => l.offRot);
+  const sum = tcSumHtml(live);
+  return (s.chosen ? '<div style="margin-bottom:4px"><span class="tag">your choice</span></div>' : '') + tmPairHtml(s) +
+    (s.shifts ? `<div class="note tmShifts">${s.shifts.length ? `<span class="tag">Oracle Shift</span> swapped in ${s.shifts.length} time${s.shifts.length > 1 ? 's' : ''} (round${s.shifts.length > 1 ? 's' : ''} ${s.shifts.join(', ')}), just before ${esc(dps)} acts${s.swapSkill ? `, using Skill ${s.swapSkill}` : ''}${tmAw(TM_FUUKA) >= 2 ? ', with their Highlight or Theurgy (Pros and Cons, once every 3 rounds)' : ''}.` : '<span class="tag miss">never swapped in</span> Fuuka\'s stacks do not reach an Oracle Shift in this fight.'}</div>` : '') +
+    // Kotone Shiomi's Lunar Phaseshift (TC_COPY): what she copied, and from whom
+    (s.copyLog ? `<div class="note tmCopy">${s.copyLog.casts
+      ? (s.copyLog.made
+        ? `Lunar Phaseshift copied buffs onto ${esc(dps)} on ${s.copyLog.made} of her ${s.copyLog.casts} Skill 3 cast${s.copyLog.casts === 1 ? '' : 's'} (from ${esc(s.copyLog.who)}), at ${s.copyLog.rate}% for 1 turn (counted below).`
+        : `None of her ${s.copyLog.casts} Skill 3 cast${s.copyLog.casts === 1 ? '' : 's'} found a teammate's buff on ${esc(dps)} worth copying.`)
+      : `Her rotation here casts no Skill 3, so Lunar Phaseshift copies nothing.`}</div>` : '') +
+    (s.copiedBy ? `<div class="note tmCopy">${esc(TC_COPY.n)} copies ${s.name === 'Wonder' ? 'his' : 'their'} buffs onto ${esc(dps)} (${s.copiedBy.rate}%, 1 turn) on ${s.copiedBy.times} of her ${s.copiedBy.casts} Skill 3 cast${s.copiedBy.casts === 1 ? '' : 's'}; this seat's share counts it.</div>` : '') +
+    (!s.known ? '<div style="margin-bottom:4px"><span class="tag miss">kit not entered yet</span> <span class="muted">counted as adding nothing</span></div>'
+     : s.empty && !(s.part > 1.001) ? '<div style="margin-bottom:4px"><span class="tag">nothing to price</span> <span class="muted">their kit is entered and has no buff for the team\'s damage</span></div>'
+     : '') +
+    (sum ? `<div class="tcSum" title="What they add to ${esc(dps)}, each line counted at its share of turns">${sum}</div>` : '') +
+    (off.length ? `<div class="note" title="${esc(off.map(l => l.why).join('\n'))}">Not counted, not in their rotation here: ${[...new Set(off.map(l => l.why.split(':')[0].trim()))].map(esc).join(', ')}</div>` : '') +
+    `<div class="tmFolds">${live.length ? `<details><summary>Where it comes from (${live.length} line${live.length === 1 ? '' : 's'})</summary><div class="in">${live.map(l =>
+      `<div><b>${esc(tcLineText(l))}</b> — ${esc(l.why)}</div>`).join('')}</div></details>` : ''}${tmFoldHtml('Not priced', TEAM_BUFF_SKIPS[s.name] || [])}</div>`;
+}
+
+/* Wonder's seat: what his setup adds, which Persona he uses how often, and the setup that would do most. */
+function tmWonderWhat(s, ctx) {
+  const W = s.wonder, B = W.best;
+  const live = (s.lines || []).filter(l => l.up > 0).sort((a, b) => b.v * b.up - a.v * a.up);
+  const sum = tcSumHtml(live);
+  const say = S => S.personas.filter(p => p.name).map((p, i) => `${i + 1}. ${p.name}${i ? '' : ' (leads)'}${wonderSkills(p).length ? ' (' + wonderSkills(p).join(', ') + ')' : ''}`).join(' · ') + (S.weapon ? ` · ${S.weapon} ${refineLabel(S.refine)}` : '');
+  const same = JSON.stringify(B) === JSON.stringify(W.setup);
+  // which Persona he is using how often, and what his six actions cannot fit
+  const use = W.setup.personas.map((p, i) => p.name && !tmBusyP.has(p.name) ? `<span class="u" style="--el:${esc(ELEMENT_COLORS[(WONDER_PERSONA[p.name] || {}).e] || ELEMENT_COLORS['None'])}"><i class="el-dot"></i>${esc(p.name)} <b>${Math.round(100 * (W.inUse[i] || 0))}%</b></span>` : '').filter(Boolean);
+  // the suggested Personas that add nothing here (his six actions are spent by the others)
+  const idleNames = B.personas.filter((p, i) => p.name && !((B.adds || [])[i] > 0.0005)).map(p => p.name);
+  const busyIn = W.setup.personas.filter(p => tmBusyP.has(p.name)).map(p => p.name);
+  const skips = (W.setup.weapon ? WONDER_SKIPS.weapons[W.setup.weapon] || [] : []).concat(...W.setup.personas.filter(p => p.name).map(p => (WONDER_SKIPS.personas[p.name] || []).concat(...wonderSkills(p).map(c => WONDER_SKIPS.cards[c] || []))));
+  return (wonderEmpty(W.setup) ? '<div class="note">Set his Personas, their skill cards and his weapon under Wonder\'s setup at the top to count what he brings.</div>' : '') +
+    (busyIn.length ? `<div class="note"><span class="tag miss">left out</span> ${esc(busyIn.join(' and '))} ${busyIn.length > 1 ? 'are' : 'is'} busy in another team, so ${busyIn.length > 1 ? 'they and their' : 'it and its'} skill cards are not counted here.</div>` : '') +
+    (s.copiedBy ? `<div class="note tmCopy">${esc(TC_COPY.n)} copies his buffs onto ${esc(ctx.dps)} (${s.copiedBy.rate}%, 1 turn) on ${s.copiedBy.times} of her ${s.copiedBy.casts} Skill 3 cast${s.copiedBy.casts === 1 ? '' : 's'}; this seat's share counts it.</div>` : '') +
+    (sum ? `<div class="tcSum" title="What he adds to ${esc(ctx.dps)}, each line counted at its share of turns">${sum}</div>` : '') +
+    (use.length ? `<div class="note">In use, by share of his turns:</div><div class="tmUse">${use.join('')}</div>` : '') +
+    ((W.uncast || []).length ? `<div class="note">Not cast — no turns left for them, or they would cost more than they bring: ${W.uncast.map(esc).join(', ')}.</div>` : '') +
+    (W.idle.length ? `<div class="note">Not counted: ${W.idle.map(esc).join('; ')}</div>` : '') +
+    `<div class="tmFolds">${live.length ? `<details><summary>Where it comes from (${live.length} line${live.length === 1 ? '' : 's'})</summary><div class="in">${live.map(l =>
+      `<div><b>${esc(tcLineText(l))}</b> — ${esc(l.why)}</div>`).join('')}</div></details>` : ''}${tmFoldHtml('Not priced', skips)}</div>` +
+    (same || W.bestGain < 1.0005 ? '' : `<div class="tmSuggest"><div class="hd"><span class="lead">Best setup for this team</span><span class="gain">team damage +${(100 * (W.bestGain - 1)).toFixed(1)}%</span><button class="sm" data-tm-wonder="${esc(JSON.stringify(B))}">Use it</button></div>
+      <div style="margin-top:4px"><b>${esc(say(B))}</b></div>
+      <div class="tmFolds"><details><summary>What the suggestion counts</summary><div class="in">${B.personas.some(p => p.name && wonderSkills(p).length) ? 'Each Persona with the skill cards and fused skills it has on the Personas tab, besides' : 'No skill cards or fused skills: each Persona brings'} its own unique skill, passives, innate skills and Highlight. His turns with it are under Rotation.` +
+      (idleNames.length ? ` ${esc(idleNames.join(' and '))} add${idleNames.length > 1 ? '' : 's'} nothing in this team — the others already fill his one action a turn, and a Persona's passives only work while it is in use — and ${idleNames.length > 1 ? 'are' : 'is'} the strongest of the rest on ${idleNames.length > 1 ? 'their' : 'its'} own.` : '') + '</div></details></div></div>');
+}
+
+/* The next best teams (or lufel's other parties), each against the one shown. */
+function tmOthersHtml(ctx) {
+  const { C, list, team } = ctx;
+  const xFmt = m => '×' + m.toFixed(2);
+  const chip = (x, extra) => { const d = charDef(x), el = ELEMENT_COLORS[d ? d.e : 'None'] || ELEMENT_COLORS['None']; return `<span class="m${extra && extra.cls ? ' ' + extra.cls : ''}" style="--el:${esc(el)}"${extra && extra.title ? ` title="${esc(extra.title)}"` : ''}>${esc(x)}${extra && extra.suffix ? extra.suffix : ''}</span>`; };
+  const others = C ? list.filter(t => t.calc.key !== C.key).slice(0, 6).map(t => `<div class="tmParty">
+      <button class="sm ghost" data-tm-party="${esc(t.calc.key)}">Use this team</button>
+      <div class="ms">${t.calc.names.filter(Boolean).map((x, i) => chip(x, { suffix: i === 3 ? ' (backup)' : '' })).join('')}</div>
+      <div class="val"><b>${xFmt(t.calc.mult)}</b> ${tcRelHtml(t.calc.mult, C.mult)}<div class="bar"><i style="width:${Math.max(2, Math.round(100 * t.calc.mult / C.mult))}%"></i></div></div></div>`).join('')
+  : list.filter(t => t !== team && t.party).slice(0, 6).map(t => {
+    const m = [...t.party.f.filter(x => x), t.party.e, t.party.b].filter(Boolean);
+    const avail = m.filter(x => !tmWhyOut(x)).length;
+    return `<div class="tmParty">
+      <button class="sm ghost" data-tm-party="${esc(t.party.key)}">Use this team</button>
+      <div class="ms">${m.map(x => chip(x, { cls: tmWhyOut(x) ? 'no' : '', title: tmWhyOut(x) || 'available', suffix: x === t.party.b ? ' (backup)' : '' })).join('')}</div>
+      <div class="val muted">${avail} of ${m.length} available${t.party.f.includes(null) ? ', one free slot' : ''}</div></div>`;
+  }).join('');
+  return others ? `<div class="panel"><h2>${C ? 'Next best calculated teams' : 'Other teams lufel recommends'}</h2><div class="tmParties">${others}</div></div>` : '';
+}
+
+/* Turn order: the thieves (Wonder included), fastest first, each in their element colour; the
+   Elucidator and the backup act outside it. */
+function tmOrderHtml(ctx) {
+  const { dps, team } = ctx;
+  const thieves = team.seats.filter(s => s.seat === 'f' && s.name).map(s => ({ n: s.name, spd: tmSpeed(s.name) }));
+  if (!thieves.some(x => x.n === 'Wonder')) thieves.push({ n: 'Wonder', spd: tmSpeed('Wonder') });
+  // Wonder without a Speed acts just before the damage dealer, as the calculated team plays it
+  const dSpd = tmSpeed(dps), sk = x => x.spd != null ? x.spd : x.n === 'Wonder' && dSpd != null ? dSpd + 0.01 : -1;
+  thieves.sort((a, b) => sk(b) - sk(a));
+  return thieves.map((x, i) => {
+    const d = charDef(x.n), el = ELEMENT_COLORS[d ? d.e : 'None'] || ELEMENT_COLORS['None'];
+    return `${i ? '<span class="sep">→</span>' : ''}<span class="tmStep" style="--el:${esc(el)}">${esc(x.n)} ${x.spd == null ? `<span class="muted">Speed not set${x.n === 'Wonder' && dSpd != null ? `: taken as just before ${esc(dps)}` : ''}</span>` : `<b>${Math.round(x.spd)}</b> Speed`}</span>`;
+  }).join(' ');
+}
+function tmOrderInfo(ctx, backup) {
+  const { dps, C } = ctx;
+  return `<p>Fastest first, by each thief's in-battle Speed with the cards they wear, their Setup and the Thieves Den. The Elucidator${backup ? ' and the backup act' : ' acts'} outside this order.</p>` +
+    `<p>${tmSpeed('Wonder') == null ? 'Wonder\'s Speed is his first Persona\'s, with its Agility Master or Ironclad Resolve: enter that Persona\'s Speed on the Personas tab, or his in the Wonder row at the top, to place him. Until then he is taken to act just before the damage dealer, so his one-turn buffs and debuffs meet their hit.' : wonderCalc(wonderHere()).spd != null ? 'Wonder\'s is his first Persona\'s Speed with its skills (from the Personas tab), plus the Thieves Den.' : 'Wonder\'s is the Speed you entered at the top, plus the Thieves Den.'}</p>` +
+    (C ? `<p>The calculated team plays this order out: a buff cast before ${esc(dps)} acts is up for this round's hit, one cast after it waits a round, which is why damage dealers are usually slowest.</p>` : '');
+}
+
+/* The legend over the rotation grids: what each tile colour is (tmTurnKind). */
+function tmLegendHtml(fitOn) {
+  const k = [['s1', 'Skill 1'], ['s2', 'Skill 2'], ['s3', 'Skill 3'], ['hl', 'Highlight / Theurgy'], ['burst', 'several in one turn'], ['item', 'item'], ['tok', 'other move'], ['idle', 'Fatigue / no action']];
+  return `<div class="tmLegend">${k.map(([c, l]) => `<span class="k k-${c}"><i></i>${l}</span>`).join('')}${fitOn ? '<span class="k fit"><i></i>changed for this team</span>' : '<span class="muted">· rotations are lufel\'s as written</span>'}<span class="muted">· hover a turn for the words</span></div>`;
+}
+/* The kind of a rotation turn, for its colour: a plain skill, a Highlight or Theurgy, several moves in one
+   turn ("1+1+3", "3+Gunshot"), an item (ⓘA), Fatigue, an idle turn, or any other move (Transform, Gunshot). */
+function tmTurnKind(x) {
+  const s = String(x);
+  if (s === '-' || s === '·' || s === '—' || s === '') return 'idle';
+  if (/fatigue/i.test(s)) return 'fatigue';
+  if (/\bHL\b|\bTH\b/.test(s)) return 'hl';
+  if (/ⓘ/.test(s)) return 'item';
+  if (/\+/.test(s)) return 'burst';
+  if (/^1\b/.test(s)) return 's1';
+  if (/^2\b/.test(s)) return 's2';
+  if (/^3\b/.test(s)) return 's3';
+  return 'tok';
+}
+
+/* One member's rotation card: the rotation chosen for this team (fitted or composed, the changed turns
+   ringed) with lufel's as written folded under it, or lufel's; Minami's medicines; lufel's notes folded. */
+function tmRotMemberHtml(s, ctx, team4, fitOn, rotState) {
+  const { dps, D, C, inTeam } = ctx;
+  const r = tmRotPick(s.name, inTeam);
+  const T = TEAMS[s.name] || {};
+  const short = tmShortTargets(s.name);
+  // the fit: a teammate's rotation re-chosen for the damage dealer (tcRotFit), and the damage dealer's
+  // own re-chosen in the fight for this team (tcSimFitDps)
+  const fits = C && C.sim && C.sim.fits;
+  const F = !fitOn || !D || !r ? null : fits ? fits[s.name] || null
+    : s.fixed ? (C && C.sim && C.sim.dpsRot) || null : tcMember(D, s.name, team4, null, true).rot;
+  // Minami's medicines for this team: named in each turn's tooltip and listed under her rotation
+  const medO = s.name === TC_MEDS_OF && D && D.n !== s.name ? tcPairInfo(s.name, s.pair || tcPairFor(D, s.name)) : null;
+  const grid = (seq, hot) => `<div class="tmRot">${seq.map((x, i) => `<div class="t ${tmTurnKind(x)}${hot && hot.includes(i) ? ' fit' : ''}" title="${esc(tmTokenText(x, medO && medO.meds))}${hot && hot.includes(i) ? ' (changed for this team)' : ''}"><small>Turn ${i + 1}</small><b>${esc(x === '-' ? '—' : x)}</b>${medO ? tmMedCell(x, medO.meds) : ''}</div>`).join('')}</div>`;
+  // the first option open, the rest folded: three six-turn grids per member made the panel a scroll
+  const opt = (v, k) => `<div class="tiny"><b>${esc(v.label || 'Rotation')}</b>${r && r.pick.length > 1 ? ` <span class="muted">— option ${k + 1} of ${r.pick.length}</span>` : ''}</div>${grid(v.seq)}`;
+  const lufelBody = !r ? '<div class="tiny muted">lufel publishes no rotation for this character.</div>'
+    : opt(r.pick[0], 0) + (r.pick.length > 1 ? `<div class="tmFolds"><details class="tmMore"><summary>${r.pick.length - 1} more option${r.pick.length > 2 ? 's' : ''} lufel writes for this Awareness</summary><div class="in">${r.pick.slice(1).map((v, k) => opt(v, k + 1)).join('')}</div></details></div>` : '');
+  let body = lufelBody;
+  const lufelFold = `<div class="tmFolds"><details class="tmMore tmLufel"><summary>lufel's rotation${r && r.pick.length > 1 ? 's' : ''} as written</summary><div class="in">${lufelBody}</div></details></div>`;
+  if (F && F.composed && !F.same && F.gain > 1e-4) {
+    rotState.fitAny = true;
+    const n = F.changed.length;
+    body = `<div class="fitHd"><b>Composed for this team</b> <span class="tag hit" title="Team damage for ${esc(dps)} with this rotation, over lufel's first option as written">+${(100 * F.gain).toFixed(1)}% team damage</span> <span class="muted">${n} of ${F.seq.length} turns differ from lufel's "${esc(F.base.label || 'Rotation')}"</span>${infoBtnHtml('Composed for this team', `<p>Written from ${esc(s.name)}'s own moves within what the kit allows (stacks, modes, Fatigue, cooldowns) and no more SP per turn than lufel's own rotations spend, by playing the fight with this team. ${n} of its ${F.seq.length} turns differ from lufel's "${esc(F.base.label || 'Rotation')}" played over the fight; the gain is the team's damage for ${esc(dps)} over lufel's first option as written.</p>`)}</div>${grid(F.seq, F.changed)}` + lufelFold;
+  } else if (F && F.composed) {
+    body = lufelBody + `<div class="tiny muted tmFitSame">Already the best the kit allows: none of the ${Math.max(0, F.tried - 1)} other rotations tried does more for ${esc(dps)}.</div>`;
+  } else if (F && !F.same && F.gain > 1e-4) {
+    rotState.fitAny = true;
+    const turns = F.changed.map(i => i + 1);
+    const how = turns.length ? `turn${turns.length > 1 ? 's' : ''} ${turns.join(', ')} re-chosen` : 'as lufel writes it';
+    body = `<div class="fitHd"><b>Fitted to this team</b> <span class="tag hit" title="Team damage for ${esc(dps)} with this rotation, over lufel's first option as written">+${(100 * F.gain).toFixed(1)}% team damage</span> <span class="muted">lufel's "${esc(F.base.label || 'Rotation')}"${F.base.of > 1 ? ` (option ${F.base.index + 1} of ${F.base.of})` : ''}, ${how}</span></div>${grid(F.seq, F.changed)}` + lufelFold;
+  } else if (F) {
+    body = lufelBody + `<div class="tiny muted tmFitSame">Already the best fit: none of the ${F.tried - 1} other ways to choose its plain skill turns does more for ${esc(dps)}.</div>`;
+  }
+  const awNote = !r || r.lvl == null ? '' : r.below
+    ? `<span class="tag miss">written for Awareness ${r.lvl}</span> <span class="muted">their Setup says ${r.aw}; lufel has nothing lower</span>`
+    : `<span class="muted">for Awareness ${r.lvl}${r.lvl !== r.aw ? ` (their Setup says ${r.aw})` : ''}</span>`;
+  const notes = (T.notes || []).map(x => x.replace(/^[·•]\s*/, ''));
+  // their Highlights (Theurgies) come from the fight, not from lufel's HL/TH turns
+  const kind = tcHlKind(s.name), nHl = C && C.sim ? C.sim.hl[s.name] : null;
+  const hlNote = C && kind && nHl != null
+    ? `<div class="tiny muted tmHlAdd">${kind === 'TH' ? `Theurgies: ${nHl} in this fight, each as soon as their own gauge (+35 a turn) is full` : `Highlights: ${nHl} in this fight, from the team's shared gauge`}; the fight decides where they fall, not lufel's ${kind} turns.</div>` : '';
+  const targets = short.length ? `<div class="tiny" style="margin:4px 0"><span class="tag miss">short of lufel's targets</span> ` +
+    short.map(x => `${esc(x.stat)} ${tmFmt(x.total, x.pct)} of ${tmFmt(x.bar, x.pct)}`).join(' · ') + '</div>' : '';
+  const folds = (notes.length ? `<details><summary>lufel's notes (${notes.length})</summary><div class="in">${notes.map(x => `<div class="tmNote">${esc(x)}</div>`).join('')}</div></details>` : '') +
+    (r && r.all.length > r.pick.length ? `<details><summary>All of lufel's rotations for ${esc(s.name)} (${r.all.length})</summary><div class="in">${r.all.map(v => `<div><b>${esc(v.label)}</b></div>${grid(v.seq)}`).join('')}</div></details>` : '');
+  const dd = charDef(s.name), el = ELEMENT_COLORS[dd ? dd.e : 'None'] || ELEMENT_COLORS['None'];
+  return `<div class="tmMember" style="--el:${esc(el)}">
+    <div class="hd"><span class="nm">${esc(s.name)}</span> <span class="tag">${esc(s.role)}</span> <span class="tiny">${awNote}</span>
+      ${T.kr ? `<a class="tiny" href="https://lufel.net/character.html?name=${encodeURIComponent(T.kr)}" target="_blank" rel="noopener">Full guide on lufel.net</a>` : ''}</div>
+    ${targets}${body}${medO ? `<div class="tiny tmMeds">Medicines for this team: ${tmMedsHtml(medO, F && !F.same && F.gain > 1e-4 ? F.seq : r && r.pick[0] ? r.pick[0].seq : null)}</div>` : ''}${hlNote}${folds ? `<div class="tmFolds">${folds}</div>` : ''}</div>`;
+}
+
+/* Wonder's six turns, repeated: the Persona in use and what it casts, or the Persona he attacks with;
+   with your setup, and with the suggested one when it differs. His Highlight comes from the gauge. */
+function tmWonderRotHtml(ctx) {
+  const { C, D, team } = ctx;
+  const wseat = team.seats.find(s => s.seat === 'w');
+  if (!C || !wseat || !wseat.wonder) return '';
+  const W = wseat.wonder, B = W.best;
+  const pel = n => ELEMENT_COLORS[(WONDER_PERSONA[n] || {}).e] || ELEMENT_COLORS['None'];
+  const wgrid = turns => `<div class="tmRot wonder">${turns.map((t, i) => `<div class="t ${t.what === 'attack' ? 'idle' : 'tok'}" style="--tb:${esc(pel(t.persona))}" title="${esc(t.what === 'attack' ? `attacks with ${t.persona || 'no Persona'}` : `${t.persona} casts ${t.what}`)}"><small>Turn ${i + 1}</small><b>${esc(t.what === 'attack' ? 'Attack' : t.what)}</b><span class="who">${esc(t.persona || '—')}</span></div>`).join('')}</div>`;
+  const mine = !wonderEmpty(W.setup) && (W.turns || []).some(t => t.persona);
+  const sug = B && W.bestGain >= 1.0005 && JSON.stringify(B) !== JSON.stringify(W.setup) ? tcWonder(D, B).turns : null;
+  return `<div class="tmMember" style="--el:#6fa6ee"><div class="hd"><span class="nm">Wonder</span> <span class="tag">every party</span> <span class="tiny muted">his six turns, repeated; a tile's edge is the Persona's element; his Highlight comes from the shared gauge</span></div>` +
+    (mine ? `<div class="tiny"><b>Your setup</b></div>${wgrid(W.turns)}` : '<div class="tiny muted">Your setup has no Persona yet: set them under Wonder\'s setup at the top.</div>') +
+    (sug ? `<div class="tiny" style="margin-top:6px"><b>Suggested setup</b> <span class="muted">— ${esc(B.personas.filter(p => p.name).map((p, i) => p.name + (i ? '' : ' (leads)')).join(', '))}, with the skill cards each has learned</span></div>${wgrid(sug)}` : '') + '</div>';
+}
+
+/* "How this team works": the mechanics that need explaining (TEAM_MECHANICS, the first paragraph shown
+   and the rest folded) and the synergies lufel names between members. */
+function tmWorksHtml(ctx, backup) {
+  const { inTeam } = ctx;
+  const pairs = tmSynergyItems(inTeam, backup && backup.name);
+  const mech = [...inTeam].filter(n => TEAM_MECHANICS[n]).map(n => {
+    const M = TEAM_MECHANICS[n];
+    const extra = n === TM_FUUKA ? (backup
+      ? `<p class="tiny">Backup here: <b>${esc(backup.name)}</b>${backup.orig === backup.name ? ' — lufel\'s pick for this team.' : backup.pickWhy ? ' — ' + backup.pickWhy.map(esc).join(' · ').replace(/\.?$/, '.') : '.'} Other choices are under its Replacements above.</p>`
+      : '<p class="tiny"><span class="tag miss">no backup</span> None of the characters lufel recommends as Fuuka\'s backup is available.</p>') : '';
+    const [first, ...rest] = M.body;
+    return `<div class="tmMember"><div class="hd"><span class="nm">${esc(M.title)}</span></div><p class="tiny tmNote">${first}</p>${rest.length ? explainHtml('The rest of it', rest.map(p => `<p>${p}</p>`).join('')) : ''}${extra}</div>`;
+  }).join('');
+  const chip = x => { const d = charDef(x), el = ELEMENT_COLORS[d ? d.e : 'None'] || ELEMENT_COLORS['None']; return `<span class="m" style="--el:${esc(el)}">${esc(x)}</span>`; };
+  const syn = pairs.length ? `<div class="tmMember"><div class="hd"><span class="nm">Synergies lufel names</span></div><ul class="tiny tmSyn" style="margin:4px 0 0 18px">${pairs.map(li => li.replace(/<b>([^<]*)<\/b>/g, (m, x) => chip(x.replace(/&amp;/g, '&')))).join('')}</ul></div>` : '';
+  return pairs.length || mech ? `<div class="panel"><h2>How this team works</h2><div class="tmMembers">${mech}${syn}</div></div>` : '';
+}
+
+/* The words behind "How the team is calculated" (calculated basis) and "How the team is chosen" (lufel's). */
+function tmCalcInfo(ctx) {
+  const { dps } = ctx;
+  return `<p>Every pair of your available thieves and every available Elucidator (with Fuuka, also her best backup) is priced by how much stronger they make ${esc(dps)}'s hits, using lufel's damage formula: ATK, damage bonus, enemy defence (DEF down and Pierce), crit, weakness and final damage multiply, and values of one kind add up (so three ATK buffs are one bigger ATK buff). ${esc(dps)}'s own cards and Setup are the starting point, with no buffs at all, which is why the number is large: a boss with +158% DEF takes little from an unbuffed hit.</p>
+    <p>Each member's buffs are read from their kit, unlocked by their Awareness and weapon and scaled by their own stats where the kit says so; the pills under a member sum them per factor, each at the share of ${esc(dps)}'s actions it was up for in the fight, and the lines behind them are under "Where it comes from". A member's percentage is what the team loses without them, so the percentages do not add up to the total. An Elucidator adds 20% of her ATK, crit, damage and Pierce (15% at 4★). The boss, the number of foes and whether hits land on a weakness are the Fight settings at the top.</p>
+    <p>The number comes from the fight played out round by round, for the length set at the top: the Elucidator acts at the start of each round, the four thieves (Wonder included) once each in Speed order, the enemy last. Each member follows their lufel rotation (or the fitted one); a buff on ${esc(dps)} counts down after ${esc(dps)}'s own action and a debuff on the enemy after the enemy's, so a buff cast after ${esc(dps)} has acted waits for the next round. ${esc(dps)}'s damage is their skills as lufel's skill numbers give them, their Highlight or Theurgy when it fires, and what their kit deals besides (Resonance, follow-ups, damage over time — much of it set off by teammates' actions or Highlights), each hit with whatever is up at that moment. The team's number is that total over the same fight with teammates who add nothing.</p>
+    <p>Highlights come from one gauge the team shares: 21% for each thief's action that hits the boss's weakness and 17% for one that does not (a buff, a shield, Wonder casting a card), never above 100%, and a Highlight spends it all and puts its user's own Highlight out of reach for their next 4 actions, so the first Highlight comes in round 2 and the gauge cannot give everyone theirs. A Highlight cannot crit unless its kit says it can (J&amp;C, Kasumi, Radiance Motoha); a Theurgy can. Wonder casts his skills on a six-turn schedule (under Rotation) and attacks in between. The fight is played with the gauge spent in several orders (${esc(dps)} first, or a teammate whose Highlight buffs first) and spent as soon as it fills or held for just before ${esc(dps)} acts; the best is kept and named in the fight facts. A Theurgy has its own gauge (+35 at its user's turn start) and fires as soon as it is full. Gauge and cooldown effects (Ayaka, Fuuka, Yukari, Miku's Virtual Concert), Summer Ayaka's Concerto of Time, free Highlights (Catchy Hook, Kotone Shiomi's Fortune, Kasumi's) and starting gauge are played out as their kits say. Manaka's Da Capo is an extra action for ${esc(dps)}, with what runs only on it. With Fuuka, Oracle Shift swaps her backup in for one action whenever her stacks allow, just before ${esc(dps)} acts, with her Awareness 2 Highlight from the backup; the backup's action is taken to fill the Highlight gauge like any thief's.</p>
+    <p>${tcDownPts() ? `Down: the boss has ${tcDownPts()} Down Points; each skill on its weakness takes 1 (a damaging Highlight too, and more where a kit says so whatever the weakness), and at 0 it is knocked down until its own turn, which it still takes, then its gauge refills. Effects that need a downed foe count only then. All-Out Attacks and Dizzy are not counted.` : 'Down: the boss is set to "can\'t be knocked down" (Down Points at the top), so effects that need a downed foe count for nothing.'}</p>
+    <p>Not counted: weakness creation, Technicals other than Fireburn and Iceburn (Mio's Cold Flames), ailments other than damage over time a kit prices, healing and survival, buffs that copy other buffs (except Kotone Shiomi's Lunar Phaseshift, which copies her target's buffs on the damage dealer at 30% for a turn and is counted), and what each seat's "Not priced" list names. Characters whose kit is not entered yet count as adding nothing. Treat the number as a ranking of teams for this damage dealer, not a damage forecast.</p>`;
+}
+function tmChooseInfo(ctx) {
+  const { dps } = ctx;
+  return `<p>Every team lufel recommends with ${esc(dps)} is filled from the characters you own and have not benched or marked busy. The team shown keeps the most of lufel's own picks; ties go to a team from ${esc(dps)}'s own page, then to the better-geared team.</p><p>A seat whose pick you cannot field goes to whoever lufel links to ${esc(dps)} most — the same seat in another of their teams, a synergy partner lufel lists (with its reason), or the same role — and only then to your best-built character, marked "filler". Build scores only break ties.</p>`;
+}
+function tmRotInfo(ctx, backup, fitOn, fitAny) {
+  const { dps } = ctx;
+  return `<p>One tile a turn, coloured by what the turn is (the legend above the cards): 1-3 are lufel's skills, HL a Highlight, TH a Theurgy, ↺ used automatically, — no action yet. Hover a turn for the words. Rotations are lufel's, at each member's Awareness (from their Setup), preferring rotations written for a teammate in this team.${backup ? ` The backup, ${esc(backup.name)}, acts only when Fuuka swaps them in.` : ''}</p>` + (fitOn
+    ? `<p><b>Fitted to this team</b>: a member's plain skill turns (a bare 1, 2 or 3) are re-chosen for what they do for ${esc(dps)} in this team, within the skills and frequencies lufel's own rotations for them use, so no skill is cast more often than lufel ever writes it; bursts, Highlights, Transformations, items, Fatigue and idle turns stay where lufel put them, and no skill is cast again inside its cooldown. <b>Composed for this team</b>: written from the kit's own moves within what the kit allows, and no more SP per turn than lufel's rotations spend. Every rotation here, ${esc(dps)}'s own included, is chosen by playing the fight with this team, one member at a time until no change helps (turn order, the Highlight gauge and what the members set off for each other all count); a change has to gain at least 0.1%. The green-ringed turns are the ones changed; the gain is the team's damage as the calculated basis prices it, over lufel's first option as written.${fitAny ? '' : ' Here every member\'s rotation is already lufel\'s.'}</p>`
+    : '<p>Rotations are lufel\'s as written; tick "Fit rotations to this team" at the top to re-choose each member\'s plain skill turns for this team.</p>') +
+    '<p>A member\'s Highlights and Theurgies come from the fight (the shared gauge, their own Theurgy gauge), not from where lufel\'s rotation writes HL or TH.</p>';
 }
 
 function tmSetBusy(n, on) {
@@ -17923,7 +18107,7 @@ $('#tmMedic').onchange = () => tmRefresh();
 // lufel's bosses (BOSSES), Sea of Souls apart; "Auto" (the default) picks by the damage dealer (tcBossNow)
 (() => {
   const opt = b => `<option value="${b.id}">${esc(b.name)}${b.res ? '' : ' (no resistance data)'} — DEF ${b.def}</option>`;
-  $('#tmBoss').innerHTML = '<option value="auto" selected>Auto: single boss, or area boss for an area damage dealer</option>' +
+  $('#tmBoss').innerHTML = '<option value="auto" selected>Auto (by the damage dealer)</option>' +
     `<optgroup label="Sea of Souls">${BOSSES.filter(b => b.sea).map(opt).join('')}</optgroup>` +
     `<optgroup label="Other bosses">${BOSSES.filter(b => !b.sea).map(opt).join('')}</optgroup>`;
 })();
@@ -17989,7 +18173,7 @@ $('#tmBusy').addEventListener('click', e => {
 });
 $('#tmOut').addEventListener('click', e => {
   const b = e.target.closest('button');
-  if (!b) return;
+  if (!b || b.classList.contains('infoBtn')) return;
   // a button acts on the team it sits in, even after another damage dealer was picked above
   if (tmShownDps && charDef(tmShownDps) && $('#tmChar').value !== tmShownDps) $('#tmChar').value = tmShownDps;
   const dps = $('#tmChar').value;
@@ -18559,6 +18743,7 @@ $('#setPop').addEventListener('click', e => e.stopPropagation());
 document.addEventListener('click', () => { if (!$('#setPop').classList.contains('hide')) setPopOpen(false); });
 document.addEventListener('keydown', e => {
   if (e.key === 'Escape' && !$('#setPop').classList.contains('hide')) { setPopOpen(false); $('#setBtn').focus(); return; }
+  if (e.key === 'Escape' && !$('#infoPop').classList.contains('hide')) { infoPopClose(); return; }
   // Ctrl+Z takes back the last undoable action, except in a text field, which has its own undo.
   if (!(e.ctrlKey || e.metaKey) || e.shiftKey || e.altKey || e.key.toLowerCase() !== 'z' || !undoSnap) return;
   const a = document.activeElement;

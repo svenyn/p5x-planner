@@ -432,67 +432,172 @@ details.sect>.inner{margin-top:10px}
 
 /* ---- narrow screens: a laptop tool first, but nothing should need sideways scrolling ---- */
 /* ---- Teams tab ---- */
-/* The answer first: the team's multiplier as one big number, lufel's team beside it for scale. */
-.tmHero{display:flex;align-items:stretch;gap:12px 24px;flex-wrap:wrap;margin-bottom:14px}
-.tmHero .num{font-family:ui-monospace,monospace;font-size:34px;font-weight:700;line-height:1;color:var(--ok)}
+/* The ? button beside a label, a heading or a line: a small round mark that opens #infoPop (infoBtn in
+   logic.js) with the words that used to sit in a tooltip or a paragraph. `.lnk` is the same button worded
+   as a link ("How the fight was played"). */
+.infoBtn{display:inline-flex;align-items:center;justify-content:center;width:17px;height:17px;padding:0;border-radius:50%;
+  border:1px solid #3a3a48;background:#1b1b24;color:var(--dim);font-size:11px;font-weight:700;line-height:1;vertical-align:middle;flex:0 0 auto}
+.infoBtn:hover,.infoBtn.open{border-color:var(--blue);color:#fff;background:#1f2a40}
+.infoBtn.lnk{width:auto;height:auto;border-radius:20px;padding:2px 9px 2px 6px;font-size:12px;font-weight:600;gap:6px}
+.infoBtn.lnk::before{content:'?';display:inline-flex;align-items:center;justify-content:center;width:15px;height:15px;border-radius:50%;
+  background:#2a2a36;color:var(--dim);font-size:10px}
+.infoBtn.lnk:hover::before{background:var(--blue);color:#fff}
+.lblRow{display:flex;align-items:center;gap:6px}
+.lblRow label{margin:0}
+.infoPop{position:absolute;z-index:40;width:min(440px,calc(100vw - 24px));background:var(--panel2);border:1px solid #3a3a48;
+  border-left:3px solid var(--blue);border-radius:10px;padding:12px 14px;box-shadow:0 12px 32px rgba(0,0,0,.6);font-size:12.5px;line-height:1.6;color:var(--dim)}
+.infoPop .hd{display:flex;align-items:center;gap:10px;margin-bottom:6px}
+.infoPop .hd b{color:var(--ink);font-size:13px;flex:1}
+.infoPop .body p{margin:0 0 8px}
+.infoPop .body p:last-child{margin-bottom:0}
+.infoPop .body b{color:var(--ink)}
+.infoPop .body ul{margin:4px 0 8px 18px}
+/* The controls: three labelled rows (Team, Fight, Wonder) and a Calculate bar. */
+.tmGroup{display:grid;grid-template-columns:76px minmax(0,1fr);gap:8px 14px;align-items:start;padding:10px 0;border-top:1px solid #22222b}
+.tmGroup:first-child{border-top:none;padding-top:0}
+.tmGroup .gl{font-size:11px;text-transform:uppercase;letter-spacing:.08em;font-weight:700;color:var(--red-text);padding-top:22px}
+.tmGroupW .gl{padding-top:22px}
+.tmGroup .gc{min-width:0}
+.tmGroup select{max-width:100%}
+.tmChecks{margin-top:6px;gap:6px 18px}
+.tmChecks .chk{display:inline-flex;align-items:center;gap:5px}
+.tmChecks .check{padding-bottom:0}
+.tmChecks .check:has(input:checked){color:var(--ink)}
+.tmCalcBar{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;margin-top:12px;padding-top:12px;border-top:1px solid var(--line)}
+.tmCalcBtn{padding:9px 26px;font-size:14px;border-radius:8px}
+.tmWonderSect{margin-top:8px;border-top:none;padding-top:0}
+.tmSub{display:flex;align-items:center;gap:8px;flex-wrap:wrap;font-size:12px;font-weight:600;color:var(--dim);margin-bottom:6px}
+.tmSub .tiny{font-weight:400}
+/* The answer first: the team's multiplier as one big number, lufel's team beside it for scale, and the
+   fight as a row of facts. */
+.tmHero{display:flex;align-items:flex-start;gap:14px 28px;flex-wrap:wrap;margin-bottom:14px}
+.tmHero .num{font-family:ui-monospace,monospace;font-size:40px;font-weight:700;line-height:1;color:var(--ok)}
 .tmHero .num.plain{color:var(--ink)}
 .tmHero .num small{font-size:13px;font-weight:600;color:var(--dim);margin-left:6px;font-family:"Segoe UI",-apple-system,system-ui,sans-serif}
-.tmHero .lbl{font-size:12px;color:var(--dim);margin-top:5px;max-width:520px}
-.tmHero .cmp{border-left:1px solid var(--line);padding-left:20px;font-size:12.5px;color:var(--dim);max-width:420px;align-self:center}
+.tmHero .lbl{font-size:12px;color:var(--dim);margin-top:6px;max-width:460px;line-height:1.5}
+.tmHero .cmp{border-left:1px solid var(--line);padding-left:20px;font-size:12.5px;color:var(--dim);max-width:420px;align-self:stretch;display:flex;flex-direction:column;justify-content:center;gap:4px}
 .tmHero .cmp b{color:var(--ink);font-family:ui-monospace,monospace;font-size:14px}
 .tmHero .acts{margin-left:auto;align-self:flex-start}
-/* One card per seat, striped in the member's element colour: who, what they add, and the
-   buttons, in three columns that stack on a phone (the table they replace scrolled sideways). */
+.tmHero .cmp .tag{font-size:12px}
+.tmRel{display:inline-block;padding:1px 7px;border-radius:20px;font-size:11.5px;font-weight:700;font-family:ui-monospace,monospace}
+.tmRel.worse{color:#e87a5c;background:#2a1712;border:1px solid #6b3524}
+.tmRel.better{color:var(--ok);background:#10241a;border:1px solid #1d5c3d}
+.tmRel.same{color:var(--dim);background:#1b1b22;border:1px solid #33333d}
+.tmFacts{display:flex;gap:6px;flex-wrap:wrap;align-items:stretch;margin:4px 0 8px}
+.tmFact{display:inline-flex;flex-direction:column;gap:2px;border:1px solid var(--line);background:#16161c;border-radius:8px;padding:5px 10px;font-size:12px;min-width:0}
+/* the label keeps its case: innerText follows text-transform, and a test reads "Highlights and Theurgies used" */
+.tmFact small{font-size:10.5px;letter-spacing:.03em;color:var(--dim2);font-weight:600}
+.tmFact b{font-weight:600;color:var(--ink)}
+.tmFact .muted{font-weight:400}
+.tmLinks{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-top:6px}
+.tmMedicNote{font-size:12px;color:var(--dim);margin:0 0 8px}
+/* One card per seat, striped in the member's element colour: who, their share of the team, what they
+   add, and the buttons, in columns that stack on a phone. The role is coloured by the kind of seat. */
 .tmSeats{display:flex;flex-direction:column;gap:8px}
 .tmSeat{display:grid;grid-template-columns:230px minmax(0,1fr) auto;gap:6px 18px;align-items:start;
   background:var(--panel2);border:1px solid var(--line);border-left:4px solid var(--el,var(--line));border-radius:9px;padding:11px 14px 11px 13px}
 .tmSeats.calc .tmSeat{grid-template-columns:230px 118px minmax(0,1fr) auto}
-.tmSeat.fixed{background:linear-gradient(90deg,color-mix(in srgb,var(--el) 12%,var(--panel2)),var(--panel2) 60%)}
+.tmSeat.fixed{background:linear-gradient(90deg,color-mix(in srgb,var(--el) 14%,var(--panel2)),var(--panel2) 60%)}
 .tmSeat.empty{border-style:dashed;border-left-style:solid;opacity:.7}
-.tmSeat .role{font-size:11px;text-transform:uppercase;letter-spacing:.05em;color:var(--dim2);font-weight:600}
+.tmSeat .role{font-size:11px;text-transform:uppercase;letter-spacing:.05em;color:var(--dim2);font-weight:700}
+.tmSeat.kind-dps .role{color:var(--red-text)}
+.tmSeat.kind-elu .role{color:#c08ae8}
+.tmSeat.kind-backup .role{color:var(--gold)}
+.tmSeat.kind-wonder .role{color:#6fa6ee}
+.tmSeat.kind-medic .role{color:var(--ok)}
 .tmSeat .nm{font-size:15px;font-weight:700;line-height:1.25;margin-top:1px}
 .tmSeat .nm .muted{font-weight:400;font-size:13px}
 .tmSeat .meta{font-size:12px;color:var(--dim);display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-top:2px}
 .tmSeat .tags{display:flex;gap:5px;flex-wrap:wrap;margin-top:7px}
 .tmSeat .tmWhat{font-size:12px;min-width:0;line-height:1.5}
-.tmSeat .tmWhat details{margin-top:3px}
-.tmSeat .tmWhat summary{cursor:pointer}
+.tmSeat .tmWhat .note{color:var(--dim);margin:2px 0 4px}
 .tmSeat .acts{text-align:right;white-space:nowrap}
-/* The member's share of the team: a number the eye can rank down the list, and a bar against
-   the largest share in the team. */
+/* Wonder's seat has a button per Persona: they wrap, so a phone never scrolls sideways */
+.tmSeat.kind-wonder .acts{white-space:normal;display:flex;flex-wrap:wrap;justify-content:flex-end;gap:4px;max-width:280px}
+/* The short lists under a seat (where the number comes from, not priced, replacements): closed ones sit
+   on one line as links, an open one takes the row. */
+.tmFolds{display:flex;flex-wrap:wrap;gap:2px 16px;margin-top:5px}
+.tmFolds>details{font-size:12px}
+.tmFolds>details[open]{flex-basis:100%}
+.tmFolds>details>summary{cursor:pointer;color:var(--dim);list-style:none;display:inline-block}
+.tmFolds>details>summary::-webkit-details-marker{display:none}
+.tmFolds>details>summary::before{content:'▸ ';color:var(--dim2)}
+.tmFolds>details[open]>summary::before{content:'▾ '}
+.tmFolds>details>summary:hover{color:var(--ink)}
+.tmFolds>details>.in{margin:4px 0 6px 12px;color:var(--dim)}
+.tmFolds>details>.in ul{margin:2px 0 0 16px}
+/* The member's share of the team: a number the eye can rank down the list, and a bar against the
+   largest share in the team. */
 .tmPart{text-align:right;padding-top:2px}
 .tmPart b{display:block;font-family:ui-monospace,monospace;font-size:22px;font-weight:700;line-height:1;color:var(--ok)}
 .tmPart.zero b{color:var(--dim2);font-size:18px}
 .tmPart small{display:block;font-size:10.5px;color:var(--dim2);text-transform:uppercase;letter-spacing:.05em;margin-top:4px}
 .tmPart .bar{margin-top:7px}
 .tmPart .bar>i{background:linear-gradient(90deg,#2e6b4c,var(--ok))}
-/* A member's buffs summed per factor: one pill each, read before the lines behind them. */
+/* A member's buffs summed per factor: one pill each, coloured by what it moves in the damage formula
+   (ATK orange, damage red, crit gold, the foe's defence blue, Highlights purple, ailments teal). */
 .tcSum{display:flex;gap:5px;flex-wrap:wrap;margin:0 0 6px}
-.tcSum .st{display:inline-block;border:1px solid var(--line);background:#16161c;border-radius:6px;padding:2px 8px;font-size:12px;white-space:nowrap}
+.tcSum .st{display:inline-block;border:1px solid var(--line);background:#16161c;border-radius:6px;padding:2px 8px 2px 7px;font-size:12px;white-space:nowrap;
+  border-left:3px solid var(--fc,var(--line))}
 .tcSum .st small{color:var(--dim2);font-size:11px}
-.tcSum .st b{font-family:ui-monospace,monospace;font-weight:700}
-.tmAlt{margin-top:8px;border-left:2px solid var(--line);padding-left:10px;display:flex;flex-direction:column;gap:6px}
+.tcSum .st b{font-family:ui-monospace,monospace;font-weight:700;color:var(--fc,var(--ink))}
+.tcSum .st.f-atk{--fc:#e0955a}
+.tcSum .st.f-dm{--fc:#ee4265}
+.tcSum .st.f-crit{--fc:#e8b64c}
+.tcSum .st.f-def{--fc:#6fa6ee}
+.tcSum .st.f-hl{--fc:#c08ae8}
+.tcSum .st.f-ail{--fc:#3fbfbf}
+.tcSum .st.f-mix{--fc:var(--pc)}
+/* The damage dealer's own damage: a stacked bar of what it was made of, the pills under it. */
+.tmMix{display:flex;height:10px;border-radius:5px;overflow:hidden;background:#24242e;margin:4px 0 6px;max-width:520px}
+.tmMix>i{display:block;height:100%;background:var(--pc)}
+.tmAlt{margin-top:4px;display:flex;flex-direction:column;gap:6px}
 .tmAlt .alt{display:flex;gap:8px;align-items:baseline;flex-wrap:wrap}
-.tmWonderSect{margin-top:12px}
+/* Wonder's seat: the Personas in use as chips, and the suggested setup as a box of its own. */
+.tmUse{display:flex;gap:5px;flex-wrap:wrap;margin:4px 0}
+.tmUse .u{display:inline-flex;align-items:center;gap:6px;border:1px solid var(--line);border-radius:20px;padding:1px 9px 1px 6px;font-size:12px;background:#16161c}
+.tmUse .u .el-dot{width:7px;height:7px;box-shadow:none}
+.tmUse .u b{font-family:ui-monospace,monospace}
+.tmSuggest{margin-top:8px;border:1px solid #2a4a66;border-left:3px solid var(--blue);background:#121a26;border-radius:8px;padding:8px 11px}
+.tmSuggest .hd{display:flex;align-items:center;gap:8px;flex-wrap:wrap;font-size:12px}
+.tmSuggest .hd b{color:var(--ink)}
+.tmSuggest .gain{color:var(--ok);font-family:ui-monospace,monospace;font-weight:700}
+.tmSuggest .lead{font-size:11px;color:#6fa6ee;font-weight:700;text-transform:uppercase;letter-spacing:.05em}
 .tmWonder{display:grid;grid-template-columns:auto repeat(4,minmax(0,1fr));gap:6px 8px;align-items:center;max-width:980px}
 .tmWonder select,.tmWonder input{min-width:0;width:100%}
 .psSkill input{width:170px}
 .tmWonder .hd{font-size:11px;text-transform:uppercase;letter-spacing:.05em;color:var(--dim2);font-weight:600}
-/* Turn order: numbered steps, the number drawn by CSS so the step's text stays the name and Speed. */
+/* Turn order: numbered steps in the member's element colour, the number drawn by CSS so the step's
+   text stays the name and Speed. */
 .tmOrder{display:flex;gap:8px;flex-wrap:wrap;align-items:center;counter-reset:turn}
 /* inline-block, not inline-flex: a flex box reports its text one word per line (the test reads it) */
-.tmOrder .tmStep{display:inline-block;border:1px solid var(--line);border-radius:8px;padding:5px 11px 5px 6px;background:var(--panel2);font-size:13px}
+.tmOrder .tmStep{display:inline-block;border:1px solid var(--line);border-left:3px solid var(--el,var(--line));border-radius:8px;padding:5px 11px 5px 6px;background:var(--panel2);font-size:13px}
 .tmOrder .tmStep::before{counter-increment:turn;content:counter(turn);display:inline-block;width:20px;height:20px;line-height:20px;text-align:center;
-  border-radius:50%;background:var(--red);color:#fff;font-size:11px;font-weight:800;margin-right:8px;vertical-align:1px}
+  border-radius:50%;background:var(--el,var(--red));color:#0b0b0d;font-size:11px;font-weight:800;margin-right:8px;vertical-align:1px}
 .tmOrder .tmStep b{font-family:ui-monospace,monospace}
 .tmOrder .sep{color:var(--dim2)}
+/* Rotation grids: one tile a turn, coloured by what the turn is (tmTurnKind): Skill 1 blue, Skill 2
+   teal, Skill 3 orange, a Highlight or Theurgy purple, several moves in one turn pink, an item gold,
+   Fatigue and idle grey. A turn changed for this team keeps a green ring (.fit). */
+.tmLegend{display:flex;gap:4px 10px;flex-wrap:wrap;align-items:center;font-size:11px;color:var(--dim);margin:0 0 10px}
+.tmLegend .k{display:inline-flex;align-items:center;gap:5px}
+.tmLegend .k i{display:inline-block;width:12px;height:12px;border-radius:3px;background:var(--tc,#1a1a22);border:1px solid var(--tb,var(--line))}
+.tmLegend .k.fit i{box-shadow:inset 0 0 0 2px var(--ok)}
 .tmRot{display:grid;grid-template-columns:repeat(auto-fill,minmax(84px,1fr));gap:4px;margin:6px 0 10px}
-.tmRot .t{border:1px solid var(--line);border-radius:6px;padding:4px 6px;background:#1a1a22;text-align:center}
+.tmRot .t{border:1px solid var(--tb,var(--line));border-radius:6px;padding:4px 6px;background:var(--tc,#1a1a22);text-align:center}
 .tmRot .t small{display:block;color:var(--dim2);font-size:10px;text-transform:uppercase;letter-spacing:.05em}
-.tmRot .t b{font-family:ui-monospace,monospace;font-size:12px;overflow-wrap:anywhere}
-.tmRot .t.idle b{color:var(--dim2)}
-.tmRot .t.fit{border-color:#1d5c3d;background:#10241a}
+.tmRot .t b{font-family:ui-monospace,monospace;font-size:12px;overflow-wrap:anywhere;color:var(--tt,var(--ink))}
+.tmRot .t.idle b,.tmRot .t.fatigue b{color:var(--dim2)}
+.tmRot .t.fit{box-shadow:inset 0 0 0 2px var(--ok)}
 .tmRot .t.fit small{color:var(--ok)}
+.k-s1,.tmRot .t.s1{--tc:#13202e;--tb:#2b4a6b;--tt:#8fc1f2}
+.k-s2,.tmRot .t.s2{--tc:#102424;--tb:#1f5050;--tt:#6fd6d6}
+.k-s3,.tmRot .t.s3{--tc:#2a1c10;--tb:#6b4420;--tt:#f0b070}
+.k-hl,.tmRot .t.hl{--tc:#211830;--tb:#4d3163;--tt:#d0a0f0}
+.k-burst,.tmRot .t.burst{--tc:#2a1220;--tb:#6b2446;--tt:#f08ab0}
+.k-item,.tmRot .t.item{--tc:#272010;--tb:#5c4a1d;--tt:var(--gold)}
+.k-tok,.tmRot .t.tok{--tc:#1d1d26;--tb:#3a3a48;--tt:var(--ink)}
+.k-idle,.tmRot .t.idle,.tmRot .t.fatigue{--tc:#17171c;--tb:#2a2a33}
 /* Wonder's turns: a skill name and the Persona under it, wider cells than a skill number needs */
 .tmRot.wonder{grid-template-columns:repeat(auto-fill,minmax(120px,1fr))}
 .tmRot.wonder .t b{font-family:inherit;display:block}
@@ -503,15 +608,22 @@ details.sect>.inner{margin-top:10px}
 .tmMember .hd{display:flex;align-items:baseline;gap:8px;flex-wrap:wrap;margin-bottom:4px}
 .tmMember .hd .nm{font-size:14px;font-weight:700}
 .tmMember .hd a{margin-left:auto}
+.tmMember .fitHd{display:flex;align-items:center;gap:8px;flex-wrap:wrap;font-size:12px}
 .tmNote{margin:4px 0;color:var(--dim)}
 .tmParties{display:flex;flex-direction:column}
-.tmParty{display:grid;grid-template-columns:auto minmax(0,1fr) auto;gap:6px 12px;align-items:center;padding:7px 0}
+.tmParty{display:grid;grid-template-columns:auto minmax(0,1fr) 150px;gap:6px 12px;align-items:center;padding:7px 0}
 .tmParty+.tmParty{border-top:1px solid #1e1e26}
 .tmParty .ms{display:flex;gap:6px;flex-wrap:wrap;align-items:center}
-.tmParty .m{border:1px solid var(--line);border-radius:20px;padding:1px 8px;font-size:12px;background:#16161c}
+.tmParty .m{border:1px solid var(--line);border-left:3px solid var(--el,var(--line));border-radius:20px;padding:1px 8px 1px 7px;font-size:12px;background:#16161c}
 .tmParty .m.no{color:#e87a5c;border-color:#6b3524;text-decoration:line-through}
 .tmParty .val{text-align:right;white-space:nowrap;font-size:12.5px}
 .tmParty .val b{font-family:ui-monospace,monospace;font-size:14px}
+.tmParty .val .bar{margin-top:4px}
+.tmParty .val .bar>i{background:linear-gradient(90deg,#2e6b4c,var(--ok))}
+.tmPanelHd{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:12px}
+.tmPanelHd h2{font-size:14px;text-transform:uppercase;letter-spacing:.07em;color:var(--dim);margin:0}
+.tmSyn li{margin:4px 0}
+.tmSyn .m{border:1px solid var(--line);border-left:3px solid var(--el,var(--line));border-radius:20px;padding:0 7px;font-size:12px;background:#16161c;font-weight:600}
 @media (max-width:760px){
   header{position:static;padding:10px 12px;gap:8px 10px}
   header .logo{font-size:15px}
@@ -533,14 +645,20 @@ details.sect>.inner{margin-top:10px}
   .cc .nm{font-size:13px}
   .rechead .acts{margin-left:0}
   dialog{padding:14px;width:100%}
-  /* Teams: seat cards stack their columns, the hero loses its divider */
+  /* Teams: seat cards stack their columns, the hero loses its divider, the control rows lose their label column */
   .tmSeat,.tmSeats.calc .tmSeat{grid-template-columns:minmax(0,1fr) auto}
   .tmSeat .tmWhat,.tmSeat .acts{grid-column:1 / -1}
-  .tmSeat .acts{text-align:left}
+  .tmSeat .acts{text-align:left;white-space:normal}
+  .tmSeat.kind-wonder .acts{justify-content:flex-start;max-width:none}
   .tmHero .cmp{border-left:none;padding-left:0}
   .tmHero .acts{margin-left:0}
   .tmParty{grid-template-columns:auto minmax(0,1fr)}
   .tmParty .val{grid-column:2;text-align:left}
+  .tmGroup{grid-template-columns:minmax(0,1fr)}
+  .tmGroup .gl,.tmGroupW .gl{padding-top:0}
+  .tmCtl select,.tmCtl input{max-width:100%}
+  .tmWonder{grid-template-columns:auto minmax(0,1fr)}
+  .tmWonder .hd{display:none}
 }
 </style>
 
@@ -658,132 +776,153 @@ details.sect>.inner{margin-top:10px}
 
   <!-- ===================== TEAMS ===================== -->
   <section id="tab-teams" class="hide">
-    <div class="panel">
-      <div class="row">
-        <div class="field" style="min-width:280px">
-          <label>Damage dealer</label>
-          <select id="tmChar"></select>
-        </div>
-        <div class="field">
-          <label>Build from</label>
-          <select id="tmBasis" title="Calculated: every team you can field, priced from the kits. lufel: the teams lufel.net recommends, filled from what you own.">
-            <option value="calc" selected>Calculated from the kits</option>
-            <option value="lufel">lufel's recommended teams</option>
-          </select>
-        </div>
-        <div class="field">
-          <label>Rank teams by</label>
-          <select id="tmRank" title="The whole team's damage: the damage dealer's hits and the teammates' and Wonder's own hits all count, so a teammate who hits hard can win a seat over a support. The damage dealer's damage: only their hits count, as a team built to make one character hit hardest; the others' own hits are still shown on their seats. Calculated basis only.">
-            <option value="team" selected>the whole team's damage</option>
-            <option value="dps">the damage dealer's damage</option>
-          </select>
-        </div>
-        <label class="check" title="Each member's plain skill turns are re-chosen for this damage dealer, within the skills and frequencies lufel's own rotations for them use; bursts, Highlights, Transformations, items, Fatigue and idle turns stay where lufel put them. Off: every rotation is lufel's as written."><input type="checkbox" id="tmRotFit" checked> Fit rotations to this team</label>
-        <label class="check" title="On: each member's rotation is written for this team from their kit's own moves, within what the kit allows (stacks, modes, Fatigue, cooldowns) and no more SP per turn than lufel's own rotations spend. Off: lufel's rotations with only their plain skill turns re-chosen."><input type="checkbox" id="tmRotCompose" checked> Compose them from the kits</label>
-        <label class="check" title="On: one of the two thief seats goes to a medic (Morgana, Lufel, Minami, Seaside Tomoko, Yukari, Summer Ichigo, or Justine &amp; Caroline in their Medic masks), the one whose kit adds most to this damage dealer, and the rest of the team is chosen around the two. Healing itself is not priced, so medics are compared on what they add to the damage. Calculated basis only."><input type="checkbox" id="tmMedic"> Include a medic</label>
-        <div class="field" style="margin-left:auto">
-          <label>Wonder's Speed</label>
-          <input id="tmWonderSpd" type="number" min="0" max="999" step="1" placeholder="not set" style="width:90px"
-            title="The Speed on Wonder's character screen (without the Thieves Den, which is added). Saved in the save file; places him in the turn order. Once his first Persona's Speed is entered on the Personas tab, that is used instead, for every setup the Teams tab tries.">
-        </div>
-        <div class="field">
-          <label>Wonder's ATK</label>
-          <input id="tmWonderAtk" type="number" min="0" max="99999" step="1" placeholder="not set" style="width:90px"
-            title="The ATK on Wonder's character screen. Saved in the save file. Until it is set his own hits are not counted, only what he does for the others. Once his Personas', dagger's and Schema's numbers are entered (Wonder's setup below), his ATK, crit rate and crit damage are worked out for every setup instead, and these are only a fallback.">
-        </div>
-        <div class="field">
-          <label>Crit rate %</label>
-          <input id="tmWonderCr" type="number" min="0" max="100" step="0.1" placeholder="5" style="width:70px"
-            title="Wonder's crit rate from his character screen; 5% when left empty.">
-        </div>
-        <div class="field">
-          <label>Crit damage %</label>
-          <input id="tmWonderCm" type="number" min="100" max="999" step="0.1" placeholder="150" style="width:70px"
-            title="Wonder's crit damage (critical multiplier) from his character screen; 150% when left empty.">
+    <!-- The settings in three labelled rows — the team, the fight it is priced in, Wonder — and one
+         Calculate bar under them. Every explanation sits behind a ? button (infoBtn; the words are
+         TM_HELP in logic.js) rather than in a tooltip or a paragraph, so the controls read at a glance.
+         The ? sits beside the label, never inside it: a label's click focuses its control. -->
+    <div class="panel tmCtl">
+      <div class="tmGroup">
+        <div class="gl">Team</div>
+        <div class="gc">
+          <div class="row">
+            <div class="field" style="min-width:260px">
+              <div class="lblRow"><label>Damage dealer</label><button type="button" class="infoBtn" data-help="dps" aria-label="About the damage dealer">?</button></div>
+              <select id="tmChar"></select>
+            </div>
+            <div class="field">
+              <div class="lblRow"><label>Build from</label><button type="button" class="infoBtn" data-help="basis" aria-label="About Build from">?</button></div>
+              <select id="tmBasis">
+                <option value="calc" selected>Calculated from the kits</option>
+                <option value="lufel">lufel's recommended teams</option>
+              </select>
+            </div>
+            <div class="field">
+              <div class="lblRow"><label>Rank teams by</label><button type="button" class="infoBtn" data-help="rank" aria-label="About Rank teams by">?</button></div>
+              <select id="tmRank">
+                <option value="team" selected>the whole team's damage</option>
+                <option value="dps">the damage dealer's damage</option>
+              </select>
+            </div>
+          </div>
+          <div class="row tmChecks">
+            <span class="chk"><label class="check"><input type="checkbox" id="tmRotFit" checked> Fit rotations to this team</label><button type="button" class="infoBtn" data-help="fit" aria-label="About fitting rotations">?</button></span>
+            <span class="chk"><label class="check"><input type="checkbox" id="tmRotCompose" checked> Compose them from the kits</label><button type="button" class="infoBtn" data-help="compose" aria-label="About composing rotations">?</button></span>
+            <span class="chk"><label class="check"><input type="checkbox" id="tmMedic"> Include a medic</label><button type="button" class="infoBtn" data-help="medic" aria-label="About including a medic">?</button></span>
+          </div>
         </div>
       </div>
-      <!-- The fight the calculated basis plays out turn by turn (a pref): rounds, in which every thief
+      <!-- The fight the calculated basis plays out turn by turn (prefs): rounds, in which every thief
            acts once in Speed order and the shared Highlight gauge fills; once-per-battle effects,
            the opening rounds before the first Highlight and turn order weigh more in a short one. -->
-      <div class="row" style="margin-top:8px">
-        <div class="field">
-          <label>Fight length</label>
-          <select id="tmFight" title="Rounds in the fight you are building for. The calculated basis plays the fight out round by round: turn order, cooldowns, the shared Highlight gauge (empty at the start, so the first Highlight usually comes in round 2) and once-per-battle effects such as Manaka's Da Capo all count for this many rounds.">
-            <option value="3">3 rounds</option>
-            <option value="6" selected>6 rounds</option>
-            <option value="9">9 rounds</option>
-            <option value="12">12 rounds</option>
-            <option value="15">15 rounds</option>
-            <option value="20">20 rounds</option>
-          </select>
+      <div class="tmGroup">
+        <div class="gl">Fight</div>
+        <div class="gc">
+          <div class="row">
+            <div class="field">
+              <div class="lblRow"><label>Length</label><button type="button" class="infoBtn" data-help="fight" aria-label="About the fight length">?</button></div>
+              <select id="tmFight">
+                <option value="3">3 rounds</option>
+                <option value="6" selected>6 rounds</option>
+                <option value="9">9 rounds</option>
+                <option value="12">12 rounds</option>
+                <option value="15">15 rounds</option>
+                <option value="20">20 rounds</option>
+              </select>
+            </div>
+            <div class="field" style="min-width:220px">
+              <div class="lblRow"><label>Boss</label><button type="button" class="infoBtn" data-help="boss" aria-label="About the boss">?</button></div>
+              <select id="tmBoss"></select>
+            </div>
+            <div class="field">
+              <div class="lblRow"><label>Weakness</label><button type="button" class="infoBtn" data-help="weak" aria-label="About weakness hits">?</button></div>
+              <select id="tmWeak">
+                <option value="all" selected>weak to the damage dealer's element</option>
+                <option value="boss">by the boss's resistances</option>
+                <option value="none">no weakness hits</option>
+              </select>
+            </div>
+            <div class="field">
+              <div class="lblRow"><label>Enemies</label><button type="button" class="infoBtn" data-help="foes" aria-label="About the number of enemies">?</button></div>
+              <select id="tmFoes">
+                <option value="auto" selected>Auto</option>
+                <option value="1">1</option>
+                <option value="2">2</option>
+                <option value="3">3</option>
+                <option value="4">4</option>
+                <option value="5">5</option>
+              </select>
+            </div>
+            <div class="field">
+              <div class="lblRow"><label>Down Points</label><button type="button" class="infoBtn" data-help="down" aria-label="About Down Points">?</button></div>
+              <select id="tmDown">
+                <option value="0" selected>can't be knocked down</option>
+                <option value="1">1</option><option value="2">2</option><option value="3">3</option>
+                <option value="4">4</option><option value="5">5</option><option value="6">6</option>
+                <option value="7">7</option><option value="8">8</option><option value="9">9</option>
+                <option value="10">10</option><option value="12">12</option><option value="15">15</option>
+              </select>
+            </div>
+          </div>
         </div>
-        <div class="field" style="min-width:220px">
-          <label>Boss</label>
-          <select id="tmBoss" title="The enemy the fight is against, from lufel's defence calculator: its DEF and DEF coefficient decide what DEF down and Pierce are worth, and its resistances which hits land on a weakness. Auto fights lufel's single-boss example (DEF 1280, like Baal or Atabaka in Nightmare's Gateway), or its area-boss example (DEF 821, like Vishnu) for a damage dealer built to hit every enemy."></select>
-        </div>
-        <div class="field">
-          <label>Weakness</label>
-          <select id="tmWeak" title="Whether hits land on a weakness: ×1.2 damage (weakness-damage buffs only count then) and 21% Highlight gauge instead of 17%. A resisted hit deals ×0.5. The default: the boss is weak to the damage dealer's element, the one it is fought with; a teammate's hit of another element is neutral.">
-            <option value="all" selected>weak to the damage dealer's element</option>
-            <option value="boss">by the boss's resistances</option>
-            <option value="none">no weakness hits</option>
-          </select>
-        </div>
-        <div class="field">
-          <label>Enemies</label>
-          <select id="tmFoes" title="How many enemies the fight has. The damage dealer's area skills hit each of them; a debuff on one foe reaches only one, a debuff on all foes reaches every hit. Auto is 5 (a boss and its 4 helpers, as Vishnu, Kartikeya and Dominion bring) for a damage dealer built to hit every enemy, else 1.">
-            <option value="auto" selected>Auto</option>
-            <option value="1">1</option>
-            <option value="2">2</option>
-            <option value="3">3</option>
-            <option value="4">4</option>
-            <option value="5">5</option>
-          </select>
-        </div>
-        <div class="field">
-          <label>Down Points</label>
-          <select id="tmDown" title="The boss's Down Points, as its gauge shows them. Each skill that hits its weakness takes 1 (some skills take more whatever the weakness, such as Kumi's Skill 3); at 0 it is knocked down until its next turn, which it still takes, and the gauge refills. Effects that need a downed foe count only then. Most bosses cannot be knocked down: leave it on that unless yours can.">
-            <option value="0" selected>can't be knocked down</option>
-            <option value="1">1</option><option value="2">2</option><option value="3">3</option>
-            <option value="4">4</option><option value="5">5</option><option value="6">6</option>
-            <option value="7">7</option><option value="8">8</option><option value="9">9</option>
-            <option value="10">10</option><option value="12">12</option><option value="15">15</option>
-          </select>
-        </div>
-        <!-- The page calculates only on this button (a fresh calculated team takes a few seconds), so
-             the settings above can be changed one after another without waiting on each. -->
-        <button class="primary" id="tmCalc" style="margin-left:auto;align-self:flex-end" title="Work out the team with the settings above (a few seconds on the calculated basis)">Calculate</button>
       </div>
-      <!-- Wonder's setup is set once and read on every visit, so it folds under one line that
-           says what is set; his Speed stays in the row above, since it places him in the turn order. -->
-      <details class="sect tmWonderSect">
-        <summary>Wonder's setup <span class="tiny muted" id="tmWonderSum"></span></summary>
-        <div class="inner">
-          <div class="tmWonder" id="tmWonderSlots"></div>
-          <div class="row" style="margin-top:8px">
-            <div class="field"><label>Wonder's weapon</label><select id="tmWWeapon"></select></div>
-            <div class="field"><label>Refinement</label><select id="tmWRefine"></select></div>
+      <!-- Wonder: his Speed places him in the turn order, so it stays in view; the rest of his setup
+           (Personas, cards, weapon, his own stats, Schema) is set once and folds under a line that says
+           what is set. -->
+      <div class="tmGroup tmGroupW">
+        <div class="gl">Wonder</div>
+        <div class="gc">
+          <div class="row">
+            <div class="field">
+              <div class="lblRow"><label>Speed</label><button type="button" class="infoBtn" data-help="spd" aria-label="About Wonder's Speed">?</button></div>
+              <input id="tmWonderSpd" type="number" min="0" max="999" step="1" placeholder="not set" style="width:90px">
+            </div>
+            <!-- what the box holds: worked out from his lead Persona (the box is then read-only), or typed -->
+            <span class="tiny muted" id="tmWonderSpdNote" style="align-self:flex-end;padding-bottom:6px"></span>
           </div>
-          <!-- His Schema and Ego level, read once off the Phantom Thieves menu: with each Persona's and the
-               dagger's own stats they work his panel out (wonderCalc), so his own hits and his Speed follow
-               whatever setup is priced. -->
-          <div class="row tmWSchema" style="margin-top:8px" title="From the Schema screen in the Phantom Thieves menu: the total each bonus shows now. Ego level from its own node. Saved in the save file.">
-            <div class="field"><label>Schema HP</label><input id="tmWS_hp" type="number" min="0" step="1" placeholder="—" style="width:76px"></div>
-            <div class="field"><label>HP %</label><input id="tmWS_hpPct" type="number" min="0" step="0.1" placeholder="—" style="width:60px"></div>
-            <div class="field"><label>Schema ATK</label><input id="tmWS_atk" type="number" min="0" step="1" placeholder="—" style="width:76px"></div>
-            <div class="field"><label>ATK %</label><input id="tmWS_atkPct" type="number" min="0" step="0.1" placeholder="—" style="width:60px"></div>
-            <div class="field"><label>Schema DEF</label><input id="tmWS_def" type="number" min="0" step="1" placeholder="—" style="width:76px"></div>
-            <div class="field"><label>DEF %</label><input id="tmWS_defPct" type="number" min="0" step="0.1" placeholder="—" style="width:60px"></div>
-            <div class="field"><label>Crit rate %</label><input id="tmWS_cr" type="number" min="0" step="0.1" placeholder="—" style="width:60px"></div>
-            <div class="field"><label>Crit damage %</label><input id="tmWS_cm" type="number" min="0" step="0.1" placeholder="—" style="width:60px"></div>
-            <div class="field"><label>Ailment acc. %</label><input id="tmWS_aa" type="number" min="0" step="0.1" placeholder="—" style="width:60px"></div>
-            <div class="field"><label>Ego level</label><input id="tmWS_ego" type="number" min="0" step="1" placeholder="—" style="width:60px"></div>
-          </div>
-          <div class="tiny" id="tmWCalc" style="margin-top:6px"></div>
-          <div class="tiny muted" style="margin-top:6px">A Persona's passives count only while it is in use; the planner shares his six actions among the Personas and skill cards set here.<span id="tmWUnrel"></span></div>
+            <details class="sect tmWonderSect" id="tmWonderSect">
+              <summary>Wonder's setup <span class="tiny muted" id="tmWonderSum"></span></summary>
+              <div class="inner">
+                <div class="tmSub"><span>Personas and skill cards</span><button type="button" class="infoBtn" data-help="setup" aria-label="About Wonder's setup">?</button><span class="tiny muted" id="tmWUnrel"></span></div>
+                <div class="tmWonder" id="tmWonderSlots"></div>
+                <div class="row" style="margin-top:8px">
+                  <div class="field"><label>Wonder's weapon</label><select id="tmWWeapon"></select></div>
+                  <div class="field"><label>Refinement</label><select id="tmWRefine"></select></div>
+                </div>
+                <!-- His own stats as typed: a fallback until the Personas', dagger's and Schema's numbers
+                     work them out (wonderCalc), when the Teams tab uses those for every setup it tries. -->
+                <div class="tmSub" style="margin-top:12px"><span>His own stats, from his character screen</span><button type="button" class="infoBtn" data-help="stats" aria-label="About Wonder's own stats">?</button></div>
+                <div class="row">
+                  <div class="field"><label>ATK</label><input id="tmWonderAtk" type="number" min="0" max="99999" step="1" placeholder="not set" style="width:90px"></div>
+                  <div class="field"><label>Crit rate %</label><input id="tmWonderCr" type="number" min="0" max="100" step="0.1" placeholder="5" style="width:70px"></div>
+                  <div class="field"><label>Crit damage %</label><input id="tmWonderCm" type="number" min="100" max="999" step="0.1" placeholder="150" style="width:70px"></div>
+                </div>
+                <!-- His Schema and Ego level, read once off the Phantom Thieves menu: with each Persona's and the
+                     dagger's own stats they work his panel out (wonderCalc), so his own hits and his Speed follow
+                     whatever setup is priced. -->
+                <div class="tmSub" style="margin-top:12px"><span>Schema and Ego</span><button type="button" class="infoBtn" data-help="schema" aria-label="About the Schema fields">?</button></div>
+                <div class="row tmWSchema">
+                  <div class="field"><label>Schema HP</label><input id="tmWS_hp" type="number" min="0" step="1" placeholder="—" style="width:76px"></div>
+                  <div class="field"><label>HP %</label><input id="tmWS_hpPct" type="number" min="0" step="0.1" placeholder="—" style="width:60px"></div>
+                  <div class="field"><label>Schema ATK</label><input id="tmWS_atk" type="number" min="0" step="1" placeholder="—" style="width:76px"></div>
+                  <div class="field"><label>ATK %</label><input id="tmWS_atkPct" type="number" min="0" step="0.1" placeholder="—" style="width:60px"></div>
+                  <div class="field"><label>Schema DEF</label><input id="tmWS_def" type="number" min="0" step="1" placeholder="—" style="width:76px"></div>
+                  <div class="field"><label>DEF %</label><input id="tmWS_defPct" type="number" min="0" step="0.1" placeholder="—" style="width:60px"></div>
+                  <div class="field"><label>Crit rate %</label><input id="tmWS_cr" type="number" min="0" step="0.1" placeholder="—" style="width:60px"></div>
+                  <div class="field"><label>Crit damage %</label><input id="tmWS_cm" type="number" min="0" step="0.1" placeholder="—" style="width:60px"></div>
+                  <div class="field"><label>Ailment acc. %</label><input id="tmWS_aa" type="number" min="0" step="0.1" placeholder="—" style="width:60px"></div>
+                  <div class="field"><label>Ego level</label><input id="tmWS_ego" type="number" min="0" step="1" placeholder="—" style="width:60px"></div>
+                </div>
+                <div class="tiny" id="tmWCalc" style="margin-top:8px"></div>
+              </div>
+            </details>
         </div>
-      </details>
-      <div id="tmBusy" class="tiny" style="margin-top:10px"></div>
+      </div>
+      <!-- The page calculates only on this button (a fresh calculated team takes a few seconds), so
+           the settings above can be changed one after another without waiting on each. -->
+      <div class="tmCalcBar">
+        <div id="tmBusy" class="tiny"></div>
+        <button class="primary tmCalcBtn" id="tmCalc">Calculate</button>
+      </div>
     </div>
     <div id="tmStatus"></div>
     <div id="tmOut"></div>
@@ -1849,6 +1988,12 @@ python ocr/review_cards.py cards-2 <span class="cm"># for a batch run with --out
   <span class="tmsg" id="toastMsg"></span>
   <button class="sm" id="toastUndo">Undo</button>
   <button class="ghost sm" id="toastClose" aria-label="Dismiss" title="Dismiss">✕</button>
+</div>
+<!-- The explanation behind a ? button (infoBtn in logic.js): one popover for the page, placed under the
+     button pressed, closed by its ✕, Escape or a click elsewhere. -->
+<div id="infoPop" class="infoPop hide" role="dialog" aria-labelledby="infoPopTitle">
+  <div class="hd"><b id="infoPopTitle"></b><button class="ghost sm" id="infoPopClose" aria-label="Close" title="Close">✕</button></div>
+  <div class="body" id="infoPopBody"></div>
 </div>
 <div id="dropzone" class="dropzone hide" aria-hidden="true">Drop to load
   <small>A save file replaces everything here. Scan files (cards.json, one or several) are merged into this

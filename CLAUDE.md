@@ -1387,6 +1387,32 @@ damage-formula section); teams are ranked by it:
   folds the rest; a synergy sentence both pages carry (Fuuka's about Kumi and Kumi's about Fuuka)
   is listed once, keeping the Awareness note (`tmSynergyItems`). A damage dealer seated with an
   entered but empty kit reads "nothing to price", not "+0.0%".
+- **Explanations behind ? buttons, colour for the kinds of thing** (6 Nov 2026; the user asked for
+  less prose and a more intuitive page). No paragraph explains a number on the page: the words sit in
+  one popover, `#infoPop`, opened by an `.infoBtn` (`infoBtn(key)` for a control, keyed into `TM_HELP`;
+  `infoBtnHtml(title, html)` for words made at render time; `infoLinkHtml` the same worded as a link,
+  "How the fight was played", "How the team is calculated", "How the rotations are chosen"). The HTML
+  travels in a `data-info` attribute through `esc()`, which the browser gives back as written; the
+  popover is placed under the button (above it when there is no room), closed by its ✕, Escape or a
+  click elsewhere, and focus goes back to the button. The `title` tooltips the controls carried went
+  into `TM_HELP`; a ? sits beside a label in a `.lblRow`, never inside it, since a label's click
+  focuses its control. The controls are three labelled rows (Team, Fight, Wonder; `.tmGroup`) and a
+  Calculate bar; Wonder's typed ATK and crit moved under "Wonder's setup" beside the Schema fields.
+  The fight is a row of facts (`.tmFacts`, `tcFightNote`; still inside `.tmHlNote`, which a test
+  reads for "N-round fight" and "Highlights and Theurgies used"). Colour: a seat's role by its kind
+  (`.tmSeat.kind-dps|thief|medic|elu|backup|wonder`), a member's pills by the factor they move
+  (`TC_FAMILY`: ATK orange, damage red, crit gold, the foe's defence blue, Highlights purple,
+  ailments teal; `.tcSum .st.f-*`), the damage dealer's damage mix as a stacked bar (`.tmMix`,
+  `TC_PART_COLOR`), rotation tiles by what the turn is (`tmTurnKind`: Skill 1/2/3, Highlight or
+  Theurgy, several in one turn, item, other move, Fatigue or idle; a legend over the cards,
+  `tmLegendHtml`; a changed turn keeps `.fit`, now a green ring), turn-order steps, next-team chips
+  and synergy names in the member's element. The lists under a seat are `.tmFolds` (closed ones on
+  one line, an open one taking the row); their summaries keep the words tests read ("Where it comes
+  from (N lines)", "Replacements (N)"). `renderTeams` is split into `tmHeroHtml`, `tmSeatHtml`
+  (`tmDpsWhat`, `tmMateWhat`, `tmWonderWhat`), `tmOthersHtml`, `tmOrderHtml`, `tmRotMemberHtml`,
+  `tmWonderRotHtml`, `tmWorksHtml`; the panel h2s are inside `.tmPanelHd` with their ? beside them,
+  so an h2's text is still exactly "Rotation" (a test finds the panel by it). Wonder's seat buttons
+  wrap (`.kind-wonder .acts`), which is what had the tab 543 px wide on a phone.
 - **"Include a medic"** (`#tmMedic`, a pref, off by default, greyed on the lufel basis; the user
   asked, Nov 2026): one of the two thief seats must hold a medic — lufel's Healer role (Morgana, Lufel,
   Minami, Seaside Tomoko, Yukari, Summer Ichigo) — unless the damage dealer is one. The search keeps
