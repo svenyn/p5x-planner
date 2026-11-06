@@ -24,6 +24,7 @@
 const fs = require('fs');
 const path = require('path');
 const vm = require('vm');
+const { selfStats, selfSrc } = require('./wonder-self-stats');
 
 const ROOT = path.resolve(__dirname, '..');
 const DATA_FILE = path.join(ROOT, 'src', 'data.js');
@@ -57,7 +58,7 @@ async function main() {
   lines[lines.length - 1] = lines[lines.length - 1].replace(/,$/, '');
 
   /* WONDER_PERSONA: what the Personas section of the page records and what changes a Persona's numbers.
-     Per Persona: rarity, element, its talent ranks (lufel lists the talent once per rank: the base, then
+     Per Persona: rarity, grade (lufel 1-9, I-IX in game, which caps its level: the page), element, its talent ranks (lufel lists the talent once per rank: the base, then
      I, II, ...), the level each innate skill is learned at, and two tables that turn a top-rank value —
      the one WONDER_BUFFS prices — into the value at a lower rank:
        tv  talent rank: a number in the top rank's talent text -> its value at each rank. Ranks are lined
@@ -105,11 +106,15 @@ async function main() {
     (p.innate_skill || []).forEach(s => { const k = String(s.name_en || '').trim(); if (k && !(k in learn)) learn[k] = +s.learn_level || 1; });
     const el = String(p.element || '');
     if (el && !ELEM[el]) console.error(`WONDER_PERSONA: ${n}: element ${el} has no English name here`);
-    return [n, { r: +p.star || 0, e: ELEM[el] || el, t: (p.passive_skill || []).map(r => (String(r.name_en || '').match(ROMAN) || ['', ''])[1]),
-      learn, tv: tidy(tv), sv: tidy(sv) }];
+    // st: per talent rank, what the talent always adds to Wonder's own panel while it is his slot-1 Persona
+    // (tools/wonder-self-stats.js; from the English text, rank by rank)
+    const st = (p.passive_skill || []).map(r => selfStats(r.desc_en));
+    return [n, { r: +p.star || 0, g: +p.grade || 0, e: ELEM[el] || el, t: (p.passive_skill || []).map(r => (String(r.name_en || '').match(ROMAN) || ['', ''])[1]),
+      learn, tv: tidy(tv), sv: tidy(sv), st: st.some(l => l.length) ? st : null }];
   }).filter(([n]) => n).sort((a, b) => a[0].localeCompare(b[0]));
   const obj = o => '{ ' + Object.entries(o).map(([k, v]) => `${q(k)}: ${Array.isArray(v) ? '[' + v.map(x => x == null ? 'null' : x).join(', ') + ']' : v}`).join(', ') + ' }';
-  const pLines = pRows.map(([n, d]) => `  ${q(n)}: { r: ${d.r}, e: ${q(d.e)}, t: [${d.t.map(q).join(', ')}], learn: ${obj(d.learn)}, tv: ${obj(d.tv)}, sv: ${obj(d.sv)} },`);
+  const pLines = pRows.map(([n, d]) => `  ${q(n)}: { r: ${d.r}, g: ${d.g}, e: ${q(d.e)}, t: [${d.t.map(q).join(', ')}], learn: ${obj(d.learn)}, tv: ${obj(d.tv)}, sv: ${obj(d.sv)}` +
+    `${d.st ? `, st: [${d.st.map(selfSrc).join(', ')}]` : ''} },`);
   pLines[pLines.length - 1] = pLines[pLines.length - 1].replace(/,$/, '');
 
   vm.runInContext(dir ? fs.readFileSync(path.join(dir, 'schedule.js'), 'utf8') : await get(BASE + 'apps/schedule/data.js'), ctx);
@@ -141,8 +146,9 @@ async function main() {
     'const WONDER_UNRELEASED = [', ...unrel, '];',
     '/* Every Persona lufel lists: rarity (r), element (e), talent ranks (t: "" for the base, then I, II, ...),',
     '   the level each innate skill is learned at, and the value of a top-rank number at each talent rank (tv)',
-    '   and skill level 6/7/8 (sv). The Personas section records which you own and at what rank; see',
-    '   personaLines in logic.js and the comment in tools/gen-wonder-innate.js. */',
+    '   and skill level 6/7/8 (sv); st, per talent rank, the stats the talent always adds to Wonder\'s panel',
+    '   from slot 1 (tools/wonder-self-stats.js, wonderCalc in logic.js). The Personas section records which',
+    '   you own and at what rank; see personaLines in logic.js and the comment in tools/gen-wonder-innate.js. */',
     'const WONDER_PERSONA = {', ...pLines, '};', END].join('\n').replace(/\n/g, EOL);
   const at = text.indexOf(BEGIN);
   let out;

@@ -25,7 +25,7 @@ behind the pages is plain static JavaScript under `/data/`, and it fetches fine.
 | `/data/characters/<Korean name>/party.js` | Recommended teams (3 thieves + Elucidator; Fuuka's carry a 5th, her Oracle Shift backup) and "friends": synergy partners, each with a one-line English reason and sometimes the Awareness it needs. Missing for a few characters, which lufel's own page treats as normal |
 | `/data/characters/<Korean name>/operation.js` | Skill rotations per Awareness level and situation ("with Miku", single target, 2-turn cycle), as a line or a turn grid, with English notes for 38 characters (the rest have none, in any language) |
 | `/data/characters/<Korean name>/skill.js` | Skills 1-3, Highlight (or Theurgy) and passives, in four languages: description with the four skill-level values, SP cost, and `cool` — the Highlight's cooldown is 4 turns for every thief; a Theurgy has none and needs 70 gauge. Source of `SKILL_DMG` |
-| `/data/persona/index.js`, `/data/persona/<Korean name>.js` | 155 Personas: unique skill, passives, innate skills, Highlight, each in English with rank values. Read once (Oct 2026) into `WONDER_BUFFS.personas` by hand-checked batches. `tools/gen-wonder-innate.js` fetches them (each file sits at the folder the index's `__path` names, `data/persona` or `data/persona/nonorder`) for the innate skills only, into `WONDER_INNATE` |
+| `/data/persona/index.js`, `/data/persona/<Korean name>.js` | 155 Personas: unique skill, passives, innate skills, Highlight, each in English with rank values. Read once (Oct 2026) into `WONDER_BUFFS.personas` by hand-checked batches. `tools/gen-wonder-innate.js` fetches them (each file sits at the folder the index's `__path` names, `data/persona` or `data/persona/nonorder`) for the innate skills only, into `WONDER_INNATE`; `tools/gen-wonder-damage.js` reads them with the skill list below for Wonder's own hits, into `WONDER_DMG` (Nov 2026): every "Deal <element> damage to <1 foe / all foes> equal to a/b/c% of Attack (N hits)" clause of a unique skill, Highlight or attack skill, 116 Personas and 134 attack skills; two cards print no number (Mada's Skill 1, Horn of Judgment) and are left out |
 | `/data/kr/wonder/skills.js` | 459 skill cards (`personaSkillList`), English descriptions. Source of `WONDER_BUFFS.cards`. `tools/gen-wonder-skills.js` reads it into `WONDER_SKILLS` (Nov 2026): every skill's English name and kind, and an active skill's values at skill levels 6/7/8 from the Korean "a/b/c"; 33 rank summaries ("Attack Boost" beside Attack Boost I-V) left out, 422 skills kept |
 | `/data/kr/wonder/weapons.js` | Wonder's 18 weapons (`matchWeapons`), English effect text with 7 refinement steps. Source of `WONDER_BUFFS.weapons` |
 | `/data/kr/calc/defense-data.js` | lufel's own defence calculator: DEF-down (`defenseCalcData`) and Pierce (`penetrateData`) sources per character and for Wonder, as numbers. Used to cross-check the hand-entered DEF-down values (all seven Wonder ones match) |
@@ -566,6 +566,76 @@ The schedule splits into `manualReleases` (confirmed dates, through v3.2.1) and
 Both are read, in that order, so a projected date never reorders a shipped character. The
 four entries with no date at all (`schedulePending`) sit at the end and carry no build, so
 they are not imported.
+
+### Wonder's stats — measured on the user's panel (6 Nov 2026), built as `wonderCalc`
+
+No site publishes how Wonder's panel is built. lufel has no Persona or dagger base stats; Prydwen
+has none either; the Megami Tensei Wiki's P5X Persona table has level-1 and max-level fields, but
+its own example leaves the max-level row blank, and the site blocks every automated read
+(Cloudflare, API and REST alike). Samurai Gamers lists max stats for eight daggers (CN/TW/KR
+versions; it does not say at which level). So the formula is being read off the user's own
+character screen (outside battle, so no Thieves Den), one change at a time.
+
+Setup: Starry Compass Lv 80, R6 (its own screen: HP 2051, ATK 654, DEF 356, "Increase Attack by
+56.0%"). Persona screens: Kohryu Lv 99 836/295/197, Janosik Lv 99 1152/320/213, Belphegor Lv 60
+500/138/121, Ippon-Datara Lv 1 155/34/28, Mandrake Lv 1 155/34/28 (HP/ATK/DEF).
+
+| Reading | Slot 1 / 2 / 3 | ATK | DEF | HP |
+|---|---|---|---|---|
+| A1 | Kohryu / Janosik / Belphegor | 4439 | 2469 | 11580 |
+| A2 | Kohryu / Ippon-Datara / Mandrake | 3639 | 2108 | 9789 |
+| A3 | Kohryu / Janosik / Mandrake | 4225 | 2348 | 11120 |
+
+The other panel stats did not move between them: SP 100, Speed 100, crit rate 31.5%, crit damage
+190%, ailment accuracy 80%, damage multiplier 10.8%.
+
+Schema (Phantom Thieves menu), as the user read it: HP +1200, HP +20%, ATK +300, ATK +20%,
+DEF +300, DEF +20%, crit rate +20%, crit damage +40%, ailment accuracy +80%, ailment resistance
++40%, HP recovery +48%, shields granted +48%. Ego level 84: HP +3360, ATK +840, DEF +840 (40 HP and
+10 ATK/DEF a level). Also: the equipped Persona's base and learned active skills +5 levels, and
+the effect of 1 More, Highlight, melee and ranged attacks raised.
+
+What the three readings settle:
+
+- **All three slots add their Persona's base stats, equally.** Each panel stat is a straight line
+  in the sum of the three Personas' stats, with the same slope in every reading: ×2.051 for ATK,
+  ×1.30 for DEF, ×1.334 for HP (every reading reproduced to within 1).
+- **Only the slot-1 Persona's talent shows.** ATK's slope is 1 + 56% (dagger) + 20% (Schema) +
+  29.1% (Kohryu's Auspicious Sign: "Increase Attack by 29.1%"). Janosik's talent carries the same
+  29.1% and did not count from slot 2. This matches the Teams tab's rule that a Persona's passives
+  work only while it is in use.
+- With the Schema and Ego flats added after the percentage, Wonder's own base reads about
+  201 ATK, 136 DEF, 725 HP. With them inside it, his base would be negative, so at least the
+  Ego flats sit outside.
+
+A fourth reading, A4, put Belphegor (talent: ailment resistance +17%; no ATK line) in slot 1 with Kohryu and
+Janosik behind it: ATK 3971 (predicted 3971), DEF 2469, HP 10870, crit rate 25%, crit damage 190%, damage
+multiplier 0%. So **slot 1 also brings its Persona's passive skills**, and only slot 1's: Kohryu's skills (the
+user's list: Spirit Strike, Thief Tactics, Battle Acumen IV, Life Aid IV, Marakukaja, Energy Drop, Apt Pupil III,
+HP Boost IV) are HP Boost IV (+13.5% HP), Apt Pupil III (+6.5% crit rate) and Battle Acumen IV (+10.8% damage),
+exactly what left the panel with him. Janosik's Attack Boost I (+5.8% ATK) never counted from slot 2; Belphegor's
+Attack Master II ("at the start of battle") is not on the panel from slot 1 either.
+
+The panel as measured, every reading reproduced:
+
+```
+HP/ATK/DEF = (Wonder's own + dagger flat + all three Personas' stat)
+             × (1 + dagger % + Schema % + slot-1 talent % + slot-1 passive skills %)
+             + Schema flat + Ego flat (40 HP, 10 ATK, 10 DEF per Ego level)
+crit rate  = 5 + Schema 20 + slot-1 passive skills;  crit damage = 150 + Schema 40
+damage multiplier = slot-1 passive skills;           ailment accuracy = Schema 80
+```
+
+Wonder's own part, solved from the readings: ATK 201.5 (A1 and A4 agree to 0.1), HP 719, DEF 135. Whether it
+grows with his level is not known.
+
+Schema's DEF bonus is +30%, not the +20% first read (the user's correction), which makes DEF's 30% whole: every
+panel number is now accounted for.
+
+**Speed** (the user, from play): Wonder's Speed is the slot-1 Persona's Speed, changed by that Persona's skills
+(Agility Master I-IV +6/+9/+12/+15, which also cost 0/4/8/12% DEF; Ironclad Resolve I-IV −6/−9/−12/−15 with
++15/22/29/36% HP). That is why a fast Persona is put in slot 1: Wonder then acts before the damage dealer. Not yet
+read off a Persona screen.
 
 ### Places where lufel and the stored data deliberately disagree
 

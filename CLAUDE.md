@@ -42,8 +42,11 @@ node tools/gen-wonder-innate.js [folder]     # replace the WONDER_INNATE block (
                                              # WONDER_UNRELEASED: Personas not out on Global yet, and
                                              # WONDER_PERSONA: rarity, talent ranks, learn levels, rank values)
 node tools/gen-wonder-skills.js [skills.js]  # replace the WONDER_SKILLS block (every Persona skill lufel lists,
-                                             # its kind and its values at skill levels 6/7/8)
+                                             # its kind, its values at skill levels 6/7/8, a passive's panel stats)
+node tools/gen-wonder-weapons.js [weapons.js] # replace the WONDER_WEAPON_STAT block (each dagger's own panel bonus by refinement)
 node tools/gen-skill-damage.js lufel.json    # replace the SKILL_DMG block (damage per skill and Highlight)
+node tools/gen-wonder-damage.js [folder]     # replace the WONDER_DMG block (Wonder's own hits: each Persona's unique skill and
+                                             # Highlight, every attack skill, % of ATK at skill levels 6/7/8)
 node tools/gen-mind-paths.js lufel.json      # replace the MIND_SKILL_PATHS block (which skills each Mindscape skill path raises)
 node tools/fetch-persona-art.js              # the Personas tab's pictures into dist/art/ (gitignored, like the portraits)
 ```
@@ -824,9 +827,10 @@ a second run is byte-identical). Rules that hold it together:
   "Fit rotations to this team" checkbox, a pref on by default) is described under the calculated
   basis below; it never touches the character the team is built around.
 - **Turn order is in-battle Speed** — `totalStat` with worn cards plus the Thieves Den. Wonder's
-  is the user's entry (`state.wonderSpd`, saved as `settings.wonderSpeed` beside the team crit
-  rate, in the unsaved-changes fingerprint and the undo snapshot): his Persona is not a card, so
-  the planner cannot compute it: it follows the Personas he uses and skill cards tune it. Unset is
+  is his slot-1 Persona's Speed with its Agility Master / Ironclad Resolve once that Persona's Speed is
+  entered (`wonderSpeedFor`, see "Wonder's stats are worked out" below), for whatever setup is priced;
+  otherwise the user's entry (`state.wonderSpd`, saved as `settings.wonderSpeed` beside the team crit
+  rate, in the unsaved-changes fingerprint and the undo snapshot). Neither set is
   unknown, never zero — he is taken to act just before the damage dealer (the user's rule, Nov 2026:
   players tune him to), and the turn order says so.
   The Elucidator acts outside the order; the page says so.
@@ -855,9 +859,10 @@ a second run is byte-identical). Rules that hold it together:
 lufel's team lists are written once and age as characters release (Ann's page still names
 Futaba where Miku or Fuuka buff more), so the Teams tab's default basis ("Build from:
 Calculated from the kits", `#tmBasis`, a pref) prices every team the user can field instead
-(`tcSearch`/`tcLineup`/`tcMember`/`tcMultiplier`/`tcTeams`). The number is how many times the
-damage dealer's own damage the team makes it, against one reference boss, through lufel's
-damage formula (`docs/DATA-SOURCES.md`, the damage-formula section):
+(`tcSearch`/`tcLineup`/`tcMember`/`tcMultiplier`/`tcTeams`). The number is the whole team's damage over the fight —
+the damage dealer's, and since Nov 2026 the teammates' and Wonder's own hits — as a multiple of the damage dealer's
+fighting alone, against one reference boss, through lufel's damage formula (`docs/DATA-SOURCES.md`, the
+damage-formula section); teams are ranked by it:
 
 - **ⓐⓑⓓ are `damageFactors(..., extra)`** — the damage dealer's own cards, Setup, conversions
   and crit profile with the team's buffs added; an ATK buff reaches ⓐ only for an ATK kit (a DEF
@@ -890,7 +895,8 @@ damage formula (`docs/DATA-SOURCES.md`, the damage-formula section):
   alone (`tcBossNow`, `tcFoes`, `TC_AUTO_BOSS`); `#tmWeak` defaults to every hit on a weakness. They
   resolve for `tcFocus`, the damage dealer the last entry point named (`tcMemoFor(D)`: `tcSim`,
   `tcMember`, `tcMultiplier`, `tcSearch`, `tcLineup`, `tcTeams`, `tcWonder`, `tcPairFor`), and the memo
-  key holds what they resolved to. The old default, the article's Vishnu with one foe and weakness by
+  key holds what they resolved to. The weakness default is the damage dealer's element only (Nov 2026: a teammate's
+  hit of another element is neutral). The old default, the article's Vishnu with one foe and weakness by
   its resistances, fought an area boss's DEF as a lone foe and gave only Fire a weakness (no listed
   boss is weak to Ice). Measured on the real save (19 damage dealers): boss DEF mattered most (821 to
   1280 changed the best team for Ren, YUI, the twins and Makoto Yuki); the weakness mode barely moved a
@@ -1049,7 +1055,8 @@ damage formula (`docs/DATA-SOURCES.md`, the damage-formula section):
   of their own actions (`TC_HL_COOL`). Four thieves charge 68-84% a round, fewer than four Highlights
   every four rounds, so who gets them is a choice: `tcSimBest` plays the fight with the gauge spent
   in several orders (the damage dealer first; each teammate whose Highlight carries lines first,
-  then the damage dealer; all those teammates first) and spent as soon as it fills or held for the
+  then the damage dealer; all those teammates first — since Nov 2026 every order of them with one or
+  two Highlight users, see the review bullet below) and spent as soon as it fills or held for the
   moment just before the damage dealer acts unless the next action would overflow it, and keeps the
   best; the page names it. A member whose Highlight carries no line never spends the gauge.
   **Theurgy, as lufel's Theurgy guide has it**: a gauge per S.E.E.S. member, +35 at the start of
@@ -1090,7 +1097,9 @@ damage formula (`docs/DATA-SOURCES.md`, the damage-formula section):
   while its Persona is in use), plus a weapon and refinement (`state.wonder`, saved as
   `settings.wonder`, in the fingerprint and the undo snapshot; `wonderFrom` drops anything
   `WONDER_BUFFS` does not know or the Personas tab does not own, and reads a pre-slots save's single
-  Persona as slot 1).
+  Persona as slot 1). **Picking another damage dealer in `#tmChar` clears it** (Personas, weapon,
+  refinement; the user asked, Nov 2026: a setup is made for one damage dealer), undoably; his Speed
+  and stats and each Persona's own skill cards stay.
   `WONDER_BUFFS`/`WONDER_SKIPS` come from lufel's Persona files, skill cards
   (`/data/kr/wonder/skills.js`) and Wonder weapons (`/data/kr/wonder/weapons.js`), the DEF-down
   values cross-checked against lufel's defence calculator (`/data/kr/calc/defense-data.js`).
@@ -1118,7 +1127,8 @@ damage formula (`docs/DATA-SOURCES.md`, the damage-formula section):
   tie-break. So each slot's shortlist also takes the quick screen's best `TC_WB_IDLE` (3) that take none of
   his turns (`tcWbShort`; `inUse` 0 for that slot). On the real save only Miyu's suggestion changed (16
   damage dealers), at 0.02-0.17 s more a suggestion.
-  His stats are not tracked, so a value that grows with them is taken at its cap, and his skills
+  A team buff that grows with his stats is still taken at its cap (his stats now feed his own hits and Speed, see
+  "Wonder's stats are worked out" above, not those lines), and his skills
   at their top rank; his own damage is not counted, his Highlight comes from the shared gauge in
   the fight (above), from whichever of his Personas' Highlights does most.
   **A Persona's passives work only while it is in use** — the user asked, and the Persona text
@@ -1131,6 +1141,25 @@ damage formula (`docs/DATA-SOURCES.md`, the damage-formula section):
   for fewer turns), in two orders — by worth, and slot by slot — the better kept, so a later slot
   never costs anything; idle turns go to the Persona whose passives are worth most. The page
   shows each Persona's share of his turns and what goes uncast.
+  **Slot 1 is his lead** (Nov 2026, the user asked): the Persona in use when the battle starts, so only it
+  does what a Persona does "at the start of battle" (`tcWonder`'s `lead`, the first slot set). A WONDER_BUFFS
+  line with `lead` counts only from the lead — Koumokuten's Heavenly King's Eyes (lufel's note: "must be
+  placed in the front row at the start of battle"; it had counted from any slot) — and the seat says to move
+  it otherwise; `wStart` puts a line on in round 1 for its `dur`, once (the fight's 'wStart', with Ice Age);
+  `tal` is the talent rank a clause needs (`personaLines` drops it below); `mark` ties it to the cast effect
+  it is the same as, so the two share a ref and a cast refreshes rather than stacks it (the quick screen
+  counts the start line only for the share the casts leave). Janosik's Hunting I-IV Mark at battle start is
+  that (DEF −34.9%, Hunting III's −12%, the allies' ATK and crit on the Marked foe; 2 turns, Tatra Shot's,
+  since none is printed; certain, no 75% roll); it was a WONDER_SKIPS note. Whether he Marks again when
+  first switched to later is not in lufel's text and is not counted. Ex Machina's party damage share
+  (`leadElem`) needs a lead of the damage dealer's element (`WONDER_PERSONA[n].e`); it had always counted.
+  `tcWonderBest` tries each of its three in front, the other two keeping their order, when one of them or
+  the weapon has such a line, and keeps the fight's best; the slot header and the suggestion say "lead".
+  On save (57) the suggestion changed for 8 of 16 damage dealers: Janosik moved to the lead for YUI, Makoto
+  Niijima, Makoto Yuki and Ichigo, and came in as lead for Yusuke and Kasumi; Koumokuten, suggested in slot 3
+  for Wavecatcher Miyu for a battle-start buff that slot never gives, went (Apsaras); Frostgale Kotone's
+  Ex Machina went (her lead, Dionysus, is not Wind; Chaos Hex). No suggestion puts Koumokuten in front. The
+  render costs the same (one or two more fights a suggestion).
   **An on-cast passive fires only on the casts its text names** (`castOn`, Nov 2026: `'ally'` for
   Dionysus, Succubus, Jikokuten, Raphael, Throne; `'foe'` for Bishamonten and the other "skill on a foe"
   lines; none, any skill). Until then every turn the Persona was in use counted, its attack turns too,
@@ -1155,6 +1184,18 @@ damage formula (`docs/DATA-SOURCES.md`, the damage-formula section):
   innate skill, Auto-Mataru III and IV — the rest are listed as "the same buff, counted once". Before,
   each source was its own buff and stacked. Rakunda and Marakunda (or Tarukaja and Matarukaja) are
   still separate: whether P5X stacks the one-target and party versions is not settled.
+  **His weapons are a record too** (`state.weapons`, saved as `settings.wonderWeapons`, the Weapons tab, `#tab-weapons`,
+  `renderWeapons`; Nov 2026, the user asked): obtained and refinement per weapon. The suggestion used to try
+  every weapon at the setup's one refinement, so the user's R6 Arc Knife was weighed at R0 and lost to Event Horizon
+  for Makoto Niijima. `tcWonderBest` now tries only obtained weapons (`wonderWeapons()`), each at its own refinement
+  (`arm`); the setup offers only obtained weapons, and its refinement is the weapon's: picking a weapon on the Teams
+  tab takes its refinement from the record, setting the refinement there writes it (`tmWonderChanged`), and so does
+  the panel for the weapon held (`wpSetRefine`). `wonderFrom` still reads `refine` from the setup object, so a setup
+  built in code keeps its own; the two are kept in step at those edit points and on load. The first time (a new page,
+  or a save without it) every weapon is owned at R0 and the setup's weapon keeps its refinement (`weaponsFrom`), so a
+  save whose setup sat at R0 suggests as before; after that a weapon with no record is not owned. In the fingerprint
+  and the undo snapshot. The header groups the tabs (the user asked): Optimise, Inventory, Triage and Upgrades under
+  "Revelation cards", Teams, Personas and Weapons under "Team building" (`.navGroup`); Roster and Data stand alone.
   **The Personas tab is Wonder's collection** (`#tab-personas`, `state.personas`, saved as
   `settings.personas`; Nov 2026, the user asked): which Personas are owned, each one's level, talent rank and
   skill level (6/7/8), and the skill cards it has learned. Laid out like the Roster: a card per Persona with
@@ -1174,7 +1215,14 @@ damage formula (`docs/DATA-SOURCES.md`, the damage-formula section):
   record; a passive reads `tv` first, the rest `sv` first, each falling back on the other (16 unique-skill lines
   are really a talent's). 136 of the 142 priced Persona lines follow a rank this way; the rest keep their top
   value. A Persona's level does nothing to a line that grows with Wonder's stats (still not tracked). Bulk
-  marks are undoable.
+  marks are undoable. **A Persona's level is capped by its grade, not its stars** (`PERSONA_LV`, keyed on lufel's `grade`, I-IX
+  in game, which the generator writes as `g`; read through `personaLv(n)`; the user, Nov 2026, after Belphegor —
+  4★, grade IV — was suggested for Wavecatcher Miyu as if at level 80, and corrected a first version keyed on
+  stars): grades I-VIII cap at 25 / 35 / 45 / 60 / 70 / 85 / 95 / 99, the user's in-game reading (published nowhere
+  found), and a new record starts at its cap; grade IX — Janosik alone on Global, and he ranks up past a cap; Macabre,
+  Raphael and Gabriel are not out — is unconfirmed and keeps the old 80 default and 120 ceiling
+  (`PERSONA_LV_FALLBACK`), which the popup says. A loaded save is clamped to the cap. The level moves only which innate skills are learned (none above 40), so no price
+  changed; what a weaker Persona does to Wonder's own stats is still not seen, since his stats are one hand entry.
   **A Persona's skills** (the user, Nov 2026): besides its unique skill and Highlight it has at most
   `PERSONA_ACTIVE` (6) — the innate skills it has learned by its level, at most 3 skill cards (`cards`), and any
   skill through fusion (`fused`). An innate skill can be replaced (`drop`, unticked in the popup), freeing its
@@ -1248,6 +1296,26 @@ damage formula (`docs/DATA-SOURCES.md`, the damage-formula section):
   for Wavecatcher Miyu, Pazuzu offered at all (+2.5% for Toshiya: his bonus adds into a large ⓑ). Thor,
   Zaou-Gongen and Orobas were right as entered: most of what they do is Wonder's own damage (Thor, the
   +29.1% ATK talents) or lifts a resistance the fight assumes is not there (Orobas's Fire Break).
+- **Wonder's stats are worked out from his setup** (`wonderCalc`, Nov 2026; the user asked, and read the rules off his
+  own character screen one change at a time — the readings are in `docs/DATA-SOURCES.md`, "Wonder's stats — measured",
+  and a test reproduces all four to within 1). HP/ATK/DEF = (Wonder's own `WONDER_OWN` + the dagger's flat + **all three
+  Personas'** stat) × (1 + the dagger's own % + Schema % + **the slot-1 Persona's** talent and passive skills) + Schema flat +
+  Ego level × 40 HP / 10 ATK / 10 DEF; crit rate 5 + Schema + slot 1, crit damage 150 + Schema + slot 1, damage multiplier
+  slot 1; **Speed is the slot-1 Persona's**, with its Agility Master / Ironclad Resolve (the user, from play). Janosik's
+  +29.1% ATK talent did nothing from slot 2, and Kohryu's HP Boost IV, Apt Pupil III and Battle Acumen IV left the panel with
+  him. Which lines count is lufel's English text through `tools/wonder-self-stats.js` — a whole sentence that is only
+  "Increase <stat> by N" — into `WONDER_PERSONA[*].st` (per talent rank), `WONDER_SKILLS[*].st` and `WONDER_WEAPON_STAT`.
+  Persona and dagger base stats are published nowhere usable (lufel and Prydwen have none; the Megami Tensei Wiki has level 1
+  only and blocks automated reads), so the user enters them: a Persona's on its popup (record `st`: hp, atk, def, spd and
+  the level read at, which the popup flags once the level changes), a dagger's on the Weapons tab, Schema and Ego level
+  under Wonder's setup (`state.wonderSchema`, saved as `settings.wonderSchema`, in the fingerprint and the undo snapshot).
+  `wonderStats(S)` / `wonderSpeedFor(S)` give the setup being priced: worked out once everything it needs is entered,
+  the typed ATK, crit and Speed otherwise. `tcWonder` puts them on its vector and result (`vec.ws`, `ws`, `spd`), so the
+  quick screen, the fight's own hits and his place in the turn order follow every setup the suggestion tries. A tried setup
+  with a Persona whose stats are not entered falls back to the typed numbers, so enter the stats of every Persona that
+  could lead. Every owned Persona can sit in a slot now (`wonderSlotPersonas`), since every slot adds base stats; the
+  suggestion still draws on `wonderPersonas`. `tmWonderCalcHtml` shows the result under the Schema fields, with what each
+  slot-1 line adds and a check against the typed ATK.
 - **Fuuka's backup is played out in the fight** (Nov 2026, the user asked; it had been averaged).
   From her Global text: Over Oracle stacks start at 3 (level 70+; +2 at A1, where the cap goes from
   4 to 8), +1 per Skill 1 or 3 she casts (+2 per Divine Prayer from A6); Oracle Shift spends 4 (3
@@ -1338,7 +1406,43 @@ damage formula (`docs/DATA-SOURCES.md`, the damage-formula section):
   Awareness 0 (the saved Setup) Yukari keeps it, 16.6× to 16.3×.
 - A member's part on the page is the team's value with them over without them, so parts do not
   multiply to the total. Replacements are priced as the whole team with them swapped in, and
-  lufel's recommended team is priced the same way for comparison in the header.
+  lufel's recommended team is priced the same way for comparison in the header. **A "without" fight
+  replays the headline fight's own rotations** (`tcSimAs`, Nov 2026): the full fit's `fits` and the
+  damage dealer's `dpsRot`, lufel's as written for a member it did not fit, and no fit of its own.
+  Until then each was fitted afresh (the list's fit, against a second fit of the whole team), and the
+  fit is a local search that starts from whatever rotations earlier fights had found (`tcMemo.pool`),
+  so a part read the search's path: on save (57) Wonder's part was 0.93-0.98 for eight damage dealers
+  with no Wonder setup at all (a test holds it at exactly 1), and a render's lineup pricing fell from
+  45-520 ms to 20-60 ms.
+- **A review of the fight's and the search's decisions (Nov 2026; the user asked)** found four more
+  things, each measured on save (57) and pinned by a test. *The gauge's spending orders* (`tcSimBest`)
+  were the damage dealer first with the users in seat order, each user first, and all users first:
+  with two Highlight users the order the fight does best with was missing for Ann's and Ren's best
+  teams (+1.75% each: Kotone's Highlight before Beachflower Minami's); every order is tried for one
+  or two users, and with more every order the damage dealer leads as well. Holding the gauge is
+  tried on the best order only (one more fight, not one per order): it never won on the 33 best
+  teams, and a hold per order had put the search's fights up by half for a team with two users.
+  *The quick screen read
+  teammates' own hits unbuffed* (`vec.own`), so a hitter beside a strong buffer screened 30-40% under
+  the fight and the fight's best lineup for Mitsuru (the twins / Runa / Miku, 25.6× against the
+  25.3× shown) sat at quick rank 72 of 2976, past the 30 the search fought; `tcOwnLift` raises each
+  member's own hits by what reaches the whole party (`vec.party`: the Elucidator share, party lines
+  and the foe's debuffs, never a line on the damage dealer alone) through their own ⓐⓑⓓ and ⓒ,
+  which put the fight's best within the top 30 for every damage dealer tried and the rank
+  correlation at 0.93-0.98 (0.89-0.96 before); one lead fell with it (Yusuke's, 13.6× to 13.4×: the
+  Kumi / Mitsuru team the old screen kept is past the 30 now), seven rose or held. The fight's five
+  best still sit as deep as quick rank 35-39, so *a funnel* was tried — the next 50 fought as
+  written, the best 10 of those fitted too — and dropped: no lead changed for eight damage dealers
+  and a search cost 0.6-3 s more (`TC_EXACT`, 30, is the whole shortlist; the comment in
+  `tcSearchCalc` has the numbers). *Lovesick* zeroed the team's Pierce but not Ichigo's own (`E.own` is in every hit's ⓒ),
+  which the tick now takes back out. Measured and left alone: the hold policy (never chosen on the 12
+  best teams), the reference fight's blank seats at Speed 100 against Wonder just before the damage
+  dealer (it moves the multiplier's denominator only, never a team's rank). A party buff counting down
+  after the damage dealer's action for every holder was found here and fixed the same day (`echoes`,
+  with teammates' kit damage — see the own-hits bullet above). The vocabulary
+  of every hand-entered table was audited the same day (524 TEAM_BUFFS lines, DPS_KIT, DPS_KIT_BONUS,
+  KIT_STAT_BUFFS, WONDER_BUFFS): every key, target, element, archetype and trigger resolves, and
+  every `on` names a token some rotation of that character casts.
 - **Extra turns for the whole party** (Miku's Virtual Concert: 2 every 6 Wonder actions) are a factor of their own, `turns`: 2 more actions in a six-turn cycle is ×8/6. Buffs that only run during those turns count as uptime.
 - **What the fight plays out that used to be judged** (Nov 2026, the user's "do 1-5"):
   - *More foes* (`#tmFoes`, 1-5, a pref): the extra foes are copies of the boss. A damage dealer's
@@ -1346,7 +1450,14 @@ damage formula (`docs/DATA-SOURCES.md`, the damage-formula section):
     component (`aoe`, else "all foes" in its `why`) hits every foe; an enemy-side buff whose text
     names one foe (`tcOneFoe`: "the target", "a foe"; an entry may say `foes: 'one'|'all'`) is on the
     main target only — a cast's (`one` on the buff) and an always-on one's alike (`sim.constsOne`,
-    `X0one`: the board's constants a foe other than the main target does not get).
+    `X0one`: the board's constants a foe other than the main target does not get). Since Nov 2026 a party or
+    ally buff the kit gives only against one marked foe takes `foes: 'one'` too (`tcMainOnly`; never read from a
+    buff's text, where "a foe" names whom the ally hits): Janosik's Hunting IV ATK and crit, Tempest Riko's
+    Falling Petals ATK. Wonder's cast events (`castEv`, `knockEv`) copy the flag, since they drop the line's
+    text; until then every Persona debuff he cast (Janosik's Mark, Rakunda) landed on all foes. The user found it:
+    Janosik suggested for Ann, a Sweeper fighting 5 foes. On save (57), each owned damage dealer's best team:
+    the 7 single-target ones unchanged to the digit; for the 9 area ones Janosik left every suggestion (he was in
+    6), Surt and Kohryu mostly taking his place, and the multipliers fell 4-12% (other one-foe debuffs he casts).
   - *Round gates* on a `TEAM_BUFFS`/`WONDER_BUFFS` line (`tcGate`): `from` a round, or by Awareness
     `fromAw: [[aw, round], ...]`; `until` a round; `rampAt` the rounds its stacks arrive. They replace
     the judged `up` that stood for a ramp or a battle-start window (Mayumi's Torque Boost, Kotone
@@ -1388,9 +1499,10 @@ damage formula (`docs/DATA-SOURCES.md`, the damage-formula section):
   Frozen Tempest damage taken nor Runa her own DEF down. `tcMemberCalc` with the damage dealer as the
   member (`self`) returns only their `party` and `enemy` lines; `tcSimPrep` puts its events on the
   damage dealer's actor and its constants and gated lines on the board, in the team fight and the
-  reference fight alike. Their buffs go on before their hit (like their timed `KIT_STAT_BUFFS`), their
-  debuffs on the enemy after it (`castBy`'s filter), so their own 1-turn debuff never meets their own
-  hit. `own: false` keeps a line from its own character: 25 that `KIT_STAT_BUFFS` already counts
+  reference fight alike. Their buffs go on before their hit (like their timed `KIT_STAT_BUFFS`), and so does what
+  their skill makes the foe take (damage taken, Resonance damage taken, ...); their DEF cuts and a line for the foe's
+  next hit (`dur: 'next'`) land after it (`foeAfter`, `castBy`'s filter), so their own 1-turn DEF cut never meets their
+  own hit. Until 6 Nov 2026 every debuff of theirs landed after; the user's in-game check of Runa settled it (below). `own: false` keeps a line from its own character: 25 that `KIT_STAT_BUFFS` already counts
   (found by stat and skill name, the rest checked by hand) and 3 written for "the other allies"
   (Koromaru's Loyal Dog, Starlight Ren's Upbeat, J&C's Execution of Rebirth); `ownAw: 6` holds Makoto
   Yuki's Cadenza lines until Awareness 6, as the damage dealer casting Ardhanari. The `DPS_KIT_BONUS`
@@ -1454,6 +1566,86 @@ damage formula (`docs/DATA-SOURCES.md`, the damage-formula section):
   (`on: 'track'`, `build`) on each gain, where they had been a judged 0.8 at three stacks (`upQ` keeps that for the quick
   screen). Her teams −6% to −12.5% (Makoto Niijima's 19.2× to 16.8×): less of her is up at once than was judged. No best
   team changed on save (56); calibration unchanged.
+- **Teammates' and Wonder's own hits count** (Nov 2026; the user asked, and chose to rank teams by the whole team's
+  damage, and to enter Wonder's stats). A teammate's skills (SKILL_DMG at their tier, area skills on every foe) and
+  Highlight or Theurgy (a Highlight crits only where its text says so) are priced on their own stats — their cards,
+  Setup and permanent kit lines, through `tcEvalFor(C, true)` (`tcMateSetup`; their timed self-buffs are left out) — with
+  what reaches them: party lines and the foe's debuffs, not lines cast on the damage dealer alone (`to: 'ally'`, kept
+  apart as `constsAlly`/`X0ally` and the `al` flag; curX's `mate`), nor the damage dealer's own kit; the twins' Skill
+  Amplification on the others' skills. Fuuka's backup's swap action hits too. Wonder's own hits need his ATK, crit rate
+  and crit damage, entered beside his Speed (`state.wonderStats`, saved as `settings.wonderStats`, in the fingerprint
+  and the undo snapshot; `wonderStats()` is null until ATK is set, and his own hits are then not counted, the seat says
+  so): his attack turns use the idle Persona's strongest attack skill, a cast that is itself an attack (Janosik's Tatra
+  Shot) hits, and his Highlight from the Persona the page picked for it (`tcWonder`'s `dmg`), from `WONDER_DMG`
+  (`tools/gen-wonder-damage.js`: lufel's English "Deal X damage to 1 foe / all foes equal to a/b/c% of Attack (N hits)",
+  at the Persona's skill level). Every own hit is in the damage dealer's units (`P.unit`: their unbuffed hit with ⓒ and
+  weakness), so `total` adds up; the result keeps them apart (`own`, by name), the damage dealer's damage mix (`parts`)
+  is theirs alone, and each seat shows its share of the team's damage. A member whose Highlight hits joins the gauge's
+  spending orders (`tcHlHits`). The quick screen adds each member's own hits unbuffed (`vec.own`, `tcMateOwnQuick`,
+  `tcWonderOwnQuick`, in the damage dealer's skills a turn), so a hitter still makes the shortlist. `tcMateOff` turns
+  all of it off, for the test fixtures that price one line alone. **Teammates' kit damage beyond their skills and
+  Highlight counts since Nov 2026** (the user asked; `tcMateKit`, `tcMateBonus`, `mateKitFire`/`mateOwn` in `tcSimRun`):
+  their DPS_KIT components and DPS_KIT_BONUS lines the fight can play generically — triggers on their own turn, skills
+  and tokens, on an ally's action, skill, attack or Highlight, and on the enemy's turn; `after`/`dur` on their own last
+  use (`lastUse` per actor, their Highlight or Theurgy included); `max` a round; Frostbound per actor (Mitsuru's Iceblade
+  and her per-stack lines); the boss's ailments, HP and knockdown; `k` stats on the hit. Left out, listed in
+  `TC_MATE_KIT_SKIP`/`TC_MATE_BONUS_SKIP`: anything reading a damage dealer's own state machine (Lovesick, La Vie en
+  Rose, Target Audience, Summer Hype, Will of Rebellion, Surf, Kumi's Lightning Legs, Technicals, Curse), and lines a
+  named partner sets off. A test holds a follow-up and a skill bonus counted and a Lovesick line skipped. **A party
+  buff counts down per holder** (`echoes` in `tcSimRun`, the same change): `buffs` counts a buff down after the damage
+  dealer's action, so a teammate acting after them lost a 1-turn party buff cast before the damage dealer acted (and
+  the twins' Skill Amplification on their skills); each other holder now keeps a copy counted down after their own
+  action, which their own hits read (`curX`'s `mate` is the actor; `tcEchoOn` is the test knob). Measured on save (57),
+  "Rank teams by: team": Mitsuru's share of a team's damage rose from 35-67% to 40-77% (her Iceblade follow-ups on the
+  allies' skills and her Frostbound lines), Makoto Yuki's own hits as a teammate grew to about what Mitsuru's are (his
+  Full Moon and Moon Phase hits), and the best team changed for 15 of 33 damage dealers, 13 of them to Makoto Yuki /
+  Mitsuru / Fuuka / Kumi, with Makoto Yuki dealing 52-60% of the team's damage. That is the ranking mode's doing — a
+  top damage dealer in a teammate seat now counts in full — and "dps" ranks by the damage dealer alone as before. Neither
+  half costs measurable time per fight (1.2-1.8 ms either way on the real save). Still not counted: the Elucidator's own
+  hits (Miku's Neverending Song), a party line's `elem`/`arch` limit read for the teammate (it is read for the damage
+  dealer), and Wonder's buffs to his own ATK beyond the panel he enters. **The default weakness mode
+  is a boss weak to the damage dealer's element** (`tcWeakFor` 'all', the user's review): a teammate's hit of another
+  element is neutral and fills the gauge at 17%; until then every hit was a weakness hit, reading teammates' hits 20%
+  high. Runa's Skill 3 is priced as the single-target Follow-Up, so SKILL_DMG no longer calls it an area hit (`aoe` in
+  gen-skill-damage.js's FIXES). On save (56), Wonder's ATK unset, after those fixes: real supports' own hits are small
+  (Kotone Shiomi 1.5-6%, Kumi 1-5%, Beachflower Minami 2-3% of the team's damage); damage dealers seated as teammates
+  are not (Mitsuru 9-34%, the twins 10-21%, Runa about 10%), so best teams changed for 8 of 16, towards them. Runa is
+  there as a hitter, not a support: her buffs alone put Runa / Mitsuru / Fuuka / Kumi at 46.3× for YUI against Kotone's
+  56.4×, and her own hits (Peppy Guard Dog turns her 197% ailment accuracy into +118% ATK, 5313 in battle; Skills 2
+  and 3 at 171% and 220% alternating) take it to 91.2× against 74.1×; alone she deals 73% of what Ryuji does. YUI alone
+  deals a tenth of Mitsuru alone (her follow-ups need allies' skills), so any hitter dominates her team. Teammates'
+  share 4-66%, median 13.5%; the search 3% slower; calibration unchanged. With a Janosik setup and 3000 ATK, Wonder's
+  own hits are 1.6-3.2% of the team's damage.
+  **"Rank teams by" is a switch** (`#tmRank`, a pref, in `tcAssumeKey`; the user asked after seeing damage dealers win
+  teammate seats): 'team', the default, as above; 'dps', the damage dealer's damage alone — the own hits are still
+  worked out and shown on the seats (`own`), but stay out of `total` (`P.ownT`, the result's `ownInTotal`), of the quick
+  screen's `vec.own` term and of the gauge's spending orders (`tcHlHits`); the seats' shares are of the whole team's
+  damage either way. On save (56) 'dps' gives back every best team from before own hits counted; four numbers moved
+  by up to 2% (off-element teammates now fill the gauge at 17%).
+- **Runa checked in game** (6 Nov 2026; the user ran her on Baal Zebul in Gates of the Nightmare Catcher, one question
+  at a time, Awareness 1, 5★ R0, Mindscape paths 3/3, skills at 10, Ryuji and Haru guarding, no Elucidator). Matched:
+  her ATK in battle within 1% (4884, Faithful Dog 5471), Furrious Bark −71.6% (the X + capped Y reading), Woof Woof
+  Blaze's damage taken 62.2% and Resonance damage taken 91.4% (A1's +50 on top), her weapon's DEF −33.3%, Welcome Hug
+  and Furrious Bark not stacking (the larger stays, whichever comes first). Three fixes: (1) a damage dealer's own
+  damage-taken debuffs count on their own hit — turn 2's Woof Woof Blaze hit 23,511, about 11,500 with them after it,
+  24,400 with them on it — while their DEF cuts land after it: turn-1 Welcome Hug hits (2715-2947, mean 2813) over
+  turn-1 Furrious Bark hits (mean 6526) are 0.431, the ratio of the two skills' coefficients (0.429), where cuts
+  counted on the hit would give 0.37-0.40; (2) Station Square Mascot (A0, 18% DEF and −50% healing for 2 turns on a
+  60% chance per Woof Woof Blaze) is entered at its average, 10.8; (3) Cerberus Claws' +23% ailment accuracy came on
+  only after Ryuji's Electric skill (not his Physical one, not her own skills; ATK +246 through Peppy Guard Dog, as
+  modelled), so it is a fight-only `KIT_STAT_BUFFS` line `on: 'allyElem'` (a teammate's or Fuuka's backup's damaging
+  skill from a Fire, Ice, Electric or Wind kit — skill elements are not in the data, so Ryuji's Electric skill reads as
+  Physical), reaching the fight as ATK% through her conversion (`tcTimedKit`); as a teammate her own hits go without
+  it. Every boss hit in that mode is under the Stable Domain (lufel's damage article): crits are off and each character
+  gets crit rate × (crit damage − 100%) as a final-damage bonus ("Cannot activate critical hits, but increase final dmg
+  by 12%" on Runa), which the model's averaged crit already equals; Highlights and damage over time (which cannot crit
+  here) and guaranteed crits may differ and are not modelled, nor are a Gateway boss's own special effects (Baal
+  Zebul: +20% final with 2+ Sweepers or Assassins, Theurgy +30%, +4% per hit up to 10 stacks, Assassins +20%). The
+  hits fit a Baal Zebul DEF near 1030 rather than lufel's 1280, not pursued. On save (56): Runa's damage alone +23%,
+  her team +4%; Mitsuru alone +4% (her own Frozen Tempest), team −1%; YUI's team +2.8%, Frostgale Kotone's +2.3%,
+  Ryuji's +1.0% (the Mascot cut); Runa joins Ryuji's (in the twins' seat) and Makoto Yuki's (Kotone's) best teams, by
+  1% and 0.1%; build scores Runa 81.10 to 80.81, Mitsuru +0.04; calibration unchanged. Starlight Morgana's own
+  debuffs now meet her Highlight, so at a 20% team crit rate her ATK% Star ties her crit Stars (0.1%); a test names it.
 - **Four small support lines entered from the text** (Nov 2026; the measured "second batch" on the list page). Runa's
   Resonance damage taken (TEAM_BUFFS `resDm`: Furrocious Follow-Up's 39-45.4%, A1's +50%, on the target, 2 turns; A6's
   +60% is not entered, points or relative being unclear); Yaoling's Highlight damage taken (the foes' *next* hit, as the
@@ -1926,8 +2118,8 @@ damage formula (`docs/DATA-SOURCES.md`, the damage-formula section):
   leaves every such line at 0 and the fight prices the leaders. The fight note gives the knockdown rounds.
   The kit lines came from one research pass over the 20 kits whose lufel text mentions Down (two batches,
   one brief, hand-reviewed); All-Out Attacks, Dizzy and Wonder's Personas are not entered.
-- **Not priced, and the page says so**: other extra actions (Narumi's for Wonder, Mayumi's own) and
-  Wonder's own damage, weakness creation, All-Out Attacks and Dizzy, Technicals (beyond the ailment readers and the Technicals above), Wonder's own
+- **Not priced, and the page says so**: other extra actions (Narumi's for Wonder, Mayumi's own), teammates' kit damage
+  that reads their own state machine (the rest counts since Nov 2026, see the own-hits bullet), weakness creation, All-Out Attacks and Dizzy, Technicals (beyond the ailment readers and the Technicals above), Wonder's own
   ailments, the boss's ailment resistance, team and Persona lines that hang on the boss's HP (Ren's Will of
   Rebellion below 60%, Yaoling's Up to Chance, Belphegor's 40% below 50%; the damage dealer's own are priced, see
   "The boss's HP" below), HP lost to the boss and healers' amounts (the damage dealer's own HP is played from

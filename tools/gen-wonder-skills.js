@@ -25,6 +25,7 @@
 const fs = require('fs');
 const path = require('path');
 const vm = require('vm');
+const { selfStats, selfSrc } = require('./wonder-self-stats');
 
 const ROOT = path.resolve(__dirname, '..');
 const DATA_FILE = path.join(ROOT, 'src', 'data.js');
@@ -52,6 +53,8 @@ async function main() {
     if (!t) warn.push(`${n}: unknown type ${s.type}`);
     const e = out.get(n) || { t: t || 'passive', sv: {} };
     if (t && e.t !== t) warn.push(`${n}: listed twice with types ${e.t} and ${t}`);
+    // a passive's lines on Wonder's own panel, from the English text (tools/wonder-self-stats.js)
+    if (t === 'passive' && !e.st) { const st = selfStats(s.description_en); if (st.length) e.st = st; }
     if (t !== 'passive') {
       // a whole "a/b/c" run; one of any other length is not levels 6/7/8
       for (const m of String(s.description || '').matchAll(/\d+(?:\.\d+)?%?(?:\/\d+(?:\.\d+)?%?)+/g)) {
@@ -75,7 +78,7 @@ async function main() {
   const rows = [...out.entries()].sort((a, b) => a[0].localeCompare(b[0]));
   const lines = rows.map(([n, e]) => {
     const sv = obj(e.sv);
-    return `  ${q(n)}: { t: ${q(e.t)}${sv === '{  }' ? '' : ', sv: ' + sv} },`;
+    return `  ${q(n)}: { t: ${q(e.t)}${sv === '{  }' ? '' : ', sv: ' + sv}${e.st ? ', st: ' + selfSrc(e.st) : ''} },`;
   });
   lines[lines.length - 1] = lines[lines.length - 1].replace(/,$/, '');
 
@@ -83,7 +86,8 @@ async function main() {
   const EOL = text.includes('\r\n') ? '\r\n' : '\n';
   const block = [BEGIN,
     '/* Every Persona skill lufel lists, by English name: its kind (t: attack, support, heal, passive) and, for an',
-    '   active skill, each number it prints at skill levels 6/7/8 (sv: top value -> the three). The Personas tab',
+    '   active skill, each number it prints at skill levels 6/7/8 (sv: top value -> the three); for a passive, the',
+    '   stats it always adds to Wonder\'s panel from his slot-1 Persona (st; tools/wonder-self-stats.js). The Personas tab',
     '   offers all of them as skill cards and fused skills; see personaSkillLines in logic.js and the comment in',
     '   tools/gen-wonder-skills.js. */',
     'const WONDER_SKILLS = {', ...lines, '};', END].join('\n').replace(/\n/g, EOL);

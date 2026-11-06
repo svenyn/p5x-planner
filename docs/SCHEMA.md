@@ -223,6 +223,12 @@ keep loading unchanged:
     A Persona present is owned unless `own` is false; one absent is not owned (released after the file was
     saved). A file without `personas` (saved before it existed) owns every Persona out on Global at the top of
     every rank, and moves the old `wonder` slots' `cards` onto their Personas.
+  - `wonderWeapons`, Wonder's weapons, the Weapons tab (Nov 2026): weapon name -> the fields that differ from
+    owned at R0, e.g. `{ "Arc Knife": { "refine": 7 }, "Event Horizon": {}, "Ice Age": { "own": false } }`. `own`
+    (written only when false) and `refine` (1-7 for R0-R6, default 1). A weapon present is owned unless `own` is
+    false; one absent is not owned (released after the file was saved). A file without `wonderWeapons` owns every
+    weapon at R0, except `wonder.weapon`, which keeps `wonder.refine`. When both are present, `wonder.refine` is
+    read from the setup's weapon here.
 
 ## Importing a rescan without losing your inventory
 
