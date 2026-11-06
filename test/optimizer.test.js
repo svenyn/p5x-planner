@@ -3077,6 +3077,25 @@ function awarenessOverrideDrift() {
   check('the tokens of a rotation are spelled out on hover', await p.evaluate(() =>
     tmTokenText('HL+3') === 'Highlight, then Skill 3' && tmTokenText('1↺+2') === 'Skill 1 (automatic), then Skill 2' && /not ready/.test(tmTokenText('-'))));
 
+  // ---- the render's caches (Nov 2026): memoised step parsers hand out copies, Wonder's suggestion is remembered ----
+  const memos = await p.evaluate(() => {
+    // tcSimRun deletes 'HL'/'TH' from the Set it gets; a shared memoised Set changed the second-ranked team
+    const a = tcTurnSkills('HL+3'); a.delete('HL');
+    const u = tcSkillUses('1+2'); u[0] = 9;
+    const t = tcAilToks('HL+3'); t.delete('HL');
+    const copy = tcTurnSkills('HL+3').has('HL') && tcSkillUses('1+2')[0] === 1 && tcAilToks('HL+3').has('HL') && tcKindCount('HL+3', 'HL') === 1;
+    const ann = charDef('Ann Takamaki');
+    tcMemo.key = '';
+    const s1 = tcWonderBest(ann, []), s2 = tcWonderBest(ann, []);
+    tcMemo.key = '';
+    const s3 = tcWonderBest(ann, []);
+    return { copy, same: s1 === s2, fresh: s3 !== s1 && JSON.stringify(s3) === JSON.stringify(s1),
+      fields: ['mateM', 'burn0', 'wb'].every(k => tcMemoNew('x')[k] instanceof Map) };
+  });
+  check('the memoised step parsers hand each caller its own copy', memos.copy);
+  check("Wonder's suggested setup is remembered within a render and recomputed, the same, once the memo turns over", memos.same && memos.fresh);
+  check('the render memo carries the mate-hit, Burn-share and Wonder-suggestion caches', memos.fields);
+
   // ---- the calculated basis: team damage from the kits (TEAM_BUFFS) ----
   const tc = await p.evaluate(() => {
     const set = n => new Set(tcTurnSkills(n));

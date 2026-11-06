@@ -1370,6 +1370,20 @@ damage-formula section); teams are ranked by it:
   about 0.1 s and a repeat (a pick, "Use") to 10 ms, with every team and part unchanged. The
   Thieves Den goes into both sides of the ratio (`damageFactors`' `extra.flat`, plus its crit);
   it was in the members' stats but not the damage dealer's.
+  **Profiled again on 6 Nov 2026** (save 59, fit and compose on, 16 owned damage dealers): a fresh render
+  was 11-15 s, three quarters of it the fights (4,500-10,000 a render at about 1 ms each; `curX` alone a
+  quarter of all time), a repeat render 0.6-0.9 s, two thirds of it `tcWonderBest`, which was not memoised.
+  Four more caches went in, every number on the page identical for all 16: the step parsers
+  (`tcTurnSkills`, `tcSkillUses`, `tcKindCount`, `tcAilToks`; 2.7 million calls a render) remember their
+  answer per step **and hand out a copy** — `tcSimRun` deletes 'HL'/'TH' from the Set it gets, and a shared
+  one changed the second-ranked team; a teammate's or Wonder's hit price (`mateMult`) lives in `tcMemo.mateM`
+  per damage dealer instead of a Map per fight (84% misses, each a `damageFactors`); the damage dealer's own
+  Burn share on the quick screen in `tcMemo.burn0`; Wonder's suggested setup in `tcMemo.wb`; and
+  `renderTeams` runs under `tcHot`, since its HTML pass priced Wonder outside it and hashed the save about 70
+  times. Fresh renders 7-31% faster (20% in all), repeat renders 72-104 ms. What is left is the search's
+  own policy: Fuuka's backup candidates re-fought at the list's fit (37% of Ann's fights), each Wonder
+  candidate setup fought under every spending order (11%), the replacements at the list's fit (15%), and
+  the hold fight (one in 7-11) — each a result-changing choice, measured but not taken.
 - **The page leads with the number** (Nov 2026 pass): the team's multiplier as the panel's headline
   (`.tmHero`, lufel's team beside it for scale; on the lufel basis, how many of lufel's picks are
   fielded), then one card per seat (`.tmSeat`, striped in the member's element colour) with the

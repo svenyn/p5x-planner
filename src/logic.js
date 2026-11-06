@@ -10086,7 +10086,18 @@ function tcStat(name, s) {
 
 /* Skills used on each turn of a rotation step: "2+3" is two skills, "1111" four uses of Skill 1,
    "2×4+1" Skill 2 and Skill 1, "HL(2)+3" a Highlight and Skill 3, "W+3+TH↺" Skill 3 and Theurgy. */
+/* The four step parsers below are pure functions of a short string and the fight asks them millions of
+   times a render (2.7 million for tcTurnSkills on the real save, Nov 2026), so each remembers its answer
+   per step. A caller gets its own copy: tcSimRun deletes 'HL' and 'TH' from the Set it is handed, and a
+   shared one silently changed the second-ranked team. */
+const tcStepMemo = { skills: new Map(), uses: new Map(), kind: new Map(), ail: new Map() };
 function tcTurnSkills(step) {
+  const k = String(step);
+  let v = tcStepMemo.skills.get(k);
+  if (!v) { v = tcTurnSkillsCalc(step); tcStepMemo.skills.set(k, v); }
+  return new Set(v);
+}
+function tcTurnSkillsCalc(step) {
   const out = new Set();
   let prev = null;
   String(step).split('+').forEach(tok => {
@@ -10275,6 +10286,12 @@ function tcHlKind(n) {
 }
 /* How many of `kind` one rotation step casts: "HL×2+3" two, "2HL+3" two, "3+HL+HL" two, "HL(2)+3" one. */
 function tcKindCount(step, kind) {
+  const k = kind + '|' + String(step);
+  let v = tcStepMemo.kind.get(k);
+  if (v === undefined) { v = tcKindCountCalc(step, kind); tcStepMemo.kind.set(k, v); }
+  return v;
+}
+function tcKindCountCalc(step, kind) {
   let n = 0;
   String(step).split('+').forEach(tok => {
     const m = tok.trim().replace(/^ⓘ[A-C]/, '').match(kind === 'TH' ? /^(\d*)TH(?:×(\d+))?/ : /^(\d*)HL(?:×(\d+))?/);
@@ -10329,6 +10346,12 @@ function tcPartyHl(dps, name, inTeam) {
 /* Uses of each skill in one rotation step: "1111" four of Skill 1, "2×4+1" four of 2 and one of 1,
    "HL+3" one of 3 (a Highlight is not a skill here). */
 function tcSkillUses(step) {
+  const k = String(step);
+  let v = tcStepMemo.uses.get(k);
+  if (!v) { v = tcSkillUsesCalc(step); tcStepMemo.uses.set(k, v); }
+  return v.slice();
+}
+function tcSkillUsesCalc(step) {
   const c = [0, 0, 0];
   String(step).split('+').forEach(tok => {
     const t = tok.trim().replace(/^ⓘ[A-C]/, '');
@@ -13164,7 +13187,16 @@ const tcWbShort = rows => {
   const by = rows.slice().sort((x, y) => (y[1] - x[1]) || (y[2] - x[2]));
   return [...new Set(by.slice(0, TC_WB_SHORT).concat(by.filter(x => x[3]).slice(0, TC_WB_IDLE)).map(x => x[0]))];
 };
+/* Remembered per damage dealer, team, fit and members' vectors for the render (tcMemo.wb): it is a few hundred
+   fights, and a repeat render (Use, Busy elsewhere, any commit on the tab) paid it again — two thirds of one. */
 function tcWonderBest(dps, vecs, names) {
+  if (!tcMemo.hot) tcMemoFor(dps);
+  const key = dps.n + '|' + (names || []).map(n => n || '').join('|') + '|' + (tmFitOn() ? 'fit' : '') + '|' + JSON.stringify(vecs) + '|' + JSON.stringify(tcPairCtx || null);
+  let S = tcMemo.wb.get(key);
+  if (!S) { S = tcWonderBestCalc(dps, vecs, names); tcMemo.wb.set(key, S); }
+  return S;
+}
+function tcWonderBestCalc(dps, vecs, names) {
   const S = { personas: [0, 1, 2].map(() => ({ name: '', cards: ['', '', ''], fused: [] })), weapon: '', refine: 1 };
   // a weapon is tried only if he has it (the weapons record), and at its own refinement
   const arm = (s, k) => { s.weapon = k; s.refine = k ? weaponRec(k).refine : 1; return s; };
@@ -13243,8 +13275,16 @@ function tcDefence(pierce, defdown) {
    the busy list, so a change made without commit() (a test, a direct edit) is still seen; the
    fingerprint costs a couple of milliseconds, so an entry point checks it once and marks the memo
    `hot` for the calls it makes (tcHot). On the real save a render went from 0.9 s to well under
-   0.1 s, which is what makes "Use", "Busy elsewhere" and every commit() on this tab feel instant. */
-const tcMemoNew = key => ({ key, hot: false, eval: new Map(), member: new Map(), search: new Map(), rot: new Map(), hlw: new Map(), sim: new Map(), dmg: new Map(), tech: new Map(), pool: new Map() });
+   0.1 s, which is what makes "Use", "Busy elsewhere" and every commit() on this tab feel instant.
+   Profiled again on 6 Nov 2026 (save 59, fit and compose on): a fresh render was 11-15 s, three quarters of it
+   the fights (4,500-10,000 a render at about 1 ms each), a repeat render 0.6-0.9 s. Three more things that depend
+   only on the save and the damage dealer are remembered here since — a teammate's or Wonder's hit price (`mateM`,
+   per damage dealer: it was a Map per fight, missing 84% of the time, each miss a damage evaluation), the damage
+   dealer's own Burn share on the quick screen (`burn0`), and Wonder's suggested setup per team (`wb`, two thirds of
+   a repeat render) — and renderTeams runs under tcHot, since its HTML pass priced Wonder outside it and re-hashed
+   the save about 70 times. Measured on all 16 owned damage dealers with every number on the page identical: fresh
+   renders 7-31% faster (20% in all), repeat renders 72-104 ms. */
+const tcMemoNew = key => ({ key, hot: false, eval: new Map(), member: new Map(), search: new Map(), rot: new Map(), hlw: new Map(), sim: new Map(), dmg: new Map(), tech: new Map(), pool: new Map(), mateM: new Map(), burn0: new Map(), wb: new Map() });
 let tcMemo = tcMemoNew('');
 function tcMemoFor(D) {
   // the "Auto" boss and enemies follow the damage dealer the fight is for; the key holds what they resolve to
@@ -13366,10 +13406,15 @@ function tcMultiplier(dps, vecs) {
   /* Technicals: the lines that need a Burning foe at the share of turns the lineup keeps it Burning (the
      damage dealer's own share and each member's, as independent chances), Technical Precision first, since
      it scales the rest */
-  const burn0 = tcBurnSupply(dps.n, tcRotSeq(dps.n, null));
+  // (the damage dealer's own share and potential depend on their rotation and mask pair only: remembered per render,
+  // since this is asked tens of thousands of times a render and walks the rotation each time)
+  const bk = dps.n + '|' + ((tcPairCtx && tcPairCtx[dps.n]) || '');
+  let B0 = tcMemo.burn0.get(bk);
+  if (!B0) { B0 = { b: tcBurnSupply(dps.n, tcRotSeq(dps.n, null)), p: tcBurnPotential(dps.n) }; tcMemo.burn0.set(bk, B0); }
+  const burn0 = B0.b;
   const need = [].concat(...vecs.map(v => v.need || []));
   // a damage dealer who can fit a Burn into their rotation (TC_ROT_ADD) does so when a member's lines want it
-  let miss = 1 - (need.length ? Math.max(burn0, tcBurnPotential(dps.n)) : burn0);
+  let miss = 1 - (need.length ? Math.max(burn0, B0.p) : burn0);
   vecs.forEach(v => { if (v.burn) miss *= 1 - Math.min(1, v.burn); });
   const cov = 1 - miss;
   need.forEach(n => { if (n.k === 'tp') X.tp += n.v * cov; });
@@ -14550,8 +14595,15 @@ function tcAilSources(n) {
   });
 }
 // a step's tokens for matching a source's `on`: its skills ('1'-'3'), Highlight or Theurgy, and named tokens
+// (memoised like tcTurnSkills; callers delete from the Set they get, so it is a copy)
 function tcAilToks(step) {
-  const t = new Set(tcTurnSkills(step));
+  const k = String(step);
+  let v = tcStepMemo.ail.get(k);
+  if (!v) { v = tcAilToksCalc(step); tcStepMemo.ail.set(k, v); }
+  return new Set(v);
+}
+function tcAilToksCalc(step) {
+  const t = tcTurnSkills(step);
   String(step).split('+').forEach(m => { m = m.trim().replace(/↺/g, ''); if (m && m !== '-') t.add(m); });
   if (tcKindCount(step, 'HL')) t.add('HL');
   if (tcKindCount(step, 'TH')) t.add('TH');
@@ -15404,9 +15456,14 @@ function tcSimRun(P, order, hold) {
     /* A teammate's or Wonder's own hit (Nov 2026): on their own stats with what reaches them (curX's `mate`), in the
        damage dealer's units (P.unit, their unbuffed hit). `w`: the hit's weakness factor on this boss (1.2 plus
        weakness-damage buffs on a weakness, 0.5 resisted); `dot`: cannot crit (a Highlight unless its text says so). */
-    const mateMemo = new Map();
+    /* Kept per damage dealer for the render (tcMemo.mateM), like `memo` above: the price depends on the teammate's
+       own stats (the save), the board and the damage dealer's unit, not on the fight, and the same boards recur
+       across every fight the fit and the spending orders play. A Map per fight missed 84% of the time. Wonder's is
+       keyed on his stats too, since each setup the suggestion tries gives him different ones. */
+    if (!tcMemo.mateM.has(D.n)) tcMemo.mateM.set(D.n, new Map());
+    const mateMemo = tcMemo.mateM.get(D.n);
     const mateMult = (a, X, w, dot) => {
-      const key = a.n + '|' + TC_DMG_KEYS.map(k => Math.round((X[k] || 0) * 100)).join(',') + '|' + w + '|' + (dot ? 1 : 0) + '|' + Math.round((X.lk || 0) * 100);
+      const key = a.n + (a.ws ? '#' + a.ws.atk + ',' + a.ws.cr + ',' + a.ws.cm + ',' + (a.ws.dm || 0) : '') + '|' + TC_DMG_KEYS.map(k => Math.round((X[k] || 0) * 100)).join(',') + '|' + w + '|' + (dot ? 1 : 0) + '|' + Math.round((X.lk || 0) * 100);
       let m = mateMemo.get(key);
       if (m == null) {
         let body, own = 0;
@@ -17700,7 +17757,9 @@ function renderTeams() {
   tmShownDps = dps; tmRunSig = tmInputSig();
   if (!dps || !charDef(dps)) { out.innerHTML = ''; tmMarkStale(); return; }
   tmBuildMemo = new Map();
-  try {
+  // one fingerprint for the whole render: the HTML below prices Wonder's setups too, and outside tcHot each
+  // of those calls re-hashed the save (about 70 times a render)
+  try { tcHot(() => {
     const calcMode = $('#tmBasis').value === 'calc';
     const { list, team } = calcMode ? tcTeams(dps) : tmTeams(dps);
     const inTeam = new Set(team.seats.filter(s => s.name).map(s => s.name));
@@ -17736,7 +17795,7 @@ function renderTeams() {
         <div class="tmMembers">${rot}${wonderRot}</div>
       </div>
       ${tmWorksHtml(ctx, backup)}`;
-  } finally { tmBuildMemo = null; tmMarkStale(); }
+  }, charDef(dps)); } finally { tmBuildMemo = null; tmMarkStale(); }
 }
 
 /* The headline: the team's number as one big figure, lufel's team beside it for scale, the medic note,
