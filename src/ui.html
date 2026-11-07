@@ -558,6 +558,7 @@ details.sect>.inner{margin-top:10px}
 .tmUse .u{display:inline-flex;align-items:center;gap:6px;border:1px solid var(--line);border-radius:20px;padding:1px 9px 1px 6px;font-size:12px;background:#16161c}
 .tmUse .u .el-dot{width:7px;height:7px;box-shadow:none}
 .tmUse .u b{font-family:ui-monospace,monospace}
+.tmUse .u b.rsv{font-family:inherit;font-weight:500;font-style:italic;color:var(--dim)}
 .tmSuggest{margin-top:8px;border:1px solid #2a4a66;border-left:3px solid var(--blue);background:#121a26;border-radius:8px;padding:8px 11px}
 .tmSuggest .hd{display:flex;align-items:center;gap:8px;flex-wrap:wrap;font-size:12px}
 .tmSuggest .hd b{color:var(--ink)}
@@ -624,6 +625,100 @@ details.sect>.inner{margin-top:10px}
 .tmPanelHd h2{font-size:14px;text-transform:uppercase;letter-spacing:.07em;color:var(--dim);margin:0}
 .tmSyn li{margin:4px 0}
 .tmSyn .m{border:1px solid var(--line);border-left:3px solid var(--el,var(--line));border-radius:20px;padding:0 7px;font-size:12px;background:#16161c;font-weight:600}
+/* ---- the shared visual vocabulary (Nov 2026 UI pass; the helpers are beside buildScoreTag in logic.js) ---- */
+/* Tab icons: one stroke drawing before each label. */
+nav button{display:inline-flex;align-items:center;gap:5px;padding:6px 9px;font-size:13px}
+.navIco{width:14px;height:14px;fill:none;stroke:currentColor;stroke-width:1.9;stroke-linecap:round;stroke-linejoin:round;opacity:.8;flex:0 0 auto}
+nav button.on .navIco{opacity:1}
+/* A ring gauge: --p is the percentage, the band class its colour. The hole is cut with a mask, so a
+   ring sits on any background; the number on a big ring is a sibling drawn over it (.ringWrap). */
+.ringWrap{position:relative;display:inline-flex;align-items:center;justify-content:center;flex:0 0 auto;vertical-align:middle}
+.ringWrap.mini{width:13px;height:13px;margin-right:1px}
+.ringWrap.big{width:96px;height:96px}
+.ring{--p:0;--c:#3a3a46;--w:3px;position:absolute;inset:0;border-radius:50%;
+  background:conic-gradient(var(--c) calc(var(--p) * 1%),#2a2a34 0);
+  -webkit-mask:radial-gradient(farthest-side,transparent calc(100% - var(--w) - .5px),#000 calc(100% - var(--w) + .5px));
+  mask:radial-gradient(farthest-side,transparent calc(100% - var(--w) - .5px),#000 calc(100% - var(--w) + .5px))}
+.ringWrap.big .ring{--w:8px;background:conic-gradient(var(--c) calc(var(--p) * 1%),#22222b 0)}
+.ringWrap.big .big{position:relative;font-size:28px}
+.ring.bs-hi{--c:var(--ok)}.ring.bs-ok{--c:#7fc9a0}.ring.bs-mid{--c:var(--gold)}.ring.bs-lo{--c:#e87a5c}.ring.bs-none{--c:#3a3a46}
+.tag.bs{display:inline-flex;align-items:center;gap:4px}
+/* A number coloured by its band (a card's out-of-100, a build score in a headline). */
+.pb.bs-hi,.bandc.bs-hi{color:var(--ok)}.pb.bs-ok,.bandc.bs-ok{color:#7fc9a0}.pb.bs-mid,.bandc.bs-mid{color:var(--gold)}.pb.bs-lo,.bandc.bs-lo{color:#e87a5c}
+/* A card block's out-of-100 as a thin bar under its header, in the band's colour. */
+.lo-pct{height:4px;border-radius:2px;background:#24242e;overflow:hidden;margin:-2px 0 8px}
+.lo-pct>i{display:block;height:100%;background:#e87a5c}
+.lo.bs-hi .lo-pct>i{background:linear-gradient(90deg,#2e6b4c,var(--ok))}
+.lo.bs-ok .lo-pct>i{background:linear-gradient(90deg,#2e6b4c,#7fc9a0)}
+.lo.bs-mid .lo-pct>i{background:linear-gradient(90deg,#6b5a20,var(--gold))}
+.lo.bs-lo .lo-pct>i{background:linear-gradient(90deg,var(--red-dim),#e87a5c)}
+.gainneg{color:#e87a5c}
+/* A round portrait: the roster's art cropped to the face, element-tinted initials under it (a pseudo-element,
+   so innerText stays the name alone) and a ring in the element's colour. */
+.avatar{--el:#8a8f98;--sz:36px;position:relative;display:inline-flex;flex:0 0 auto;width:var(--sz);height:var(--sz);border-radius:50%;overflow:hidden;
+  vertical-align:middle;background:radial-gradient(120% 90% at 50% 10%,color-mix(in srgb,var(--el) 55%,transparent),#101015 75%);
+  box-shadow:0 0 0 2px color-mix(in srgb,var(--el) 55%,transparent)}
+.avatar::before{content:attr(data-i);position:absolute;inset:0;display:flex;align-items:center;justify-content:center;
+  font-size:calc(var(--sz) * .36);font-weight:800;letter-spacing:-.02em;color:color-mix(in srgb,var(--el) 70%,#fff);opacity:.75}
+.avatar img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;object-position:center 14%;transform:scale(1.6)}
+.who{display:inline-flex;align-items:center;gap:8px;vertical-align:middle}
+.who>span{min-width:0}
+.rlist td .who .nm{display:inline}
+.loHead{display:flex;align-items:center;gap:14px;padding-right:28px}
+.loHead h2{display:inline}
+.loHead .pips{margin-left:4px}
+.upHd{display:flex;align-items:center;gap:8px;flex-wrap:wrap;font-size:15px}
+.upHd .avatar{order:-1}
+.upHd .upHdMeta{display:inline-flex;align-items:center;gap:8px;margin-left:auto;font-weight:400}
+/* Five slot pips: filled in the slot's colour when the worn card is in the recommended set, outlined when
+   it is worn off-set, dashed when the slot is empty. The letters are the same abbreviations the slot badges use. */
+.pips{display:inline-flex;gap:3px;vertical-align:middle;flex-wrap:wrap}
+.pip{display:inline-flex;align-items:center;justify-content:center;width:27px;height:15px;border-radius:4px;font-size:8px;font-weight:800;
+  letter-spacing:.05em;text-transform:uppercase;font-style:normal;border:1px dashed #3d3d4a;color:#5a5a68;background:transparent;line-height:1}
+.pip.on{border-style:solid;border-color:var(--sc);color:var(--sc);background:color-mix(in srgb,var(--sc) 12%,transparent)}
+.pip.on.set{background:var(--sc);color:#0b0b0d}
+.pip.Sun{--sc:#f0c260}.pip.Moon{--sc:#7fa8e8}.pip.Star{--sc:#c08ae8}.pip.Sky{--sc:#4fc79a}.pip.Space{--sc:#f07a92}
+.cc .slotsRow{margin-top:8px}
+/* The roster's "default setup" warning reads as one. */
+.tag.warn{color:var(--gold);border-color:#5c4a1d;background:#241f10}
+.tag.warn::before{content:'⚠ ';font-size:10px}
+/* A card's level: a pill whose underline fills to the cap, gold when there. */
+.lvl{display:inline-flex;flex-direction:column;align-items:center;gap:2px;min-width:30px;padding:1px 6px 2px;border-radius:5px;background:#1b1b22;border:1px solid var(--line)}
+.lvl b{font-family:ui-monospace,monospace;font-weight:700;font-size:12px;line-height:1.2;color:var(--dim)}
+.lvl i{display:block;height:2px;width:0;border-radius:1px;background:var(--dim2);align-self:flex-start;max-width:100%}
+.lvl.max{border-color:#6b5220;background:#2a2213}.lvl.max b{color:#f0c260}.lvl.max i{background:#f0c260}
+.lvl.part b{color:var(--ink)}.lvl.part i{background:#7fa8e8}
+.lvl.zero b{color:var(--dim2)}
+/* Triage verdicts: a glyph and a colour of their own — keep green, hold amber, feed red, lock blue, an
+   Upgrades pick green with an arrow — and the quality bar in the same colour. */
+.tag.vt{display:inline-flex;align-items:center;gap:4px}
+.tag.vt::before{font-size:10px;font-weight:800;line-height:1}
+.tag.v-keep,.tag.v-upgrade{color:var(--ok);border-color:#1d5c3d;background:#10241a}
+.tag.v-keep::before{content:'✓'}
+.tag.v-upgrade::before{content:'↑'}
+.tag.v-hold{color:var(--gold);border-color:#5c4a1d;background:#241f10}
+.tag.v-hold::before{content:'◐'}
+.tag.v-feed{color:#e87a5c;border-color:#6b3524;background:#2a1712}
+.tag.v-feed::before{content:'✕'}
+.tag.v-lock{color:#8fc1f2;border-color:#2b4a6b;background:#13202e}
+.tag.v-lock::before{content:'';width:9px;height:10px;background:currentColor;
+  -webkit-mask:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M6 10V8a6 6 0 0 1 12 0v2h1a1 1 0 0 1 1 1v10a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V11a1 1 0 0 1 1-1zm3 0h6V8a3 3 0 0 0-6 0z'/%3E%3C/svg%3E") center/contain no-repeat;
+  mask:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M6 10V8a6 6 0 0 1 12 0v2h1a1 1 0 0 1 1 1v10a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V11a1 1 0 0 1 1-1zm3 0h6V8a3 3 0 0 0-6 0z'/%3E%3C/svg%3E") center/contain no-repeat}
+.bar.q-keep>i,.bar.q-upgrade>i{background:linear-gradient(90deg,#2e6b4c,var(--ok))}
+.bar.q-hold>i{background:linear-gradient(90deg,#6b5a20,var(--gold))}
+.bar.q-lock>i{background:linear-gradient(90deg,#2b4a6b,#8fc1f2)}
+.bar.q-feed>i{background:linear-gradient(90deg,var(--red-dim),#e87a5c)}
+/* the verdict chips over the Triage table carry the same glyphs */
+.vchip::before{font-size:10px;font-weight:800}
+.vchip.keep::before{content:'✓'}.vchip.rec::before{content:'↑'}.vchip.hold::before{content:'◐';color:var(--gold)}
+.vchip.feed::before,.vchip.soft::before{content:'✕'}.vchip.lock::before{content:'🔒';font-size:9px}
+.vchip.hold b{color:var(--gold)}.vchip.lock b{color:#8fc1f2}
+/* Teams: the seat's portrait beside the role and name; the turn order's steps and the next teams' chips carry one too */
+.tmWho{display:flex;gap:11px;align-items:flex-start}
+.tmWhoIn{min-width:0;flex:1}
+.tmOrder .tmStep .avatar{margin-right:6px;vertical-align:-5px}
+.tmParty .m{display:inline-flex;align-items:center;gap:6px}
+.tmParty .m .avatar{box-shadow:none;margin-left:-3px}
 @media (max-width:760px){
   header{position:static;padding:10px 12px;gap:8px 10px}
   header .logo{font-size:15px}

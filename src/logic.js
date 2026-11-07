@@ -962,7 +962,7 @@ function cardHeadroom(score, slot, t) {
    percentage, then the headroom in raw points, muted. */
 function cardPctHtml(score, slot, t) {
   const pct = cardPct(score, slot, t), room = cardHeadroom(score, slot, t);
-  return `<span class="score" title="${pct} of 100: how close this card is to a perfect ${esc(slot)} card for this character">${pct}</span>` +
+  return `<span class="score pb ${pctBand(pct)}" title="${pct} of 100: how close this card is to a perfect ${esc(slot)} card for this character">${pct}</span>` +
     `<span class="tiny muted" style="margin-left:5px" title="Raw points a perfect ${esc(slot)} card would add over this one. Comparable across this character's five slots, so the largest headroom is the biggest gain available.">${room.toFixed(1)} left</span>`;
 }
 
@@ -3196,10 +3196,12 @@ function cardBlockHtml(card, t, o) {
     const rv = o.rolls ? ` <span class="muted tiny">(${(s.value / maxRoll(s.stat, slot)).toFixed(1)}r)</span>` : '';
     return `<div class="sub ${cls}"><span>${esc(s.stat)}</span><b>${esc(subVal(s))}${rv}</b></div>`;
   }).join('');
-  return `<div class="lo${o.cls ? ' ' + o.cls : ''}">
-    <h4><span class="slot ${slot}">${slot.slice(0, 3)}</span> ${esc(card.set)}
+  const pct = o.score != null && t ? cardPct(o.score, slot, t) : null;
+  return `<div class="lo${o.cls ? ' ' + o.cls : ''}${pct != null ? ' ' + pctBand(pct) : ''}">
+    <h4><span class="slot ${slot}">${slot.slice(0, 3)}</span> ${setHtml(card.set)}
       <span class="tag r${card.rarity}">${card.rarity}★</span>${o.tags || ''}
-      ${o.score != null && t ? `<span style="margin-left:auto;white-space:nowrap">${cardPctHtml(o.score, slot, t)}</span>` : ''}</h4>
+      ${pct != null ? `<span style="margin-left:auto;white-space:nowrap">${cardPctHtml(o.score, slot, t)}</span>` : ''}</h4>
+    ${pct != null ? `<div class="lo-pct" title="${pct} of 100 for this slot on this character"><i style="width:${pct}%"></i></div>` : ''}
     <div class="lo-mainrow">
       <div class="sub" style="border:none;padding:0"><span class="muted">Main · Lv${card.level}</span><b>${esc(card.main)}</b></div>
       ${o.mainTag != null ? `<div class="lo-tagrow">${o.mainTag || '&nbsp;'}</div>` : ''}
@@ -3609,10 +3611,10 @@ function runOpt() {
   const setupNote = setupIsDefault(name) ? `<p class="tiny muted" style="margin:0 0 12px">${esc(DEFAULT_SETUP_NOTE)}
       <button class="linky" id="optSetup">Set ${esc(char.n)}'s setup</button></p>` : '';
   const headline = !rec ? '' : now
-    ? `Build score <span class="big">${now.score}</span><span class="arrow">→</span><span class="big">${rec.score}</span>
+    ? `Build score <span class="big bandc ${nowBand.cls}">${now.score}</span><span class="arrow">→</span><span class="big bandc ${buildBand(rec.score).cls}">${rec.score}</span>
        ${delta >= 0.05 ? `<span class="${losing ? 'muted' : 'gainpos'}">(${esc(gainStr(delta))})</span>`
          : delta <= -0.05 ? `<span class="muted">(${esc(gainStr(delta))})</span>` : '<span class="muted">(no change)</span>'}`
-    : `Would score <span class="big">${rec.score}</span><span class="muted">/100</span>
+    : `Would score <span class="big bandc ${buildBand(rec.score).cls}">${rec.score}</span><span class="muted">/100</span>
        <span class="tiny muted">— nothing is equipped on ${esc(char.n)} yet</span>`;
 
   /* What the character has now, broken down. Below the recommendation rather than above it:
@@ -3621,7 +3623,7 @@ function runOpt() {
   const bsHtml = `<div class="panel">
     <h2>${now ? 'Build score now' : 'The recommendation, broken down'}</h2>
     ${now ? `<div class="bscore">
-        <div><span class="big">${now.score}<small>/100</small></span></div>
+        ${ringHtml(now.score, 'big', `<span class="big bandc ${nowBand.cls}">${now.score}<small>/100</small></span>`)}
         <div><span class="tag ${nowBand.cls}">${esc(nowBand.label)}</span>
           <div class="tiny muted" style="margin-top:4px">
             ${now.filled} of ${SLOTS.length} slots equipped${now.actual.active4 ? ' · ' + esc(now.actual.active4) + ' 4-piece' : ' · no 4-piece'}</div></div>
@@ -3721,7 +3723,7 @@ function runOpt() {
         <td class="tiny muted">${subsInlineHtml(o.c, t)}</td>
         <td class="right score">${cardPct(cardScore(o.c, t), sl, t)}</td>
         <td class="right tiny muted">${cardHeadroom(cardScore(o.c, t), sl, t).toFixed(1)}</td>
-        <td class="right tiny">${pick && o.c === pick.c ? '<span class="tag hit">picked</span>' : `<span class="muted">${esc(gainStr(o.d))}</span>`}</td>
+        <td class="right tiny">${pick && o.c === pick.c ? '<span class="tag hit">picked</span>' : `<span class="${o.d >= 0.05 ? 'gainpos' : o.d <= -0.05 ? 'gainneg' : 'muted'}">${esc(gainStr(o.d))}</span>`}</td>
         <td style="white-space:nowrap">${slotEquipHtml(name, sl, o.c)} ${cardLevelBtnHtml(o.c)}</td></tr>`;
       });
     }).join('')}</tbody></table>
@@ -4005,6 +4007,12 @@ function sortThHtml(key, label, sort, title, style, cls) {
     `<button type="button" class="thBtn">${label}${arrow}</button></th>`;
 }
 function invSortHeader(key, label) { return sortThHtml(key, label, invSort); }
+/* A card's level as a pill with a bar under the number: gold and full at the cap, dim at 0. */
+function levelPillHtml(c) {
+  const max = (RARITY[c.rarity] || RARITY[5]).maxLevel || 25, lv = c.level || 0;
+  const cls = lv >= max ? 'max' : lv > 0 ? 'part' : 'zero';
+  return `<span class="lvl ${cls}" title="Level ${lv} of ${max}"><b>${lv}</b><i style="width:${Math.round(100 * lv / max)}%"></i></span>`;
+}
 function renderInv() {
   renderSetOverview();
   const rows = sortInvRows(filteredCards());
@@ -4015,9 +4023,9 @@ function renderInv() {
     </tr></thead><tbody>` +
     rows.slice(0, 600).map(c => `<tr>
       <td><span class="slot ${c.slot}">${c.slot.slice(0,3)}</span></td>
-      <td>${esc(c.set)}</td>
+      <td>${setHtml(c.set)}</td>
       <td><span class="tag r${c.rarity}">${c.rarity}★</span></td>
-      <td class="muted">${c.level}</td>
+      <td>${levelPillHtml(c)}</td>
       <td class="tiny">${esc(c.main)}</td>
       <td class="tiny muted">${subsInlineHtml(c)}</td>
       <td class="tiny">${c.equipped ? esc(c.equipped) : '<span class="muted">—</span>'}${c.locked
@@ -4362,11 +4370,12 @@ function renderTriageTable() {
       const p = Math.round(r.pct * 100);
       const v = trVerdict(r);
       const role = esc((ARCHETYPES[r.vaultRole] || {}).label || r.vaultRole || '');
-      const verdict = r.rec ? `<span class="tag hit" title="Part of ${esc(r.rec)}'s upgrade on the Upgrades tab. Its own swap score can be low, because most of a set switch is the 4-piece bonus, which lands only with the fourth card.">keep</span>`
-        : v === 'keep' ? '<span class="tag hit">keep</span>'
-        : v === 'hold' ? '<span class="tag">hold</span>'
-        : v === 'lock' ? `<span class="tag hit" title="The Vault rates this in the top 2% of ${esc(r.card.slot)} cards for the ${role} role: worth a lock in the game client, though nobody you own gains much from it now.">lock</span>`
-        : `<span class="tag miss">feed</span>${r.vault === 'watch' ? ` <span class="tiny muted" title="The Vault rates this in the top 7% of ${esc(r.card.slot)} cards for the ${role} role, worth holding. Feed it after the rest.">vault: hold</span>` : ''}`;
+      const verdict = r.rec ? verdictTagHtml('upgrade', 'keep', `Part of ${r.rec}'s upgrade on the Upgrades tab. Its own swap score can be low, because most of a set switch is the 4-piece bonus, which lands only with the fourth card.`)
+        : v === 'keep' ? verdictTagHtml('keep', 'keep', 'Worth 70% or more of the best card of its slot to someone you own')
+        : v === 'hold' ? verdictTagHtml('hold', 'hold', 'Between 35% and 70% of the best card of its slot: keep it for now, feed it last')
+        : v === 'lock' ? verdictTagHtml('lock', 'lock', `The Vault rates this in the top 2% of ${r.card.slot} cards for the ${(ARCHETYPES[r.vaultRole] || {}).label || r.vaultRole || ''} role: worth a lock in the game client, though nobody you own gains much from it now.`)
+        : `${verdictTagHtml('feed', 'feed', 'Below 35% of the best card of its slot for everyone you own')}${r.vault === 'watch' ? ` <span class="tiny muted" title="The Vault rates this in the top 7% of ${esc(r.card.slot)} cards for the ${role} role, worth holding. Feed it after the rest.">vault: hold</span>` : ''}`;
+      const q = r.rec || v === 'keep' ? 'q-keep' : v === 'hold' ? 'q-hold' : v === 'lock' ? 'q-lock' : 'q-feed';
       const setElem = (SETS[r.card.set] || {}).elem;
       const noOneTitle = (r.noSetMatch
         ? `${setElem ? `Someone owned is ${esc(setElem)}, but n` : 'N'}obody in scope has ${esc(r.card.set)} as one of their own sets.`
@@ -4374,15 +4383,15 @@ function renderTriageTable() {
         ' The verdict already counts the Vault\'s view: a card it rates worth a lock reads lock, not feed.';
       return `<tr>
         <td><span class="slot ${r.card.slot}">${r.card.slot.slice(0,3)}</span></td>
-        <td>${esc(r.card.set)}</td>
+        <td>${setHtml(r.card.set)}</td>
         <td><span class="tag r${r.card.rarity}">${r.card.rarity}★</span></td>
         <td class="tiny">${esc(r.card.main)}</td>
         <td class="tiny muted">${subsInlineHtml(r.card)}</td>
-        <td class="tiny">${r.rec ? `${esc(r.rec)} <span class="tag" title="The Upgrades tab recommends equipping this on ${esc(r.rec)}.">upgrade</span>`
-          : r.who ? esc(r.who)
+        <td class="tiny">${r.rec ? `<span class="who">${avatarHtml(r.rec, 22)}<span>${esc(r.rec)} <span class="tag" title="The Upgrades tab recommends equipping this on ${esc(r.rec)}.">upgrade</span></span></span>`
+          : r.who ? `<span class="who">${avatarHtml(r.who, 22)}<span>${esc(r.who)}</span></span>`
           : `<span class="muted" title="${noOneTitle}">— no one in scope</span>`}</td>
         <td class="right score">${r.best.toFixed(1)}</td>
-        <td><div class="bar"><i style="width:${p}%"></i></div></td>
+        <td><div class="bar ${q}" title="${p}% of the best ${esc(r.card.slot)} card"><i style="width:${p}%"></i></div></td>
         <td>${verdict}</td></tr>`;
     }).join('') + '</tbody>' + (rows.length > 800
       ? `<tfoot><tr><td colspan="9" class="tiny muted">Showing the first 800 rows — narrow the filters to see more.</td></tr></tfoot>` : '');
@@ -4659,17 +4668,17 @@ function renderVaultTable() {
       if (r.genPct >= VAULT_WATCH) why.push(`${r.lines.total}/${r.lines.of} damage stats`);
       if (r.rolePct >= VAULT_WATCH) why.push(`top ${Math.max(1, Math.round((1 - r.rolePct) * 100))}% of your ${esc(r.card.slot)} cards for ${aOrAn(ARCHETYPES[r.role].label)}`);
       if (r.unfielded) why.push(`you own no ${esc(ARCHETYPES[r.role].label)}`);
-      const verdict = r.verdict === 'lock' ? '<span class="tag hit">lock</span>'
-        : r.verdict === 'watch' ? '<span class="tag">hold</span>' : '<span class="tag miss">—</span>';
+      const verdict = r.verdict === 'lock' ? verdictTagHtml('lock', 'lock', 'Top 2% of this slot for its best role: lock it in the game client')
+        : r.verdict === 'watch' ? verdictTagHtml('hold', 'hold', 'Top 7% of this slot for its best role: worth holding') : '<span class="tag miss">—</span>';
       return `<tr>
         <td><span class="slot ${r.card.slot}">${r.card.slot.slice(0,3)}</span></td>
-        <td>${esc(r.card.set)}</td>
+        <td>${setHtml(r.card.set)}</td>
         <td><span class="tag r${r.card.rarity}">${r.card.rarity}★</span></td>
         <td class="tiny">${esc(r.card.main)}</td>
         <td class="tiny muted">${subsInlineHtml(r.card)}</td>
-        <td class="right score">${Math.round(r.genPct * 100)}%</td>
+        <td class="right score nowrap">${Math.round(r.genPct * 100)}%<div class="bar q-${r.genPct >= VAULT_LOCK ? 'lock' : r.genPct >= VAULT_WATCH ? 'hold' : 'feed'}" style="width:56px;margin-left:auto"><i style="width:${Math.round(r.genPct * 100)}%"></i></div></td>
         <td class="tiny">${esc(ARCHETYPES[r.role].label)}${r.unfielded ? ' <span class="tag miss">none owned</span>' : ''}</td>
-        <td class="right score">${Math.round(r.rolePct * 100)}%</td>
+        <td class="right score nowrap">${Math.round(r.rolePct * 100)}%<div class="bar q-${r.rolePct >= VAULT_LOCK ? 'lock' : r.rolePct >= VAULT_WATCH ? 'hold' : 'feed'}" style="width:56px;margin-left:auto"><i style="width:${Math.round(r.rolePct * 100)}%"></i></div></td>
         <td class="tiny muted">${why.join(' · ') || '—'}</td>
         <td>${verdict}</td></tr>`;
     }).join('') + '</tbody>' + (list.length > 800
@@ -4939,9 +4948,11 @@ function runUpgrades() {
   $('#upPanel').classList.toggle('hide', !results.length);
   if (!results.length) return;
 
+  const wornAll = equippedByChar();
   $('#upList').innerHTML = results.map(({ c, rows }) => { const t = target(c); return `
     <div class="panel">
-      <h3 style="margin-top:0">${esc(c.n)}${c.a ? ` <span class="tiny muted">(${esc(c.a)})</span>` : ''}</h3>
+      <h3 class="upHd" style="margin-top:0"><span class="nm">${esc(c.n)}</span>${c.a ? ` <span class="tiny muted">(${esc(c.a)})</span>` : ''}
+        ${avatarHtml(c.n, 34)}<span class="upHdMeta">${buildScoreTag(c, wornAll)} ${slotPipsHtml(c, wornAll[c.n] || [], t)}</span></h3>
       <table><thead><tr>
         <th>Slot</th><th>Currently wearing</th><th></th><th>Better card</th>
         <th class="right">Gain</th><th></th>
@@ -4970,12 +4981,12 @@ function runUpgrades() {
         return `<tr>
           <td><span class="slot ${row.slot}">${row.slot.slice(0,3)}</span></td>
           <td class="tiny">${row.cur
-            ? `${esc(row.cur.set)} · ${esc(row.cur.main)} <span class="muted">(${cardPct(row.curScore, row.slot, t)})</span>
+            ? `${setHtml(row.cur.set)} · ${esc(row.cur.main)} <span class="pb ${pctBand(cardPct(row.curScore, row.slot, t))}" title="Out of 100 for this slot on ${esc(c.n)}">(${cardPct(row.curScore, row.slot, t)})</span>
                <div class="tiny muted">${subsHtml(row.cur)}</div>`
             : '<span class="muted">empty</span>'}</td>
           <td class="tiny muted">&rarr;</td>
-          <td class="tiny">${esc(row.rec.set)} <span class="tag r${row.rec.rarity}">${row.rec.rarity}★</span> ·
-            ${esc(row.rec.main)} <span class="muted">(${cardPct(row.recScore, row.slot, t)})</span>
+          <td class="tiny">${setHtml(row.rec.set)} <span class="tag r${row.rec.rarity}">${row.rec.rarity}★</span> ·
+            ${esc(row.rec.main)} <span class="pb ${pctBand(cardPct(row.recScore, row.slot, t))}" title="Out of 100 for this slot on ${esc(c.n)}">(${cardPct(row.recScore, row.slot, t)})</span>
             ${ownedBy ? ` <span class="tag" title="Currently equipped on ${esc(ownedBy)} — swapping unequips it from them${row.giverPts != null
               ? `, and costs them ${esc(row.giverPts.toFixed(1))} build points even after they put back their best free card of this slot (same set first; a full Optimise run may find them better)` : ''}">on ${esc(ownedBy)}${row.giverPts != null ? ` · ${esc(gainStr(-row.giverPts))}` : ''}</span>` : ''}
             <div class="tiny muted">${subsHtml(row.rec)}</div></td>
@@ -5197,9 +5208,10 @@ function renderHeadroomTable() {
     </tr></thead><tbody>` +
     list.slice(0, 600).map(r => {
       const band = r.build == null ? 'bs-none' : buildBand(r.build).cls;
+      const el = ELEMENT_COLORS[r.ch.e] || ELEMENT_COLORS['None'];
       return `<tr>
-        <td class="tiny"><b>${esc(r.ch.n)}</b>
-          <div class="tiny muted">${esc(r.ch.e)} · <span class="tag bs ${band}">build ${r.build == null ? '—' : `<b>${r.build}</b>`}</span></div></td>
+        <td class="tiny"><span class="who">${avatarHtml(r.ch.n, 32)}<span><b>${esc(r.ch.n)}</b>
+          <div class="tiny muted"><i class="el-dot" style="--el:${esc(el)}"></i> ${esc(r.ch.e)} · <span class="tag bs ${band}">${ringHtml(r.build)}build ${r.build == null ? '—' : `<b>${r.build}</b>`}</span></div></span></span></td>
         <td><span class="slot ${r.slot}">${r.slot.slice(0, 3)}</span></td>
         <td class="tiny">${r.card
           ? `${esc(r.card.set)} <span class="tag r${r.card.rarity}">${r.card.rarity}★</span> · ${esc(r.card.main)}
@@ -7024,14 +7036,67 @@ function equippedByChar() {
 /* Compact build-score chip for the roster grid. Deliberately does not run the
    optimiser — the roster re-renders on every keystroke in the search box, and this
    only has to read the five cards already equipped. */
+/* ---- the visual vocabulary shared by every screen (Nov 2026 UI pass) ----
+   A number the eye can rank is drawn as a shape beside its digits, never instead of them:
+   a build score or a card's out-of-100 as a ring (ringHtml, the band's colour), a character as a
+   round portrait (avatarHtml: the roster's art, element-tinted initials under it, drawn as a CSS
+   pseudo-element so a test reading innerText still sees only the name), the five slots as pips
+   (slotPipsHtml: filled when the worn card is in the recommended set, outlined when it is off-set,
+   dashed when the slot is empty), an element-locked set with its element's dot (setHtml), and a
+   Triage verdict with a glyph and its own colour (verdictTagHtml). */
+const pctBand = p => p >= 80 ? 'bs-hi' : p >= 60 ? 'bs-ok' : p >= 40 ? 'bs-mid' : 'bs-lo';
+/* `pct` 0-100 (null: nothing to show), `cls` 'mini' | 'big', `inner` sits over the ring's hole */
+function ringHtml(pct, cls, inner) {
+  const band = pct == null ? 'bs-none' : pctBand(pct);
+  return `<span class="ringWrap ${cls || 'mini'}"><span class="ring ${band}" style="--p:${pct == null ? 0 : Math.max(0, Math.min(100, pct))}"></span>${inner || ''}</span>`;
+}
+function avatarHtml(name, size) {
+  const d = charDef(name), el = ELEMENT_COLORS[d ? d.e : 'None'] || ELEMENT_COLORS['None'];
+  return `<span class="avatar" data-i="${esc(initials(name))}" style="--el:${esc(el)}${size ? `;--sz:${size}px` : ''}" title="${esc(name)}">` +
+    `<img src="${esc(artPath(name))}" alt="" loading="lazy" onerror="this.remove()"></span>`;
+}
+/* A set name with its element's dot in front when the set works for that element only. */
+function setHtml(set) {
+  const e = (SETS[set] || SPACE_SETS[set] || {}).elem;
+  return (e ? `<i class="el-dot" style="--el:${esc(ELEMENT_COLORS[e] || ELEMENT_COLORS['None'])}" title="${esc(e)} characters only"></i> ` : '') + esc(set);
+}
+/* The five slots of one character: what each holds and whether it is in the recommended set. */
+function slotPipsHtml(char, wornCards, t) {
+  t = t || target(char);
+  const worn = wornCards || state.cards.filter(c => c.equipped === char.n);
+  return `<span class="pips" title="Slots: filled = equipped and in the recommended set, outlined = equipped off-set, dashed = empty">` +
+    SLOTS.map(sl => {
+      const c = worn.find(x => x.slot === sl);
+      if (!c) return `<i class="pip ${sl}" title="${esc(sl)}: empty">${sl.slice(0, 3)}</i>`;
+      const inSet = sl === 'Space' ? t.space === c.set : (t.sets || []).includes(c.set);
+      return `<i class="pip ${sl} on${inSet ? ' set' : ''}" title="${esc(sl)}: ${esc(c.set)} · ${esc(c.main)} Lv${c.level}${inSet ? '' : ' (not a recommended set)'}">${sl.slice(0, 3)}</i>`;
+    }).join('') + '</span>';
+}
+/* kind: keep | hold | feed | lock | upgrade — the glyph and colour are the class's (CSS), the text stays the word */
+function verdictTagHtml(kind, label, title) {
+  return `<span class="tag vt v-${kind}"${title ? ` title="${esc(title)}"` : ''}>${esc(label || kind)}</span>`;
+}
 function buildScoreTag(char, worn) {
   const b = buildScore(char, (worn && worn[char.n]) || []);
-  if (!b) return `<span class="tag bs bs-none" title="No cards are equipped on ${esc(char.n)} yet">build —</span>`;
+  if (!b) return `<span class="tag bs bs-none" title="No cards are equipped on ${esc(char.n)} yet">${ringHtml(null)}build —</span>`;
   const band = buildBand(b.score);
   const partial = b.filled < SLOTS.length ? ` · ${b.filled}/${SLOTS.length} slots filled` : '';
   return `<span class="tag bs ${band.cls}" title="Build score ${b.score}/100 — ${band.label}${partial}">` +
-         `build <b>${b.score}</b></span>`;
+         `${ringHtml(b.score)}build <b>${b.score}</b></span>`;
 }
+/* The tabs' icons, one stroke drawing each, put in front of the label when the page loads. */
+const NAV_ICONS = {
+  roster: '<circle cx="12" cy="8" r="4"/><path d="M4 21c0-4 4-6 8-6s8 2 8 6"/>',
+  opt: '<path d="M12 3l1.8 5.2L19 10l-5.2 1.8L12 17l-1.8-5.2L5 10l5.2-1.8z"/><path d="M19 17l.7 1.8 1.8.7-1.8.7-.7 1.8-.7-1.8-1.8-.7 1.8-.7z"/>',
+  inv: '<rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/>',
+  triage: '<path d="M3 5h18l-7 8v6l-4 2v-8z"/>',
+  upgrades: '<path d="M3 17l6-6 4 4 8-8"/><path d="M14 7h7v7"/>',
+  teams: '<circle cx="9" cy="8" r="3.5"/><path d="M2 20c0-4 3-6 7-6s7 2 7 6"/><circle cx="17.5" cy="9" r="2.5"/><path d="M17.5 14c2.8 0 4.5 2 4.5 5"/>',
+  personas: '<path d="M4 5c3-1.5 13-1.5 16 0v7c0 5-4 8-8 9-4-1-8-4-8-9z"/><path d="M8 11c1-1 2-1 3 0M13 11c1-1 2-1 3 0M9 15.5c2 1.5 4 1.5 6 0"/>',
+  weapons: '<path d="M14 4l6 6-9 9-4 1 1-4z"/><path d="M5 19l-1 1M11 15l-2-2"/>',
+  data: '<ellipse cx="12" cy="6" rx="8" ry="3"/><path d="M4 6v12c0 1.7 3.6 3 8 3s8-1.3 8-3V6"/><path d="M4 12c0 1.7 3.6 3 8 3s8-1.3 8-3"/>'
+};
+const navIconHtml = k => NAV_ICONS[k] ? `<svg class="navIco" viewBox="0 0 24 24" aria-hidden="true">${NAV_ICONS[k]}</svg>` : '';
 
 // Sort comparators for the roster grid. These all sort a filtered *copy* of CHARACTERS
 // for display only — per the data-provenance rule the array itself is never re-sorted in
@@ -7096,7 +7161,7 @@ function renderRoster() {
   $$('#rsView button').forEach(b => { const on = b.dataset.view === rosterView; b.classList.toggle('on', on); b.setAttribute('aria-pressed', on); });
   $('#rsGrid').classList.toggle('hide', rosterView !== 'cards');
   $('#rsListPanel').classList.toggle('hide', rosterView !== 'list');
-  const defaultTag = c => `<span class="tag" title="${esc(DEFAULT_SETUP_NOTE)} Open the character to set yours.">default setup</span>`;
+  const defaultTag = c => `<span class="tag warn" title="${esc(DEFAULT_SETUP_NOTE)} Open the character to set yours.">default setup</span>`;
   if (rosterView === 'list') {
     $('#rsGrid').innerHTML = '';
     $('#rsList').innerHTML = `<thead><tr><th>Character</th><th>Role</th><th>Build</th><th class="right">Slots</th>
@@ -7105,11 +7170,12 @@ function renderRoster() {
       const o = cs.owned, b = o && cs.benched;
       const el = ELEMENT_COLORS[c.e] || ELEMENT_COLORS['None'];
       return `<tr class="rrow${b ? ' benched' : ''}" data-ch="${esc(c.n)}" tabindex="0" aria-label="Open ${esc(c.n)}'s loadout">
-        <td style="--el:${esc(el)}"><i class="el-dot" title="${esc(c.e)}"></i> <span class="nm">${esc(c.n)}</span>
-          ${c.a ? `<span class="tiny muted">${esc(c.a)}</span>` : ''} <span class="tag r${c.r}">${c.r}★</span></td>
+        <td style="--el:${esc(el)}"><span class="who">${avatarHtml(c.n, 30)}<span><span class="nm">${esc(c.n)}</span>
+          ${c.a ? `<span class="tiny muted">${esc(c.a)}</span>` : ''} <span class="tag r${c.r}">${c.r}★</span>
+          <div class="tiny muted"><i class="el-dot" title="${esc(c.e)}"></i> ${esc(c.e)}</div></span></span></td>
         <td class="tiny">${esc(c.arch)}${b ? ' <span class="tag benched">benched</span>' : ''}${o ? '' : ' <span class="tag">not owned</span>'}</td>
         <td>${buildScoreTag(c, worn)}</td>
-        <td class="right tiny">${(worn[c.n] || []).length}/${SLOTS.length}</td>
+        <td class="right tiny nowrap">${slotPipsHtml(c, worn[c.n] || [], t)} <span class="muted">${(worn[c.n] || []).length}/${SLOTS.length}</span></td>
         <td class="tiny muted">${esc(t.sets[0] || '—')} 4pc · ${esc(t.space || '—')}</td>
         <td class="tiny">${o && !b ? (setupIsDefault(c.n) ? defaultTag(c) : '<span class="muted">yours</span>') : ''}</td>
         <td class="acts">
@@ -7156,7 +7222,8 @@ function renderRoster() {
             ${b ? '<span class="tag benched">benched</span>' : ''}
             ${o && !b && setupIsDefault(c.n) ? defaultTag(c) : ''}
           </div>
-          <div class="tiny muted" style="margin-top:7px">${esc((t.sets[0] || '—'))} 4pc · ${esc(t.space || '—')}</div>
+          <div class="slotsRow">${slotPipsHtml(c, worn[c.n] || [], t)}</div>
+          <div class="tiny muted" style="margin-top:5px">${esc((t.sets[0] || '—'))} 4pc · ${esc(t.space || '—')}</div>
           <div class="row acts">
             <button class="sm ghost" data-edit="${esc(c.n)}">Targets</button>
             <button class="sm ghost" data-optimize="${esc(c.n)}">Optimize</button>
@@ -7362,10 +7429,12 @@ function openLoadout(name, openKeys) {
   const statsHtml = statsSummaryHtml(c, worn, L, false, idealLo.cards) + targetHtml(bs) + spreadHtml(bs);
 
   setDlgView('loadout', name);
+  const elc = ELEMENT_COLORS[c.e] || ELEMENT_COLORS['None'];
   body.innerHTML = `
+    <div class="loHead">${avatarHtml(c.n, 52)}<div>
     <h2 style="margin-bottom:4px">${esc(c.n)}${c.a ? ' · ' + esc(c.a) : ''}</h2>
-    <p class="tiny muted" style="margin:0 0 14px">${esc(c.e)} · ${esc(ARCHETYPES[c.arch].label)} ·
-      ${buildScoreTag(c, { [c.n]: worn })}</p>
+    <p class="tiny muted" style="margin:0 0 14px"><i class="el-dot" style="--el:${esc(elc)}"></i> ${esc(c.e)} · ${esc(ARCHETYPES[c.arch].label)} ·
+      ${buildScoreTag(c, { [c.n]: worn })} ${slotPipsHtml(c, worn, t)}</p></div></div>
     <div class="row" style="margin:0 0 10px;align-items:center">
       <h3 style="margin:0;font-size:13px">Cards</h3>
       <button class="ghost sm ${wornLocked ? 'gold' : ''}" id="loLock" ${worn.length ? '' : 'disabled'}
@@ -13035,8 +13104,14 @@ function tcWonder(dps, setup) {
   const wConst = {}, castEv = [], wGated = [], wOne = {}, wMin = [], wAlly = {}, wAllyOnly = {}, markRef = new Map();
   TC_KEYS.forEach(k => { wConst[k] = 0; });
   vec.allyCopy = {}; vec.isWonder = true; vec.party = {};
+  /* per slot, what it adds without a turn of its own: 'reserve' (a passive that works while another Persona is in
+     use, Kohryu's Auspicious Sign) or 'start' (a battle-start line from the lead). The seat shows that in place of a
+     0% share of his turns, which read as "never used" (the user, Nov 2026, of Kohryu in Ann's team). */
+  const offTurn = [null, null, null];
   best.ups.forEach(([i, up]) => {
     if (!up) return;
+    if (i.s.slot >= 0 && i.passive && i.e.reserve) offTurn[i.s.slot] = 'reserve';
+    else if (i.s.slot >= 0 && i.start && !offTurn[i.s.slot]) offTurn[i.s.slot] = 'start';
     vec[i.k] += i.v * up;
     if (i.e.to !== 'ally') vec.party[i.k] = (vec.party[i.k] || 0) + i.v * up;
     const cp = tcCopyable(i.e, i.k) && !i.e.minHits && !i.e.ailMin && !i.e.perAil;
@@ -13166,7 +13241,7 @@ function tcWonder(dps, setup) {
     if (!src) return { persona: best.idleSlot >= 0 ? S.personas[best.idleSlot].name : '', what: 'attack' };
     return { persona: S.personas[src.slot].name, what: skillName(src) };
   });
-  return { vec, ws, spd: wonderSpeedFor(S), lines, idle, uncast, turns, dmg, lead, busy: asked > 6, inUse: best.inUse.map(x => x / 6), sim: { consts: noHl, constsOne: wOne, constsMin: wMin, events: hlEv, knock: knockEv, gated: wGated, ally: wAlly, cast: { seq: sched, events: castEv }, constsAlly: wAllyOnly } };
+  return { vec, ws, spd: wonderSpeedFor(S), lines, idle, uncast, turns, dmg, lead, busy: asked > 6, inUse: best.inUse.map(x => x / 6), offTurn, sim: { consts: noHl, constsOne: wOne, constsMin: wMin, events: hlEv, knock: knockEv, gated: wGated, ally: wAlly, cast: { seq: sched, events: castEv }, constsAlly: wAllyOnly } };
 }
 
 /* The setup that helps this team most from what the player owns (the Personas section; the weapon is
@@ -17593,7 +17668,7 @@ function renderTmPicker() {
 function tmBuildTag(n) {
   const v = tmBuild(n);
   if (v == null) return n === 'Wonder' ? '' : '<span class="tag bs-none" title="Build score: nothing equipped">no cards</span>';
-  return `<span class="tag bs ${buildBand(v).cls}" title="Build score: how well geared, 0-100">build <b>${v}</b></span>`;
+  return `<span class="tag bs ${buildBand(v).cls}" title="Build score: how well geared, 0-100">${ringHtml(v)}build <b>${v}</b></span>`;
 }
 const tmFmt = (v, pct) => pct ? v.toFixed(1) + '%' : String(Math.round(v));
 const tcFmtLine = (k, v) => k === 'atk' || k === 'turns' ? String(Math.round(v)) : v.toFixed(1) + '%';
@@ -17876,7 +17951,7 @@ function tmSeatHtml(s, i, ctx) {
   }
   const kind = s.fixed ? 'dps' : s.seat === 'w' ? 'wonder' : s.seat === 'b' ? 'backup' : s.seat === 'e' ? 'elu' : s.role === 'Medic' ? 'medic' : 'thief';
   return `<div class="tmSeat kind-${kind}${s.fixed ? ' fixed' : ''}${s.name ? '' : ' empty'}" style="--el:${esc(el)}">
-    <div class="tmWho"><div class="role">${esc(s.role)}</div>${who}</div>${part}
+    <div class="tmWho">${s.name ? avatarHtml(s.name, 44) : ''}<div class="tmWhoIn"><div class="role">${esc(s.role)}</div>${who}</div></div>${part}
     <div class="tmWhat">${status}${alts ? `<div class="tmFolds"><details><summary>Replacements (${s.alts.length})</summary><div class="in"><div class="tmAlt">${alts}</div></div></details></div>` : ''}</div>
     <div class="acts">${actions}</div>
   </div>`;
@@ -17938,7 +18013,16 @@ function tmWonderWhat(s, ctx) {
   const say = S => S.personas.filter(p => p.name).map((p, i) => `${i + 1}. ${p.name}${i ? '' : ' (leads)'}${wonderSkills(p).length ? ' (' + wonderSkills(p).join(', ') + ')' : ''}`).join(' · ') + (S.weapon ? ` · ${S.weapon} ${refineLabel(S.refine)}` : '');
   const same = JSON.stringify(B) === JSON.stringify(W.setup);
   // which Persona he is using how often, and what his six actions cannot fit
-  const use = W.setup.personas.map((p, i) => p.name && !tmBusyP.has(p.name) ? `<span class="u" style="--el:${esc(ELEMENT_COLORS[(WONDER_PERSONA[p.name] || {}).e] || ELEMENT_COLORS['None'])}"><i class="el-dot"></i>${esc(p.name)} <b>${Math.round(100 * (W.inUse[i] || 0))}%</b></span>` : '').filter(Boolean);
+  /* a Persona that takes none of his turns but still adds something (a reserve passive, a battle-start line from the
+     lead) says so, rather than a 0% that reads as "never used" */
+  const useTag = i => {
+    const pct = Math.round(100 * (W.inUse[i] || 0)), off = (W.offTurn || [])[i];
+    if (pct || !off) return `<b>${pct}%</b>`;
+    return off === 'reserve'
+      ? '<b class="rsv" title="Takes none of his turns: its passive works while another Persona is in use">in reserve</b>'
+      : '<b class="rsv" title="Takes none of his turns: it leads, and what it does at the start of battle counts">battle start</b>';
+  };
+  const use = W.setup.personas.map((p, i) => p.name && !tmBusyP.has(p.name) ? `<span class="u" style="--el:${esc(ELEMENT_COLORS[(WONDER_PERSONA[p.name] || {}).e] || ELEMENT_COLORS['None'])}"><i class="el-dot"></i>${esc(p.name)} ${useTag(i)}</span>` : '').filter(Boolean);
   // the suggested Personas that add nothing here (his six actions are spent by the others)
   const idleNames = B.personas.filter((p, i) => p.name && !((B.adds || [])[i] > 0.0005)).map(p => p.name);
   const busyIn = W.setup.personas.filter(p => tmBusyP.has(p.name)).map(p => p.name);
@@ -17962,7 +18046,7 @@ function tmWonderWhat(s, ctx) {
 function tmOthersHtml(ctx) {
   const { C, list, team } = ctx;
   const xFmt = m => '×' + m.toFixed(2);
-  const chip = (x, extra) => { const d = charDef(x), el = ELEMENT_COLORS[d ? d.e : 'None'] || ELEMENT_COLORS['None']; return `<span class="m${extra && extra.cls ? ' ' + extra.cls : ''}" style="--el:${esc(el)}"${extra && extra.title ? ` title="${esc(extra.title)}"` : ''}>${esc(x)}${extra && extra.suffix ? extra.suffix : ''}</span>`; };
+  const chip = (x, extra) => { const d = charDef(x), el = ELEMENT_COLORS[d ? d.e : 'None'] || ELEMENT_COLORS['None']; return `<span class="m${extra && extra.cls ? ' ' + extra.cls : ''}" style="--el:${esc(el)}"${extra && extra.title ? ` title="${esc(extra.title)}"` : ''}>${avatarHtml(x, 18)}${esc(x)}${extra && extra.suffix ? extra.suffix : ''}</span>`; };
   const others = C ? list.filter(t => t.calc.key !== C.key).slice(0, 6).map(t => `<div class="tmParty">
       <button class="sm ghost" data-tm-party="${esc(t.calc.key)}">Use this team</button>
       <div class="ms">${t.calc.names.filter(Boolean).map((x, i) => chip(x, { suffix: i === 3 ? ' (backup)' : '' })).join('')}</div>
@@ -17989,7 +18073,7 @@ function tmOrderHtml(ctx) {
   thieves.sort((a, b) => sk(b) - sk(a));
   return thieves.map((x, i) => {
     const d = charDef(x.n), el = ELEMENT_COLORS[d ? d.e : 'None'] || ELEMENT_COLORS['None'];
-    return `${i ? '<span class="sep">→</span>' : ''}<span class="tmStep" style="--el:${esc(el)}">${esc(x.n)} ${x.spd == null ? `<span class="muted">Speed not set${x.n === 'Wonder' && dSpd != null ? `: taken as just before ${esc(dps)}` : ''}</span>` : `<b>${Math.round(x.spd)}</b> Speed`}</span>`;
+    return `${i ? '<span class="sep">→</span>' : ''}<span class="tmStep" style="--el:${esc(el)}">${avatarHtml(x.n, 20)}${esc(x.n)} ${x.spd == null ? `<span class="muted">Speed not set${x.n === 'Wonder' && dSpd != null ? `: taken as just before ${esc(dps)}` : ''}</span>` : `<b>${Math.round(x.spd)}</b> Speed`}</span>`;
   }).join(' ');
 }
 function tmOrderInfo(ctx, backup) {
@@ -18589,7 +18673,7 @@ function showTab(tab) {
   if (tab === 'personas' && psStale) renderPersonas();
   if (tab === 'weapons' && wpStale) renderWeapons();
 }
-$$('nav button').forEach(b => b.onclick = () => showTab(b.dataset.tab));
+$$('nav button').forEach(b => { b.onclick = () => showTab(b.dataset.tab); b.insertAdjacentHTML('afterbegin', navIconHtml(b.dataset.tab)); });
 
 /* Triage's two views, the same pattern as Upgrades': only the panes toggle. */
 function trPane() { return $('#tr-pane-vault').classList.contains('hide') ? 'feed' : 'vault'; }

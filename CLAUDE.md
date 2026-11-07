@@ -154,7 +154,19 @@ how-to-read prose is folded with `explainHtml(gist, body)`, never deleted; a sub
 is printed with its unit through `subVal`/`subsInlineHtml` (coloured by the character's coupled
 weights when one is in view) and a card block through `cardBlockHtml`; sortable headers come
 from `sortThHtml` (a real button, `aria-sort`); `.field` labels are tied to their controls by
-`linkLabels` (page once, each dialog in `showDlg`). The Vault is Triage's second view ("Lock for
+`linkLabels` (page once, each dialog in `showDlg`). **A number the eye should rank is drawn as a
+shape beside its digits, never instead of them** (the Nov 2026 UI pass; the helpers sit beside
+`buildScoreTag` in `logic.js`): a build score or a card's out-of-100 as a ring (`ringHtml`, coloured
+by `BUILD_BANDS`/`pctBand`, a thin `.lo-pct` bar under every `cardBlockHtml` header), a character as
+a round portrait (`avatarHtml`: the roster's art, element-tinted initials under it drawn as a CSS
+pseudo-element so a test reading `innerText` still sees only the name — Teams seats, turn order,
+next-team chips, Weakest slots, Upgrades, the Loadout popup), the five slots as pips (`slotPipsHtml`:
+filled when the worn card is in the recommended set, outlined off-set, dashed empty — Roster cards
+and list, Upgrades, the Loadout popup), an element-locked set with its element's dot (`setHtml`), a
+Triage or Vault verdict as a word with a glyph and colour of its kind (`verdictTagHtml`, `.tag.vt
+.v-*`, the quality bar in the same colour), a card's level as a pill that fills to the cap
+(`levelPillHtml`), and a tab with an icon (`NAV_ICONS`, injected at load). The words and numbers
+tests read stay as they were; a test in section 11 holds the shapes to the data. The Vault is Triage's second view ("Lock for
 later"); `showTab('vault')` still lands there. The Setup is edited only in the Loadout popup; the
 Targets dialog links to it.
 

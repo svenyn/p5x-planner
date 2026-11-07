@@ -72,6 +72,8 @@ async function dressSynthetic(p) {
   await p.click('nav button[data-tab="teams"]');
   await p.click('#tmCalc'); await p.waitForFunction(() => !document.querySelector('#tmCalc').disabled, null, { timeout: 60000 });
   await p.screenshot({ path:path.join(DOCS,'shot-teams.png') });
+  // back to the Roster: a card is only clickable while its tab is on screen
+  await p.click('nav button[data-tab="roster"]'); await p.waitForTimeout(300);
   await p.click('#rsGrid .cc[data-ch] >> nth=0', { position: { x: 100, y: 150 } });
   await p.waitForSelector('#dlg[open]'); await p.waitForTimeout(200);
   await p.screenshot({ path:path.join(DOCS,'shot-loadout.png') });

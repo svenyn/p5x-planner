@@ -2431,6 +2431,32 @@ function awarenessOverrideDrift() {
   });
   check('Enter on a roster card opens its Loadout popup, which shows the five cards before the Setup', kb.opened && kb.cardsFirst, JSON.stringify(kb));
 
+  /* The visual vocabulary (Nov 2026): a build score carries a ring, a character's five slots are pips
+     whose state is the worn card's, every tab has an icon, a Triage verdict has its kind as a class
+     and its word as its text, an avatar's initials are a pseudo-element so innerText is the name alone. */
+  const viz = await p.evaluate(() => {
+    const n = ownedChars()[0].n, t = target(charDef(n));
+    const card = document.querySelector(`#rsGrid .cc[data-ch="${CSS.escape(n)}"]`);
+    const pips = card ? [...card.querySelectorAll('.pips .pip')] : [];
+    const worn = state.cards.filter(c => c.equipped === n);
+    const pipsRight = pips.length === SLOTS.length && SLOTS.every((sl, i) => {
+      const c = worn.find(x => x.slot === sl), p = pips[i];
+      const inSet = c && (sl === 'Space' ? t.space === c.set : (t.sets || []).includes(c.set));
+      return p.classList.contains(sl) && p.classList.contains('on') === !!c && p.classList.contains('set') === !!inSet;
+    });
+    const tag = card && card.querySelector('.tag.bs');
+    const ring = tag && tag.querySelector('.ring');
+    const ringRight = !!ring && (worn.length ? Math.abs(+ring.style.getPropertyValue('--p') - buildScore(charDef(n), worn).score) < 1e-9 : true);
+    const icons = [...document.querySelectorAll('nav button[data-tab]')].every(b => b.querySelector('svg.navIco'));
+    const vt = document.querySelector('#trTable .tag.vt');
+    const verdictRight = !!vt && /^(keep|hold|feed|lock)$/.test(vt.textContent.trim()) && [...vt.classList].some(c => /^v-(keep|hold|feed|lock|upgrade)$/.test(c));
+    const av = document.createElement('div'); av.innerHTML = avatarHtml(n, 24);
+    const avatarRight = av.textContent.trim() === '' && av.querySelector('.avatar').dataset.i === initials(n);
+    return { n, pipsRight, ringRight, icons, verdictRight, avatarRight, pips: pips.length };
+  });
+  check('the Roster card carries five slot pips in the worn cards\' state and a build-score ring; tabs have icons; a Triage verdict is a word with its kind as a class; an avatar has no text',
+    viz.pipsRight && viz.ringRight && viz.icons && viz.verdictRight && viz.avatarRight, JSON.stringify(viz));
+
   const listUi = await p.evaluate(() => {
     rosterView = 'list'; renderRoster();
     const r = { rows: document.querySelectorAll('#rsList tr.rrow').length, shown: parseInt(document.getElementById('rsCount').textContent, 10),
@@ -3783,6 +3809,9 @@ function awarenessOverrideDrift() {
     const sl = n => ({ name: n, cards: ['', '', ''] });
     const upOfP = n => { const w = tcWonder(ann, { personas: [sl('Gabriel'), sl(n), sl('')], weapon: '', refine: 1 }); const l = w.lines.find(x => x.why.startsWith(n)); return l ? l.up : 0; };
     out.reserve = [upOfP('TestR'), upOfP('TestN')];
+    // the seat says "in reserve" for a Persona that takes none of his turns and still adds something
+    const offOf = n => { const w = tcWonder(ann, { personas: [sl('Gabriel'), sl(n), sl('')], weapon: '', refine: 1 }); return { use: w.inUse[1], off: w.offTurn[1] }; };
+    out.offTurn = { r: offOf('TestR'), n: offOf('TestN') };
     delete WONDER_BUFFS.personas.TestR; delete WONDER_BUFFS.personas.TestN;
     // elemental ailments on the boss: a teammate's skill inflicts them, a line reads the count
     const keepAilX = TC_AILMENTS['Ryuji Sakamoto'], keepAilA = TC_AILMENTS[ann.n], keepKbA = DPS_KIT_BONUS[ann.n];
@@ -4465,6 +4494,8 @@ function awarenessOverrideDrift() {
   check('a 4+-hit buff reaches only skills that hit that often; continuous-damage buffs reach skills that count as continuous damage, the separate multiplier exactly; a reserve passive counts while another Persona is in use',
     Math.abs(th.hitsAs.fewHits - 1) < 1e-9 && th.hitsAs.manyHits > 1.05 && Math.abs(th.hitsAs.dotNo - 1) < 1e-9 && th.hitsAs.dotYes > 1.05 && Math.abs(th.hitsAs.dotFinal - 1.5) < 1e-6 &&
     th.reserve[0] > th.reserve[1], JSON.stringify({ h: th.hitsAs, r: th.reserve }));
+  check('Wonder\'s seat marks a Persona whose passive works in reserve as such, and only that one (a 0% share of his turns read as "never used")',
+    th.offTurn.r.off === 'reserve' && th.offTurn.n.off == null, JSON.stringify(th.offTurn));
   check('elemental ailments: a teammate\'s skill puts them on the boss, a per-ailment line grows with them, an ailMin line needs that many; Queen\'s Chief Strategist reads them, and Chizuko keeps more on the boss than Queen alone',
     th.ail.with > th.ail.none + 1e-6 && Math.abs(th.ail.none - th.ail.bare) < 1e-9 && th.ail.mean >= 1.5 && th.ail.min2 > th.ail.bare + 1e-6 && Math.abs(th.ail.min3 - th.ail.bare) < 1e-9 &&
     th.ail.chief && th.ail.queenVino > th.ail.queenAlone && th.ail.sources >= 25 && !th.ail.bad.length, JSON.stringify(th.ail));
