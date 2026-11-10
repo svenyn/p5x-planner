@@ -269,6 +269,13 @@ const GLB_STAT_OVERRIDES = {
   'Hatsune Miku': {
     aw: { attack_per: 19 },
     why: "GLB Awakening 7 is ATK +19%, not lufel's 29 - solved from the user's character screen with every other ATK% source confirmed"
+  },
+  /* lufel's base row for Fuuka reads crit 5 / 150 beside Speed 0 and SP 0 - placeholders; every other Buff
+     Elucidator reads 0 / 0. The user's character screen (10 Nov 2026), all cards and the weapon taken off:
+     crit rate 0%, crit damage 24%, the 24 being her Mindscape node. */
+  'Fuuka Yamagishi': {
+    crit: { cr: 0, cm: 0 },
+    why: "GLB character screen with no cards or weapon reads crit rate 0% and crit damage 24% (her Mindscape's +24): base 0 / 0 like the other Buff Elucidators, not lufel's 5 / 150"
   }
 };
 
@@ -844,7 +851,10 @@ function main() {
     const prevCS = (ours.CHAR_STATS || {})[ourName] || {};
     const spd = l1.speed > 0 ? l1.speed : (prevCS.spd || 100);
     if (!(l1.speed > 0)) notes.push(`${ourName}: lufel gives no Speed, kept ${spd}`);
-    bits.push(`spd:${spd}, cr:${l1.crit_rate ?? 5}, cm:${l1.crit_mult ?? 150}`);
+    const glbCrit = GLB_STAT_OVERRIDES[ourName] && GLB_STAT_OVERRIDES[ourName].crit;
+    if (glbCrit) notes.push(`${ourName}: base crit from GLB_STAT_OVERRIDES — ${GLB_STAT_OVERRIDES[ourName].why}`);
+    bits.push(`spd:${spd}, cr:${glbCrit ? glbCrit.cr : l1.crit_rate ?? 5}, cm:${glbCrit ? glbCrit.cm : l1.crit_mult ?? 150}` +
+      (glbCrit ? ` /* ${GLB_STAT_OVERRIDES[ourName].why} */` : ''));
     for (const [key, src] of [['l80', 'a0_lv80'], ['l80a6', 'a6_lv80'], ['l100', 'a0_lv100'], ['l100a6', 'a6_lv100']])
       if (trip(src)) bits.push(`${key}:${trip(src)}`);
     /* One Awakening-7 ATK bonus is filed under `attack` (Hatsune Miku's 29) where the other 34

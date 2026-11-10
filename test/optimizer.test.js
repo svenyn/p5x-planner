@@ -347,8 +347,9 @@ function awarenessOverrideDrift() {
     fail('CHAR_STATS covers every character with a base triple, speed, crit and a 5★ weapon',
       CHARACTERS.every(c => { const cs = CHAR_STATS[c.n]; return cs && cs.l80 && cs.l80.length === 3 && typeof cs.spd === 'number' && typeof cs.cr === 'number' && typeof cs.cm === 'number' && cs.w5; }),
       CHARACTERS.filter(c => !CHAR_STATS[c.n]).map(c => c.n).join(', '));
-    fail('the seven Buff-element supports with a 0% crit base are all Elucidators',
-      (() => { const z = CHARACTERS.filter(c => CHAR_STATS[c.n] && CHAR_STATS[c.n].cr === 0); return z.length === 7 && z.every(c => c.arch === 'Navigator'); })());
+    // all eight Elucidators carry a 0% / 0% crit base: Fuuka joined on 10 Nov 2026 (the user's screen; lufel's 5 / 150 was a placeholder)
+    fail('every Elucidator, and only they, has a 0% / 0% crit base (Fuuka included)',
+      (() => { const z = CHARACTERS.filter(c => CHAR_STATS[c.n] && CHAR_STATS[c.n].cr === 0 && CHAR_STATS[c.n].cm === 0); return z.length === 8 && z.every(c => c.arch === 'Navigator') && z.some(c => c.n === 'Fuuka Yamagishi'); })());
     fail('eight Elucidators on the roster', CHARACTERS.filter(c => c.arch === 'Navigator').length === 8);
 
     /* A weapon's `extra` is the passive text the generator refused to count. It must never
@@ -1016,11 +1017,13 @@ function awarenessOverrideDrift() {
     fail('every stat target is satisfied by the ideal loadout (bar capped at what a perfect build reaches)', bpBad.length === 0, bpBad.slice(0, 4).join(' | '));
     fail('a character with no targets has no breakpoint rows', breakpointRows([], idealLoadout(joker, tj).cards, joker, tj, lj).length === 0 && (tj.targets || []).length === 0);
     /* A target already met with no cards cannot be earned by any loadout, so it is shown but
-       left out of the block. Fuuka's Crit Multiplier target (lufel's 64-78%, the crit damage
-       at which her party buff caps) sits under her 150% base; Mitsuru's LV10 ATK under her
-       no-card ATK — until a Setup whose tier her base does not clear. Each setup gets its own
-       idealLoadout, since breakpointRows caches the ideal side per idealCards array. */
-    fail('a target met with no cards is shown but not scored (Fuuka\'s Crit Multiplier; Mitsuru\'s ATK until her tier outgrows her base)', (() => {
+       left out of the block: Mitsuru's LV10 ATK sits under her no-card ATK — until a Setup whose
+       tier her base does not clear. Fuuka's Crit Multiplier target (lufel's 64-78%, the crit damage
+       at which Spirit Wave caps) was the other case while her base was taken as 150; it is 0 on
+       Global (the user's screen, 10 Nov 2026), so with no cards she is short of it and cards earn
+       it. Each setup gets its own idealLoadout, since breakpointRows caches the ideal side per
+       idealCards array. */
+    fail('a target met with no cards is shown but not scored (Mitsuru\'s ATK until her tier outgrows her base); Fuuka\'s Crit Multiplier, short with no cards at her 0 base, is scored', (() => {
       const fu = charDef('Fuuka Yamagishi'), tf = target(fu), lf = charLoadout(fu.n), idf = idealLoadout(fu, tf, 55);
       const card = mk('Sun', 'Labor', 'HP', [['ATK%', 3.5]]);
       const bs = buildScoreOf(fu, [card], 55, lf, idf, tf), part = bs.parts.find(x => x.label === 'Stat targets');
@@ -1028,8 +1031,7 @@ function awarenessOverrideDrift() {
       const mi = charDef('Mitsuru Kirijo'), tmi = target(mi);
       const lm0 = Object.assign({}, DEFAULT_LOADOUT), lm5 = Object.assign({}, DEFAULT_LOADOUT, { mindSkill: true });
       const bm0 = buildScoreOf(mi, [card], 55, lm0, idealLoadout(mi, tmi, 55), tmi), bm5 = buildScoreOf(mi, [card], 55, lm5, idealLoadout(mi, tmi, 55), tmi);
-      return bs.targets.length === 2 && cm.metBare && cm.bare > cm.bar && !atk.metBare && part && part.max === BREAKPOINT_VALUE &&
-        near(part.got, BREAKPOINT_VALUE * atk.ratio) &&
+      return bs.targets.length === 2 && !cm.metBare && cm.bare < cm.bar && !atk.metBare && part && part.max === BREAKPOINT_VALUE &&
         bm0.targets[0].metBare && !bm0.parts.some(x => x.label === 'Stat targets') &&
         !bm5.targets[0].metBare && bm5.parts.some(x => x.label === 'Stat targets');
     })());
@@ -2701,8 +2703,8 @@ function awarenessOverrideDrift() {
     psUi.inSave && psUi.back && psUi.redrawn && psUi.oldAll && psUi.oldCards === 'Rebellion' && psUi.oldSetup === 'Rebellion,,', JSON.stringify(psUi));
   check('on a phone-width screen the Personas tab does not scroll sideways', psPhone <= 390, `${psPhone}px wide`);
   // a Persona's level is capped by its grade (lufel's I-IX), not its stars: grades I-VIII are the user's in-game
-  // reading (Nov 2026; IV is 60), grade IX (Janosik alone on Global) has no entry and keeps 80 / 120; a save holding
-  // more is clamped on load; the popup says so
+  // reading (Nov 2026; IV is 60), grade IX (Janosik alone on Global) reads rank VIII and 99 on his screen (10 Nov 2026);
+  // a save holding more is clamped on load; the popup says so
   const psCap = await p.evaluate(() => {
     const r = { b: WONDER_PERSONA['Belphegor'].g, j: WONDER_PERSONA['Janosik'].g, graded: Object.values(WONDER_PERSONA).every(d => d.g >= 1 && d.g <= 9),
       def4: personaDefault('Belphegor').lv, def9: personaDefault('Janosik').lv, known9: personaLvKnown('Janosik'),
@@ -2711,14 +2713,14 @@ function awarenessOverrideDrift() {
       clamp: personasFrom({ Belphegor: { lv: 80 }, Janosik: { lv: 130 } }), fit: Object.values(PERSONA_LV).every(x => x.def <= x.max) };
     r.clamp4 = r.clamp.Belphegor.lv; r.clamp9 = r.clamp.Janosik.lv; delete r.clamp;
     openPersona('Belphegor');
-    r.max = +document.getElementById('psDLv').max; r.said = /up to 60 at grade IV/.test(document.getElementById('dlgBody').textContent) && /grade IV ·/.test(document.getElementById('dlgBody').textContent);
+    r.max = +document.getElementById('psDLv').max; r.said = /up to 60/.test(document.getElementById('dlgBody').textContent) && /grade IV ·/.test(document.getElementById('dlgBody').textContent);
     openPersona('Janosik');
-    r.unknown = /grade IX: its cap is not known/.test(document.getElementById('dlgBody').textContent) && +document.getElementById('psDLv').max === 120;
+    r.j99 = /up to 99/.test(document.getElementById('dlgBody').textContent) && +document.getElementById('psDLv').max === 99;
     document.getElementById('dlg').close();
     return r;
   });
-  check('a Persona\'s level is capped by its grade: every Persona has one (I-IX), grade IV defaults to and stops at 60, a grade with no entry keeps 80 and 120 and the popup says its cap is not known, a loaded level above the cap is clamped',
-    psCap.b === 4 && psCap.j === 9 && psCap.graded && psCap.def4 === 60 && psCap.def9 === 80 && !psCap.known9 && psCap.clamp4 === 60 && psCap.clamp9 === 120 && psCap.max === 60 && psCap.said && psCap.unknown && psCap.fit &&
+  check('a Persona\'s level is capped by its grade: every Persona has one (I-IX), grade IV defaults to and stops at 60, Janosik (lufel\'s grade IX) at 99, a loaded level above the cap is clamped',
+    psCap.b === 4 && psCap.j === 9 && psCap.graded && psCap.def4 === 60 && psCap.def9 === 99 && psCap.known9 && psCap.clamp4 === 60 && psCap.clamp9 === 99 && psCap.max === 60 && psCap.said && psCap.j99 && psCap.fit &&
     psCap.caps === '25,35,45,60,70,85,95,99' && psCap.rising && psCap.pixie, JSON.stringify(psCap));
   // a Persona's skills (the user, Nov 2026): besides its unique skill and Highlight at most 6 — the innate skills it
   // has learned, at most 3 skill cards, any skill through fusion; every skill lufel lists can be chosen, priced or
@@ -3037,22 +3039,26 @@ function awarenessOverrideDrift() {
   check('Wonder\'s Speed is unset until entered; entered, it places him in the turn order, counts as unsaved, and goes through the save file',
     wsBefore.spd === null && /Wonder Speed not set/.test(wsBefore.order) && /^Wonder 250/.test(ws.first) && ws.dirty && ws.saved === 250 && ws.restored === 250,
     JSON.stringify({ wsBefore, ws }));
-  // once his lead Persona's Speed is entered the box shows the worked-out Speed and cannot be typed in; the typed one
-  // stays saved and comes back when the lead has none
+  // with a Persona in slot 1 the box shows the Speed worked out from it (100 on every Persona's screen, or a Speed typed
+  // on its popup, plus its Agility Master or Ironclad Resolve) and cannot be typed in; the typed one stays saved and
+  // comes back with no lead
   const wsCalc = await p.evaluate(() => {
     const keepW = state.wonder, keepRec = JSON.stringify(personaRec('Kohryu'));
     const box = () => ({ v: $('#tmWonderSpd').value, dis: $('#tmWonderSpd').disabled, note: $('#tmWonderSpdNote').textContent, spd: tmSpeed('Wonder') });
     state.wonder = wonderFrom({ personas: [{ name: 'Kohryu' }], weapon: '', refine: 1 });
-    personaSet('Kohryu', { owned: true, st: { hp: 836, atk: 295, def: 197, spd: 100, lv: 99 } }); commit(); tmRefresh();
-    const on = box();
+    personaSet('Kohryu', { owned: true, st: { hp: 836, atk: 295, def: 197, spd: 120, lv: 99 } }); commit(); tmRefresh();
+    const typed = box();
     personaSet('Kohryu', { st: { hp: 836, atk: 295, def: 197, lv: 99 } }); commit(); tmRefresh();
+    const on = box();
+    state.wonder = wonderFrom({ personas: [], weapon: '', refine: 1 }); commit(); tmRefresh();
     const off = box();
     state.personas.Kohryu = JSON.parse(keepRec); state.wonder = keepW; commit(); tmRefresh();
-    return { on, off };
+    return { typed, on, off };
   });
-  check('Wonder\'s Speed box shows the Speed worked out from his lead Persona, read-only, and the typed one when the lead has none',
+  check('Wonder\'s Speed box shows the Speed worked out from his lead Persona (a Speed typed on its popup, else 100), read-only, and the typed one with no lead',
+    wsCalc.typed.dis && wsCalc.typed.spd === 120 &&
     wsCalc.on.dis && wsCalc.on.v === '100' && wsCalc.on.spd === 100 && /worked out from Kohryu/.test(wsCalc.on.note) &&
-    !wsCalc.off.dis && wsCalc.off.v === '250' && wsCalc.off.spd === 250 && /enter Kohryu's Speed/.test(wsCalc.off.note), JSON.stringify(wsCalc));
+    !wsCalc.off.dis && wsCalc.off.v === '250' && wsCalc.off.spd === 250 && /put a Persona in slot 1/.test(wsCalc.off.note), JSON.stringify(wsCalc));
   await p.evaluate(() => { state.wonderSpd = 0; commit(); });
 
   // another damage dealer picked above starts Wonder's setup over (Personas, weapon, refinement), undoably;
@@ -3503,7 +3509,15 @@ function awarenessOverrideDrift() {
           missing: (() => { const s = state.wonderSchema; state.wonderSchema = {}; const m = wonderCalc({ personas: [{ name: 'Kohryu' }, { name: '' }, { name: '' }], weapon: '', refine: 1 }).missing; state.wonderSchema = s; return m; })(),
           // the fight reads them for the setup it prices, and his Speed from the slot-1 Persona
           stats: wonderStats({ personas: [{ name: 'Kohryu', cards: personaCards('Kohryu'), fused: personaFused('Kohryu') }, { name: 'Janosik', cards: [], fused: [] }, { name: 'Belphegor', cards: [], fused: [] }], weapon: 'Starry Compass', refine: 7 }),
-          agility: (WONDER_SKILLS['Agility Master II'] || {}).st, saved: JSON.stringify(personasSaved().Kohryu.st) + JSON.stringify(weaponsSaved()['Starry Compass'].st) };
+          agility: (WONDER_SKILLS['Agility Master II'] || {}).st,
+          /* a Persona's stats at its level and overclocks, worked out from Game8's level 1 (personaCalcStats): the user's
+             readings of eleven Persona screens (10 Nov 2026, docs/DATA-SOURCES.md); Janosik, who also ranks up, is left out */
+          rule: [['Fuu-Ki', 40, 0, 264, 96, 48], ['Fuu-Ki', 40, 1, 291, 106, 53], ['Belphegor', 60, 2, 500, 138, 121], ['Black Frost', 80, 0, 657, 241, 121],
+            ['Black Frost', 1, 0, 229, 84, 42], ['Kohryu', 99, 3, 836, 295, 197], ['Scathach', 70, 2, 389, 137, 91], ['Okuninushi', 65, 1, 580, 205, 137],
+            ['Skadi', 70, 0, 451, 160, 106], ['Norn', 85, 3, 976, 270, 122], ['Lilith', 95, 3, 815, 288, 192], ['Alice', 99, 3, 893, 328, 165]]
+            .map(([n, lv, oc, hp, atk, def]) => { const c = personaCalcStats(n, { lv, oc }); return c ? Math.abs((c.hp + 4 * c.atk + 6 * c.def) / (hp + 4 * atk + 6 * def) - 1) : 1; }),
+          janosik: personaCalcStats('Janosik', { lv: 99, oc: 3 }),
+          caps: [personaLvCap('Black Frost', 0), personaLvCap('Fuu-Ki', 0), personaLvCap('Okuninushi', 1), personaLvCap('Kohryu', 3), personaLvCap('Janosik', 3)], saved: JSON.stringify(personasSaved().Kohryu.st) + JSON.stringify(weaponsSaved()['Starry Compass'].st) };
         state.personas = JSON.parse(keep.p); state.weapons = JSON.parse(keep.w); state.wonderSchema = JSON.parse(keep.s); tcMemo.key = '';
       }
       out.powerfulBond = { every: pb(0, ['1']), sparse: pb(0, ['1', '2', '2']), none: pb(0, ['2']), a1: pb(1, ['2']), burst: pb(0, ['1+1+3']), burst6: pb(6, ['1+1+3']) };
@@ -3649,6 +3663,67 @@ function awarenessOverrideDrift() {
     const vals = cands.map(c => tcSim(ann, [null, null, 'Fuuka Yamagishi', c], false).mult);
     out.fightBackup = { pick: tcFightBackup(ann, [null, null, 'Fuuka Yamagishi', 'Leo Kamiyama'], cands, false)[3], best: cands[vals.indexOf(Math.max(...vals))],
       other: tcFightBackup(ann, [null, null, 'Hatsune Miku'], cands, false).length };
+    // the backup's one action is the skill the fight does best with, not the one whose damage buffs sum highest
+    {
+      tcMemo.key = '';
+      const lineup = [null, null, 'Fuuka Yamagishi', yka];
+      const S = tcSim(ann, lineup, true), P0 = tcSimPrep(ann, lineup, true, false, {});
+      const ref = tcSimBest(P0);
+      const at = sk => tcSimRun(Object.assign({}, P0, { fuuka: Object.assign({}, P0.fuuka, { backup: Object.assign({}, P0.fuuka.backup, { skill: sk }) }) }), ref.spend, ref.hold).total;
+      const vals = ['1', '2', '3'].map(at), pick = S.prep.fuuka.backup.skill;
+      out.bkSkill = { pick, sum: P0.fuuka.backup.skill, vals, best: Math.max(...vals), pickV: at(pick) };
+    }
+    // Mitsuru's Iceblade: on the triggering ally's ATK (Global text), and from her A1 on every ally skill attack
+    {
+      const MI = charDef('Mitsuru Kirijo'), keepM = state.chars[MI.n], mate = 'Kumi Katayama';
+      const atA = aw => { state.chars[MI.n] = Object.assign({}, keepM || { owned: false }, { loadout: Object.assign({}, DEFAULT_LOADOUT, { awareness: aw }) }); tcMemo.key = ''; };
+      const fu = () => { tcMemo.key = ''; return tcSim(MI, [mate, null, null], false).parts.fu || 0; };
+      atA(0);
+      const kit0 = tcKitFor(MI).filter(c => c.byAtk).map(c => c.after), fu0 = fu();
+      const keepP = window.tcPanelAtk;
+      // every trigger (Kumi, Wonder) at twice its ATK; Wonder's unknown ATK stands in as Mitsuru's
+      window.tcPanelAtk = a => a && a.n === MI.n ? keepP(a) : 2 * (keepP(a) || keepP({ n: MI.n }));
+      const fu0x2 = fu();
+      window.tcPanelAtk = keepP;
+      atA(1);
+      const kit1 = tcKitFor(MI).filter(c => c.byAtk).map(c => c.after), fu1 = fu();
+      if (keepM) state.chars[MI.n] = keepM; else delete state.chars[MI.n];
+      tcMemo.key = '';
+      out.iceblade = { kit0, kit1, fu0, fu0x2, fu1 };
+    }
+    // Mio's Entropy: every Ice Technical lowers DEF, on a Shocked or Frozen foe as on a Burning one (YUI Shocks)
+    {
+      const MIO = 'Mio Natsukawa', keepMio = state.chars[MIO], yui = charDef('YUI');
+      state.chars[MIO] = Object.assign({}, keepMio || { owned: false }, { loadout: Object.assign({}, DEFAULT_LOADOUT, { weapon: '5' }) });
+      const ent = TEAM_BUFFS[MIO].find(e => /^Entropy/.test(e.why)), keepNeed = ent.needAil;
+      const run = () => { tcMemo.key = ''; return tcSim(yui, [MIO, null, null], false).total; };
+      const any = run();
+      ent.needAil = ['Burn']; const burnOnly = run();
+      ent.needAil = keepNeed;
+      if (keepMio) state.chars[MIO] = keepMio; else delete state.chars[MIO];
+      tcMemo.key = '';
+      out.entropy = { need: keepNeed, any, burnOnly };
+    }
+    // Ann's Rosethorn: Fire damage per Burning foe, Falling Sun Burning the other foes at its chance; one foe, one stack at most
+    {
+      const keepAnn = state.chars[ann.n], foeSel = $('#tmFoes'), keepFoes = foeSel.value;
+      state.chars[ann.n] = Object.assign({}, keepAnn || { owned: false }, { loadout: Object.assign({}, DEFAULT_LOADOUT, { weapon: '5', refine: 4 }) });
+      const rose = DPS_KIT_BONUS[ann.n].find(b => b.perBurnFoe), keepRose = DPS_KIT_BONUS[ann.n].slice();
+      const play = (foes, withRose) => {
+        foeSel.value = String(foes);
+        DPS_KIT_BONUS[ann.n] = withRose ? keepRose : keepRose.filter(b => b !== rose);
+        tcMemo.key = ''; tcMemoFor(ann);
+        const P = tcSimPrep(ann, [null, null, null], false, true);
+        P.thieves = P.thieves.map(a => a.isDps ? Object.assign({}, a, { seq: ['3'] }) : a);
+        const r = tcSimBest(P);
+        return { total: r.total * tcEvalFor(ann, true).f0, burnFoes: r.burnFoes };
+      };
+      const five = play(5, true), fiveNo = play(5, false), one = play(1, true);
+      DPS_KIT_BONUS[ann.n] = keepRose; foeSel.value = keepFoes;
+      if (keepAnn) state.chars[ann.n] = keepAnn; else delete state.chars[ann.n];
+      tcMemo.key = '';
+      out.rosethorn = { five: five.burnFoes, one: one.burnFoes, gain: five.total / fiveNo.total };
+    }
     }
     state.chars['Fuuka Yamagishi'].loadout = keepF; tcMemo.key = '';
     // skill numbers at the tier the Setup reaches
@@ -3840,8 +3915,12 @@ function awarenessOverrideDrift() {
     DPS_KIT_BONUS[ann.n] = [{ to: 'skill', v: 40, needAil: 'Burn', amp: true, why: 't' }];
     const fa40 = ryu([]), fa40Skill = fa40.parts.skill / fa40.base.parts.skill;
     TC_AILMENTS['Ryuji Sakamoto'] = keepAilX; TC_AILMENTS[ann.n] = keepAilA; DPS_KIT_BONUS[ann.n] = keepKbA; tcMemo.key = '';
-    // the quick screen: Mio's Technical lines wait for a Burning foe, which a member's `burn` share supplies
+    // the quick screen: Mio's Technical lines wait for a Burning foe, which a member's `burn` share supplies (her weapon's
+    // Entropy read as Burn-only here: it also reads her own Freeze, which would blur what a Burn adds)
+    const entX = TEAM_BUFFS['Mio Natsukawa'].find(e => /^Entropy/.test(e.why)), keepEntNeed = entX.needAil;
+    entX.needAil = 'Burn'; tcMemo.key = '';
     const rinX = charDef('Yaoling Li [Firecracker]'), vMio = tcMember(rinX, 'Mio Natsukawa', null, null).vec, burnOnly = { burn: 1 };
+    entX.needAil = keepEntNeed; tcMemo.key = '';
     /* Rin below Awareness 2 Burns only with Skill 2, which lufel's rotations never cast: the fit may put it on (TC_ROT_ADD),
        her Prosperity in Red counts in the fight only on a Burning foe, and Mio's rotation is fitted to meet the Burn */
     const keepRinLo = state.chars[rinX.n].loadout;
@@ -3864,7 +3943,7 @@ function awarenessOverrideDrift() {
       mioNeed: vMio.need.map(n => n.k + (n.tech ? ':' + n.tech : '')).join(','),
       screen: { mio: tcMultiplier(rinX, [vMio]), burn: tcMultiplier(rinX, [burnOnly]), both: tcMultiplier(rinX, [vMio, burnOnly]) },
       scaldAlone: tcBurnSupply('Mio Natsukawa', ['1', '3']), koromaru: tcBurnSupply('Koromaru', ['1']),
-      users: [...TC_TECH_USERS].filter(n => !charDef(n)), badNeed: needs.filter(a => !TC_AIL_TYPES.includes(a)), nNeed: needs.length };
+      users: [...TC_TECH_USERS].filter(n => !charDef(n)), badNeed: needs.filter(a => !(Array.isArray(a) ? a.length && a.every(x => TC_AIL_TYPES.includes(x)) : TC_AIL_TYPES.includes(a))), nNeed: needs.length };
     tcMateOff = false; tcMemo.key = '';
     const qAloneXX = tcSimRun(tcSimPrep(mak, [null, null, null], false, true), [mak.n], false), qVinoX = tcSim(mak, ['Chizuko Nagao', null, null], false);
     out.ail = { none: a0X.mult, with: a2X.mult, mean: a2X.ailMean, min2: m2X.mult, min3: m3X.mult, bare: noneXX.mult, queenAlone: qAloneXX.ailMean, queenVino: qVinoX.ailMean,
@@ -3972,7 +4051,7 @@ function awarenessOverrideDrift() {
       text: tmTokenText('ⓘA+2', tcMedInfo('res.atk.dmg').meds)
     };
     // her Highlight strengthens her next medicine (+9.8% at the base tier, 5% more from A4); Soothing Sunlight's
-    // Blessing stacks come one a Summer Garden or Gentle Sea Breeze and stay
+    // Blessing stacks come two a Summer Garden and one a Gentle Sea Breeze, each cast's for 2 turns (the user's in-game reading)
     {
       const L0 = state.chars[MIN] ? state.chars[MIN].loadout : undefined;
       if (!state.chars[MIN]) state.chars[MIN] = { owned: false };
@@ -3985,11 +4064,12 @@ function awarenessOverrideDrift() {
       const fight = () => { tcMemo.key = ''; tcPairCtx = { [MIN]: 'dmg.atk.hl' }; const S = tcSim(ann, minTeam, false); tcPairCtx = null; return S; };
       const withB = fight();
       window.tcMedHlBoost = () => 0; const noB = fight(); window.tcMedHlBoost = hlB; tcMemo.key = '';
-      const sl = TEAM_BUFFS[MIN].find(e => /^Soothing Sunlight/.test(e.why)), slRef = TEAM_BUFFS[MIN].indexOf(sl);
-      const seat = tcMemberCalc(ann, MIN, null, null, false, 'dmg.atk.hl').lines.find(l => /^Soothing Sunlight/.test(l.why));
+      const sl = TEAM_BUFFS[MIN].find(e => /^Soothing Sunlight .* from Summer Garden/.test(e.why)), sl3 = TEAM_BUFFS[MIN].find(e => /^Soothing Sunlight .* from Gentle Sea Breeze/.test(e.why)), slRef = TEAM_BUFFS[MIN].indexOf(sl);
+      const seat = tcMemberCalc(ann, MIN, null, null, false, 'dmg.atk.hl').lines.find(l => /^Soothing Sunlight .* from Summer Garden/.test(l.why));
       const cov = [...(withB.cover.get(MIN) || new Map()).values()];
       out.medHl = { b0, b4, t4, withB: withB.total, noB: noB.total, hl: withB.hl[MIN] || 0,
-        build: !!sl.build && sl.build['2'] === 2 && sl.build['3'] === 1 && sl.up == null && sl.stacks === 6, slRef,
+        build: !!sl.build && sl.build['2'] === 2 && sl.dur === 2 && sl.perCast === 'blessing' && sl.stacks === 6 && sl3.build === true && sl3.to === 'ally' && sl3.perCast === 'blessing' && sl3.dur === 2, slRef,
+        twice: tcBuildMean(['2'], sl, 6),
         mean6: tcBuildMean(['3', 'ⓘA+2', '1'], sl, 6), mean12: tcBuildMean(['3', 'ⓘA+2', '1'], sl, 12),
         seatV: seat ? seat.v : null, seatUp: seat ? seat.up : null, covMax: cov.length ? Math.max(...cov) : null };
     }
@@ -4051,7 +4131,9 @@ function awarenessOverrideDrift() {
       const lines = (w, re) => w.lines.filter(l => re.test(l.why)).length;
       const startEv = w => w.sim.cast.events.filter(ev => [].concat(ev.e.on).includes('wStart'));
       tcMemo.key = '';
-      const other = wonderPersonas().find(n => n !== 'Koumokuten' && n !== 'Janosik' && !personaLines(n).some(e => e.lead));
+      // with no Speed skill, so either lead gives Wonder the same Speed and the same place in the turn order
+      const other = wonderPersonas().find(n => n !== 'Koumokuten' && n !== 'Janosik' && !personaLines(n).some(e => e.lead) &&
+        !wonderAdds({ personas: [{ name: n }], weapon: '' }).add.spd);
       const kL = tcWonder(ann, set('Koumokuten', other)), kB = tcWonder(ann, set(other, 'Koumokuten'));
       const jL = tcWonder(ann, set('Janosik', other)), jB = tcWonder(ann, set(other, 'Janosik'));
       // a battle-start Mark that Tatra Shot also gives is one Mark: it shares the cast's ref
@@ -4270,10 +4352,12 @@ function awarenessOverrideDrift() {
     const wc = th.wonderCalc, panel = { A1: [4439, 2469, 11580, 31.5, 190, 10.8], A2: [3639, 2108, 9789, 31.5, 190, 10.8], A3: [4225, 2348, 11120, 31.5, 190, 10.8], A4: [3971, 2469, 10870, 25, 190, 0] };
     check('Wonder\'s stats worked out from his setup reproduce the user\'s four readings of his character screen (all three slots add base stats; only slot 1\'s talent and passive skills count)',
       Object.entries(panel).every(([k, [atk, def, hp, cr, cm, dm]]) => wc[k].ok && Math.abs(wc[k].atk - atk) <= 1 && Math.abs(wc[k].def - def) <= 1 && Math.abs(wc[k].hp - hp) <= 1 &&
-        near(wc[k].cr, cr, 1e-6) && near(wc[k].cm, cm, 1e-6) && near(wc[k].dm, dm, 1e-6)) && wc.A1.spd === 100 && wc.A4.spd == null && near(wc.A1.aa, 80, 1e-6), JSON.stringify(wc));
+        near(wc[k].cr, cr, 1e-6) && near(wc[k].cm, cm, 1e-6) && near(wc[k].dm, dm, 1e-6)) && wc.A1.spd === 100 && wc.A4.spd === 100 && near(wc.A1.aa, 80, 1e-6), JSON.stringify(wc));
     check('worked-out stats feed the fight for the setup priced, say what is missing until entered, read Agility Master\'s Speed and DEF from lufel, and are saved',
       wc.stats && wc.stats.computed && Math.abs(wc.stats.atk - 4439) <= 1 && near(wc.stats.dm, 10.8, 1e-6) && wc.missing.some(m => /Schema/.test(m)) &&
       JSON.stringify(wc.agility) === '[["spd",9],["def%",-4]]' && wc.saved === '{"hp":836,"atk":295,"def":197,"spd":100,"lv":99}{"hp":2051,"atk":654,"def":356}', JSON.stringify(wc));
+    check('a Persona\'s stats at its level and overclocks are worked out from Game8\'s level-1 stats within 3% of eleven real screens; Janosik is left out; the cap drops 5 a missing overclock',
+      wc.rule.every(e => e <= 0.03) && wc.janosik === null && JSON.stringify(wc.caps) === '[80,40,65,99,99]', JSON.stringify({ rule: wc.rule, j: wc.janosik, caps: wc.caps }));
     const mk = th.mateKit;
     check('a party buff counts down per holder: a slower teammate\'s own hit reads a 1-turn party ATK buff cast before the damage dealer acted, not one on the damage dealer alone',
       mk.plain > 0 && mk.echoed > mk.plain * 1.3 && near(mk.allyOnly, mk.plain, 1e-9), JSON.stringify(mk));
@@ -4353,6 +4437,15 @@ function awarenessOverrideDrift() {
   check('a Highlight\'s permanent effect (Kumi\'s DEF down) comes with the first Highlight, not from the start', th.kumiHl === true);
   check('Fuuka\'s backup is chosen by the fight among the quick screen\'s best few; another Elucidator\'s lineup is left alone',
     th.fightBackup.pick === th.fightBackup.best && th.fightBackup.other === 3, JSON.stringify(th.fightBackup));
+  check('Fuuka\'s backup uses the skill the fight does best with on each swap (each of its three tried), not the one whose damage buffs sum highest',
+    ['1', '2', '3'].includes(th.bkSkill.pick) && th.bkSkill.pickV >= th.bkSkill.best * (1 - 1e-9), JSON.stringify(th.bkSkill));
+  check('Ann\'s Rosethorn adds Fire damage per Burning foe: with five foes Falling Sun Burns the others at its chance (well over one Burning foe on average) and her damage rises; with one foe at most one counts',
+    th.rosethorn.five > 1.5 && th.rosethorn.one <= 1 + 1e-9 && th.rosethorn.gain > 1.05, JSON.stringify(th.rosethorn));
+  check('Mio\'s Entropy lowers DEF on every Ice Technical (a Burning, Frozen or Shocked foe), so beside YUI, who Shocks, it counts where a Burn-only reading gave nothing',
+    JSON.stringify(th.entropy.need) === '["Burn","Freeze","Shock"]' && th.entropy.any > th.entropy.burnOnly * 1.001, JSON.stringify(th.entropy));
+  check('Mitsuru\'s Iceblade is priced on the triggering ally\'s ATK (twice the ATK, twice the Iceblade) and from her Awareness 1 needs no Theurgy window',
+    th.iceblade.kit0.length === 1 && th.iceblade.kit0[0] === 'HL' && th.iceblade.kit1.every(a => a == null) && th.iceblade.fu0 > 0 &&
+    Math.abs(th.iceblade.fu0x2 / th.iceblade.fu0 - 2) < 1e-6 && th.iceblade.fu1 > th.iceblade.fu0, JSON.stringify(th.iceblade));
 
   // ---- knockdowns: the boss's Down gauge (#tmDown) ----
   const dn = await p.evaluate(() => {
@@ -4471,9 +4564,9 @@ function awarenessOverrideDrift() {
     th.meds.toks === '2,iA|1,iC' && ['atkPct:36.0', 'dm:30.0', 'hlFinal:12.0'].every(x => th.meds.lines.includes(x)) && th.meds.lines.filter(x => x === 'atkPct:15.0').length === 3 &&
     th.meds.judged === 0 && th.meds.miyu.length === 1 && th.meds.miyu.every(id => id.split('.').length === 3 && new Set(id.split('.')).size === 3 && id.split('.').includes('res')) &&
     th.meds.ich.length === 1 && th.meds.ich.every(id => id.split('.').includes('dot')) && th.meds.best && /Resonance medicine, then Skill 2/.test(th.meds.text), JSON.stringify(th.meds));
-  check('Beachflower Minami: her Highlight makes her next medicine stronger (+9.8%, +5% more from A4), and Soothing Sunlight\'s stacks build two a Summer Garden and one a Gentle Sea Breeze and are kept, the page reading the share of the 36% held',
+  check('Beachflower Minami: her Highlight makes her next medicine stronger (+9.8%, +5% more from A4), and Soothing Sunlight\'s stacks come two a Summer Garden and one a Gentle Sea Breeze, each cast\'s running out after 2 turns (two Summer Gardens in a row hold 4), the page reading the share of the 36% held',
     Math.abs(th.medHl.b0 - 0.098) < 1e-9 && Math.abs(th.medHl.b4 - th.medHl.t4 - 0.05) < 1e-9 && th.medHl.hl > 0 && th.medHl.withB > th.medHl.noB &&
-    th.medHl.build && Math.abs(th.medHl.mean6 - 23 / 36) < 1e-9 && Math.abs(th.medHl.mean12 - 59 / 72) < 1e-9 &&
+    th.medHl.build && Math.abs(th.medHl.mean6 - 8 / 36) < 1e-9 && Math.abs(th.medHl.mean12 - 16 / 72) < 1e-9 && Math.abs(th.medHl.twice - 22 / 36) < 1e-9 &&
     Math.abs(th.medHl.seatV - 36) < 1e-9 && th.medHl.seatUp > 0 && th.medHl.seatUp < 1, JSON.stringify(th.medHl));
   check('with three foes an always-on debuff on one foe helps less than one on all foes',
     th.oneConst[0] < th.oneConst[1] - 1e-6, JSON.stringify(th.oneConst));
@@ -5094,13 +5187,14 @@ function awarenessOverrideDrift() {
       melee: tcAtkCount('Yaoling Li [Firecracker]', '3+Melee'), skill: tcAtkCount('Ann Takamaki', '1')
     };
     const D = charDef('YUI'), keep = DPS_KIT.YUI;
-    const probe = (entry, names) => {
+    const probe = (entry, names, noWonder) => {
       DPS_KIT.YUI = [Object.assign({ kind: 'fu', v: 100, why: 'test' }, entry)];
       tcMemo.key = '';
-      try { return tcHot(() => (tcSim(D, names, false).parts || {}).fu || 0); } finally { DPS_KIT.YUI = keep; tcMemo.key = ''; }
+      try { return tcHot(() => (tcSim(D, names, false, !!noWonder).parts || {}).fu || 0); } finally { DPS_KIT.YUI = keep; tcMemo.key = ''; }
     };
     const blank = [null, null, null];
     out.blankSkill = probe({ on: 'allySkill' }, blank);
+    out.blankSkillNoW = probe({ on: 'allySkill' }, blank, true);
     out.blankAtk = probe({ on: 'allyAtk' }, blank);
     out.windWithTwins = probe({ on: 'allySkill', allyElem: ['Wind'] }, [JC, null, null]);
     // a Wind teammate whose rotation beside YUI deals skill damage
@@ -5114,8 +5208,84 @@ function awarenessOverrideDrift() {
   const ah = ally.helpers;
   check('a teammate\'s turn sets off "an ally\'s skill" once per damaging skill: the twins\' "3↺+1" twice, a buff-only skill never; basic attacks are counted apart',
     ah.twins === 2 && ah.plain === 1 && ah.buffOnly === 0 && ah.wonderAtk === 1 && ah.wonderCast === 0 && ah.blank === 1 && ah.melee === 1 && ah.skill === 0, JSON.stringify(ah));
-  check('in the fight, blank teammates set off "an ally\'s damage" but not "an ally\'s skill", and a Wind-only line needs a Wind teammate',
-    ally.blankSkill === 0 && ally.blankAtk > 0 && ally.windWithTwins === 0 && ally.windWithMate > 0 && ally.anyWithTwins > 0, JSON.stringify(ally));
+  /* Blank teammates set off "an ally's damage" (their turns are basic attacks: two of them, every round) but not "an ally's
+     skill"; Wonder's attack turns are Persona skills (KR 페르소나 스킬 in YUI's and Mitsuru's text), so with blank teammates
+     "an ally's skill" fires on his turns only, one a round (Nov 2026; until then his attacks counted as basic attacks) */
+  check('in the fight, blank teammates set off "an ally\'s damage" but not "an ally\'s skill" (Wonder\'s attacks are skills), and a Wind-only line needs a Wind teammate',
+    ally.blankSkill > 0 && ally.blankAtk > 1.5 * ally.blankSkill && ally.windWithTwins === 0 && ally.windWithMate > 0 && ally.anyWithTwins > ally.blankSkill, JSON.stringify(ally));
+
+  // ---- the Nov 2026 audit of the Teams calculation: each fix pinned (see CLAUDE.md "The audit of Nov 2026") ----
+  const au = await p.evaluate(() => {
+    const out = {};
+    // the foes follow the damage dealer (Auto): an earlier section left the control at 1
+    const keepFoes = $('#tmFoes').value; $('#tmFoes').value = 'auto'; tcMemo.key = '';
+    // a build line lands as many stacks as the turn casts its skill: "1+1+3" is two Lyre's Melody stacks, not one
+    const bl = { on: '1', build: true };
+    out.build = [tcBuildGain(bl, tcTurnSkills('1+1+3'), tcSkillUses('1+1+3')), tcBuildGain(bl, tcTurnSkills('1+1+3')), tcBuildGain(bl, tcTurnSkills('3'), tcSkillUses('3'))];
+    // a decayed multi-hit area skill: Yusuke's Bone-Chilling Cold is one 92.9 hit per foe at 5 foes, the folded 185.8 on one
+    const sp5 = tcHitSplit('Yusuke Kitagawa', 1, 5), sp2 = tcHitSplit('Yusuke Kitagawa', 1, 2);
+    out.split = { five: sp5, two: sp2, one: tcHitSplit('Yusuke Kitagawa', 1, 1), plain: tcHitSplit('Ann Takamaki', 0, 5), mult5: tcFoeMult('Yusuke Kitagawa', 1, 5), mult5plain: tcFoeMult('Ann Takamaki', 0, 5) };
+    // Makoto Yuki as a teammate below A6 casts one Theurgy: the fight chooses Cadenza (buffs) or Ardhanari (the hit), never both
+    const yui = charDef('YUI'), keepMY = state.chars['Makoto Yuki'].loadout;
+    state.chars['Makoto Yuki'].loadout = Object.assign({}, DEFAULT_LOADOUT, { awareness: 0 }); tcMemo.key = '';
+    const names = ['Makoto Yuki', null, null];
+    const both = tcSim(yui, names, false);
+    const forced = id => { const keep = tcPairCtx; tcPairCtx = { 'Makoto Yuki': id }; try { return tcHot(() => tcSimBest(tcSimPrep(yui, names, false, false, {})), yui); } finally { tcPairCtx = keep; tcMemo.key = ''; } };
+    const C = forced('C'), A = forced('A');
+    out.th = { opts: tcPairOpts(yui, 'Makoto Yuki').map(o => o.id), chosen: both.pairs['Makoto Yuki'], ownC: (C.own || {})['Makoto Yuki'] || 0, ownA: (A.own || {})['Makoto Yuki'] || 0, totalC: C.total, totalA: A.total, best: both.total,
+      asDps: tcPairOpts(charDef('Makoto Yuki'), 'Makoto Yuki').length };
+    state.chars['Makoto Yuki'].loadout = Object.assign({}, DEFAULT_LOADOUT, { awareness: 6 }); tcMemo.key = '';
+    out.th.a6opts = tcPairOpts(yui, 'Makoto Yuki').length;
+    out.th.a6lines = tcMemberCalc(yui, 'Makoto Yuki', null, null, false, undefined).lines.filter(l => /Cadenza/.test(l.why)).length;
+    state.chars['Makoto Yuki'].loadout = keepMY; tcMemo.key = '';
+    // a teammate's own hits do not read their own `own: false` party line off the board again (Runa's Faithful Dog)
+    const ann = charDef('Ann Takamaki'), runa = ['Runa Dogenzaka', null, null];
+    const ownR = () => tcHot(() => (tcSimBest(tcSimPrep(ann, runa, false, false, {})).own || {})['Runa Dogenzaka'] || 0, ann);
+    const r1 = ownR();
+    const keepRB = TEAM_BUFFS['Runa Dogenzaka'];
+    TEAM_BUFFS['Runa Dogenzaka'] = keepRB.filter(e => !(e.own === false && !e.on)); tcMemo.key = '';
+    const r2 = ownR();
+    TEAM_BUFFS['Runa Dogenzaka'] = keepRB; tcMemo.key = '';
+    out.ownFalse = { withLine: r1, without: r2 };
+    // a teammate keeps its always-on `need*` stat lines (Ichigo's Chains of Love ATK) but not its timed self-buffs
+    const ichi = charDef('Ichigo Shikano');
+    out.mateNeed = { mate: tcEvalFor(ichi, 'mate').f0, dps: tcEvalFor(ichi, true).f0, full: tcEvalFor(ichi).f0 };
+    // Starry Compass's Guidance: a one-hit damage dealer with buff-casting teammates cannot hold 5 stacks past the first rounds, an area one can
+    out.guid = { ryuji: tcGuidUp(charDef('Ryuji Sakamoto'), 5), ann: tcGuidUp(ann, 5), ann15: tcGuidUp(ann, 15) };
+    // the quick screen reads Resonance and damage-over-time lines on the share of the damage dealer's damage that is such hits
+    const miyu = charDef('Miyu Sahara [Wavecatcher]');
+    out.quickRes = { miyu: tcMultiplier(miyu, [{ resDm: 50 }]), ryuji: tcMultiplier(charDef('Ryuji Sakamoto'), [{ resDm: 50 }]), dm: tcMultiplier(miyu, [{ dm: 50 }]) };
+    // a one-foe debuff reaches only the main target's share of an area damage dealer's damage on the quick screen
+    const v1 = tcMemberCalc(ann, 'Runa Dogenzaka', null, null, false, undefined).vec;
+    out.oneFoe = { one: Object.keys(v1.one || {}).length, mix: tcPartMix(ann) };
+    // Tempest Riko's Blossom stacks follow the receiving ally's hits a turn; a line with `hits.min` needs that many
+    const riko = charLoadout('Riko Tanemura [Tempest]');
+    const line = { k: 'atk', v: 30, hits: { turns: 3, cap: 10, scale: true } }, minLine = { k: 'cm', v: 5, hits: { turns: 3, cap: 10, min: 10 } };
+    out.hits = { ann: tcLineValue(line, { n: 'Riko Tanemura [Tempest]' }, riko, ann), ryuji: tcLineValue(line, { n: 'Riko Tanemura [Tempest]' }, riko, charDef('Ryuji Sakamoto')), hptAnn: tcHitsPerTurn(ann), hptRyuji: tcHitsPerTurn(charDef('Ryuji Sakamoto')),
+      minRyuji: tcLineValue(minLine, { n: 'Riko Tanemura [Tempest]' }, riko, charDef('Ryuji Sakamoto')) };
+    // a `per` line with a negative `plus` reads the stat over a floor and never below 0 (Riko's Speed over 100)
+    const plain = charLoadout('Riko Tanemura');
+    out.plus = { v: tcLineValue({ k: 'defdown', v: 0, per: { s: 'Speed', rate: 49, cap: 60, plus: -100 } }, { n: 'Riko Tanemura' }, plain, ann), spd: tcStat('Riko Tanemura', 'Speed') };
+    $('#tmFoes').value = keepFoes; tcMemo.key = '';
+    return out;
+  });
+  check('a build line lands a stack per cast: "1+1+3" is two Lyre\'s Melody stacks (one by the token set alone), "3" none',
+    au.build[0] === 2 && au.build[1] === 1 && au.build[2] === 0, JSON.stringify(au.build));
+  check('a decayed multi-hit area skill is split by foe: Yusuke\'s Skill 2 is half its folded number on each of 5 foes, 0.8 / 0.7 on 2, whole on 1; a plain area skill is untouched',
+    au.split.five && Math.abs(au.split.five.main - 0.5) < 1e-9 && Math.abs(au.split.five.other - 0.5) < 1e-9 && Math.abs(au.split.two.main - 0.8) < 1e-9 && Math.abs(au.split.two.other - 0.7) < 1e-9 &&
+    au.split.one === null && au.split.plain === null && Math.abs(au.split.mult5 - 2.5) < 1e-9 && au.split.mult5plain === 5, JSON.stringify(au.split));
+  check('Makoto Yuki as a teammate below A6 is one Theurgy: Cadenza lands no Ardhanari hit, Ardhanari no Cadenza buffs, the fight keeps the better; at A6 there is no choice and his Cadenza lines stay; as the damage dealer none',
+    au.th.opts.join() === 'C,A' && ['C', 'A'].includes(au.th.chosen) && au.th.ownC > 0 && au.th.ownA > au.th.ownC * 1.1 && au.th.totalA !== au.th.totalC && Math.abs(au.th.best - Math.max(au.th.totalC, au.th.totalA)) < 1e-6 && au.th.a6opts === 0 && au.th.a6lines >= 2 && au.th.asDps === 0, JSON.stringify(au.th));
+  check('a teammate\'s own hits read their own `own: false` always-on party line once (it is in their stats): zeroing Runa\'s Faithful Dog leaves her hits as they were',
+    au.ownFalse.withLine > 0 && Math.abs(au.ownFalse.withLine - au.ownFalse.without) < 1e-6, JSON.stringify(au.ownFalse));
+  check('a teammate\'s baseline keeps its always-on need-lines (Ichigo\'s Chains of Love ATK) and drops its timed self-buffs',
+    au.mateNeed.mate > au.mateNeed.dps && au.mateNeed.mate <= au.mateNeed.full + 1e-9, JSON.stringify(au.mateNeed));
+  check('Starry Compass\'s Guidance drains for a one-hit damage dealer and holds for an area one on the quick screen',
+    au.guid.ryuji < 0.6 && au.guid.ann === 1 && au.guid.ann15 > 0 && au.guid.ann15 < 1, JSON.stringify(au.guid));
+  check('the quick screen prices a Resonance damage line for a Resonance damage dealer and not for one without, and a one-foe debuff on the main target\'s share of an area damage dealer\'s damage',
+    au.quickRes.miyu > 1.02 && Math.abs(au.quickRes.ryuji - 1) < 1e-9 && au.quickRes.dm > au.quickRes.miyu && au.oneFoe.one > 0 && au.oneFoe.mix && au.oneFoe.mix.other > 0.5 && au.oneFoe.mix.other < 1, JSON.stringify({ q: au.quickRes, o: au.oneFoe }));
+  check('a line with `hits` scales with the receiving ally\'s hits a turn, capped, and one with `hits.min` needs that many; a negative `plus` reads a stat over a floor',
+    au.hits.ann > au.hits.ryuji && au.hits.ann <= 300 + 1e-9 && au.hits.hptAnn > au.hits.hptRyuji && au.hits.minRyuji === null && au.plus.v >= 0 && Math.abs(au.plus.v - Math.min(60, Math.max(0, au.plus.spd - 100)) * 0.49) < 1e-6, JSON.stringify(au.hits) + ' ' + JSON.stringify(au.plus));
 
   await p.evaluate(k => { state.chars = JSON.parse(k.chars); tmBusy = new Set(k.busy); tmPick = JSON.parse(k.pick); commit(); showTab('roster'); }, tmKeep);
 

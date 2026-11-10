@@ -49,6 +49,8 @@ node tools/gen-wonder-damage.js [folder]     # replace the WONDER_DMG block (Won
                                              # Highlight, every attack skill, % of ATK at skill levels 6/7/8)
 node tools/gen-mind-paths.js lufel.json      # replace the MIND_SKILL_PATHS block (which skills each Mindscape skill path raises)
 node tools/fetch-persona-art.js              # the Personas tab's pictures into dist/art/ (gitignored, like the portraits)
+node tools/gen-persona-base.js [folder]      # replace the PERSONA_BASE block (each Persona's level-1 HP/ATK/DEF, from Game8's
+                                             # Persona pages; [folder] caches the pages)
 ```
 
 Run the audit before changing anything in `src/data.js` by hand — it will usually tell you
@@ -459,7 +461,7 @@ Elucidator's passive grants each ally 20% of the Elucidator's corresponding stat
 4★, and it is a property of the role, verified across all eight — so their Crit Rate and
 ATK% are damage stats by name, which is all `damageShare` reads, while what they actually
 buy is an *ally's* damage. What a donated point is worth depends on the receiving ally's
-balance, which nothing here models, and seven of the eight have a 0% / 0% crit base
+balance, which nothing here models, and all eight have a 0% / 0% crit base
 besides, so the ⓐⓑⓓ product from their own board is a quantity the game never evaluates.
 Ungated it was worth 48-58 points of every Elucidator's build score.
 
@@ -730,17 +732,18 @@ Four things the score does that look odd until you know why:
 - A target the character already meets **with no cards at all** on the current setup is
   shown but left out of the block (`metBare` in `breakpointRows`). No loadout can earn or
   lose it, so scoring it only handed every loadout the same free points and watered down the
-  targets gear does move. Fuuka is the standing case: lufel's Crit Multiplier 64-78% is the
-  crit damage at which her party crit-damage buff stops growing ("10% + 0.625% per 1% of
-  Fuuka's critical damage, up to 40%" — lufel's number is the cap over 0.625; Global's 4.12
-  buff made it 12% + 0.75% up to 48%, and 48 over 0.75 is the same 64). Kit text means
-  the *total* there, as Starlight Ren's "up to 31.4% … at 197.6% critical damage" (his target
-  is 197.6) and Tempest Riko's explicit "the portion that exceeds 100%" show, so her 150%
-  base clears it before a card is worn. It was half her block, leaving her ATK target — the
-  one gear moves — the other half. Mitsuru's LV10 ATK target (2928, under her no-card 3190)
-  is the other; at a Setup whose tier her base does not clear, it counts again. Checked
-  against lufel's raw `minimum_stats` and skill text in Sep 2026, which is also where an
-  earlier guess (that 64 was the 20% share Fuuka passes to allies) was ruled out.
+  targets gear does move. Mitsuru's LV10 ATK target (2928, under her no-card 3190) is the
+  standing case; at a Setup whose tier her base does not clear, it counts again. Fuuka's Crit
+  Multiplier target was the other until 10 Nov 2026: lufel's 64-78% is the crit damage at which
+  Spirit Wave stops growing ("12% + 0.75% per 1% of Fuuka's critical damage, up to 48%" on
+  Global; 48 over 0.75 is 64), and kit text means the *total* there, as Starlight Ren's "up to
+  31.4% … at 197.6% critical damage" (his target is 197.6) and Tempest Riko's explicit "the
+  portion that exceeds 100%" show. With lufel's 150% base she cleared it before a card was worn;
+  the user's screen settled her base at 0 like the other Buff Elucidators (crit damage 24% with
+  no cards or weapon, all of it Mindscape; `GLB_STAT_OVERRIDES` `crit`), so she is short of it
+  with no cards and cards earn it, and Spirit Wave reads her real crit damage. Checked against
+  lufel's raw `minimum_stats` and skill text in Sep 2026, which is also where an earlier guess
+  (that 64 was the 20% share Fuuka passes to allies) was ruled out.
 
 `bestPlan` scores every plan with this same term — literally, since a plan's total is
 `buildScoreOf(...).total` (see the scoring-engine section). It has to: without it the
@@ -839,12 +842,16 @@ a second run is byte-identical). Rules that hold it together:
   "Fit rotations to this team" checkbox, a pref on by default) is described under the calculated
   basis below; it never touches the character the team is built around.
 - **Turn order is in-battle Speed** — `totalStat` with worn cards plus the Thieves Den. Wonder's
-  is his slot-1 Persona's Speed with its Agility Master / Ironclad Resolve once that Persona's Speed is
-  entered (`wonderSpeedFor`, see "Wonder's stats are worked out" below), for whatever setup is priced;
-  otherwise the user's entry (`state.wonderSpd`, saved as `settings.wonderSpeed` beside the team crit
-  rate, in the unsaved-changes fingerprint and the undo snapshot). Neither set is
-  unknown, never zero — he is taken to act just before the damage dealer (the user's rule, Nov 2026:
-  players tune him to), and the turn order says so.
+  is his slot-1 Persona's Speed — 100, as every Persona's screen reads, or one typed on its popup — with its
+  Agility Master / Ironclad Resolve (`wonderSpeedFor`, `PERSONA_SPEED`, see "Wonder's stats are worked out"
+  below), for whatever setup is priced; with slot 1 empty, the user's entry (`state.wonderSpd`, saved as
+  `settings.wonderSpeed` beside the team crit rate, in the unsaved-changes fingerprint and the undo
+  snapshot). Neither set is unknown, never zero — he is taken to act just before the damage dealer (the
+  user's rule, Nov 2026: players tune him to), and the turn order says so. Until 10 Nov 2026 a lead counted
+  only once its Speed was typed, so on save (59), which types none, he acted just before every damage
+  dealer; at 100 (Janosik leads, no Speed skill) 5 of 33 best teams changed (Ren, Makoto Yuki, Yaoling,
+  Leo, Mayumi) and team numbers moved −13% to +1.7%, median −1% (Tempest Riko −13%: his one-turn buffs
+  now wait a round behind faster damage dealers).
   The Elucidator acts outside the order; the page says so.
 - **No lufel prose beyond one-liners.** Partner reasons and rotation notes are short and shown
   as lufel's; the long reviews are linked, not copied (the site build is public). A mechanic worth
@@ -1152,7 +1159,9 @@ damage-formula section); teams are ranked by it:
   gains (casting a second Persona's skill takes turns from the first, whose passives then count
   for fewer turns), in two orders — by worth, and slot by slot — the better kept, so a later slot
   never costs anything; idle turns go to the Persona whose passives are worth most. The page
-  shows each Persona's share of his turns and what goes uncast.
+  shows each Persona's share of his turns and what goes uncast; one that takes none of his turns but still adds
+  something reads "in reserve" (a `reserve` passive) or "battle start" (a lead's battle-start line) instead of 0%
+  (`tcWonder`'s `offTurn`; the user read Kohryu's 0% in Ann's team as "never used", Nov 2026).
   **Slot 1 is his lead** (Nov 2026, the user asked): the Persona in use when the battle starts, so only it
   does what a Persona does "at the start of battle" (`tcWonder`'s `lead`, the first slot set). A WONDER_BUFFS
   line with `lead` counts only from the lead — Koumokuten's Heavenly King's Eyes (lufel's note: "must be
@@ -1317,9 +1326,17 @@ damage-formula section); teams are ranked by it:
   +29.1% ATK talent did nothing from slot 2, and Kohryu's HP Boost IV, Apt Pupil III and Battle Acumen IV left the panel with
   him. Which lines count is lufel's English text through `tools/wonder-self-stats.js` — a whole sentence that is only
   "Increase <stat> by N" — into `WONDER_PERSONA[*].st` (per talent rank), `WONDER_SKILLS[*].st` and `WONDER_WEAPON_STAT`.
-  Persona and dagger base stats are published nowhere usable (lufel and Prydwen have none; the Megami Tensei Wiki has level 1
-  only and blocks automated reads), so the user enters them: a Persona's on its popup (record `st`: hp, atk, def, spd and
-  the level read at, which the popup flags once the level changes), a dagger's on the Weapons tab, Schema and Ego level
+  **A Persona's stats are worked out** (`personaStats`, 10 Nov 2026; the user asked not to type them): Game8's level-1
+  HP/ATK/DEF (`PERSONA_BASE`, `tools/gen-persona-base.js`; Black Frost matched the user's screen exactly) × (1 + 2.4% per
+  level above 1) × (1 + 10% for each of the first two overclocks; the third adds nothing). Speed is 100 on every Persona's screen, so Wonder's turn order takes his lead's 100 plus its Speed skills (a Speed typed on its popup wins). Fitted
+  on eleven of the user's Persona screens, all within 2.6% (`docs/DATA-SOURCES.md`, "Persona stats by level"; a test holds
+  them). Janosik reads 25% under it and is the one Persona that also ranks up, so the user had him left out
+  (`PERSONA_RULE_SKIP`): his are typed. The record carries the overclock count (`oc`, 0 to `personaOcMax`: 1 at grades I-III,
+  2 at IV-V, 3 from VI; each overclock not done takes 5 off the level cap, `personaLvCap`; a new record is fully overclocked,
+  like its level), and a reading typed on the popup (record `st`: hp, atk, def, spd, the level and overclock read at) wins
+  while the record is at that level and overclock. The popup and card show the stats used, and the popup the same with the
+  Persona's own talent and skills on, as in slot 1. Dagger base stats are published nowhere usable, so the user enters them:
+  a dagger's on the Weapons tab, Schema and Ego level
   under Wonder's setup (`state.wonderSchema`, saved as `settings.wonderSchema`, in the fingerprint and the undo snapshot).
   `wonderStats(S)` / `wonderSpeedFor(S)` give the setup being priced: worked out once everything it needs is entered,
   the typed ATK, crit and Speed otherwise. `tcWonder` puts them on its vector and result (`vec.ws`, `ws`, `spd`), so the
@@ -1333,7 +1350,14 @@ damage-formula section); teams are ranked by it:
   4 to 8), +1 per Skill 1 or 3 she casts (+2 per Divine Prayer from A6); Oracle Shift spends 4 (3
   from A6), once a round. The fight swaps as soon as the stacks allow, during the damage dealer's
   turn just before they act ("swap the currently acting ally"): the backup takes one action — the
-  skill whose lines alone do most for the damage dealer — then the damage dealer carries on.
+  skill the fight does best with (`tcBackupSkill`, 10 Nov 2026: each of its three played under one spending order at
+  the fits the page shows, `true` and 'full', once per lineup, `tcMemo.bks`; the search's first pass keeps the old
+  pick, the skill whose damage buffs alone sum highest, since choosing there too put a render up by a quarter; it is
+  +7% as it stands) — then the damage dealer carries on. The sum never saw a skill whose worth is its own hit, a
+  follow-up it sets off, an ailment or a heal: for YUI's best pair, Yukari as the backup goes 106.8× to 115.1× on
+  Skill 1 instead of Skill 2. On save (59) no best team changed (Kumi's Skill 1 and Ayaka's Skill 2 were already the
+  fight's picks); Tempest Riko's pick moved from Skill 3 to Skill 1 at 0.04% less once fully fitted, as the choice is
+  made before the fit. `tcSimAs` replays the headline's pick.
   Fuuka's swap lines fire (`on: 'shift'`: Pros and Cons' +10% final damage at A2, 2 turns at A6;
   her weapon's crit damage for 3 turns), and from A2 the backup's Highlight or Theurgy fires free
   with the swap, at most once every 3 rounds, setting off every Highlight trigger. The backup's
@@ -2063,9 +2087,18 @@ damage-formula section); teams are ranked by it:
   from A4, added to her other increases. lufel's Korean text says the next medicine (다음번 약품 사용 시) for both,
   where the English reads as every one; the fight spends it on her first medicine after each of her Highlights
   (`medNext` on her actor in `tcSimRun`, the medicine line's `fx`), the quick screen leaves it out. **Soothing
-  Sunlight's Blessing stacks are permanent** (no duration printed; the user's reading): two a Summer Garden (its
-  own "grant all allies 1 Blessing stack" plus the passive's, the user's reading) and one a Gentle Sea Breeze, up
-  to 6 (+36%), from 0 at the start. A TEAM_BUFFS line with `build` is that shape — `true` for a stack a cast, or
+  Sunlight's Blessing stacks run out after 2 turns, each cast's on its own** (the user's in-game reading, 10 Nov
+  2026, with Akihiko: Summer Garden in turn 1 gave him 2 stacks, Gentle Sea Breeze in turn 2 made 3, turn 3 showed 1,
+  turn 4 none; they had been taken as permanent, no duration being printed): two on every ally a Summer Garden (its
+  own "grant all allies 1 Blessing stack" plus the passive's) and one on its target a Gentle Sea Breeze, +6% damage
+  each, at most 6 (+36%) together. Summer Garden's own party damage (43.0% at the user's Minami, her max HP past the
+  cap) is a separate buff of 3 turns, which the same reading matched. Two lines, `perCast: 'blessing'`: each cast is
+  a record of its own with its own timer, never a refresh, and records sharing the key hold the line's full value at
+  most together (`addBuff`; `echo` copies each record); `tcBuildMean` counts only the last `dur` turns' casts. On save
+  (59) her A0 rotation casts Summer Garden every third turn, so the quick screen reads 22% of the 36% held where it read
+  64%; every team with her fell 3-5% (Akihiko's 32.7× to 31.5×, Makoto Yuki's 50.7× to 48.9×), and Ren's best team
+  went from Minami / Kotone Shiomi / Fuuka / Kumi (23.81×, now 22.84×) to the twins / Mitsuru / Fuuka / Kumi (23.80×,
+  a near tie); she stays in the other eight best teams she led. A TEAM_BUFFS line with `build` is that shape — `true` for a stack a cast, or
   the stacks per skill (`{ '2': 2, '3': 1 }`, `tcBuildGain`); `stacks` is the cap and the line's value the whole.
   The fight lands a turn's stacks per cast, the quick screen reads the average over the fight (`tcBuildMean`),
   and the page shows the share of the whole held.
@@ -2141,8 +2174,13 @@ damage-formula section); teams are ranked by it:
   Fireburn) as additive, and damage taken (Cold Flames, Iceburn) is in ⓑ, so those stay additions; Rin's
   weapon (+34-64% "damage" on a Fire Technical) is untested and left additive. Read as an addition, the
   Technical Precision Mio adds to Rin's Fireburn was nearly all diluted by her other bonuses. Not priced: Windburn,
-  Short Circuit, Deepfreeze, Freeze and Shock as Technical triggers for Mio's weapon, Happy New Year!'s
-  51% (kept at 42%).
+  Short Circuit's and Deepfreeze's own effects (+2% skill damage, a chance to Icebound), Happy New Year!'s
+  51% (kept at 42%). **Mio's Entropy counts every Ice Technical** (10 Nov 2026): Iceburn on a Burning foe, Deepfreeze
+  on a Frozen one, Short Circuit on a Shocked one, so `needAil` may be a list any one of which will do (`ailOn`; the
+  quick screen's share for it is `tcAilCovQuick`, `tcBurnSupply`/`tcBurnCov` taking the ailments). Until then only a
+  Burning foe counted, though her own Skill 1 Freezes and YUI Shocks. Her lineups rose on the quick screen, which pushed
+  Ren's best pair (the twins / Mitsuru) past the search's 30-lineup shortlist, so `TC_EXACT` is 40 (same teams at 34,
+  about the same time). On save (59) no best team changed; Haru's, same members, reads 20.56× for 20.66× (the fit's path).
 - **Knockdowns: the boss's Down gauge** (Nov 2026; the user asked, and answered the rules from play).
   `#tmDown` (a pref, in `tcAssumeKey`) is the boss's Down Points as its gauge shows them; 0, the default,
   is a boss that cannot be knocked down, since most cannot. The fight (`downAct`, `downHl`, `knock` in
@@ -2286,6 +2324,114 @@ damage-formula section); teams are ranked by it:
   18.05×, and the best team without a healer (Mayumi, Kotone Shiomi, Fuuka, Kumi) 15.21× to 14.09×. Healing
   amounts are not read (every heal counts the same), nor Wonder's heal cards; what is left out is in
   `TC_HEALS`' comment.
+
+### The audit of Nov 2026: what was over- and undervalued, and what is still open
+
+The user asked for the Teams calculation to be gone over for characters and Personas over- or undervalued (7 Nov
+2026). Method: every owned damage dealer's best team on save (59), a support × damage dealer matrix (each
+available member in each seat of each best team), each Persona alone in the lead slot for six damage dealers,
+then twelve parallel read-only audits of the hand-entered tables against lufel's kit text (TEAM_BUFFS in five
+slices, the owned damage dealers' own tables in two, WONDER_BUFFS in three, and two code reviews of the fight
+and the quick screen). Each finding was re-read against the text before entry. What changed:
+
+- **Engine.** A `build` line lands a stack per CAST, not per turn (`castBy` takes the turn's `tcSkillUses`): Kotone
+  Shiomi's "1+1+3" burst gave one Lyre's Melody stack of two. **A teammate Makoto Yuki below A6 casts one Theurgy**:
+  he is in `TC_PAIRS` (ids C = Cadenza's buffs, A = Ardhanari's hit, `TC_TH_CHOICE`; an option's `when` hides the
+  choice at A6 and when he is the damage dealer, and a pair-gated line counts when no choice is offered), where one
+  'TH' used to fire his Cadenza lines AND land Ardhanari's 590% (YUI's best team was his for that, 165.9×; the twins'
+  at 158×). **A decayed multi-hit area skill is split by foe** (`TC_HIT_SPREAD`, `tcHitSplit`, `spread`'s `ratio`):
+  Yusuke's Bone-Chilling Cold is one 92.9% hit per foe at 5 foes, where the fight dealt the folded single-boss 185.8
+  to every foe (his base fell and his best team, unchanged in its members, went 22.8× to 25.6×). **Wonder's attack turns
+  and attacking casts are Persona skills** (`wonderHits`, `dmgSkillsOf`): they fire `allySkill` lines (YUI's
+  follow-ups, Mitsuru's Iceblade), charge the gauge at 21% and take a Down Point, where they counted as basic
+  attacks and an attacking cast as nothing. **A teammate's own hits no longer read their own `own: false` party
+  lines twice** (`X0ownOf`, `ownFalse` on a buff: Runa's hits were 12% high beside a FIEW damage dealer) **and keep
+  their always-on `need*` stat lines** (`tcEvalFor(C, 'mate')`, `noTimed` 'mate': Ichigo's, Haru's and Makoto
+  Niijima's hits as teammates read 20-40% low). **Starry Compass's Guidance is a counter the fight plays** (`guid`
+  on a WONDER_BUFFS line, `guidHit`, `tcGuidUp` on the quick screen): 10 at the start, +1 per damage instance per
+  foe, -5 at the end of Wonder's turn, cap 20; the DEF line was entered as permanent, and its 15-stack Psy line is
+  in. **The quick screen** reads Resonance and damage-over-time lines on the shares of the damage dealer's damage
+  alone that are such hits (`tcPartMix`, one fight alone per damage dealer; the four keys were worth exactly nothing
+  there, so Runa, Ichigo's party continuous damage and Shoki's Blazing Passion never reached the fought 30), takes a
+  one-foe debuff off the share of an area damage dealer's damage the other foes take (`vec.one`, measured by a
+  second fight on one foe; single-target debuffers screened 10-15% high at 5 foes), and counts a teammate's
+  Highlight or Theurgy in their own hits (`tcMateTurnCoef(..., true)`). **The fought shortlist is varied as well as
+  deep** (`TC_EXACT_PER`, 12): no one thief sits in more than that many of the `TC_EXACT` lineups the quick screen
+  hands to the fight — the screen rates Kumi in a thief seat 15-20% high beside Firecracker Yaoling, and once her
+  Tenacious Teacher line was priced 30-odd Kumi lineups topped the screen and the fight's best team (Beachflower
+  Minami / Kotone Shiomi / Fuuka, 21.1× against the 19.9× that led) was never fought. A round-gated line
+  (`until`, `from`, `rampAt`) is a field member's: Fuuka's backup gets none, where its battle-start lines (Ayaka's
+  A1 Costar) had reached the quick screen as a backup's. New line fields: `nth: [k, n]` (every n-th
+  cast from the k-th), `awMax`, `foesMin`/`foesMax`, `hits: { turns, cap, min, scale }` (stacks per hit the receiving
+  ally lands, `tcHitsPerTurn`), a negative `per.plus` ("per 10 Speed over 100"), `notElem` and `foesMax` on Wonder
+  lines, TC_THEURGY `rateWith` (a faster fill that needs a kind of character on the field), TC_CK `share`/`one1`.
+- **Data, owned.** Shun Kano's Desperado Smash Hit is DEF down TO 59.9/62.4 (KR 까지, JP に上昇; it read +18 points).
+  Beachflower Minami's Beach Basket is a mark on the foe (counts down after the enemy's turn). Akihiko's Lightning
+  Fist per-Grit multiplier, Firecracker Yaoling's Scarlet Surprise and Year-End Flames, Yusuke's Imagination
+  counter, Tropical Motoha's A6 hits and Haru's A6 Rounds are area hits (`aoe`). Yukari's Theurgy keeps Erosion up
+  and Arrow of Life's ATK stacks to 2. Mayumi's Nebula Pennant is per 40 of the total Velocity GAINED (5 stacks from
+  round 3). Kiyoshi's Crimson Summon adds 2 Chosen One on a Burning foe and Baptism by Fire lands on his Highlight's
+  Burn. Minami's Highlight heal fires Health Comes First. Yaoling's Infinite Moment +15 Speed is a stat line. Kumi's
+  Tenacious Teacher (+10 + 2.22 per 10 Speed, cap 40, after Lightning Legs) is entered as points on Hard Knocks,
+  like Hard Knocks itself: +50 at 180+ Speed, confirmed in game by the user on 10 Nov 2026 (Hard Knocks 50.4% DEF down after Skill 1, 100.4% after Skill 3; damage taken 40.3% both times). Ayaka's A1
+  Costar comes at the start of battle with +15% crit rate. Yumi's Moonlit Feather lands its three party buffs
+  (ungranted first, KR/JP). Riko's Sky's Edge is priced and her Speed lines read her Speed. Mio's Biting Cold and
+  Requiem Guidance (every second Skill 3 at A0, every one from A1). Frostgale's Swan on the Ice at 4 stacks (not 7)
+  and her weapon's crit rate; Kasumi's Steps of Faith 2 stacks; Ichigo's My Destiny 1- and 2-Chain ladders and its
+  Skill 3 crit damage; Firecracker Yaoling's Happy New Year! Burn-gated in the fight and 51% once a Technical
+  resets it; Akihiko's Grit pierce at its mean of 2; Tempest Riko's Blossom per hit with the 5- and 10-stack lines.
+- **Data, Wonder.** Melchizedek's Bless damage is 8 for allies (half of Wonder's 16); Vishnu's DEF -48% rides on
+  his casts; Garuda's, Jatayu's and Baphomet's triggers at ~0.9/0.85 (their attack turns fire them); Kushinada's
+  third stack never comes in 6 rounds; Dominion's Commandment on his ally casts; Gabriel's crit damage on ally casts
+  only; Raphael's +20% ATK lead-only and whole-fight; Onmoraki's lone-foe gate; Auto-Mataru lead-only; All In's party
+  DEF, Rakukaja and Marakukaja cards, Purgatory's and Event Horizon's battle-start stacks for an off-element damage
+  dealer; Arc Knife's Mark at 0.8 and 1.5 stacks; Nian's Fearsome Flames on casts.
+- **Data, unowned** (priced without cards when tried): Junpei's Theurgy recovery doubled with a Fire ST/AoE DPS on
+  the field from A0 (KR/JP; it was A6 only), Pioneer Shun's Justice Shot stacks (cap 6 printed in KR/JP) and A6
+  Special turns, Aran's second Sin, Highlight damage taken and A4, Yukimi's Karmic Cycle DEF steal and A2 Gavel,
+  Lufel's Fallen Angel Wing on the ally in Starfire, Kayo's ×1.5 on an ailing foe, Haruna's A2 for all allies (judged
+  0.6 of casts), Miyu Sahara's Ephemerality per stack held, Akechi's A1 durations and start, Koromaru's A2 DEF,
+  Shoki's Ribalta `own: false`, Summer Ichigo's Words of Love on her Highlight.
+- **Measured on save (59)** after everything, by best team: YUI 165.9× to 158.1× (the twins replace Makoto Yuki),
+  Yusuke 22.8× to 25.6×, Kasumi 57.6× to 60.1×, Frostgale 55.9× to 58.4×, Makoto Yuki 51.9× to 54.0× (Minami /
+  Kotone / Fuuka, backup Ayaka, chosen by the fight), Firecracker Yaoling 26.2× to 21.1× (her base rose with the
+  area slash; Happy New Year! Burn-gated), Ichigo 40.6× to 38.0×; the other ten keep their team within 1%. A render
+  costs about the same (5-14 s a damage dealer, the quick screen's one extra fight alone aside). Fuuka's lead over
+  Miku stands: her lines match lufel's current English text (the 12% + capped 48% reading). The calibration did not
+  move (mean 70.1, median 71, range 41-84, bands 8/52/8; non-recommended mains 33 of 204).
+- **Fuuka's base crit is 0 / 0, settled 10 Nov 2026** (the user's character screen with no cards or weapon: crit rate
+  0%, crit damage 24%, all of it her Mindscape; lufel's 5 / 150 sat beside a placeholder Speed of 0). It is a
+  `GLB_STAT_OVERRIDES` entry (`crit`) in the generator, and Spirit Wave reads her real crit damage (12% + 0.75% per 1%,
+  the scaled part capped at 48-58.6%) instead of sitting at its cap. With her weapon and Mindscape she reaches 118% crit
+  damage on save (59), so Spirit Wave is still at its cap there; what she lost is 30 crit damage and 1 crit rate from
+  the 20% share. Every best team keeps her; their numbers fell 5-8%; Ren's and Yusuke's teams swapped their first
+  thief seat (the twins / Mitsuru to Beachflower Minami / Kotone Shiomi and Akihiko / Mitsuru, both near ties
+  before). Her Crit Multiplier target is no longer met with no cards, so cards earn it. Calibration unchanged.
+- **Mitsuru's Iceblade, settled 10 Nov 2026**: priced on the triggering ally's ATK, as Global's English says ("22.0% of
+  that ally's Attack"; the Korean reads as hers): DPS_KIT `byAtk`, the hit scaled by the trigger's in-battle panel ATK
+  over Mitsuru's (`tcPanelAtk`, per render in `tcMemo.atk`; Wonder's from his setup, unknown: hers), in `kitFire` and
+  `mateKitFire`. From her A1 it needs no Theurgy window (`alwaysAw: 1`): C'est Magnifique leaves every foe Snowbound
+  for good, so every ally skill attack fires it, at the Frostbound stacks the fight counts; A1's own 2 Snowbound stacks
+  are not added (both texts count Frostbound stacks), an in-game reading would settle it. On save (59), Mitsuru at A0
+  with 5047 ATK above most allies who trigger it: her teams −0.3% to −2% (YUI 146.9× to 144.5×, Mitsuru 46.6× to
+  45.7×), Makoto Niijima's +1.9% (her ATK is higher), and Yusuke's best team swaps Mitsuru for the twins (24.05× to
+  24.04×, a near tie).
+- **Ann's Rosethorn, priced 10 Nov 2026**: her 5-star weapon's Fire damage +25.5-49.5% per Burning foe (at most 76-148%)
+  is DPS_KIT_BONUS `perBurnFoe` with `capLadder`, read in the damage dealer's own bonuses (a teammate Ann skips it,
+  TC_MATE_BONUS_SKIP). The fight counts Burning foes: the main target's Burn as before, and each other foe's as a chance
+  with turns left (`burnO`, `burnAdd`): TC_AILMENTS `foes: 'all'` rolls every foe at its chance (Falling Sun, Runa's
+  Welcome Hug, Firework Finale, Black Inferno, a Highlight, Brave Warrior), `foes: 'random'` lands on each foe in turn
+  (Rosethorn's Burn). Chances, not a running tally: as a tally Falling Sun's 30% every other turn never Burned another
+  foe in 6 rounds. The fight result carries `burnFoes`, the mean a round. On save (59), Ann at R4 A6 on 5 foes: about 1.9
+  foes Burn, her damage alone +11%, her best team's +5.6% (the same team; its multiplier 17.43× to 16.52×, since her solo
+  damage rose more); no other best team moved; build score 76.13 to 75.31, and Optimise's pick for her went from 4-piece
+  Strife to 2-piece Strife + best available (76.65 against 75.31, a 0.44 lead the other way before); calibration
+  unchanged. The quick screen does not read it (it is the damage dealer's own, in both fights alike).
+- **Still open, ranked** (each needs a mechanism or an in-game reading): Ren's Rebellion Resurgence stacks from foes below 60% HP;
+  Starlight Morgana's Rushing Haze; Aran's Sin damage copy; Summer Ichigo's
+  weapon reading; a Persona `per` line is still taken at its cap though Wonder's stats are now worked out (Succubus's
+  Rebellion needs 38.9% crit); WONDER_BUFFS lines cannot read the ailment tracker (Hariti, Yurlungur, Vishnu's Wind
+  line); Wonder's own ailments (Nian, Throne, Surt, Thor) are not priced; Labor's party +8% for the allies; Courtesy in the sweep.
 
 ### Lufel publishes an order, not magnitudes
 
@@ -2444,8 +2590,8 @@ over the factors of the same product. Three consequences worth knowing:
   Multiplier roll — Fuuka's Crit Multiplier Star, the stat her Spirit Wave turns into party
   crit damage, lost to a Crit Rate one by 11%. At a geared ally's board the two rolls are
   worth about the same, so their cards are priced on their weights alone (`seedBaseline`
-  returns null for them). Seven Buff-element support units genuinely carry
-  0%/0% — confirmed via lufel's raw data and Miku's own in-game panel — and the generator
+  returns null for them). All eight Elucidators genuinely carry
+  0%/0% — confirmed via lufel's raw data and Miku's own in-game panel, and for Fuuka, whose lufel row reads 5/150 beside a placeholder Speed of 0, by the user's screen (GLB_STAT_OVERRIDES) — and the generator
   used to read that with `l1.crit_rate || 5`, treating a legitimate 0 as missing data.
 - **Reading that 0 correctly is not enough on its own — the crit factor needs a floor.**
   ⓓ is `1 + cr * (cm/100 - 1)`, which is only sane while `cm >= 100`. Feeding those seven

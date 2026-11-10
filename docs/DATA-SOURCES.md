@@ -634,8 +634,56 @@ panel number is now accounted for.
 
 **Speed** (the user, from play): Wonder's Speed is the slot-1 Persona's Speed, changed by that Persona's skills
 (Agility Master I-IV +6/+9/+12/+15, which also cost 0/4/8/12% DEF; Ironclad Resolve I-IV −6/−9/−12/−15 with
-+15/22/29/36% HP). That is why a fast Persona is put in slot 1: Wonder then acts before the damage dealer. Not yet
-read off a Persona screen.
++15/22/29/36% HP). That is why a fast Persona is put in slot 1: Wonder then acts before the damage dealer. Every
+Persona's own screen reads Speed 100 (the user, 10 Nov 2026), so only those skills move it: the planner takes his
+lead's Speed as 100 plus those skills unless a Speed is typed on the Persona's popup (`PERSONA_SPEED`).
+
+### Persona stats by level — measured (10 Nov 2026), built as `personaStats`
+
+lufel publishes no Persona stats. Game8's Persona pages give each one's **level-1** HP, Attack and Defense
+("Base Level Stats"); `tools/gen-persona-base.js` reads them into `PERSONA_BASE` (152 of 155; Gabriel, Macabre and
+Raphael are not out on Global and have none). Game8 matched the user's own screen exactly for Black Frost at level 1
+(229 / 84 / 42). Samurai Gamers carries the same numbers for some Personas, others off by a point or two (Skadi
+172/60/40 against Game8's 168/59/39) and some plainly wrong (its Janosik reads 246/45/68).
+
+Overclocking (the user): done once at grades I-III (I and II assumed), twice at IV-V, three times from VI; each
+raises the level cap by 5 (Fuu-Ki 40 → 45, Black Frost 80 → 95, Skadi 70 → 85). A Persona's screen previews the
+overclock: Fuu-Ki at level 40 goes 264/96/48 → 291/106/53, +10% at the same level.
+
+The user's readings, against Game8's level 1 (HP / ATK / DEF):
+
+| Persona | Grade | Level | Overclocks | Screen | Level 1 (Game8) | Screen ÷ level 1 |
+|---|---|---|---|---|---|---|
+| Fuu-Ki | III | 40 | 0 | 264 / 96 / 48 | 134 / 49 / 24 | 1.975 |
+| Fuu-Ki (preview) | III | 40 | 1 | 291 / 106 / 53 | | 2.179 |
+| Belphegor | IV | 60 | 2 | 500 / 138 / 121 | 175 / 48 / 42 | 2.872 |
+| Scathach | V | 70 | 2 | 389 / 137 / 91 | 126 / 44 / 29 | 3.116 |
+| Okuninushi | V | 65 | 1 | 580 / 205 / 137 | 209 / 74 / 49 | 2.781 |
+| Skadi | VI | 70 | 0 | 451 / 160 / 106 | 168 / 59 / 39 | 2.707 |
+| Norn | VI | 85 | 3 | 976 / 270 / 122 | 267 / 74 / 33 | 3.664 |
+| Black Frost (preview) | VII | 80 | 0 | 657 / 241 / 121 | 229 / 84 / 42 | 2.873 |
+| Lilith | VII | 95 | 3 | 815 / 288 / 192 | 209 / 74 / 49 | 3.904 |
+| Kohryu | VIII | 99 | 3 | 836 / 295 / 197 | 209 / 74 / 49 | 4.003 |
+| Alice | VIII | 99 | 3 | 893 / 328 / 165 | 224 / 82 / 41 | 4.004 |
+| Janosik | "VIII" (lufel 9) | 99 | 3 | 1152 / 320 / 213 | 357 / 99 / 66 | 3.229 |
+
+(The ratio is HP + 4 ATK + 6 DEF over the same of level 1, so the small DEF numbers' rounding does not dominate.)
+HP, Attack and Defense always grow by the same factor. The rule that fits:
+
+```
+stat = level-1 stat × (1 + 0.024 × (level − 1)) × (1 + 10% × overclocks, the third adding nothing)
+```
+
+Every reading but Janosik's lands within 2.6% (Scathach +2.6%, Fuu-Ki −2.1%); a test holds them within 3%. With
+overclocks 0-2 the growth per level reads 2.31-2.52% of level 1, the three-overclock readings 2.12-2.16% at +30%,
+and all of them 2.31-2.50% at +20%, which is why the third overclock is taken to add nothing. Grade does not
+change the rate: Okuninushi (V), Lilith (VII) and Kohryu (VIII) share Game8's level-1 209/74/49, and all three fit
+the same rule. Janosik reads 25% under it; he is the only Persona that also ranks up, and the user chose to leave
+him out (`PERSONA_RULE_SKIP`): his stats are typed on his popup.
+
+Where it is rough: the 2.4% is a fit, not a published number, and rounding Game8's small level-1 numbers moves a
+low-grade Persona by a few percent. On Wonder's panel that is a few ATK in 4000. A reading typed on a Persona's popup
+at its level and overclock replaces the rule; one read at another level or overclock gives way to it.
 
 ### Places where lufel and the stored data deliberately disagree
 

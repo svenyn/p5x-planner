@@ -309,11 +309,10 @@ these need their own term.
   nothing can hit would put 100 out of reach for reasons the user cannot act on.
 - A target met **with no cards at all** on the current setup (`metBare`) is shown with a
   "met without cards" tag but left out of the block, which is then split over the targets
-  gear can move — or dropped, when none is left. Fuuka's Crit Multiplier target is the
-  standing case: lufel's 64-78% is where her party crit-damage buff caps (its cap over
-  0.625% per 1% of her crit damage; Global's 4.12 buff to 48% over 0.75% gives the same
-  64), and kit text means the total there, so her 150% base
-  clears it; it used to be half her block, free. Mitsuru's LV10 ATK target is the other.
+  gear can move — or dropped, when none is left. Mitsuru's LV10 ATK target is the standing
+  case. Fuuka's Crit Multiplier target (64-78%, where Spirit Wave caps) was another while her
+  base was taken as lufel's 150%; on Global it is 0 (the user's screen, 10 Nov 2026), so cards
+  earn it.
 - Missing main-stat magnitudes are **unknown, never zero**: when a card that could
   contribute has no `mainValue`, `mainsMissing` trips and the target falls back to the
   relative measure rather than reporting an undercount as fact.
