@@ -2690,7 +2690,7 @@ function awarenessOverrideDrift() {
       setTimeout(() => {
         r.oldAll = personaNames().every(n => personaRec(n).own);
         r.oldCards = personaRec('Alice').cards.join(',');
-        r.oldSetup = wonderSetup().personas[0].cards.join(',');
+        r.oldSetup = wonderEmpty(wonderSetup());
         state.personas = JSON.parse(keepP); state.wonder = JSON.parse(keepW); commit(); markSaved(); showTab('roster');
         res(r);
       }, 400);
@@ -2699,8 +2699,8 @@ function awarenessOverrideDrift() {
   check('the Personas tab shows a card for every Persona out on Global; a card opens its popup (click or Enter), whose edits apply at once and keep their fields; the card\'s button and the bulk marks undo; it filters',
     psUi.rows === psUi.names && !psUi.unrelListed && psUi.art && psUi.unowned && psUi.ownUndone && psUi.popup && psUi.tal === 0 && psUi.sameField && psUi.listed && psUi.cardShows &&
     psUi.cardSet && psUi.labels && psUi.keyOpen && psUi.filtered === 1 && psUi.bulkOff && psUi.undone, JSON.stringify(psUi));
-  check('the Persona collection goes through a save file, and a save from before it starts with every released Persona owned and the old setup\'s skill cards on their Persona',
-    psUi.inSave && psUi.back && psUi.redrawn && psUi.oldAll && psUi.oldCards === 'Rebellion' && psUi.oldSetup === 'Rebellion,,', JSON.stringify(psUi));
+  check('the Persona collection goes through a save file, and a save from before it starts with every released Persona owned and the old setup\'s skill cards on their Persona (the setup itself starts empty)',
+    psUi.inSave && psUi.back && psUi.redrawn && psUi.oldAll && psUi.oldCards === 'Rebellion' && psUi.oldSetup === true, JSON.stringify(psUi));
   check('on a phone-width screen the Personas tab does not scroll sideways', psPhone <= 390, `${psPhone}px wide`);
   // a Persona's level is capped by its grade (lufel's I-IX), not its stars: grades I-VIII are the user's in-game
   // reading (Nov 2026; IV is 60), grade IX (Janosik alone on Global) reads rank VIII and 99 on his screen (10 Nov 2026);
@@ -2754,7 +2754,7 @@ function awarenessOverrideDrift() {
     personaSet(pn, { sk: 6 });
     const L6 = personaSkillLines(pn, 'Rebellion')[0];
     r.level = L6.v === 9.3 && Math.abs(L6.per.rate * L6.per.cap / 100 - 6.4) < 0.01 && setup({}) !== asFused;
-    personaSet(pn, { sk: 8, cards: [], fused: [] });
+    personaSet(pn, { sk: personaDefault(pn).sk, cards: [], fused: [] });
     // the popup: an innate tick per innate skill, three card and six fused boxes open as far as the slots allow
     openPersona(pn);
     const B = document.getElementById('dlgBody'), boxes = [...B.querySelectorAll('[data-psd-fused]')], ticks = [...B.querySelectorAll('[data-psd-innate]')];
@@ -3724,6 +3724,19 @@ function awarenessOverrideDrift() {
       tcMemo.key = '';
       out.rosethorn = { five: five.burnFoes, one: one.burnFoes, gain: five.total / fiveNo.total };
     }
+    // a Persona line that grows with Wonder's stats reads them (Apsaras's Rebellion: 10.2% + 1.8% per 10% of his crit rate,
+    // at most 38.9%), and takes its cap only when they are not known
+    {
+      const keepWS = state.wonderStats, setupA = { personas: [{ name: 'Apsaras', cards: ['', '', ''] }, { name: '', cards: ['', '', ''] }, { name: '', cards: ['', '', ''] }], weapon: '', refine: 1 };
+      const reb = () => { tcMemo.key = ''; const l = tcWonder(ann, setupA).lines.find(x => /Apsaras: Rebellion/.test(x.why)); return l ? l.v : null; };
+      // at skill level 8, the level these numbers are printed at (the default is 7)
+      const keepSk = personaRec('Apsaras').sk; personaSet('Apsaras', { sk: 8 });
+      state.wonderStats = null; const capV = reb();
+      state.wonderStats = { atk: 2000, cr: 10, cm: 150 }; const at10 = reb();
+      state.wonderStats = { atk: 2000, cr: 60, cm: 150 }; const at60 = reb();
+      state.wonderStats = keepWS; personaSet('Apsaras', { sk: keepSk }); tcMemo.key = '';
+      out.wonderPer = { capV, at10, at60, ok: !wonderCalc(setupA).ok };
+    }
     }
     state.chars['Fuuka Yamagishi'].loadout = keepF; tcMemo.key = '';
     // skill numbers at the tier the Setup reaches
@@ -4439,6 +4452,8 @@ function awarenessOverrideDrift() {
     th.fightBackup.pick === th.fightBackup.best && th.fightBackup.other === 3, JSON.stringify(th.fightBackup));
   check('Fuuka\'s backup uses the skill the fight does best with on each swap (each of its three tried), not the one whose damage buffs sum highest',
     ['1', '2', '3'].includes(th.bkSkill.pick) && th.bkSkill.pickV >= th.bkSkill.best * (1 - 1e-9), JSON.stringify(th.bkSkill));
+  check('a Persona line that grows with Wonder\'s stats reads them: Rebellion at 10% crit rate is 10.2 + 1.8, at 60% its cap (17.2), and with no stats known its cap',
+    th.wonderPer.ok && near(th.wonderPer.capV, 17.2, 0.05) && near(th.wonderPer.at10, 12.0, 0.05) && near(th.wonderPer.at60, 17.2, 0.05), JSON.stringify(th.wonderPer));
   check('Ann\'s Rosethorn adds Fire damage per Burning foe: with five foes Falling Sun Burns the others at its chance (well over one Burning foe on average) and her damage rises; with one foe at most one counts',
     th.rosethorn.five > 1.5 && th.rosethorn.one <= 1 + 1e-9 && th.rosethorn.gain > 1.05, JSON.stringify(th.rosethorn));
   check('Mio\'s Entropy lowers DEF on every Ice Technical (a Burning, Frozen or Shocked foe), so beside YUI, who Shocks, it counts where a Burn-only reading gave nothing',
@@ -4688,7 +4703,11 @@ function awarenessOverrideDrift() {
     state.wonder = {};
     applySave(saved, '');
     const e3 = { name: '', cards: ['', '', ''], fused: [] };
-    out.trip = JSON.stringify(wonderSetup()) === JSON.stringify({ personas: [{ name: pn, cards: [cn, '', ''], fused: [] }, e3, e3], weapon: wn, refine: 4 }) && !!pn && !!cn && !!wn;   // an old one-Persona setup becomes slot 1
+    // an old one-Persona setup is not restored (the setup starts empty each visit), but its cards go onto the Persona and its
+    // refinement onto the weapon, and a new save holds no setup
+    out.trip = wonderEmpty(wonderSetup()) && JSON.stringify(personaRec(pn).cards) === JSON.stringify([cn]) && weaponRec(wn).refine === 4 &&
+      !('wonder' in savePayload().settings) && !!pn && !!cn && !!wn;
+    void e3;
     hideToast();
     state.wonder = keep; state.personas = keepPs; state.weapons = keepWp;
     return out;
@@ -4740,6 +4759,33 @@ function awarenessOverrideDrift() {
   const wpFree = await p.evaluate(() => ({ busy: tmBusyP.size, lines: tcWonder(charDef('Yusuke Kitagawa')).lines.length }));
   check('making a busy Persona available again counts it again', wpFree.busy === 0 && wpFree.lines > 0, JSON.stringify(wpFree));
   await p.evaluate(k => { state.wonder = JSON.parse(k); commit(); renderTeams(); }, wpKeep.keep);
+
+  // nothing under Wonder's setup: he adds nothing and nothing is counted for him; his best setup is only suggested, and
+  // counts once Use it puts it under his setup. Opening the Teams tab empties an entered setup, undoably, and a setup
+  // is not part of the save, so neither marks unsaved changes
+  const wa = await p.evaluate(() => {
+    const d = 'Yusuke Kitagawa', keep = JSON.stringify(state.wonder || null);
+    tmPick = {}; state.wonder = wonderFrom({}); commit(); markSaved();
+    const e = tcTeams(d), we = e.team.seats.find(s => s.wonder);
+    $('#tmBasis').value = 'calc'; $('#tmChar').value = d; renderTeams();
+    const seatText = $('#tmOut').innerText, useBtn = !!$('#tmOut [data-tm-wonder]');
+    state.wonder = JSON.parse(JSON.stringify(we.wonder.best)); commit();
+    const dirty = isDirty();
+    const h = tcTeams(d).team.seats.find(s => s.wonder);
+    const before = JSON.stringify(wonderSetup());
+    showTab('roster'); showTab('teams');
+    const opened = { empty: wonderEmpty(wonderSetup()), toast: $('#toast') ? $('#toast').innerText : '' };
+    undo();
+    const back = JSON.stringify(wonderSetup()) === before;
+    hideToast(); showTab('roster');
+    state.wonder = JSON.parse(keep) || {}; commit();
+    return { emptyPart: we.part, lines: (we.lines || []).length, set: !wonderEmpty(we.wonder.setup), hasBest: !wonderEmpty(we.wonder.best),
+      noAssumed: !('assumed' in we.wonder), shown: /Nothing set, so he adds nothing/.test(seatText), useBtn, dirty,
+      usedPart: h.part, opened, back };
+  });
+  check('with nothing under Wonder\'s setup he adds nothing and his best setup is only suggested, counted once entered; opening the Teams tab empties his setup undoably, and it is not saved',
+    wa.emptyPart === 1 && wa.lines === 0 && !wa.set && wa.hasBest && wa.noAssumed && wa.shown && wa.useBtn && !wa.dirty && wa.usedPart > 1 &&
+    wa.opened.empty && /Wonder's setup was cleared: the Teams tab was opened/.test(wa.opened.toast) && wa.back, JSON.stringify(wa));
 
   // the page: a per-factor summary line per member with the kit lines folded under it, the next
   // teams and lufel's priced against the shown one, synergies named once, rotation options folded

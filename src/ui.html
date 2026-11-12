@@ -765,7 +765,7 @@ nav button.on .navIco{opacity:1}
     <div class="navGroup" role="group" aria-labelledby="navCards"><span class="navLbl" id="navCards">Revelation cards</span>
       <div class="navBtns"><button data-tab="opt">Optimise</button><button data-tab="inv">Inventory</button><button data-tab="triage">Triage</button><button data-tab="upgrades">Upgrades</button></div></div>
     <div class="navGroup" role="group" aria-labelledby="navTeams"><span class="navLbl" id="navTeams">Team building</span>
-      <div class="navBtns"><button data-tab="teams">Teams</button><button data-tab="personas">Personas</button><button data-tab="weapons">Weapons</button></div></div>
+      <div class="navBtns"><button data-tab="teams">Teams</button><button data-tab="personas">Personas</button><button data-tab="weapons">Wonder loadout</button></div></div>
     <button data-tab="data">Data</button>
   </nav>
   <div class="hdr-right">
@@ -991,22 +991,6 @@ nav button.on .navIco{opacity:1}
                   <div class="field"><label>Crit rate %</label><input id="tmWonderCr" type="number" min="0" max="100" step="0.1" placeholder="5" style="width:70px"></div>
                   <div class="field"><label>Crit damage %</label><input id="tmWonderCm" type="number" min="100" max="999" step="0.1" placeholder="150" style="width:70px"></div>
                 </div>
-                <!-- His Schema and Ego level, read once off the Phantom Thieves menu: with each Persona's and the
-                     dagger's own stats they work his panel out (wonderCalc), so his own hits and his Speed follow
-                     whatever setup is priced. -->
-                <div class="tmSub" style="margin-top:12px"><span>Schema and Ego</span><button type="button" class="infoBtn" data-help="schema" aria-label="About the Schema fields">?</button></div>
-                <div class="row tmWSchema">
-                  <div class="field"><label>Schema HP</label><input id="tmWS_hp" type="number" min="0" step="1" placeholder="—" style="width:76px"></div>
-                  <div class="field"><label>HP %</label><input id="tmWS_hpPct" type="number" min="0" step="0.1" placeholder="—" style="width:60px"></div>
-                  <div class="field"><label>Schema ATK</label><input id="tmWS_atk" type="number" min="0" step="1" placeholder="—" style="width:76px"></div>
-                  <div class="field"><label>ATK %</label><input id="tmWS_atkPct" type="number" min="0" step="0.1" placeholder="—" style="width:60px"></div>
-                  <div class="field"><label>Schema DEF</label><input id="tmWS_def" type="number" min="0" step="1" placeholder="—" style="width:76px"></div>
-                  <div class="field"><label>DEF %</label><input id="tmWS_defPct" type="number" min="0" step="0.1" placeholder="—" style="width:60px"></div>
-                  <div class="field"><label>Crit rate %</label><input id="tmWS_cr" type="number" min="0" step="0.1" placeholder="—" style="width:60px"></div>
-                  <div class="field"><label>Crit damage %</label><input id="tmWS_cm" type="number" min="0" step="0.1" placeholder="—" style="width:60px"></div>
-                  <div class="field"><label>Ailment acc. %</label><input id="tmWS_aa" type="number" min="0" step="0.1" placeholder="—" style="width:60px"></div>
-                  <div class="field"><label>Ego level</label><input id="tmWS_ego" type="number" min="0" step="1" placeholder="—" style="width:60px"></div>
-                </div>
                 <div class="tiny" id="tmWCalc" style="margin-top:8px"></div>
               </div>
             </details>
@@ -1059,8 +1043,27 @@ nav button.on .navIco{opacity:1}
   <!-- Which of Wonder's weapons the player has and at what refinement; the Teams tab offers and suggests only
        these, each at its own refinement (weaponsFrom in logic.js) -->
   <section id="tab-weapons" class="hide">
+    <!-- Wonder's Schema and Ego level: account-wide, the same whatever team or setup is priced, so they sit here
+         beside his weapons rather than under the Teams tab's setup. With each Persona's and the dagger's own stats they
+         work his panel out (wonderCalc). -->
     <div class="panel">
-      <h2>Wonder's weapons <span class="muted" id="wpCount"></span></h2>
+      <div class="tmPanelHd"><h2>Schema and Ego</h2><button type="button" class="infoBtn" data-help="schema" aria-label="About the Schema fields">?</button></div>
+      <div class="tiny muted" style="margin-bottom:8px">The totals the Schema screen in the Phantom Thieves menu shows now, and the Ego level from its own node. With these, each weapon's stats below and his Personas' stats, the Teams tab works out Wonder's stats for every setup it tries.</div>
+      <div class="row tmWSchema">
+          <div class="field"><label>Schema HP</label><input id="tmWS_hp" type="number" min="0" step="1" placeholder="—" style="width:76px"></div>
+          <div class="field"><label>HP %</label><input id="tmWS_hpPct" type="number" min="0" step="0.1" placeholder="—" style="width:60px"></div>
+          <div class="field"><label>Schema ATK</label><input id="tmWS_atk" type="number" min="0" step="1" placeholder="—" style="width:76px"></div>
+          <div class="field"><label>ATK %</label><input id="tmWS_atkPct" type="number" min="0" step="0.1" placeholder="—" style="width:60px"></div>
+          <div class="field"><label>Schema DEF</label><input id="tmWS_def" type="number" min="0" step="1" placeholder="—" style="width:76px"></div>
+          <div class="field"><label>DEF %</label><input id="tmWS_defPct" type="number" min="0" step="0.1" placeholder="—" style="width:60px"></div>
+          <div class="field"><label>Crit rate %</label><input id="tmWS_cr" type="number" min="0" step="0.1" placeholder="—" style="width:60px"></div>
+          <div class="field"><label>Crit damage %</label><input id="tmWS_cm" type="number" min="0" step="0.1" placeholder="—" style="width:60px"></div>
+          <div class="field"><label>Ailment acc. %</label><input id="tmWS_aa" type="number" min="0" step="0.1" placeholder="—" style="width:60px"></div>
+          <div class="field"><label>Ego level</label><input id="tmWS_ego" type="number" min="0" step="1" placeholder="—" style="width:60px"></div>
+      </div>
+    </div>
+    <div class="panel">
+      <h2>Weapons <span class="muted" id="wpCount"></span></h2>
       <div id="wpExplain" style="margin-bottom:10px"></div>
       <div class="scroll"><table id="wpTable"></table></div>
     </div>

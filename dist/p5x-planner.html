@@ -771,7 +771,7 @@ nav button.on .navIco{opacity:1}
     <div class="navGroup" role="group" aria-labelledby="navCards"><span class="navLbl" id="navCards">Revelation cards</span>
       <div class="navBtns"><button data-tab="opt">Optimise</button><button data-tab="inv">Inventory</button><button data-tab="triage">Triage</button><button data-tab="upgrades">Upgrades</button></div></div>
     <div class="navGroup" role="group" aria-labelledby="navTeams"><span class="navLbl" id="navTeams">Team building</span>
-      <div class="navBtns"><button data-tab="teams">Teams</button><button data-tab="personas">Personas</button><button data-tab="weapons">Weapons</button></div></div>
+      <div class="navBtns"><button data-tab="teams">Teams</button><button data-tab="personas">Personas</button><button data-tab="weapons">Wonder loadout</button></div></div>
     <button data-tab="data">Data</button>
   </nav>
   <div class="hdr-right">
@@ -997,22 +997,6 @@ nav button.on .navIco{opacity:1}
                   <div class="field"><label>Crit rate %</label><input id="tmWonderCr" type="number" min="0" max="100" step="0.1" placeholder="5" style="width:70px"></div>
                   <div class="field"><label>Crit damage %</label><input id="tmWonderCm" type="number" min="100" max="999" step="0.1" placeholder="150" style="width:70px"></div>
                 </div>
-                <!-- His Schema and Ego level, read once off the Phantom Thieves menu: with each Persona's and the
-                     dagger's own stats they work his panel out (wonderCalc), so his own hits and his Speed follow
-                     whatever setup is priced. -->
-                <div class="tmSub" style="margin-top:12px"><span>Schema and Ego</span><button type="button" class="infoBtn" data-help="schema" aria-label="About the Schema fields">?</button></div>
-                <div class="row tmWSchema">
-                  <div class="field"><label>Schema HP</label><input id="tmWS_hp" type="number" min="0" step="1" placeholder="—" style="width:76px"></div>
-                  <div class="field"><label>HP %</label><input id="tmWS_hpPct" type="number" min="0" step="0.1" placeholder="—" style="width:60px"></div>
-                  <div class="field"><label>Schema ATK</label><input id="tmWS_atk" type="number" min="0" step="1" placeholder="—" style="width:76px"></div>
-                  <div class="field"><label>ATK %</label><input id="tmWS_atkPct" type="number" min="0" step="0.1" placeholder="—" style="width:60px"></div>
-                  <div class="field"><label>Schema DEF</label><input id="tmWS_def" type="number" min="0" step="1" placeholder="—" style="width:76px"></div>
-                  <div class="field"><label>DEF %</label><input id="tmWS_defPct" type="number" min="0" step="0.1" placeholder="—" style="width:60px"></div>
-                  <div class="field"><label>Crit rate %</label><input id="tmWS_cr" type="number" min="0" step="0.1" placeholder="—" style="width:60px"></div>
-                  <div class="field"><label>Crit damage %</label><input id="tmWS_cm" type="number" min="0" step="0.1" placeholder="—" style="width:60px"></div>
-                  <div class="field"><label>Ailment acc. %</label><input id="tmWS_aa" type="number" min="0" step="0.1" placeholder="—" style="width:60px"></div>
-                  <div class="field"><label>Ego level</label><input id="tmWS_ego" type="number" min="0" step="1" placeholder="—" style="width:60px"></div>
-                </div>
                 <div class="tiny" id="tmWCalc" style="margin-top:8px"></div>
               </div>
             </details>
@@ -1065,8 +1049,27 @@ nav button.on .navIco{opacity:1}
   <!-- Which of Wonder's weapons the player has and at what refinement; the Teams tab offers and suggests only
        these, each at its own refinement (weaponsFrom in logic.js) -->
   <section id="tab-weapons" class="hide">
+    <!-- Wonder's Schema and Ego level: account-wide, the same whatever team or setup is priced, so they sit here
+         beside his weapons rather than under the Teams tab's setup. With each Persona's and the dagger's own stats they
+         work his panel out (wonderCalc). -->
     <div class="panel">
-      <h2>Wonder's weapons <span class="muted" id="wpCount"></span></h2>
+      <div class="tmPanelHd"><h2>Schema and Ego</h2><button type="button" class="infoBtn" data-help="schema" aria-label="About the Schema fields">?</button></div>
+      <div class="tiny muted" style="margin-bottom:8px">The totals the Schema screen in the Phantom Thieves menu shows now, and the Ego level from its own node. With these, each weapon's stats below and his Personas' stats, the Teams tab works out Wonder's stats for every setup it tries.</div>
+      <div class="row tmWSchema">
+          <div class="field"><label>Schema HP</label><input id="tmWS_hp" type="number" min="0" step="1" placeholder="—" style="width:76px"></div>
+          <div class="field"><label>HP %</label><input id="tmWS_hpPct" type="number" min="0" step="0.1" placeholder="—" style="width:60px"></div>
+          <div class="field"><label>Schema ATK</label><input id="tmWS_atk" type="number" min="0" step="1" placeholder="—" style="width:76px"></div>
+          <div class="field"><label>ATK %</label><input id="tmWS_atkPct" type="number" min="0" step="0.1" placeholder="—" style="width:60px"></div>
+          <div class="field"><label>Schema DEF</label><input id="tmWS_def" type="number" min="0" step="1" placeholder="—" style="width:76px"></div>
+          <div class="field"><label>DEF %</label><input id="tmWS_defPct" type="number" min="0" step="0.1" placeholder="—" style="width:60px"></div>
+          <div class="field"><label>Crit rate %</label><input id="tmWS_cr" type="number" min="0" step="0.1" placeholder="—" style="width:60px"></div>
+          <div class="field"><label>Crit damage %</label><input id="tmWS_cm" type="number" min="0" step="0.1" placeholder="—" style="width:60px"></div>
+          <div class="field"><label>Ailment acc. %</label><input id="tmWS_aa" type="number" min="0" step="0.1" placeholder="—" style="width:60px"></div>
+          <div class="field"><label>Ego level</label><input id="tmWS_ego" type="number" min="0" step="1" placeholder="—" style="width:60px"></div>
+      </div>
+    </div>
+    <div class="panel">
+      <h2>Weapons <span class="muted" id="wpCount"></span></h2>
       <div id="wpExplain" style="margin-bottom:10px"></div>
       <div class="scroll"><table id="wpTable"></table></div>
     </div>
@@ -13575,7 +13578,7 @@ function charsSig(detail) {
   });
   return (h >>> 0).toString(36);
 }
-function dataSignature() { return cardsSig(true) + ':' + charsSig('all') + ':' + teamSig() + ':' + denSig() + ':' + (wonderSpeed() || '') + ':' + JSON.stringify(wonderStatsSaved()) + ':' + JSON.stringify(wonderSchemaSaved()) + ':' + JSON.stringify(wonderSetup()) + ':' + JSON.stringify(personasSaved()) + ':' + JSON.stringify(weaponsSaved()); }
+function dataSignature() { return cardsSig(true) + ':' + charsSig('all') + ':' + teamSig() + ':' + denSig() + ':' + (wonderSpeed() || '') + ':' + JSON.stringify(wonderStatsSaved()) + ':' + JSON.stringify(wonderSchemaSaved()) + ':' + JSON.stringify(personasSaved()) + ':' + JSON.stringify(weaponsSaved()); }
 
 /* The save file is the only persistence (no browser storage — see CLAUDE.md), so the header
    says when there is something it does not have yet, and the page asks before it is closed on
@@ -13815,7 +13818,7 @@ function applyPrefs(p) {
 // What save() writes — split out so the round trip in the tests reads the real shape.
 function savePayload() {
   return { version: 1, savedAt: new Date().toISOString(), nextId: state.nextId,
-    cards: state.cards, characters: state.chars, settings: { teamCritRate: state.teamCrit, teamBuffs: teamBuffsSaved(), thievesDen: denSaved(), wonderSpeed: wonderSpeed(), wonderStats: wonderStatsSaved(), wonderSchema: wonderSchemaSaved(), wonder: wonderSetup(), personas: personasSaved(), wonderWeapons: weaponsSaved() }, prefs: collectPrefs() };
+    cards: state.cards, characters: state.chars, settings: { teamCritRate: state.teamCrit, teamBuffs: teamBuffsSaved(), thievesDen: denSaved(), wonderSpeed: wonderSpeed(), wonderStats: wonderStatsSaved(), wonderSchema: wonderSchemaSaved(), personas: personasSaved(), wonderWeapons: weaponsSaved() }, prefs: collectPrefs() };
 }
 function save() {
   const payload = savePayload();
@@ -13864,7 +13867,9 @@ function applySave(text, from) {
     state.personas = personasFrom(d.settings && d.settings.personas, d.settings && d.settings.wonder);
     // and his weapons: the setup's weapon and its refinement are read from them
     state.weapons = weaponsFrom(d.settings && d.settings.wonderWeapons, d.settings && d.settings.wonder);
-    state.wonder = wonderFrom(d.settings && d.settings.wonder);
+    // Wonder's setup starts empty: it is chosen on the Teams tab each visit (an old save's is read above only to
+    // move its skill cards onto their Personas and its weapon's refinement onto the weapon)
+    state.wonder = wonderFrom({});
     if (state.wonder.weapon) state.wonder.refine = weaponRec(state.wonder.weapon).refine;
     syncTeamCritField();
     applyPrefs(d.prefs);
@@ -18514,7 +18519,8 @@ function tcMemberCalc(dps, name, inTeam, backup, fit, pair) {
 }
 
 /* ---- Wonder: three Personas, each with its own three skill cards, and a weapon (the user's
-   choice, saved in the save file as settings.wonder beside his Speed) --------------------------
+   choice on the Teams tab, emptied each time the tab is opened and not saved; an old save's settings.wonder
+   is read only to move its cards and refinement onto the Personas and weapons) --------------------------
    WONDER_BUFFS holds what each of them does for the team, in the TEAM_BUFFS format, from lufel's
    Persona, skill-card and Wonder-weapon data. Wonder's own stats are not tracked, so a value
    that grows with them is taken at its printed cap, and his skills at their top rank; the page
@@ -18554,8 +18560,9 @@ const WONDER_SLOTS = 3, WONDER_CARDS = 3;
    can be replaced (`drop`, the ones it no longer has), which frees its slot. When a change leaves more than six
    (a card set, a level that teaches an innate skill, an innate skill ticked back), the last fused skills go
    first, then the last cards; personaSet returns what went.
-   A line whose number lufel's text does not tie to a rank keeps its top value. Wonder's own stats still are not
-   tracked, so a Persona's level does nothing to a line that grows with them (taken at its cap, as before). */
+   A line whose number lufel's text does not tie to a rank keeps its top value. A line that grows with Wonder's own
+   stats reads them for the setup priced (tcWonder's `wStat`: wonderCalc, where a Persona's level counts), at its cap
+   only when they are not known. */
 /* A Persona's level cap follows its grade — lufel's `grade`, I to IX in game, WONDER_PERSONA's `g` — not its stars
    (the user, Nov 2026: Belphegor, 4★ and grade IV, stops at 60, which the section had let default to 80; a first
    fix keyed on stars was corrected). Grades I-VIII are the user's in-game reading (25 / 35 / 45 / 60 / 70 / 85 /
@@ -18613,7 +18620,12 @@ const PERSONA_SK = [6, 7, 8], PERSONA_CARDS = 3, PERSONA_ACTIVE = 6;
 // every Persona the section lists: lufel's, out on Global
 const personaNames = () => Object.keys(WONDER_PERSONA).filter(n => !WONDER_UNRELEASED.includes(n)).sort((a, b) => a.localeCompare(b));
 const personaTop = n => Math.max(0, ((WONDER_PERSONA[n] || {}).t || ['']).length - 1);
-const personaDefault = n => ({ own: true, lv: personaLv(n).def, oc: personaOcMax(n), tal: personaTop(n), sk: 8, cards: [], fused: [], drop: [] });
+/* A Persona with no record is obtained, at its grade's level cap, fully overclocked, at its top talent rank and at skill
+   level 7 (the user, 12 Nov 2026: every Persona in their game is at 7; the default had been 8, the top of lufel's 6/7/8,
+   and with only Dionysus set to 7 an untouched Succubus at 8 out-priced his Rebellion and Highlight). A save stores only
+   what differs from this, so an old save's untouched Personas, counted at 8 until then, read 7 now. */
+const PERSONA_SK_DEFAULT = 7;
+const personaDefault = n => ({ own: true, lv: personaLv(n).def, oc: personaOcMax(n), tal: personaTop(n), sk: PERSONA_SK_DEFAULT, cards: [], fused: [], drop: [] });
 // every skill a Persona can have: lufel's skill list and every innate skill (four innate names are not in the list)
 let personaSkillSet = null, personaSkillSorted = null;
 const personaSkillNames = () => (personaSkillSorted || (personaSkillSorted =
@@ -18854,6 +18866,10 @@ function wonderFrom(o) {
 function wonderSetup() { return wonderFrom(state.wonder); }
 // his setup as this team can field it: a Persona marked busy (Wonder uses it in another team) is
 // left out with its skill cards, the way a busy character is left out of the team
+/* With nothing entered under Wonder's setup he brings nothing: the team is priced with only what the user picked (the user,
+   12 Nov 2026). For a few hours that day an empty setup was priced as his best setup for the team, worked out and assumed
+   without being entered, so the page counted Personas the setup above did not show. The best setup is still suggested on
+   his seat, with Use it to enter it. */
 function wonderHere() {
   const W = wonderSetup();
   W.personas = W.personas.map(p => tmBusyP.has(p.name) ? { name: '', cards: ['', '', ''], fused: [] } : p);
@@ -18900,9 +18916,22 @@ function tcWonder(dps, setup) {
   const lines = [], idle = [];
   const ri = S.refine - 1;
   const pick = x => Array.isArray(x) ? (x.length === 7 ? x[ri] : x[x.length - 1]) : x;
+  /* A line that grows with one of his stats ("plus 1.8% per 10% of Wonder's crit rate, at most 7% more") reads that stat
+     for this setup (Nov 2026): worked out from it (wonderCalc) once everything it needs is entered, else the ATK and crit
+     rate typed under his setup, in battle (the Thieves Den added, as for everyone); a stat neither gives is taken at the
+     line's cap, as every one was before. */
+  const WC = wonderCalc(S), typed = WC.ok ? null : wonderStatsTyped();
+  const wStat = s => {
+    const b = WC.ok ? { ATK: WC.atk, 'Crit Rate': Math.min(100, WC.cr), DEF: WC.def, HP: WC.hp, 'Ailment Accuracy': WC.aa }[s]
+      : typed ? { ATK: typed.atk, 'Crit Rate': typed.cr }[s] : undefined;
+    return b == null ? null : b + denBonus(s);
+  };
   const val = e => {
     let v = e.ladder ? e.ladder[ri] : (pick(e.v) || 0);
-    if (e.per && e.per.cap != null) v += (pick(e.per.rate) || 0) * pick(e.per.cap) / 100;
+    if (e.per && e.per.cap != null) {
+      const cap = pick(e.per.cap), st = wStat(e.per.s);
+      v += (pick(e.per.rate) || 0) * (st == null ? cap : Math.min(Math.max(0, st), cap)) / 100;
+    }
     return v * (e.stacks || 1);
   };
   // sources: the weapon (no slot), then each slot's Persona and its cards (slot = which Persona)
@@ -19372,13 +19401,27 @@ function tcDefence(pierce, defdown) {
    renders 7-31% faster (20% in all), repeat renders 72-104 ms. */
 const tcMemoNew = key => ({ key, hot: false, eval: new Map(), member: new Map(), search: new Map(), rot: new Map(), hlw: new Map(), sim: new Map(), dmg: new Map(), tech: new Map(), pool: new Map(), mateM: new Map(), burn0: new Map(), wb: new Map(), mix: new Map(), bks: new Map(), atk: new Map() });
 let tcMemo = tcMemoNew('');
+let tcMemoBank = { base: null, m: new Map() };
+const TC_MEMO_BANK = 4;
 function tcMemoFor(D) {
   // the "Auto" boss and enemies follow the damage dealer the fight is for; the key holds what they resolve to
   if (D) tcFocus = D.n || D;
   // composing or not changes every fitted rotation, so it turns the memo over like the fight's assumptions
-  const key = dataSignature() + '|' + [...tmBusy].sort().join(',') + '|' + [...tmBusyP].sort().join(',') + '|' + tcAssumeKey() + (tmComposeOn() ? '|compose' : '');
+  const base = dataSignature() + '|' + [...tmBusy].sort().join(',') + '|' + [...tmBusyP].sort().join(',') + '|' + tcAssumeKey() + (tmComposeOn() ? '|compose' : '');
+  // Wonder's setup is this session's, not the save's (dataSignature leaves it out), so the key holds it
+  const key = base + '|w=' + JSON.stringify(wonderSetup());
   if (key !== tcMemo.key) {
-    tcMemo = tcMemoNew(key);
+    /* A few memos are kept for the same save, one per Wonder setup, so entering a suggested setup and taking it back
+       does not work everything out again */
+    // a memo whose key was blanked (a test editing a kit table, which no fingerprint sees) drops them all
+    if (tcMemoBank.base !== base || tcMemo.key === '') tcMemoBank = { base, m: new Map() };
+    let m = tcMemoBank.m.get(key);
+    if (!m) {
+      m = tcMemoNew(key);
+      tcMemoBank.m.set(key, m);
+      while (tcMemoBank.m.size > TC_MEMO_BANK) tcMemoBank.m.delete(tcMemoBank.m.keys().next().value);
+    }
+    tcMemo = m;
     // the fight is against the boss the page picks
     const b = tcBossNow();
     if (b) Object.assign(TC_BOSS, { def: b.def, coef: b.coef });
@@ -23260,7 +23303,9 @@ function tcBestBackup(D, three) {
    seat's replacements priced by the whole team's value with them swapped in, and lufel's own
    recommended team priced the same way for comparison. Keys start "calc:" so a choice made on the
    lufel basis is never read here, nor the other way round. */
-function tcTeams(dps) { return tcHot(() => tcTeamsCalc(dps), dps); }
+function tcTeams(dps) {
+  return tcHot(() => tcTeamsCalc(dps), dps);
+}
 function tcTeamsCalc(dps) {
   const D = charDef(dps);
   const found = tcSearch(D, 8);
@@ -23552,7 +23597,7 @@ function wonderStatsTyped() { const s = wonderStatsSaved(); return s.atk ? { atk
    tools/wonder-self-stats.js (WONDER_PERSONA st, WONDER_SKILLS st, WONDER_WEAPON_STAT). Nothing publishes a Persona's or
    a dagger's base stats at its level (lufel and Prydwen have none; the Megami Tensei Wiki has level 1 only and blocks
    automated reads), so the user enters them from the game: each Persona's on the Personas tab (record `st`: hp, atk,
-   def, spd and the level read at), each dagger's on the Weapons tab, Schema and Ego level under Wonder's setup.
+   def, spd and the level read at), each dagger's, his Schema and Ego level on the Wonder loadout tab.
    WONDER_OWN is what is left over, solved from the four readings (each within 0.5 of these); whether it
    grows with Wonder's level is not known. The result is the character screen, so the Thieves Den is added in battle as
    for everyone (tcWonderBody), and a Persona's in-battle lines (a start-of-battle buff, Janosik's +29.1% from slot 2
@@ -23595,8 +23640,8 @@ function wonderCalc(S) {
   const pst = {};
   names.forEach(n => { pst[n] = personaStats(n); if (!statsComplete(pst[n])) missing.push(`${n}'s HP, ATK and DEF (Personas tab)`); });
   const wst = S.weapon ? weaponRec(S.weapon).st : null;
-  if (S.weapon && !statsComplete(wst)) missing.push(`${S.weapon}'s HP, ATK and DEF (Weapons tab)`);
-  if (!Object.keys(sc).length) missing.push('his Schema bonuses');
+  if (S.weapon && !statsComplete(wst)) missing.push(`${S.weapon}'s HP, ATK and DEF (Wonder loadout tab)`);
+  if (!Object.keys(sc).length) missing.push('his Schema bonuses (Wonder loadout tab)');
   const { add, from } = wonderAdds(S);
   const sumP = k => names.reduce((t, n) => t + ((pst[n] || {})[k] || 0), 0);
   const stat = k => (WONDER_OWN[k] + ((wst || {})[k] || 0) + sumP(k)) * (1 + ((sc[k + 'Pct'] || 0) + (add[k + '%'] || 0)) / 100) + (sc[k] || 0) + (sc.ego || 0) * WONDER_EGO[k];
@@ -23773,7 +23818,7 @@ const TM_HELP = {
   weak: ['Weakness', '<p>Whether hits land on a weakness: ×1.2 damage (weakness-damage buffs only count then) and 21% Highlight gauge instead of 17%. A resisted hit deals ×0.5.</p><p>The default: the boss is weak to the damage dealer\'s element, the one it is fought with; a teammate\'s hit of another element is neutral.</p>'],
   foes: ['Enemies', '<p>How many enemies the fight has. The damage dealer\'s area skills hit each of them; a debuff on one foe reaches only one, a debuff on all foes reaches every hit.</p><p><b>Auto</b> is 5 (a boss and its 4 helpers, as Vishnu, Kartikeya and Dominion bring) for a damage dealer built to hit every enemy, else 1.</p>'],
   down: ['Down Points', '<p>The boss\'s Down Points, as its gauge shows them. Each skill that hits its weakness takes 1 (some skills take more whatever the weakness, such as Kumi\'s Skill 3); at 0 it is knocked down until its next turn, which it still takes, and the gauge refills. Effects that need a downed foe count only then.</p><p>Most bosses cannot be knocked down: leave it on that unless yours can.</p>'],
-  setup: ['Wonder\'s setup', '<p>His three Personas and the skill cards each has learned, his weapon and its refinement. A Persona\'s passives count only while it is in use; the planner shares his six actions among the Personas and skill cards set here.</p><p><b>Slot 1 is his lead</b>: the Persona he starts the battle with, so only it does what a Persona does at the start of battle (Koumokuten, Janosik\'s Mark, Ex Machina\'s element).</p><p>Only the Personas marked obtained on the Personas tab are offered; a Persona\'s skill cards are its own, and setting them here sets them there. Skills it has through fusion are set there and count too. Only the weapons marked obtained on the Weapons tab are offered, each at its own refinement; changing the refinement here changes it there.</p>'],
+  setup: ['Wonder\'s setup', '<p>His three Personas and the skill cards each has learned, his weapon and its refinement. A Persona\'s passives count only while it is in use; the planner shares his six actions among the Personas and skill cards set here.</p><p><b>Slot 1 is his lead</b>: the Persona he starts the battle with, so only it does what a Persona does at the start of battle (Koumokuten, Janosik\'s Mark, Ex Machina\'s element).</p><p>Only the Personas marked obtained on the Personas tab are offered; a Persona\'s skill cards are its own, and setting them here sets them there. Skills it has through fusion are set there and count too. Only the weapons marked obtained on the Wonder loadout tab are offered, each at its own refinement; changing the refinement here changes it there.</p><p><b>It starts empty</b> each time the Teams tab is opened and when another damage dealer is picked, and is not kept in the save file: only what you pick here is counted. With nothing set he adds nothing, and his seat suggests his best setup for the team, with Use it to enter it.</p>'],
   schema: ['Schema and Ego', '<p>From the Schema screen in the Phantom Thieves menu: the total each bonus shows now, and the Ego level from its own node. Saved in the save file.</p><p>With each Persona\'s and the dagger\'s own stats (entered on their tabs) they work his character panel out, so his own hits and his Speed follow whatever setup is priced.</p>'],
   busy: ['Busy elsewhere', '<p>Fielding someone in another team (another damage dealer\'s, a second team for the same fight)? Press <b>Busy elsewhere</b> on their seat and the whole team is worked out again without them. Wonder\'s Personas are marked the same way on his seat.</p><p>The list is kept in the save file\'s preferences.</p>']
 };
@@ -23824,7 +23869,7 @@ $('#infoPopClose').onclick = infoPopClose;
 const TM_INPUTS = ['#tmChar', '#tmBasis', '#tmRank', '#tmRotFit', '#tmRotCompose', '#tmMedic', '#tmFight', '#tmBoss', '#tmWeak', '#tmFoes', '#tmDown'];
 function tmInputSig() {
   return TM_INPUTS.map(id => { const el = $(id); return el.type === 'checkbox' ? (el.checked ? 1 : 0) : el.value; }).join('|') +
-    '|' + [...tmBusy].sort().join(',') + '|' + [...tmBusyP].sort().join(',') + '|' + dataSignature();
+    '|' + [...tmBusy].sort().join(',') + '|' + [...tmBusyP].sort().join(',') + '|' + dataSignature() + '|' + JSON.stringify(wonderSetup());
 }
 function tmMarkStale() {
   const box = $('#tmStatus');
@@ -23894,7 +23939,7 @@ function renderTmPicker() {
   }
   setSel('#tmWWeapon', wopt('weapons', W.weapon), W.weapon);
   setSel('#tmWRefine', [1, 2, 3, 4, 5, 6, 7].map(r => `<option value="${r}">${refineLabel(r)}</option>`).join(''), String(W.refine));
-  // the refinement is the weapon's own (the Weapons tab): nothing to set without one
+  // the refinement is the weapon's own (the Wonder loadout tab): nothing to set without one
   $('#tmWRefine').disabled = !W.weapon;
   // worked out from the lead Persona's Speed once it is entered: then the box shows that and cannot be typed in;
   // the typed number stays saved and is used only for a setup whose lead has no Speed entered
@@ -23905,8 +23950,7 @@ function renderTmPicker() {
     : 'typed: put a Persona in slot 1 to work it out';
   const wst = wonderStatsSaved();
   [['#tmWonderAtk', 'atk'], ['#tmWonderCr', 'cr'], ['#tmWonderCm', 'cm']].forEach(([id, k]) => { const el = $(id); if (el && document.activeElement !== el) el.value = wst[k] != null ? wst[k] : ''; });
-  const sc = wonderSchemaSaved();
-  Object.keys(WONDER_SCHEMA_KEYS).forEach(k => { const el = $('#tmWS_' + k); if (el && document.activeElement !== el) el.value = sc[k] != null ? sc[k] : ''; });
+  wonderSchemaFill();
   $('#tmWCalc').innerHTML = tmWonderCalcHtml();
   $('#tmWonderSum').textContent = '— ' + tmWonderSumText();
   // only what is obtained is offered (the ? button says so); what Global does not have yet is named here
@@ -24210,7 +24254,7 @@ function tmSeatHtml(s, i, ctx) {
     <div class="acts">${actions}</div>
   </div>`;
 }
-const TM_WONDER_SEAT_INFO = '<p>Wonder joins every party. What his Personas, their skill cards and his weapon add is set under <b>Wonder\'s setup</b> at the top and priced here; the suggestion is the setup that does most for this team among what you own.</p><p>A Persona\'s passives count only while it is in use, so his six actions are shared among the Personas set. Anything that grows with his own stats is taken at its cap. His own attacks count once his ATK is entered (or worked out from his setup): his attack turns, an attacking skill he casts, his Highlight. His turns are under Rotation.</p>';
+const TM_WONDER_SEAT_INFO = '<p>Wonder joins every party. What his Personas, their skill cards and his weapon add is set under <b>Wonder\'s setup</b> at the top and priced here; the suggestion is the setup that does most for this team among what you own. With nothing set there, the team is chosen as if he runs his best setup for it, and that setup is counted and shown on his seat.</p><p>A Persona\'s passives count only while it is in use, so his six actions are shared among the Personas set. Anything that grows with his own stats (Rebellion\'s crit rate, Tarukaja\'s ATK) reads his stats for that setup once they are worked out or typed, and is taken at its cap otherwise. His own attacks count once his ATK is entered (or worked out from his setup): his attack turns, an attacking skill he casts, his Highlight. His turns are under Rotation.</p>';
 
 // a folded list under a seat: "Title (n)" closed, the items when opened
 const tmFoldHtml = (title, items, lead) => items.length ? `<details><summary>${esc(title)} (${items.length})</summary><div class="in">${lead || ''}<ul>${items.map(x => `<li>${esc(x)}</li>`).join('')}</ul></div></details>` : '';
@@ -24281,7 +24325,7 @@ function tmWonderWhat(s, ctx) {
   const idleNames = B.personas.filter((p, i) => p.name && !((B.adds || [])[i] > 0.0005)).map(p => p.name);
   const busyIn = W.setup.personas.filter(p => tmBusyP.has(p.name)).map(p => p.name);
   const skips = (W.setup.weapon ? WONDER_SKIPS.weapons[W.setup.weapon] || [] : []).concat(...W.setup.personas.filter(p => p.name).map(p => (WONDER_SKIPS.personas[p.name] || []).concat(...wonderSkills(p).map(c => WONDER_SKIPS.cards[c] || []))));
-  return (wonderEmpty(W.setup) ? '<div class="note">Set his Personas, their skill cards and his weapon under Wonder\'s setup at the top to count what he brings.</div>' : '') +
+  return (wonderEmpty(W.setup) ? '<div class="note">Nothing set, so he adds nothing to this team. Set his Personas, their skill cards and his weapon under Wonder\'s setup at the top, or use the suggested setup below, to count what he brings.</div>' : '') +
     (busyIn.length ? `<div class="note"><span class="tag miss">left out</span> ${esc(busyIn.join(' and '))} ${busyIn.length > 1 ? 'are' : 'is'} busy in another team, so ${busyIn.length > 1 ? 'they and their' : 'it and its'} skill cards are not counted here.</div>` : '') +
     (s.copiedBy ? `<div class="note tmCopy">${esc(TC_COPY.n)} copies his buffs onto ${esc(ctx.dps)} (${s.copiedBy.rate}%, 1 turn) on ${s.copiedBy.times} of her ${s.copiedBy.casts} Skill 3 cast${s.copiedBy.casts === 1 ? '' : 's'}; this seat's share counts it.</div>` : '') +
     (sum ? `<div class="tcSum" title="What he adds to ${esc(ctx.dps)}, each line counted at its share of turns">${sum}</div>` : '') +
@@ -24478,17 +24522,16 @@ $('#tmStatus').addEventListener('click', e => { if (e.target.closest('[data-tm-c
    damage dealer, and keeping it priced the next one's team with Personas chosen for the last. His three
    Personas, weapon and refinement go; his Speed and stats, and each Persona's own skill cards (the
    Personas section), stay. Undoable. */
-$('#tmChar').onchange = () => {
-  if (!wonderEmpty(wonderSetup())) {
-    const snap = snapshotState();
-    state.wonder = wonderFrom({});
-    commit();
-    tmRefresh();
-    offerUndo(`Wonder's setup was cleared for ${$('#tmChar').value}.`, snap);
-    return;
-  }
+function tmWonderReset(why) {
+  if (wonderEmpty(wonderSetup())) return false;
+  const snap = snapshotState();
+  state.wonder = wonderFrom({});
+  commit();
   tmRefresh();
-};
+  offerUndo(`Wonder's setup was cleared: ${why}.`, snap);
+  return true;
+}
+$('#tmChar').onchange = () => { if (!tmWonderReset(`${$('#tmChar').value} picked`)) tmRefresh(); };
 $('#tmBasis').onchange = () => { tmSyncCompose(); tmRefresh(); };
 // composing needs fitting on: the second box is greyed while the first is off; the medic box
 // belongs to the calculated basis
@@ -24688,7 +24731,7 @@ function renderPersonas() {
     A Persona released later starts as not obtained.</p>
     <p><b>Its stats</b>: the HP, Attack, Defense and Speed on the Persona's own screen. Wonder's panel adds up the HP, Attack and Defense of all
     three Personas he carries, and takes his Speed from the first one (with its Agility Master or Ironclad Resolve); only the first one's
-    talent and passive skills show on his panel. With these, his dagger's stats (Weapons tab) and his Schema (Wonder's setup on the Teams tab)
+    talent and passive skills show on his panel. With these, his dagger's stats and his Schema (Wonder loadout tab)
     filled in, the Teams tab works his stats out for every setup it tries. They are worked out from the Persona's level and overclocks
     and its level-1 stats (Game8): 2.4% of those a level, 10% more for each of the first two overclocks, Speed 100. That matched eleven
     readings of real screens to within 3%; numbers typed from the Persona's screen at its level and overclock replace it. Janosik, who
@@ -24715,7 +24758,8 @@ function renderPersonas() {
   }).join('') || '<div class="muted">No Persona matches these filters.</div>';
   $('#psFoot').textContent = WONDER_UNRELEASED.length ? `Not out on Global yet, so not listed: ${WONDER_UNRELEASED.join(', ')}.` : '';
 }
-/* The Weapons tab: Wonder's weapons, obtained or not, and the refinement, per weapon; what the Teams tab counts
+/* The Wonder loadout tab (`#tab-weapons`, renamed from Weapons on 12 Nov 2026): his Schema and Ego level, which are the
+   account's and the same for every team, and his weapons, obtained or not, and the refinement, per weapon; what the Teams tab counts
    for each beside it. Edits commit at once; un-obtaining one is undoable. Redrawn on commit() while shown, marked
    stale while hidden, like the Personas tab. */
 let wpStale = true;
@@ -24727,8 +24771,14 @@ function wpCountsText(n) {
   const L = WONDER_BUFFS.weapons[n] || [], skip = WONDER_SKIPS.weapons[n] || [];
   return L.length ? `${L.length} effect${L.length === 1 ? '' : 's'} counted${skip.length ? ', some not' : ''}` : 'nothing counted';
 }
+// the Schema and Ego boxes (the Wonder loadout tab) show what is saved; the one being typed in is left alone
+function wonderSchemaFill() {
+  const sc = wonderSchemaSaved();
+  Object.keys(WONDER_SCHEMA_KEYS).forEach(k => { const el = $('#tmWS_' + k); if (el && document.activeElement !== el) el.value = sc[k] != null ? sc[k] : ''; });
+}
 function renderWeapons() {
   wpStale = false;
+  wonderSchemaFill();
   const names = weaponNames();
   $('#wpCount').textContent = `${names.filter(weaponOwned).length} of ${names.length} obtained`;
   if (!$('#wpExplain').innerHTML) $('#wpExplain').innerHTML = explainHtml(
@@ -24967,7 +25017,7 @@ function showTab(tab) {
   if (tab === 'upgrades' && !$('#up-pane-retro').classList.contains('hide')) { if (!rgCache) runRetrograde(); else markStaleRuns(); }
   if (tab === 'upgrades' && !$('#up-pane-fortune').classList.contains('hide')) { if (!frCache) runFortune(); else { renderFrChars(); markStaleRuns(); } }
   if (tab === 'triage') { autoRunTriage(); markStaleRuns(); }
-  if (tab === 'teams') tmRefresh();   // controls and status only: the team waits for Calculate
+  if (tab === 'teams') { if (!tmWonderReset('the Teams tab was opened')) tmRefresh(); }   // the team waits for Calculate
   if (tab === 'personas' && psStale) renderPersonas();
   if (tab === 'weapons' && wpStale) renderWeapons();
 }

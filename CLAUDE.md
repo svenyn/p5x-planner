@@ -1113,12 +1113,20 @@ damage-formula section); teams are ranked by it:
   setup are all priced by the fight.
 - **Wonder** is a member like any other, priced from the setup the user enters on the tab — three
   Persona slots, each with the three skill cards that Persona has learned (a card is cast only
-  while its Persona is in use), plus a weapon and refinement (`state.wonder`, saved as
-  `settings.wonder`, in the fingerprint and the undo snapshot; `wonderFrom` drops anything
-  `WONDER_BUFFS` does not know or the Personas tab does not own, and reads a pre-slots save's single
-  Persona as slot 1). **Picking another damage dealer in `#tmChar` clears it** (Personas, weapon,
-  refinement; the user asked, Nov 2026: a setup is made for one damage dealer), undoably; his Speed
-  and stats and each Persona's own skill cards stay.
+  while its Persona is in use), plus a weapon and refinement (`state.wonder`, in the undo snapshot;
+  `wonderFrom` drops anything `WONDER_BUFFS` does not know or the Personas tab does not own, and reads a
+  pre-slots save's single Persona as slot 1).
+  **Only what the user picks is counted, and the setup starts empty** (the user, 12 Nov 2026: "it has to be a
+  choice"). `tmWonderReset` empties it — Personas, weapon, refinement — each time the Teams tab is opened
+  (`showTab('teams')`) and when another damage dealer is picked in `#tmChar`, undoably, with a toast saying why; his
+  Speed and stats, each Persona's own skill cards and each weapon's refinement record stay. With nothing set he adds
+  nothing (his part is exactly 1) and his seat says so; his best setup for the team is only suggested, with Use it to
+  enter it. Because it never outlives a visit, **it is not in the save file nor in `dataSignature()`** (so it never
+  marks unsaved changes): `tcMemoFor` and `tmInputSig` put it in their keys themselves. An old save's
+  `settings.wonder` is read only by `personasFrom`/`weaponsFrom`, to move its skill cards and refinement onto the
+  Personas and weapons. Earlier the same day an empty setup was priced as his best setup for the team, worked out and
+  assumed (`tcWonderAssume`, `tcAssumeRun`) without being entered, so the page counted Personas the setup did not
+  show; that was removed for this.
   `WONDER_BUFFS`/`WONDER_SKIPS` come from lufel's Persona files, skill cards
   (`/data/kr/wonder/skills.js`) and Wonder weapons (`/data/kr/wonder/weapons.js`), the DEF-down
   values cross-checked against lufel's defence calculator (`/data/kr/calc/defense-data.js`).
@@ -1146,8 +1154,13 @@ damage-formula section); teams are ranked by it:
   tie-break. So each slot's shortlist also takes the quick screen's best `TC_WB_IDLE` (3) that take none of
   his turns (`tcWbShort`; `inUse` 0 for that slot). On the real save only Miyu's suggestion changed (16
   damage dealers), at 0.02-0.17 s more a suggestion.
-  A team buff that grows with his stats is still taken at its cap (his stats now feed his own hits and Speed, see
-  "Wonder's stats are worked out" above, not those lines), and his skills
+  A team buff that grows with his stats reads them for the setup priced (10 Nov 2026; `tcWonder`'s `wStat`): Rebellion and
+  Revolution his crit rate, Tarukaja, Matarukaja, Cohesion and Purifying Flames his ATK, Rakukaja and Marakukaja his DEF,
+  Die For Me! his ailment accuracy, each from `wonderCalc` once his setup's numbers are entered, else his typed ATK and
+  crit rate, in battle (Thieves Den added), at most the line's cap; a stat neither gives takes the cap, as every one did
+  before. With 3000 ATK and 15% crit typed on save (59), the suggestion dropped Dionysus (Revolution priced at 40% crit) for
+  Makoto Yuki and Kushinada (Matarukaja at 3950 ATK) for Ryuji; YUI's and Kasumi's did not move. On the save as it stands
+  (Janosik's stats and the Schema not entered, nothing typed) every line keeps its cap. His skills
   at their top rank; his own damage is not counted, his Highlight comes from the shared gauge in
   the fight (above), from whichever of his Personas' Highlights does most.
   **A Persona's passives work only while it is in use** — the user asked, and the Persona text
@@ -1205,7 +1218,7 @@ damage-formula section); teams are ranked by it:
   innate skill, Auto-Mataru III and IV — the rest are listed as "the same buff, counted once". Before,
   each source was its own buff and stacked. Rakunda and Marakunda (or Tarukaja and Matarukaja) are
   still separate: whether P5X stacks the one-target and party versions is not settled.
-  **His weapons are a record too** (`state.weapons`, saved as `settings.wonderWeapons`, the Weapons tab, `#tab-weapons`,
+  **His weapons are a record too** (`state.weapons`, saved as `settings.wonderWeapons`, the Wonder loadout tab — named Weapons until 12 Nov 2026 — `#tab-weapons`,
   `renderWeapons`; Nov 2026, the user asked): obtained and refinement per weapon. The suggestion used to try
   every weapon at the setup's one refinement, so the user's R6 Arc Knife was weighed at R0 and lost to Event Horizon
   for Makoto Niijima. `tcWonderBest` now tries only obtained weapons (`wonderWeapons()`), each at its own refinement
@@ -1216,7 +1229,7 @@ damage-formula section); teams are ranked by it:
   or a save without it) every weapon is owned at R0 and the setup's weapon keeps its refinement (`weaponsFrom`), so a
   save whose setup sat at R0 suggests as before; after that a weapon with no record is not owned. In the fingerprint
   and the undo snapshot. The header groups the tabs (the user asked): Optimise, Inventory, Triage and Upgrades under
-  "Revelation cards", Teams, Personas and Weapons under "Team building" (`.navGroup`); Roster and Data stand alone.
+  "Revelation cards", Teams, Personas and Wonder loadout under "Team building" (`.navGroup`); Roster and Data stand alone.
   **The Personas tab is Wonder's collection** (`#tab-personas`, `state.personas`, saved as
   `settings.personas`; Nov 2026, the user asked): which Personas are owned, each one's level, talent rank and
   skill level (6/7/8), and the skill cards it has learned. Laid out like the Roster: a card per Persona with
@@ -1227,7 +1240,10 @@ damage-formula section); teams are ranked by it:
   in a loaded setup (`wonderPersonas()`), and a slot's skill cards are its Persona's (`wonderFrom` reads them
   from the collection; the Teams card boxes write there). The first time — a new page, or a save without
   `settings.personas` — every Persona out on Global is owned at the top of every rank, which is what was
-  priced before, and the old setup's cards move onto their Personas (`personasFrom`); after that a Persona
+  priced before, except skill level, which is 7 (`PERSONA_SK_DEFAULT`; the user, 12 Nov 2026: every Persona in
+  their game is at 7, and an untouched Succubus at the old default of 8 out-priced their Dionysus at 7; a save
+  stores only what differs from the default, so an old save's untouched Personas read 7 now), and the old setup's
+  cards move onto their Personas (`personasFrom`); after that a Persona
   with no record is not owned (released since). The ranks change numbers through `WONDER_PERSONA`, which
   `tools/gen-wonder-innate.js` writes from lufel's Korean text: `learn` (an innate skill counts from the
   level it is learned at, `wonderInnateHere`), `tv` (a talent number's value at each rank, lined up sentence
@@ -1336,8 +1352,9 @@ damage-formula section); teams are ranked by it:
   like its level), and a reading typed on the popup (record `st`: hp, atk, def, spd, the level and overclock read at) wins
   while the record is at that level and overclock. The popup and card show the stats used, and the popup the same with the
   Persona's own talent and skills on, as in slot 1. Dagger base stats are published nowhere usable, so the user enters them:
-  a dagger's on the Weapons tab, Schema and Ego level
-  under Wonder's setup (`state.wonderSchema`, saved as `settings.wonderSchema`, in the fingerprint and the undo snapshot).
+  a dagger's and the Schema and Ego level on the Wonder loadout tab (moved there from Wonder's setup on the Teams tab
+  on 12 Nov 2026, the user's request: they are the account's, the same for every team; `wonderSchemaFill` fills the boxes from
+  both tabs) (`state.wonderSchema`, saved as `settings.wonderSchema`, in the fingerprint and the undo snapshot).
   `wonderStats(S)` / `wonderSpeedFor(S)` give the setup being priced: worked out once everything it needs is entered,
   the typed ATK, crit and Speed otherwise. `tcWonder` puts them on its vector and result (`vec.ws`, `ws`, `spd`), so the
   quick screen, the fight's own hits and his place in the turn order follow every setup the suggestion tries. A tried setup
@@ -2429,8 +2446,7 @@ and the quick screen). Each finding was re-read against the text before entry. W
   unchanged. The quick screen does not read it (it is the damage dealer's own, in both fights alike).
 - **Still open, ranked** (each needs a mechanism or an in-game reading): Ren's Rebellion Resurgence stacks from foes below 60% HP;
   Starlight Morgana's Rushing Haze; Aran's Sin damage copy; Summer Ichigo's
-  weapon reading; a Persona `per` line is still taken at its cap though Wonder's stats are now worked out (Succubus's
-  Rebellion needs 38.9% crit); WONDER_BUFFS lines cannot read the ailment tracker (Hariti, Yurlungur, Vishnu's Wind
+  weapon reading; WONDER_BUFFS lines cannot read the ailment tracker (Hariti, Yurlungur, Vishnu's Wind
   line); Wonder's own ailments (Nian, Throne, Surt, Thor) are not priced; Labor's party +8% for the allies; Courtesy in the sweep.
 
 ### Lufel publishes an order, not magnitudes

@@ -18,3 +18,6 @@ ocr/debug_out/
 
 # Phone app (PWA) build for GitHub Pages — npm run site
 site/
+
+# web-upload batches of site/art (GitHub takes under 100 files an upload)
+site-upload/
