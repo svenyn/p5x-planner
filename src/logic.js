@@ -409,14 +409,16 @@ function mergeImport(existingCards, incomingCards) {
     // any pairwise work: the passes below are a cross product per fingerprint, and
     // one fingerprint really does run to hundreds of cards — Sun/Power 5★ HP is a
     // sixth of this user's inventory on its own. Cards sharing this key are
-    // interchangeable, so which one is claimed cannot matter, and every pair it
-    // takes is one the duplicate pass below would have taken anyway.
+    // interchangeable, and every pair it takes is one the duplicate pass below would
+    // have taken anyway. Worn ones are claimed first: a copy left over is offered for
+    // removal in the review, and removing it must not take a card off anyone.
     const byExact = new Map();
     pool.forEach((ex, j) => {
       const k = exactKey(ex);
       if (!byExact.has(k)) byExact.set(k, []);
       byExact.get(k).push(j);
     });
+    byExact.forEach(q => q.sort((a, b) => (pool[b].equipped ? 1 : 0) - (pool[a].equipped ? 1 : 0)));
     idxs.forEach(i => {
       const q = byExact.get(exactKey(incomingCards[i]));
       if (!q || !q.length) return;
@@ -492,18 +494,17 @@ function mergeImport(existingCards, incomingCards) {
   // and the user says whether the scan really was complete.
   const claimed = new Set();
   verdict.forEach(v => { if (v) claimed.add(v.existing); });
-  // ...except that an unmatched card whose exact twin the scan DID read is not evidence
-  // of a feed. Identical cards sit next to each other in the game's list, and autowalk
-  // reads two adjacent pixel-identical panels as one card (its documented blind spot):
-  // the Sep 2026 full scan came back with zero identical pairs against twenty in the
-  // inventory, and every one of the twenty was two Steam screenshots a second apart
-  // with the grid cursor moved and the panel unchanged — two cards, read once. Those
-  // are kept, listed separately, and never offered for removal: a phantom card is
-  // cheaper than deleting a real one.
+  // An unmatched card whose exact copy the scan DID read is one too, offered for removal
+  // like the rest (`unmatchedCopies` names them, for a note in the review). Until Nov 2026
+  // they were kept out of the removal, on the belief that identical cards sit side by side
+  // in the game's list and autowalk reads the pair as one. Checked on 13 Nov 2026 against
+  // the 19 identical pairs in save (63): for 16 of them the two Steam screenshots behind
+  // the pair show the selection on the same tile with the list not scrolled (one card shot
+  // twice, both shots added by the old screenshot import), and the full walk's logs show no
+  // "nothing moved" mid-list, which an adjacent twin would produce.
   const claimedKeys = new Set();
   claimed.forEach(c => claimedKeys.add(cardFingerprint(c) + '#' + exactKey(c)));
-  const isTwin = c => claimedKeys.has(cardFingerprint(c) + '#' + exactKey(c));
-  const unmatchedTwins = existingCards.filter(c => !claimed.has(c) && isTwin(c));
+  const isCopy = c => claimedKeys.has(cardFingerprint(c) + '#' + exactKey(c));
   // Reported in the order they were scanned, whatever order they were matched in.
   const toAdd = [], toUpdate = [], duplicates = [], ambiguous = [];
   incomingCards.forEach((inc, i) => {
@@ -525,12 +526,14 @@ function mergeImport(existingCards, incomingCards) {
     cardFingerprint(inc) === cardFingerprint(c) && subsNamesCompatible(c.subs || [], inc.subs || []) &&
     subsDiffering(c.subs || [], inc.subs || []) <= 1);
   const unmatched = existingCards.filter(c => {
-    if (claimed.has(c) || isTwin(c)) return false;
+    if (claimed.has(c)) return false;
+    if (isCopy(c)) return true;
     const inc = nearOf(c);
     if (inc) { unmatchedNear.push({ existing: c, incoming: inc }); return false; }
     return true;
   });
-  return { toAdd, toUpdate, duplicates, ambiguous, unmatched, unmatchedTwins, unmatchedNear };
+  const unmatchedCopies = unmatched.filter(isCopy);
+  return { toAdd, toUpdate, duplicates, ambiguous, unmatched, unmatchedCopies, unmatchedNear };
 }
 
 /* ======================== scoring engine ======================== */
@@ -3520,6 +3523,22 @@ function runOpt() {
     ${esc(unver.join(' and '))} appears in build guides but was not in any set list I could confirm,
     so its 2-piece effect is unknown and the optimiser scores that part as zero.
     Check it in game and correct it, or the recommendation will undervalue this set.</div>`);
+  /* The preferred set the pool cannot complete. The policy then falls back to another set, and
+     the only word of why was the last row of "Other set plans considered" ("4-piece Gain missing
+     Star,Sky"): the user read Shoki [Notte]'s Virtue 4-piece as the planner preferring Virtue
+     (Nov 2026; save (65) holds a Gain Sun and Moon and no Star or Sky). Not under "Pure stat
+     maximum", which ignores sets on purpose. */
+  const policy = $('#optPolicy').value;
+  const usesPref = r.best && r.best.sets.some(s => (t.sets || []).includes(s));
+  if (r.best && policy !== 'stats' && !usesPref && r.incomplete.length) {
+    const sets = r.incomplete.map(p => `<b>${esc(p.sets[0])}</b> (no ${esc(p.missing.join(' or '))} card)`);
+    const instead = policy === 'pref' ? 'the best plan these cards allow' : 'the best complete 4-piece these cards allow';
+    const poolNote = $('#optPool').value === 'free'
+      ? ' Cards worn by other characters are left out; set <b>Card pool</b> to All cards to count them.' : '';
+    notes.push(`<div class="notice optPrefMissing"><b>Preferred set not available.</b> ${esc(name)}'s preferred
+      4-piece ${sets.length > 1 ? 'sets' : 'set'} ${sets.join(' and ')} cannot be built from this card pool, so this is
+      ${instead} instead.${poolNote}</div>`);
+  }
   $('#optNotes').innerHTML = notes.join('');
 
   if (!r.best) {
@@ -8358,7 +8377,7 @@ function importScan(files) {
 
 function renderImportReview(result, invalid) {
   const unmatched = result.unmatched || [];
-  const twins = result.unmatchedTwins || [];
+  const copies = new Set(result.unmatchedCopies || []);
   const near = result.unmatchedNear || [];
   const unmatchedWorn = unmatched.filter(c => c.equipped).length;
   const cardLine = c => `${esc(c.slot)}/${esc(c.set)} ${c.rarity}★ Lv${c.level} ${esc(c.main)} — ` +
@@ -8370,8 +8389,7 @@ function renderImportReview(result, invalid) {
       <b>${result.toAdd.length}</b> new · <b>${result.toUpdate.length}</b> leveled up ·
       <b>${result.duplicates.length}</b> already in inventory (skipped) ·
       <b>${result.ambiguous.length}</b> need a decision · <b>${invalid.length}</b> invalid (skipped) ·
-      <b>${unmatched.length}</b> in inventory but not in this scan${twins.length ? ` ·
-      <b>${twins.length}</b> identical twins the scan read once` : ''}${near.length ? ` ·
+      <b>${unmatched.length}</b> in inventory but not in this scan${near.length ? ` ·
       <b>${near.length}</b> read differently by this scan` : ''}
     </p>
     ${invalid.length ? `<div class="notice tiny"><b>Skipped as invalid:</b><br>${invalid.slice(0, 8).map(esc).join('<br>')}${invalid.length > 8 ? ' …' : ''}</div>` : ''}
@@ -8397,24 +8415,15 @@ function renderImportReview(result, invalid) {
         the inventory matched nothing in what you imported${unmatchedWorn ? `, <b>${unmatchedWorn}</b> of them currently
         equipped` : ''}. On a partial scan that is expected. If this scan was your <b>complete</b> inventory, these are the
         cards fed away since the last one and can be removed here. Applying can be undone for 15 seconds afterwards,
-        and not after that — save first if in doubt.</p>
+        and not after that — save first if in doubt.${copies.size ? ` <b>${copies.size}</b> of them ${copies.size === 1 ? 'is an exact copy' : 'are exact copies'}
+        of a card this scan did read: most likely the same card saved twice by an older
+        import, so removing ${copies.size === 1 ? 'it' : 'them'} keeps the one the scan found.` : ''}</p>
       <label class="tiny"><input type="checkbox" id="impRemoveUnseen"> Remove these ${unmatched.length} cards — this scan was
         my whole inventory</label>
       <details style="margin-top:6px"><summary class="tiny muted">Show them</summary>
         <div class="tiny" style="max-height:180px;overflow:auto;margin-top:4px">
-          ${unmatched.slice(0, 60).map(c => `${cardLine(c)}${c.equipped ? ` <b>(on ${esc(c.equipped)})</b>` : ''}`).join('<br>')}
+          ${unmatched.slice(0, 60).map(c => `${cardLine(c)}${c.equipped ? ` <b>(on ${esc(c.equipped)})</b>` : ''}${copies.has(c) ? ' <i>(copy of a scanned card)</i>' : ''}`).join('<br>')}
           ${unmatched.length > 60 ? `<br>… and ${unmatched.length - 60} more` : ''}
-        </div></details>` : ''}
-    ${twins.length ? `
-      <h3 style="margin:14px 0 8px;font-size:13px">Identical twins the scan read once</h3>
-      <p class="tiny muted" style="margin:0 0 8px">${twins.length} card${twins.length === 1 ? ' is' : 's are'} an exact copy of a card
-        this scan did read. Identical cards sit next to each other in the game's list and the scanner reads two identical
-        adjacent cards as one, so these are kept and are <b>not</b> removed by the box above — if you really fed one of a pair,
-        take it off by hand on the Inventory tab.</p>
-      <details><summary class="tiny muted">Show them</summary>
-        <div class="tiny" style="max-height:180px;overflow:auto;margin-top:4px">
-          ${twins.slice(0, 60).map(c => `${cardLine(c)}${c.equipped ? ` <b>(on ${esc(c.equipped)})</b>` : ''}`).join('<br>')}
-          ${twins.length > 60 ? `<br>… and ${twins.length - 60} more` : ''}
         </div></details>` : ''}
     ${near.length ? `
       <h3 style="margin:14px 0 8px;font-size:13px">Read differently by this scan</h3>
@@ -9118,6 +9127,7 @@ const TEAM_BUFFS = {
     { k: 'defdown', v: 0, per: { s: 'ATK', rate: 0.4, cap: [2928, 3228, 3108, 3408] }, to: 'enemy', src: 'aw', on: '1', dur: 2, aw: 6, why: 'Burning Spirit (A6): Frostbound cap raised to 6, one more stack of Flower of Ice\'s DEF decrease' },
     { k: 'defdown', v: [7.8, 8.6, 8.3, 9.1], per: { s: 'ATK', rate: 1.0667, cap: [2928, 3228, 3108, 3408] }, to: 'enemy', src: '2', why: 'Frozen Tempest (Skill 2, Imperious Queen): foe\'s DEF -7.8% plus 3.2% per 300 of Mitsuru\'s ATK (up to 2928 ATK), permanent; lufel opens every fight with it' },
     { k: 'dmg', v: 0, per: { s: 'ATK', rate: 0.6667, cap: [2928, 3228, 3108, 3408] }, to: 'enemy', src: '2', why: 'Frozen Tempest (Skill 2, Imperious Queen): foe takes +2% damage per 300 of Mitsuru\'s ATK (up to 2928 ATK), permanent' },
+    { elu: 3, to: 'party', src: '3', on: '3', dur: 2, why: 'Snowpierced Waltz (Skill 3): the party gains 3% of the Elucidator\'s stats for 2 turns (Korean: each of the Elucidator\'s stats, 3% of it added to the allies\' matching stat), read like her own 20% share: ATK (as flat ATK), crit rate, crit damage, damage and Pierce' },
     { k: 'dmg', v: [19.5, 21.5, 20.7, 22.7], to: 'enemy', src: 'TH', on: 'TH', dur: 2, why: 'Blizzard Edge (Theurgy): foe takes +19.5% damage while Snowbound, 2 turns' },
     { k: 'dmg', v: 25, to: 'enemy', src: 'aw', on: 'TH', dur: 2, aw: 4, why: 'Behind the Lies (A4): Blizzard Edge\'s target takes a further +25% damage, 2 turns' },
     { k: 'dmg', v: 4.8, to: 'party', src: 'passive', arch: ['ST DPS', 'AoE DPS'], stacks: 5, cond: 'foe carries Frostbound, which Mitsuru\'s every skill applies', why: 'Freeze Mark (passive): Assassin and Sweeper allies deal +4.8% damage per Frostbound stack on the foe; her rotation holds 5' },
@@ -12483,6 +12493,22 @@ function tcSelfAmp(name, e, lo, aw, round, lb) {
   }
   return 1 + p / 100;
 }
+/* The stats an Elucidator shares with the party (her passive's 20%, 15% at 4★), by team key. `elu` on a TEAM_BUFFS
+   line is a share of them of its own (Mitsuru's Snowpierced Waltz, 3%): with the team known (`inTeam` holds an
+   Elucidator) it becomes one line per stat at her totals; without one (the quick sweep prices members two at a time)
+   it is a single marker line, `eluPct`, whose share of turns tcMultiplier multiplies by the Elucidator's own stats
+   (`vec.eluBase`) once the lineup has one. */
+const TC_ELU_STATS = [['atk', 'ATK'], ['cr', 'Crit Rate'], ['cm', 'Crit Multiplier'], ['dm', 'Damage Multiplier'], ['pierce', 'Resistance Pierce']];
+const TC_ELU_LINE_K = { atk: 'atk', cr: 'cr', cm: 'cm', dm: 'dmg', pierce: 'pierce' };
+function tcEluLines(list, name, inTeam) {
+  if (!list.some(e => e.elu)) return list;
+  const elu = inTeam ? [...inTeam].find(n => n !== name && n !== inTeam.backup && (charDef(n) || {}).arch === 'Navigator') : null;
+  return [].concat(...list.map(e => {
+    if (!e.elu) return [e];
+    if (!elu) return [Object.assign({}, e, { k: 'eluPct', v: e.elu, eluMark: true })];
+    return TC_ELU_STATS.map(([k, s]) => Object.assign({}, e, { k: TC_ELU_LINE_K[k], v: e.elu / 100 * tcStat(elu, s), elu: undefined, why: `${e.why} — ${s}: ${e.elu}% of ${elu}'s` }));
+  }));
+}
 function tcMemberCalc(dps, name, inTeam, backup, fit, pair) {
   const sup = charDef(name);
   const vec = {}; TC_KEYS.forEach(k => { vec[k] = 0; });
@@ -12492,10 +12518,13 @@ function tcMemberCalc(dps, name, inTeam, backup, fit, pair) {
   // the damage dealer's own lines, for the fight: only what reaches the whole party or the enemy, and not
   // what their own stats already count (`own: false`) or reaches them only from an Awareness (`ownAw`)
   const self = name === dps.n;
+  let eluBase = null;
   if (sup.arch === 'Navigator' && !backup && !self) {
     const share = sup.r >= 5 ? 0.2 : 0.15;
-    [['atk', 'ATK'], ['cr', 'Crit Rate'], ['cm', 'Crit Multiplier'], ['dm', 'Damage Multiplier'], ['pierce', 'Resistance Pierce']].forEach(([k, s]) => {
-      const v = share * tcStat(name, s);
+    eluBase = {};
+    TC_ELU_STATS.forEach(([k, s]) => {
+      const t = tcStat(name, s), v = share * t;
+      if (t > 0) eluBase[k] = t;
       if (v > 0) { vec[k] += v; lines.push({ k, v, up: 1, why: `Elucidator: ${Math.round(share * 100)}% of her ${s}` }); }
     });
   }
@@ -12507,6 +12536,7 @@ function tcMemberCalc(dps, name, inTeam, backup, fit, pair) {
     });
   }
   const shareVec = Object.assign({}, vec), shareN = lines.length;
+  if (eluBase) vec.eluBase = eluBase;
   const rot = tmRotPick(name, inTeam || new Set([dps.n, name]));
   let seq = rot && rot.pick[0] ? rot.pick[0].seq : [];
   const dkind = tcHlKind(dps.n), F = tcFight(), aw = +lo.awareness || 0;
@@ -12517,7 +12547,7 @@ function tcMemberCalc(dps, name, inTeam, backup, fit, pair) {
   let burnCov = null;   // the share of turns the lineup keeps the foe Burning, likewise
   const usable = [];
   // Minami's medicines are lines of the choice being priced (`pair`, TC_MEDS)
-  for (const e of (TEAM_BUFFS[name] || []).concat(name === TC_MEDS_OF && pair ? tcMedLines(pair) : [])) {
+  for (const e of tcEluLines(TEAM_BUFFS[name] || [], name, inTeam).concat(name === TC_MEDS_OF && pair ? tcMedLines(pair) : [])) {
     if (self && ((e.to !== 'party' && e.to !== 'enemy') || e.own === false || (e.ownAw != null && aw < e.ownAw))) continue;
     // a line of a mask pair not played (a character with no choice to make here, Makoto Yuki at A6, keeps every line)
     if (e.pair && !(pair && e.pair.includes(pair)) && tcPairOpts(dps, name).length) continue;
@@ -12537,7 +12567,7 @@ function tcMemberCalc(dps, name, inTeam, backup, fit, pair) {
     const lbOff = name === TC_LB.n && !TC_LB.arch.includes(dps.arch) ? 0 : undefined;
     const v = tcLineValue(e, sup, lo, dps.n) * ckQ * tcSelfAmp(name, e, lo, aw, undefined, lbOff);
     if (v == null || !v || isNaN(v)) continue;
-    const k = TC_FROM_K[e.k];
+    const k = e.eluMark ? 'eluPct' : TC_FROM_K[e.k];
     if (!k) continue;
     let dur = e.durAw && aw >= e.durAw[0] ? e.durAw[1] : (e.dur || 1);
     /* a line that needs a knocked-down boss (`down`) or that a knockdown sets off (`on: 'knock'`, 'knockSelf')
@@ -13453,13 +13483,17 @@ function tcWonder(dps, setup) {
   const wdLv = p => Math.max(0, PERSONA_SK.indexOf(personaRec(p).sk));
   const wdParts = (list, p) => (list || []).map(x => ({ el: x[0], aoe: !!x[1], v: x[2] * x[3 + wdLv(p)] }));
   const wdVal = parts => parts.reduce((t, x) => t + x.v * (x.aoe ? tcFoes() : 1) * tcWeakF(x.el), 0);
-  const wdAttack = slot => {
+  /* the skill an attack turn uses, with its name for the Rotation panel (the user, Nov 2026: "Attack" with Vishnu
+     read as a basic attack, where it is his Wind of Nirvana); a unique with no name in the data reads "unique skill" */
+  const wdAttackOpt = slot => {
     const p = S.personas[slot] && S.personas[slot].name;
     if (!p) return null;
+    const P = WONDER_DMG.personas[p] || {};
     const names = personaInnateHas(p, personaRec(p)).concat(wonderSkills(S.personas[slot]));
-    const opts = [wdParts((WONDER_DMG.personas[p] || {}).u, p)].concat(names.map(n => wdParts(WONDER_DMG.skills[n], p))).filter(x => x.length);
-    return opts.length ? opts.reduce((a, b) => wdVal(b) > wdVal(a) ? b : a) : null;
+    const opts = [{ name: P.un || 'unique skill', parts: wdParts(P.u, p) }].concat(names.map(n => ({ name: n, parts: wdParts(WONDER_DMG.skills[n], p) }))).filter(x => x.parts.length);
+    return opts.length ? opts.reduce((a, b) => wdVal(b.parts) > wdVal(a.parts) ? b : a) : null;
   };
+  const wdAttack = slot => { const o = wdAttackOpt(slot); return o ? o.parts : null; };
   const wdCast = src => { const p = S.personas[src.slot] && S.personas[src.slot].name; if (!p) return null; const l = src.card ? WONDER_DMG.skills[src.label] : (WONDER_DMG.personas[p] || {}).u; const x = wdParts(l, p); return x.length ? x : null; };
   const hlSlot = hls.length && hlEv.length ? (hls.find(h => h.e === hlEv[0].e) || {}).s : null;
   const hlOf = slot => { const p = S.personas[slot] && S.personas[slot].name; return p ? wdParts((WONDER_DMG.personas[p] || {}).hl, p) : []; };
@@ -13474,7 +13508,7 @@ function tcWonder(dps, setup) {
   const turns = sched.map(tok => {
     const src = byTok.get(tok);
     if (tok === 'wr') return { persona: S.personas[best.idleSlot].name, what: skillName(allySkill[best.idleSlot]) + ' again' };
-    if (!src) return { persona: best.idleSlot >= 0 ? S.personas[best.idleSlot].name : '', what: 'attack' };
+    if (!src) { const o = best.idleSlot >= 0 ? wdAttackOpt(best.idleSlot) : null; return { persona: best.idleSlot >= 0 ? S.personas[best.idleSlot].name : '', what: 'attack', skill: o ? o.name : null }; }
     return { persona: S.personas[src.slot].name, what: skillName(src) };
   });
   return { vec, ws, spd: wonderSpeedFor(S), lines, idle, uncast, turns, dmg, lead, busy: asked > 6, inUse: best.inUse.map(x => x / 6), offTurn, sim: { consts: noHl, constsOne: wOne, constsMin: wMin, events: hlEv, knock: knockEv, gated: wGated, ally: wAlly, cast: { seq: sched, events: castEv }, constsAlly: wAllyOnly, guid: wGuid } };
@@ -13492,7 +13526,7 @@ function tcWonder(dps, setup) {
    line the quick screen cannot price: continuous damage, Resonance) and the fight picks among them; one improvement pass follows. Without `names` the
    quick screen decides. `adds` (not saved, not compared) is what each slot adds: the team's value with it
    over without. A Persona marked busy (tmBusyP: Wonder is using it in another team) is never suggested. */
-const TC_WB_SHORT = 6, TC_WB_IDLE = 3, TC_WB_WEAPONS = 3;
+const TC_WB_SHORT = 6, TC_WB_IDLE = 3;
 // a slot's shortlist from its quick-screen rows [name, value, value alone, takes none of his turns]
 const tcWbShort = rows => {
   const by = rows.slice().sort((x, y) => (y[1] - x[1]) || (y[2] - x[2]));
@@ -13544,13 +13578,21 @@ function tcWonderBestCalc(dps, vecs, names) {
   // one improvement pass: each slot again, against the other two as they now stand
   for (let slot = 0; slot < WONDER_SLOTS; slot++) pick(slot);
   /* The weapon again, now with his Personas: it was chosen with none, which no weapon whose effect hangs on
-     his casts can win (Ice Age's Ancient Frost, renewed only by a skill on an ally). The quick screen's best
-     TC_WB_WEAPONS and the current one are fought; a change gets one more pass over the slots. */
-  const wq = wonderWeapons().map(k => [k, value(arm(copy(S), k))])
-    .sort((x, y) => y[1] - x[1]).slice(0, TC_WB_WEAPONS).map(x => x[0]);
-  let wTop = S.weapon, wBest = fight(S);
-  wq.forEach(k => { if (k === S.weapon) return; const v = fight(arm(copy(S), k)); if (v > wBest + 1e-9) { wBest = v; wTop = k; } });
-  if (wTop !== S.weapon) { arm(S, wTop); for (let slot = 0; slot < WONDER_SLOTS; slot++) pick(slot); }
+     his casts can win (Ice Age's Ancient Frost, renewed only by a skill on an ally). Every weapon he owns is
+     fought, by the fight the page shows (tmFitOn(): rotations fitted to the team), and a change gets one more
+     pass over the slots. Until Nov 2026 only the quick screen's best three were fought, with lufel's rotations as
+     written: for Queen on save (66) that kept Glimmer (+5.2% at the page's fit) over Arc Knife (+5.9%, 0.2% behind
+     unfitted) and never fought Starry Compass (+6.9%, 9th on the quick screen, whose Guidance counter only the
+     fight plays). A dozen or so fights, against a few hundred for the slots. */
+  const fightW = s => names ? tcSim(dps, names, tmFitOn(), false, s).mult : value(s);
+  const bestWeapon = () => {
+    let top = S.weapon, tv = fightW(S);
+    wonderWeapons().forEach(k => { if (k === S.weapon) return; const v = fightW(arm(copy(S), k)); if (v > tv + 1e-9) { tv = v; top = k; } });
+    return top;
+  };
+  const wTop = bestWeapon();
+  let moved = false;
+  if (wTop !== S.weapon) { arm(S, wTop); moved = true; for (let slot = 0; slot < WONDER_SLOTS; slot++) pick(slot); }
   /* Who leads: slot 1's Persona is the one in use when the battle starts, and only it does what a Persona does
      at the start of battle (tcWonder's `lead`: Koumokuten, Janosik's Mark; Ex Machina's element). When one of
      the three or the weapon has such a line, each is tried in front, the other two keeping their order, and the
@@ -13565,8 +13607,10 @@ function tcWonderBestCalc(dps, vecs, names) {
       const v = fight(t);
       if (v > lv + 1e-9) { lv = v; ls = t; }
     }
-    if (ls) S.personas = ls.personas;
+    if (ls) { S.personas = ls.personas; moved = true; }
   }
+  // the slots or the lead changed after the weapon was chosen: the weapon once more against them as they stand
+  if (moved) { const w = bestWeapon(); if (w !== S.weapon) arm(S, w); }
   const full = fight(S);
   const adds = S.personas.map((p, i) => { if (!p.name) return 0; const t = copy(S); t.personas[i].name = ''; return full / fight(t) - 1; });
   Object.defineProperty(S, 'adds', { value: adds, enumerable: false });
@@ -18659,7 +18703,10 @@ function tmWonderRotHtml(ctx) {
   if (!C || !wseat || !wseat.wonder) return '';
   const W = wseat.wonder, B = W.best;
   const pel = n => ELEMENT_COLORS[(WONDER_PERSONA[n] || {}).e] || ELEMENT_COLORS['None'];
-  const wgrid = turns => `<div class="tmRot wonder">${turns.map((t, i) => `<div class="t ${t.what === 'attack' ? 'idle' : 'tok'}" style="--tb:${esc(pel(t.persona))}" title="${esc(t.what === 'attack' ? `attacks with ${t.persona || 'no Persona'}` : `${t.persona} casts ${t.what}`)}"><small>Turn ${i + 1}</small><b>${esc(t.what === 'attack' ? 'Attack' : t.what)}</b><span class="who">${esc(t.persona || '—')}</span></div>`).join('')}</div>`;
+  /* an attack turn names the skill it uses (his strongest damaging skill on that Persona), marked as an attack:
+     "Attack" alone read as a basic attack */
+  const atkTitle = t => t.skill ? `attacks with ${t.persona}: ${t.skill}, its strongest damaging skill here` : `attacks with ${t.persona || 'no Persona'}`;
+  const wgrid = turns => `<div class="tmRot wonder">${turns.map((t, i) => `<div class="t ${t.what === 'attack' ? 'idle' : 'tok'}" style="--tb:${esc(pel(t.persona))}" title="${esc(t.what === 'attack' ? atkTitle(t) : `${t.persona} casts ${t.what}`)}"><small>Turn ${i + 1}${t.what === 'attack' && t.skill ? ' · attack' : ''}</small><b>${esc(t.what === 'attack' ? t.skill || 'Attack' : t.what)}</b><span class="who">${esc(t.persona || '—')}</span></div>`).join('')}</div>`;
   const mine = !wonderEmpty(W.setup) && (W.turns || []).some(t => t.persona);
   const sug = B && W.bestGain >= 1.0005 && JSON.stringify(B) !== JSON.stringify(W.setup) ? tcWonder(D, B).turns : null;
   return `<div class="tmMember" style="--el:#6fa6ee"><div class="hd"><span class="nm">Wonder</span> <span class="tag">every party</span> <span class="tiny muted">his six turns, repeated; a tile's edge is the Persona's element; his Highlight comes from the shared gauge</span></div>` +

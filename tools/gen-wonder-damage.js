@@ -87,11 +87,13 @@ async function main() {
       if (!skills.has(k)) skills.set(k, p);
       else if (!same(skills.get(k), p)) warn.push(`${n}: innate ${k} differs from the skill list's, the list's kept`);
     });
-    if (u.length || hl.length) personas.push([n, u, hl]);
+    const un = u.length && f.uniqueSkill ? String(f.uniqueSkill.name_en || '').trim() : '';
+    if (u.length && !un) warn.push(`${n}: unique skill has damage but no English name`);
+    if (u.length || hl.length) personas.push([n, u, hl, un]);
   });
   personas.sort((a, b) => a[0].localeCompare(b[0]));
   const arr = p => '[' + p.map(x => '[' + q(x[0]) + ', ' + x.slice(1).join(', ') + ']').join(', ') + ']';
-  const pLines = personas.map(([n, u, hl]) => `    ${q(n)}: { ${[u.length ? 'u: ' + arr(u) : '', hl.length ? 'hl: ' + arr(hl) : ''].filter(Boolean).join(', ')} },`);
+  const pLines = personas.map(([n, u, hl, un]) => `    ${q(n)}: { ${[u.length ? 'u: ' + arr(u) : '', un ? 'un: ' + q(un) : '', hl.length ? 'hl: ' + arr(hl) : ''].filter(Boolean).join(', ')} },`);
   const sLines = [...skills.entries()].sort((a, b) => a[0].localeCompare(b[0])).map(([n, p]) => `    ${q(n)}: ${arr(p)},`);
   [pLines, sLines].forEach(L => { if (L.length) L[L.length - 1] = L[L.length - 1].replace(/,$/, ''); });
 
@@ -99,7 +101,7 @@ async function main() {
   const EOL = text.includes('\r\n') ? '\r\n' : '\n';
   const block = [BEGIN,
     '/* Wonder\'s own damage (lufel\'s English Persona and skill text): each part [element, all foes (1/0), hits,',
-    '   % of Attack per hit at skill levels 6/7/8]. `personas`: a Persona\'s unique skill (u) and Highlight (hl);',
+    '   % of Attack per hit at skill levels 6/7/8]. `personas`: a Persona\'s unique skill (u, its name un) and Highlight (hl);',
     '   `skills`: every attack skill a Persona can have (innate, skill card, fused), by English name. The Teams tab\'s',
     '   fight deals these from the ATK and crit entered for him. See tools/gen-wonder-damage.js. */',
     'const WONDER_DMG = {', '  personas: {', ...pLines, '  },', '  skills: {', ...sLines, '  }', '};', END].join(EOL);

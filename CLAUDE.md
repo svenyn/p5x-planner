@@ -578,6 +578,13 @@ both at the tab's 4-piece value), in "Other set plans considered" and the "ignor
 line. At the default 55 that is exactly the build score each plan would earn. They used to be
 raw (643.6, "598.5 / −45.2") beside the /100 score, a second scale for the same thing.
 
+**When the preferred 4-piece cannot be built, Optimise says so at the top** (`.optPrefMissing` in
+`#optNotes`; Nov 2026): the pick uses none of the character's sets, the policy is not "Pure stat
+maximum", and `r.incomplete` names each preferred set with the slots the pool lacks. Until then the
+only word of it was the last row of "Other set plans considered", and the user read Shoki [Notte]'s
+Virtue 4-piece (save (65): a Gain Sun and Moon, no Star or Sky) as the planner preferring Virtue. On
+that save it shows for him alone of 41 owned.
+
 Absolute in-battle numbers remain `totalStat()`'s job, not this one — `damageFactors`
 counts each main at its `MAIN_MAGNITUDE` value for the card's level, the same figure
 `cardScore` prices it at, identically on both sides of every ratio. That includes the two
@@ -1142,8 +1149,14 @@ damage-formula section); teams are ranked by it:
   foe, such as Janosik's Tatra Shot, is cast on the foe). It had been a judged 80% whatever he cast. The
   quick screen reads his ally casts per six turns (`allyCastUp`, optimistic: a cast in the opening window
   renews nothing), the fight plays them. `tcWonderBest` re-checks the weapon once its Personas are chosen
-  (the quick screen's best `TC_WB_WEAPONS`, 3, fought; a change gets one more pass over the slots), since a
-  weapon chosen with no Personas can never be Ice Age. On the real save, Miyu's best team: with the
+  (every weapon he owns fought by the fight the page shows, `tmFitOn()`; a change gets one more pass over the
+  slots, and after that pass or a new lead the weapon is checked once more), since a weapon chosen with no
+  Personas can never be Ice Age. Until 14 Nov 2026 only the quick screen's best three were fought, with lufel's
+  rotations as written: for Queen on save (66) that kept Glimmer (+5.2% at the page's fit) over Arc Knife (+5.9%;
+  0.2% behind unfitted, the user asked why) and never fought Starry Compass (+6.9%, 9th on the quick screen,
+  whose Guidance counter only the fight plays). On that save 2 of 17 suggestions changed, Queen's and Yusuke's,
+  both to Starry Compass (Wonder's gain 40.8% to 43.1%, 39.1% to 44.8%); a fresh render is about 5-25% slower
+  where nothing changed. A test holds that no owned weapon fights better than the pick. On the real save, Miyu's best team: with the
   suggested Personas (no ally casts) Ice Age fell from +3.4% to +1.1% and Starry Compass (+4.2%) stays;
   with Dionysus casting Revolution on her Ice Age beats Starry Compass on the same Personas (21.93× to
   21.82×), but Kohryu / Janosik / Belphegor with Starry Compass is higher still (22.14×), and the
@@ -1317,7 +1330,10 @@ damage-formula section); teams are ranked by it:
   Starlight Morgana's 3% and Pioneer Shun's 6% at Awareness 2 (Skill 1 is not in his Awareness 0
   rotation, so nothing there).
   **His six turns are under Rotation** (`tcWonder(...).turns`: each turn's Persona and what it casts,
-  or the Persona he attacks with), for your setup and for the suggested one when it differs.
+  or the Persona he attacks with), for your setup and for the suggested one when it differs. An attack turn
+  names the skill it uses (`skill`: that Persona's strongest damaging skill, the unique's name from `WONDER_DMG`
+  `un`; Nov 2026, the user read Vishnu's "Attack" in Queen's team as a basic attack, where it is Wind of Nirvana —
+  cast for its hit and its DEF cut, since its Wind-damage debuff is nothing to a Nuclear damage dealer).
   **His casts go on the damage dealer's heavy turns** (Nov 2026): skill by skill, `tcWonder` places its
   casts on the free turns whose coverage (each turn once, over the fight) holds most of the damage
   dealer's damage, turn by turn from their lufel rotation; a Highlight-only line counts Highlights only.
@@ -3060,11 +3076,19 @@ than in arrival order. Three rules were each added after a real false match:
 - **Unmatched existing cards are reported, and removal is opt-in.** On a scan of the whole
   inventory they are the cards fed since the last one, which no per-card verdict can say;
   the review lists them, flags equipped ones, and offers removal behind an unchecked box.
-  Cards with an **exact twin the scan did read** are excluded and listed apart
-  (`unmatchedTwins`): identical cards sit adjacent in the game's list and autowalk reads
-  two identical adjacent panels as one. Verified Sep 2026 — the full scan had zero
-  identical pairs against twenty in the save, each pair two Steam screenshots a second
-  apart with the cursor moved and the panel unchanged.
+  A card with an **exact copy the scan did read** is offered with the rest, marked as a
+  copy (`unmatchedCopies`), and the exact-hash claim takes the worn one of such a pair
+  first, so removing the copy unequips nobody. Until Nov 2026 these were held out of the
+  removal (`unmatchedTwins`), on the belief that identical cards sit side by side in the
+  game's list and autowalk reads the pair as one; a Sep 2026 look at twenty such pairs
+  had read their screenshots as the cursor moving between two cards. Checked again on
+  13 Nov 2026 it does not hold: save (63) held 19 identical pairs and that day's full
+  walk (`ocr/cards-43..47.json`) read each once; for 16 of them the two Steam screenshots
+  behind the pair (`src`) show the selection on the same tile with the list not scrolled,
+  i.e. one card shot twice and both shots added by the old screenshot import (of the other
+  three, the two Sorrow pairs are screenshots days apart and not decidable from pixels); and the walk logs show no "nothing moved" anywhere mid-list, which an adjacent
+  identical card would produce. Removal stays behind the unticked box, so a real pair can
+  still be kept.
 
 Verify a merge change against real data, not just the fixtures: load the newest save
 and today's scan in a headless page and compare bucket counts under the old and new rule
@@ -3112,8 +3136,9 @@ and the exposure is the whole account) and they chose it anyway. So:
   reads as "nothing moved" and the model falls a step behind until the next dropped-looking
   key resyncs it. That costs one card and is reported in the revisit count, and it was
   judged rarer than the alternative — a signature-based "seen before" check, which would
-  silently skip every identical pair anywhere in the inventory, and an inventory this size
-  has several. The bottom-right `ID:` on the panel was checked as a way out and is **the
+  silently skip every identical pair anywhere in the inventory. (The identical pairs a save
+  holds are not evidence that real ones are common: the 19 checked in Nov 2026 were one card
+  saved twice, see "Import merge" above.) The bottom-right `ID:` on the panel was checked as a way out and is **the
   player's UID**, identical on all 60 frames sampled, not a card serial.
 - **It rewinds first** (`Walker.rewind`): W until two presses move nothing, then it reads
   which column the grid's red selection frame is in (`detect_grid_cursor`, over the

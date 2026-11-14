@@ -1778,7 +1778,7 @@ function awarenessOverrideDrift() {
       subs: [{ stat: 'Crit Multiplier', value: 10 }, { stat: 'ATK%', value: 8 }, { stat: 'Speed', value: 4 }] };
     const leveledUp = Object.assign({}, cardA, { level: 25,   // two upgrades: one CM roll, one minted fourth substat
       subs: [{ stat: 'Crit Multiplier', value: 13.5 }, { stat: 'ATK%', value: 8 }, { stat: 'Speed', value: 4 }, { stat: 'Resistance Pierce', value: 1.7 }] });
-    const sum = x => J({ add: x.toAdd.length, upd: x.toUpdate.length, dup: x.duplicates.length, amb: x.ambiguous.length, unm: x.unmatched.length, twins: x.unmatchedTwins.length, near: x.unmatchedNear.length });
+    const sum = x => J({ add: x.toAdd.length, upd: x.toUpdate.length, dup: x.duplicates.length, amb: x.ambiguous.length, unm: x.unmatched.length, copies: x.unmatchedCopies.length, near: x.unmatchedNear.length });
     const m1 = mergeImport([cardA], [leveledUp]);
     fail('mergeImport treats an affordable monotonic level-up as an update, not a duplicate or a new card', m1.toUpdate.length === 1 && m1.toAdd.length === 0 && m1.ambiguous.length === 0 && m1.toUpdate[0].existingId === 'a1', sum(m1));
     const cardB = Object.assign({}, cardA, { id: 'b1' });
@@ -1807,12 +1807,15 @@ function awarenessOverrideDrift() {
       const x = mergeImport([ex0], [sameLvOff]); return x.toAdd.length === 1 && x.ambiguous.length === 0 && x.unmatched.length === 0 && x.unmatchedNear.length === 1 && x.unmatchedNear[0].existing === ex0;
     })());
     fail('a lower-level read of a same-fingerprint card is new, never a level-down', (() => { const x = mergeImport([Object.assign({}, cardA, { id: 'd1' })], [Object.assign({}, ex0, { id: undefined })]); return x.toAdd.length === 1 && x.ambiguous.length === 0; })());
-    /* Identical twins: two identical cards in the save, one read in the scan — the scanner
-       reads adjacent identical panels as one, so the other is a twin, not a feed. */
-    fail('an unmatched card whose exact twin the scan did read is listed as a twin, not offered for removal', (() => {
-      const twin = Object.assign({}, ex0, { id: 'e2' }); const x = mergeImport([ex0, twin], [Object.assign({}, ex0, { id: undefined })]);
-      return x.duplicates.length === 1 && x.unmatchedTwins.length === 1 && x.unmatched.length === 0;
-    })());
+    /* Two identical cards in the save, one read in the scan: on the real save (Nov 2026) such pairs were one card
+       saved twice by the old screenshot import, so the left-over copy is offered for removal like any unmatched card,
+       marked as a copy; the worn one of the pair is the one the scan claims, so removing the copy unequips nobody. */
+    fail('an unmatched card whose exact copy the scan did read is offered for removal, marked as a copy, and the worn copy is kept', (() => {
+      const worn = Object.assign({}, ex0, { id: 'e2', equipped: 'Ann' });
+      const x = mergeImport([ex0, worn], [Object.assign({}, ex0, { id: undefined })]);
+      return x.duplicates.length === 1 && x.duplicates[0].existing === worn && x.unmatched.length === 1 && x.unmatched[0] === ex0 &&
+        x.unmatchedCopies.length === 1 && x.unmatchedCopies[0] === ex0;
+    })(), J(mergeImport([ex0, Object.assign({}, ex0, { id: 'e2', equipped: 'Ann' })], [Object.assign({}, ex0, { id: undefined })]).unmatched.map(c => c.id)));
     fail('the merge matches the closest pair across a pool, not in arrival order', (() => {
       const far = Object.assign({}, cardA, { id: 'f1', subs: [{ stat: 'Crit Multiplier', value: 3 }, { stat: 'ATK%', value: 3 }, { stat: 'Speed', value: 1.5 }] });
       const x = mergeImport([far, Object.assign({}, cardA, { id: 'f2' })], [leveledUp]);
@@ -2531,6 +2534,40 @@ function awarenessOverrideDrift() {
     return bad;
   });
   check('Optimise\'s alternatives are ordered by "vs pick", and in a 4-piece plan the pick heads every Heavens slot', altUi.length === 0, altUi.join('; '));
+
+  /* When the preferred 4-piece cannot be built and the pick is another set, Optimise says so at the
+     top (Shoki [Notte], Nov 2026: a Gain Sun and Moon only, and a Virtue 4-piece read as the planner
+     preferring Virtue). Not when the pick uses the preferred set, and not under "Pure stat maximum". */
+  const prefMiss = await p.evaluate(() => {
+    const bad = [];
+    const was = { ch: $('#optChar').value, pol: $('#optPolicy').value, pool: $('#optPool').value };
+    const shown = () => !!document.querySelector('#optNotes .optPrefMissing');
+    let seenOn = 0, seenOff = 0;
+    ownedChars().slice(0, 12).forEach(ch => {
+      ['force4', 'pref', 'stats'].forEach(pol => {
+        renderOpt(ch.n); $('#optChar').value = ch.n; $('#optPolicy').value = pol; runOpt();
+        const t = target(ch);
+        const r = bestPlan(ch, poolFor($('#optPool').value, +$('#optRarity').value, ch.n), { policy: pol, p4value: +$('#optP4').value });
+        if (!r.best) return;
+        const want = pol !== 'stats' && !r.best.sets.some(s => t.sets.includes(s)) && r.incomplete.length > 0;
+        if (want !== shown()) bad.push(`${ch.n} ${pol}: notice ${shown()}, expected ${want}`);
+        if (want) { seenOn++; if (!r.incomplete.every(pl => $('#optNotes').textContent.includes(pl.sets[0]))) bad.push(ch.n + ': set not named'); }
+        else seenOff++;
+      });
+    });
+    // A character whose preferred set cannot be completed: take every card of it out of the pool.
+    const ch = ownedChars()[0], t = target(ch), pref = t.sets[0];
+    const saved = state.cards.slice();
+    state.cards = state.cards.filter(c => !(c.set === pref && c.slot !== 'Space' && c.slot !== 'Sun'));
+    renderOpt(ch.n); $('#optChar').value = ch.n; $('#optPolicy').value = 'force4'; runOpt();
+    if (!shown()) bad.push(`${ch.n} with no ${pref} Moon/Star/Sky: no notice`);
+    else if (!/Moon or Star or Sky/.test($('#optNotes').textContent)) bad.push('missing slots not named: ' + $('#optNotes').textContent);
+    state.cards = saved;
+    $('#optPolicy').value = was.pol; $('#optPool').value = was.pool; renderOpt(); $('#optChar').value = was.ch;
+    return { bad, seenOn, seenOff };
+  });
+  check('Optimise says at the top when the preferred 4-piece cannot be built and the pick is another set',
+    prefMiss.bad.length === 0 && prefMiss.seenOff > 0, JSON.stringify(prefMiss));
 
   /* Each alternatives row can open its card in the editor ready for a level-up (the user, Oct
      2026: level a card in the game, enter it from where it was suggested). Saving re-runs the
@@ -4091,12 +4128,16 @@ function awarenessOverrideDrift() {
     const slotW = n => ({ name: n, cards: ['', '', ''] });
     const kou = tcWonder(ann, { personas: [slotW('Koumokuten'), slotW(''), slotW('')], weapon: '', refine: 1 });
     const two = tcWonder(ann, { personas: [slotW('Apsaras'), slotW('Succubus'), slotW('')], weapon: '', refine: 1 });
+    // an attack turn names the skill it uses: Vishnu's Wind-damage debuff is nothing to Queen (Nuclear), so his
+    // turns are attacks, with Wind of Nirvana, his strongest hit on one foe (the user read "Attack" as a basic attack)
+    const vis = tcWonder(charDef('Makoto Niijima'), { personas: [slotW('Vishnu'), slotW(''), slotW('')], weapon: '', refine: 1 });
     tcMemo.key = '';
     const sug = tcWonderBest(ann, []);
     out.wonder3 = { innate: (WONDER_INNATE['Koumokuten'] || []).includes('Auto-Mataru III') && kou.lines.some(l => /Auto-Mataru III \(innate\)/.test(l.why)),
       sugN: sug.personas.filter(p => p.name).length, sugCards: sug.personas.some(p => p.cards.some(Boolean)), adds: (sug.adds || []).length,
       rebellion: two.lines.filter(l => /Rebellion/.test(l.why)).length, once: two.idle.some(x => /the same buff as/.test(x)),
       turns: kou.turns.length === 6 && kou.turns.every(t => t.persona === 'Koumokuten'),
+      visAttack: vis.turns.filter(t => t.what === 'attack').map(t => t.skill),
       listed: wonderPersonas().includes('Kodama') && wonderPersonas().includes('Ose') };
     // an on-cast passive fires only on casts of the kind it names (`castOn`): one needing a skill on an ally
     // never fires on an attack turn, and a Persona with an ally skill recasts it on its idle turns instead
@@ -4629,6 +4670,8 @@ function awarenessOverrideDrift() {
     th.shoki.ids === 'E,T,B,C' && th.shoki.E === 'cm' && th.shoki.T === 'pierce' && th.shoki.B === 'dotDm' && th.shoki.C === 'tp,atkPct' && th.shoki.Cnon === 'tp', JSON.stringify(th.shoki));
   check('Wonder: innate skills count as their card, the suggestion is three Personas with the skill cards each has learned (none by default), a skill from two sources counts once, and his six turns name the Persona',
     th.wonder3.innate && th.wonder3.sugN === 3 && !th.wonder3.sugCards && th.wonder3.adds === 3 && th.wonder3.once && th.wonder3.turns && th.wonder3.listed, JSON.stringify(th.wonder3));
+  check('Wonder: an attack turn names the skill it uses (Vishnu for Queen: Wind of Nirvana, not a basic attack)',
+    th.wonder3.visAttack.length > 0 && th.wonder3.visAttack.every(s => s === 'Wind of Nirvana'), JSON.stringify(th.wonder3.visAttack));
   check('Wonder: an on-cast passive fires only on the casts its trigger names — never an ally one on an attack turn; a Persona with an ally skill recasts it on idle turns, which do not hit the boss',
     th.castOn.f === 0 && th.castOn.fTurns === 3 && th.castOn.a === 1 && th.castOn.aAgain === 4 && th.castOn.aSeq === 4 && th.castOn.g === 1 && th.castOn.gTurns === 4, JSON.stringify(th.castOn));
   check('Wonder: Ice Age\'s Ancient Frost is on for the first 3 turns and lasts longer only while he casts a skill on an ally alone — an attack or a skill on a foe that buffs allies does not renew it',
@@ -4759,6 +4802,23 @@ function awarenessOverrideDrift() {
   const wpFree = await p.evaluate(() => ({ busy: tmBusyP.size, lines: tcWonder(charDef('Yusuke Kitagawa')).lines.length }));
   check('making a busy Persona available again counts it again', wpFree.busy === 0 && wpFree.lines > 0, JSON.stringify(wpFree));
   await p.evaluate(k => { state.wonder = JSON.parse(k); commit(); renderTeams(); }, wpKeep.keep);
+
+  // the suggested weapon is the best he owns for the suggested Personas, by the fight the page shows: every owned
+  // weapon is fought there (only the quick screen's best three were, with lufel's rotations as written, which kept
+  // Glimmer over Arc Knife and Starry Compass for Queen on the real save)
+  const wpWeapon = await p.evaluate(() => {
+    const d = 'Yusuke Kitagawa', D = charDef(d);
+    const res = tcTeams(d), names = res.team.calc.key.slice(5).split('|').map(x => x || null);
+    const best = res.team.seats.find(s => s.wonder).wonder.best;
+    const rows = tcHot(() => wonderWeapons().map(k => {
+      const S = JSON.parse(JSON.stringify(best)); S.weapon = k; S.refine = weaponRec(k).refine;
+      return [k, tcSim(D, names, tmFitOn(), false, S).mult];
+    }), D);
+    const top = Math.max(...rows.map(r => r[1]));
+    return { weapon: best.weapon, n: rows.length, mine: (rows.find(r => r[0] === best.weapon) || [])[1], top, beat: rows.filter(r => r[1] > top - 1e-9).map(r => r[0]) };
+  });
+  check('Wonder\'s suggested weapon is the best he owns for the suggested Personas at the page\'s fit, every owned weapon tried',
+    wpWeapon.n > 3 && wpWeapon.mine != null && wpWeapon.mine > wpWeapon.top - 1e-9, JSON.stringify(wpWeapon));
 
   // nothing under Wonder's setup: he adds nothing and nothing is counted for him; his best setup is only suggested, and
   // counts once Use it puts it under his setup. Opening the Teams tab empties an entered setup, undoably, and a setup
