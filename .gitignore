@@ -1,0 +1,23 @@
+node_modules/
+docs/shot-*.png
+*.log
+p5x-planner-save.json
+
+# OCR pipeline: generated output and calibration scratch
+**/__pycache__/
+ocr/.pytest_cache/
+ocr/cards.json
+ocr/cards-review.json
+ocr/_frames/
+ocr/debug_*.py
+ocr/debug_*.png
+
+# Character portraits fetched by tools/fetch-art.py — game assets, not ours to commit
+dist/art/
+ocr/debug_out/
+
+# Phone app (PWA) build for GitHub Pages — npm run site
+site/
+
+# web-upload batches of site/art (GitHub takes under 100 files an upload)
+site-upload/

@@ -1,0 +1,996 @@
+{
+  "slots": [
+    "Sun",
+    "Moon",
+    "Star",
+    "Sky",
+    "Space"
+  ],
+  "slotInfo": {
+    "Sun": {
+      "fixed": true,
+      "mains": [
+        "HP"
+      ]
+    },
+    "Moon": {
+      "fixed": false,
+      "mains": [
+        "ATK%",
+        "DEF%",
+        "HP%",
+        "HP Recovery",
+        "Damage Multiplier"
+      ]
+    },
+    "Star": {
+      "fixed": false,
+      "mains": [
+        "ATK%",
+        "DEF%",
+        "HP%",
+        "Crit Rate",
+        "Crit Multiplier",
+        "Ailment Accuracy"
+      ]
+    },
+    "Sky": {
+      "fixed": false,
+      "mains": [
+        "ATK%",
+        "DEF%",
+        "HP%",
+        "Speed",
+        "SP Recovery"
+      ]
+    },
+    "Space": {
+      "fixed": true,
+      "mains": [
+        "ATK + DEF"
+      ]
+    }
+  },
+  "substats": {
+    "ATK": {
+      "maxRoll": 46,
+      "maxRollSpace": 46,
+      "flat": true
+    },
+    "DEF": {
+      "maxRoll": 46,
+      "maxRollSpace": 46,
+      "flat": true
+    },
+    "HP": {
+      "maxRoll": 140,
+      "maxRollSpace": 175,
+      "flat": true
+    },
+    "Speed": {
+      "maxRoll": 2.2,
+      "maxRollSpace": 2.8,
+      "flat": true
+    },
+    "ATK%": {
+      "maxRoll": 3.5,
+      "maxRollSpace": 4.3,
+      "flat": false
+    },
+    "DEF%": {
+      "maxRoll": 5.2,
+      "maxRollSpace": 6.4,
+      "flat": false
+    },
+    "HP%": {
+      "maxRoll": 3.6,
+      "maxRollSpace": 4.4,
+      "flat": false
+    },
+    "Damage Multiplier": {
+      "maxRoll": 2.8,
+      "maxRollSpace": 3.5,
+      "flat": false
+    },
+    "Crit Rate": {
+      "maxRoll": 2,
+      "maxRollSpace": 2.6,
+      "flat": false
+    },
+    "Crit Multiplier": {
+      "maxRoll": 4.1,
+      "maxRollSpace": 5.2,
+      "flat": false
+    },
+    "Ailment Accuracy": {
+      "maxRoll": 4.1,
+      "maxRollSpace": 5.2,
+      "flat": false
+    },
+    "SP Recovery": {
+      "maxRoll": 10,
+      "maxRollSpace": 12.5,
+      "flat": false
+    },
+    "Resistance Pierce": {
+      "maxRoll": 2.1,
+      "maxRollSpace": 2.7,
+      "flat": false
+    }
+  },
+  "rollTiers": {
+    "ATK": {
+      "heavens": [
+        27,
+        32,
+        37,
+        41,
+        46
+      ],
+      "space": [
+        27,
+        32,
+        37,
+        41,
+        46
+      ]
+    },
+    "DEF": {
+      "heavens": [
+        27,
+        32,
+        37,
+        41,
+        46
+      ],
+      "space": [
+        27,
+        32,
+        37,
+        41,
+        46
+      ]
+    },
+    "HP": {
+      "heavens": [
+        84,
+        98,
+        112,
+        126,
+        140
+      ],
+      "space": [
+        105,
+        123,
+        140,
+        157,
+        175
+      ]
+    },
+    "Speed": {
+      "heavens": [
+        1.3,
+        1.5,
+        1.8,
+        2,
+        2.2
+      ],
+      "space": [
+        1.6,
+        1.9,
+        2.2,
+        2.5,
+        2.8
+      ]
+    },
+    "ATK%": {
+      "heavens": [
+        2,
+        2.5,
+        2.8,
+        3.2,
+        3.5
+      ],
+      "space": [
+        2.6,
+        3.1,
+        3.5,
+        3.9,
+        4.3
+      ]
+    },
+    "DEF%": {
+      "heavens": [
+        3,
+        3.5,
+        4.1,
+        4.6,
+        5.2
+      ],
+      "space": [
+        3.8,
+        4.5,
+        5.2,
+        5.8,
+        6.4
+      ]
+    },
+    "HP%": {
+      "heavens": [
+        2.1,
+        2.6,
+        2.9,
+        3.3,
+        3.6
+      ],
+      "space": [
+        2.7,
+        3.2,
+        3.6,
+        4,
+        4.4
+      ]
+    },
+    "Damage Multiplier": {
+      "heavens": [
+        1.7,
+        1.9,
+        2.1,
+        2.5,
+        2.8
+      ],
+      "space": [
+        2.1,
+        2.5,
+        2.7,
+        3.1,
+        3.5
+      ]
+    },
+    "Crit Rate": {
+      "heavens": [
+        1.3,
+        1.4,
+        1.7,
+        1.8,
+        2
+      ],
+      "space": [
+        1.6,
+        1.8,
+        2.1,
+        2.3,
+        2.6
+      ]
+    },
+    "Crit Multiplier": {
+      "heavens": [
+        2.5,
+        2.8,
+        3.4,
+        3.7,
+        4.1
+      ],
+      "space": [
+        3.1,
+        3.6,
+        4.2,
+        4.7,
+        5.2
+      ]
+    },
+    "Ailment Accuracy": {
+      "heavens": [
+        2.5,
+        2.8,
+        3.4,
+        3.7,
+        4.1
+      ],
+      "space": [
+        3.1,
+        3.6,
+        4.2,
+        4.7,
+        5.2
+      ]
+    },
+    "SP Recovery": {
+      "heavens": [
+        5.9,
+        7,
+        7.9,
+        9,
+        10
+      ],
+      "space": [
+        7.5,
+        8.7,
+        10,
+        11.2,
+        12.5
+      ]
+    },
+    "Resistance Pierce": {
+      "heavens": [
+        1.3,
+        1.4,
+        1.7,
+        1.9,
+        2.1
+      ],
+      "space": [
+        1.6,
+        1.8,
+        2.2,
+        2.5,
+        2.7
+      ]
+    }
+  },
+  "mainMagnitude": {
+    "ATK%": [
+      4.6,
+      31.4
+    ],
+    "HP%": [
+      4.7,
+      31.5
+    ],
+    "DEF%": [
+      7.1,
+      47.1
+    ],
+    "Damage Multiplier": [
+      3.7,
+      25.1
+    ],
+    "Crit Rate": [
+      2.8,
+      18.8
+    ],
+    "Crit Multiplier": [
+      5.7,
+      37.6
+    ],
+    "Ailment Accuracy": [
+      5.7,
+      37.6
+    ],
+    "Speed": [
+      3.1,
+      20.3
+    ],
+    "SP Recovery": [
+      13.6,
+      90.4
+    ],
+    "HP Recovery": [
+      3.4,
+      22.6
+    ],
+    "HP": [
+      162,
+      1080
+    ],
+    "ATK + DEF": [
+      54,
+      359
+    ]
+  },
+  "statAliases": {
+    "crit dmg": "Crit Multiplier",
+    "crit damage": "Crit Multiplier",
+    "cdmg": "Crit Multiplier",
+    "crit mult": "Crit Multiplier",
+    "cm": "Crit Multiplier",
+    "cr": "Crit Rate",
+    "critrate": "Crit Rate",
+    "crit": "Crit Rate",
+    "effect hit rate": "Ailment Accuracy",
+    "ehr": "Ailment Accuracy",
+    "ail acc": "Ailment Accuracy",
+    "ailment acc": "Ailment Accuracy",
+    "accuracy": "Ailment Accuracy",
+    "penetration": "Resistance Pierce",
+    "pen": "Resistance Pierce",
+    "pierce": "Resistance Pierce",
+    "resistance pierce rate": "Resistance Pierce",
+    "pierce rate": "Resistance Pierce",
+    "damage bonus": "Damage Multiplier",
+    "dmg bonus": "Damage Multiplier",
+    "attack multiplier": "Damage Multiplier",
+    "dmg mult": "Damage Multiplier",
+    "dmg": "Damage Multiplier",
+    "damage mult": "Damage Multiplier",
+    "sp regen": "SP Recovery",
+    "sp rec": "SP Recovery",
+    "spd": "Speed",
+    "atk": "ATK",
+    "def": "DEF",
+    "hp": "HP",
+    "hp rec": "HP Recovery",
+    "healing": "HP Recovery",
+    "attack": "ATK",
+    "defense": "DEF"
+  },
+  "flatToPercent": {
+    "ATK": "ATK%",
+    "DEF": "DEF%",
+    "HP": "HP%"
+  },
+  "rarity": {
+    "2": {
+      "maxLevel": 10,
+      "subMin": 2,
+      "subMax": 2,
+      "upgrades": 2
+    },
+    "3": {
+      "maxLevel": 15,
+      "subMin": 3,
+      "subMax": 3,
+      "upgrades": 3
+    },
+    "4": {
+      "maxLevel": 20,
+      "subMin": 3,
+      "subMax": 4,
+      "upgrades": 4
+    },
+    "5": {
+      "maxLevel": 25,
+      "subMin": 3,
+      "subMax": 4,
+      "upgrades": 5
+    }
+  },
+  "sets": [
+    "Change",
+    "Control",
+    "Courage",
+    "Defeat",
+    "Disappointment",
+    "Futility",
+    "Gain",
+    "Hindrance",
+    "Labor",
+    "Love",
+    "Oppression",
+    "Opulence",
+    "Peace",
+    "Pleasure",
+    "Power",
+    "Prosperity",
+    "Prudence",
+    "Reconciliation",
+    "Renewal",
+    "Ruin",
+    "Sorrow",
+    "Strife",
+    "Triumph",
+    "Truth",
+    "Victory",
+    "Virtue",
+    "Worry",
+    "Cruelty",
+    "Debauch",
+    "Failure",
+    "Happiness",
+    "Satiety",
+    "Tenacity",
+    "Wealth"
+  ],
+  "setAliases": {
+    "abundance": "Prosperity",
+    "science": "Truth",
+    "completion": "Renewal",
+    "dominion": "Control",
+    "valor": "Courage",
+    "luxury": "Opulence",
+    "interference": "Hindrance",
+    "strength": "Power",
+    "reconcilation": "Reconciliation"
+  },
+  "spaceSets": [
+    "Acceptance",
+    "Acuity",
+    "Awareness",
+    "Creation",
+    "Departure",
+    "Faith",
+    "Freedom",
+    "Growth",
+    "Harmony",
+    "Hope",
+    "Integrity",
+    "Meditation",
+    "Nativity",
+    "Perseverance",
+    "Resolve",
+    "Trust",
+    "Wisdom",
+    "Ego",
+    "Purity"
+  ],
+  "characters": [
+    "Ann Takamaki",
+    "Ryuji Sakamoto",
+    "Morgana",
+    "Yaoling Li",
+    "Haruna Nishimori",
+    "Lufel",
+    "Leo Kamiyama",
+    "Motoha Arai",
+    "Kotone Montagne",
+    "Shun Kano",
+    "Seiji Shiratori",
+    "Yukimi Fujikawa",
+    "Kiyoshi Kurotani",
+    "Tomoko Noge",
+    "Toshiya Sumi",
+    "Miyu Sahara",
+    "Kayo Tomiyama",
+    "Ren Amamiya",
+    "YUI",
+    "Minami Miyashita",
+    "Yusuke Kitagawa",
+    "Makoto Niijima",
+    "Chizuko Nagao",
+    "Yumi Shiina",
+    "Ayaka Sakai",
+    "Riko Tanemura",
+    "Motoha Arai [Tropical]",
+    "Tomoko Noge [Seaside]",
+    "Kira Kitazato",
+    "Futaba Sakura",
+    "Masaki Ashiya",
+    "Haru Okumura",
+    "Justine & Caroline",
+    "Kotone Montagne [Frostgale]",
+    "Runa Dogenzaka",
+    "Riko Tanemura [Tempest]",
+    "Mio Natsukawa",
+    "Yaoling Li [Firecracker]",
+    "Kasumi Yoshizawa",
+    "Mayumi Hashimoto",
+    "Goro Akechi",
+    "Manaka Nagao",
+    "Shoki Ikenami",
+    "Makoto Yuki",
+    "Yukari Takeba",
+    "Akihiko Sanada",
+    "Hatsune Miku",
+    "Minami Miyashita [Beachflower]",
+    "Miyu Sahara [Wavecatcher]",
+    "Ichigo Shikano",
+    "Kumi Katayama",
+    "YUI [Prism]",
+    "Kotone Shiomi",
+    "Mitsuru Kirijo",
+    "Fuuka Yamagishi",
+    "Shoki Ikenami [Notte]",
+    "Shun Kano [Pioneer]",
+    "Junpei Iori",
+    "Narumi Nashimoto",
+    "Koromaru",
+    "Motoha Arai [Radiance]",
+    "Aran Hirano",
+    "Aigis",
+    "Ren Amamiya [Starlight]",
+    "Morgana [Starlight]",
+    "Ann Takamaki [Starlight]",
+    "Ayaka Sakai [Summer]",
+    "Ichigo Shikano [Summer]"
+  ],
+  "characterMeta": [
+    {
+      "n": "Ann Takamaki",
+      "a": "Panther",
+      "r": 5,
+      "e": "Fire"
+    },
+    {
+      "n": "Ryuji Sakamoto",
+      "a": "Skull",
+      "r": 5,
+      "e": "Physical"
+    },
+    {
+      "n": "Morgana",
+      "a": "Mona",
+      "r": 5,
+      "e": "Wind"
+    },
+    {
+      "n": "Yaoling Li",
+      "a": "Rin",
+      "r": 5,
+      "e": "Curse"
+    },
+    {
+      "n": "Haruna Nishimori",
+      "a": "Riddle",
+      "r": 5,
+      "e": "Psychokinesis"
+    },
+    {
+      "n": "Lufel",
+      "a": "Cattle",
+      "r": 4,
+      "e": "Fire"
+    },
+    {
+      "n": "Leo Kamiyama",
+      "a": "Leon",
+      "r": 4,
+      "e": "Nuclear"
+    },
+    {
+      "n": "Motoha Arai",
+      "a": "Closer",
+      "r": 4,
+      "e": "Electric"
+    },
+    {
+      "n": "Kotone Montagne",
+      "a": "Mont",
+      "r": 4,
+      "e": "Ice"
+    },
+    {
+      "n": "Shun Kano",
+      "a": "Soy",
+      "r": 4,
+      "e": "Ice"
+    },
+    {
+      "n": "Seiji Shiratori",
+      "a": "Fleuret",
+      "r": 4,
+      "e": "Wind"
+    },
+    {
+      "n": "Yukimi Fujikawa",
+      "a": "Yuki",
+      "r": 4,
+      "e": "Bless"
+    },
+    {
+      "n": "Kiyoshi Kurotani",
+      "a": "Key",
+      "r": 4,
+      "e": "Fire"
+    },
+    {
+      "n": "Tomoko Noge",
+      "a": "Moko",
+      "r": 4,
+      "e": "Psychokinesis"
+    },
+    {
+      "n": "Toshiya Sumi",
+      "a": "Sepia",
+      "r": 4,
+      "e": "Curse"
+    },
+    {
+      "n": "Miyu Sahara",
+      "a": "Puppet",
+      "r": 4,
+      "e": "None"
+    },
+    {
+      "n": "Kayo Tomiyama",
+      "a": "Okyann",
+      "r": 4,
+      "e": "None"
+    },
+    {
+      "n": "Ren Amamiya",
+      "a": "Joker",
+      "r": 5,
+      "e": "Curse"
+    },
+    {
+      "n": "YUI",
+      "a": "BUI",
+      "r": 5,
+      "e": "Electric"
+    },
+    {
+      "n": "Minami Miyashita",
+      "a": "Marian",
+      "r": 5,
+      "e": "Bless"
+    },
+    {
+      "n": "Yusuke Kitagawa",
+      "a": "Fox",
+      "r": 5,
+      "e": "Ice"
+    },
+    {
+      "n": "Makoto Niijima",
+      "a": "Queen",
+      "r": 5,
+      "e": "Nuclear"
+    },
+    {
+      "n": "Chizuko Nagao",
+      "a": "Vino",
+      "r": 4,
+      "e": "Nuclear"
+    },
+    {
+      "n": "Yumi Shiina",
+      "a": "Phoebe",
+      "r": 5,
+      "e": "None"
+    },
+    {
+      "n": "Ayaka Sakai",
+      "a": "Chord",
+      "r": 5,
+      "e": "Electric"
+    },
+    {
+      "n": "Riko Tanemura",
+      "a": "Wind",
+      "r": 4,
+      "e": "None"
+    },
+    {
+      "n": "Motoha Arai [Tropical]",
+      "a": "Summer Closer",
+      "r": 5,
+      "e": "Bless"
+    },
+    {
+      "n": "Tomoko Noge [Seaside]",
+      "a": "Summer Moko",
+      "r": 5,
+      "e": "Psychokinesis"
+    },
+    {
+      "n": "Kira Kitazato",
+      "a": "Messa",
+      "r": 5,
+      "e": "Physical"
+    },
+    {
+      "n": "Futaba Sakura",
+      "a": "Oracle",
+      "r": 5,
+      "e": "None"
+    },
+    {
+      "n": "Masaki Ashiya",
+      "a": "Cherish",
+      "r": 5,
+      "e": "Ice"
+    },
+    {
+      "n": "Haru Okumura",
+      "a": "Noir",
+      "r": 5,
+      "e": "Psychokinesis"
+    },
+    {
+      "n": "Justine & Caroline",
+      "a": "Twins",
+      "r": 5,
+      "e": "Almighty"
+    },
+    {
+      "n": "Kotone Montagne [Frostgale]",
+      "a": "Frostgale Mont",
+      "r": 5,
+      "e": "Wind"
+    },
+    {
+      "n": "Runa Dogenzaka",
+      "a": "Howler",
+      "r": 5,
+      "e": "Fire"
+    },
+    {
+      "n": "Riko Tanemura [Tempest]",
+      "a": "Wind Vast",
+      "r": 5,
+      "e": "Wind"
+    },
+    {
+      "n": "Mio Natsukawa",
+      "a": "Matoi",
+      "r": 5,
+      "e": "Ice"
+    },
+    {
+      "n": "Yaoling Li [Firecracker]",
+      "a": "Rin Lion Dance",
+      "r": 5,
+      "e": "Fire"
+    },
+    {
+      "n": "Kasumi Yoshizawa",
+      "a": "Violet",
+      "r": 5,
+      "e": "Bless"
+    },
+    {
+      "n": "Mayumi Hashimoto",
+      "a": "Turbo",
+      "r": 5,
+      "e": "Physical"
+    },
+    {
+      "n": "Goro Akechi",
+      "a": "Crow",
+      "r": 5,
+      "e": "Almighty"
+    },
+    {
+      "n": "Manaka Nagao",
+      "a": "Ange",
+      "r": 5,
+      "e": "None"
+    },
+    {
+      "n": "Shoki Ikenami",
+      "a": "Luce",
+      "r": 4,
+      "e": "Bless"
+    },
+    {
+      "n": "Makoto Yuki",
+      "a": "",
+      "r": 5,
+      "e": "Fire"
+    },
+    {
+      "n": "Yukari Takeba",
+      "a": "",
+      "r": 5,
+      "e": "Wind"
+    },
+    {
+      "n": "Akihiko Sanada",
+      "a": "",
+      "r": 5,
+      "e": "Electric"
+    },
+    {
+      "n": "Hatsune Miku",
+      "a": "Miku",
+      "r": 5,
+      "e": "None"
+    },
+    {
+      "n": "Minami Miyashita [Beachflower]",
+      "a": "S. Minami",
+      "r": 5,
+      "e": "Bless"
+    },
+    {
+      "n": "Miyu Sahara [Wavecatcher]",
+      "a": "Wave Puppet",
+      "r": 5,
+      "e": "Ice"
+    },
+    {
+      "n": "Ichigo Shikano",
+      "a": "Berry",
+      "r": 5,
+      "e": "Curse"
+    },
+    {
+      "n": "Kumi Katayama",
+      "a": "Blitz",
+      "r": 5,
+      "e": "Electric"
+    },
+    {
+      "n": "YUI [Prism]",
+      "a": "BUI Prism",
+      "r": 5,
+      "e": "Nuclear"
+    },
+    {
+      "n": "Kotone Shiomi",
+      "a": "Kotone",
+      "r": 5,
+      "e": "Fire"
+    },
+    {
+      "n": "Mitsuru Kirijo",
+      "a": "",
+      "r": 5,
+      "e": "Ice"
+    },
+    {
+      "n": "Fuuka Yamagishi",
+      "a": "",
+      "r": 5,
+      "e": "None"
+    },
+    {
+      "n": "Shoki Ikenami [Notte]",
+      "a": "Luce Notte",
+      "r": 5,
+      "e": "Bless"
+    },
+    {
+      "n": "Shun Kano [Pioneer]",
+      "a": "Soy Pioneer",
+      "r": 5,
+      "e": "Gun"
+    },
+    {
+      "n": "Junpei Iori",
+      "a": "",
+      "r": 5,
+      "e": "Fire"
+    },
+    {
+      "n": "Narumi Nashimoto",
+      "a": "PINKY",
+      "r": 5,
+      "e": "Psychokinesis"
+    },
+    {
+      "n": "Koromaru",
+      "a": "",
+      "r": 5,
+      "e": "Curse"
+    },
+    {
+      "n": "Motoha Arai [Radiance]",
+      "a": "Radiance Closer",
+      "r": 5,
+      "e": "Electric"
+    },
+    {
+      "n": "Aran Hirano",
+      "a": "Anri",
+      "r": 4,
+      "e": "Curse"
+    },
+    {
+      "n": "Aigis",
+      "a": "",
+      "r": 5,
+      "e": "Gun"
+    },
+    {
+      "n": "Ren Amamiya [Starlight]",
+      "a": "Starlight Joker",
+      "r": 5,
+      "e": "Curse"
+    },
+    {
+      "n": "Morgana [Starlight]",
+      "a": "Starlight Mona",
+      "r": 5,
+      "e": "Wind"
+    },
+    {
+      "n": "Ann Takamaki [Starlight]",
+      "a": "Starlight Panther",
+      "r": 5,
+      "e": "Fire"
+    },
+    {
+      "n": "Ayaka Sakai [Summer]",
+      "a": "Summer Chord",
+      "r": 5,
+      "e": "Wind"
+    },
+    {
+      "n": "Ichigo Shikano [Summer]",
+      "a": "Summer Berry",
+      "r": 5,
+      "e": "Psychokinesis"
+    }
+  ]
+}

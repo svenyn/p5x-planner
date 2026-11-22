@@ -1,0 +1,2131 @@
+<style>
+:root{
+  /* --dim2 labels every field and table header, so it has to clear WCAG AA (4.5:1) on all
+     five backgrounds it sits on; #6e6e7a read 3.4-3.9:1. --red-text is the brand red lifted
+     for text on dark panels, where --red itself reads 4.1:1 — fills and borders keep --red. */
+  --bg:#0b0b0d; --panel:#141419; --panel2:#1c1c23; --line:#2c2c36;
+  --ink:#f2f2f4; --dim:#9a9aa6; --dim2:#83838f;
+  --red:#e6274a; --red-text:#ee4265; --red-dim:#7a1528; --gold:#e8b64c; --purple:#a86fd0; --blue:#4c8fe8;
+  --ok:#3fbf7f;
+  /* dark native scrollbars and form controls; without it the scroll boxes' tracks were white */
+  color-scheme:dark;
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);
+  font:14px/1.5 "Segoe UI",-apple-system,system-ui,sans-serif;-webkit-font-smoothing:antialiased}
+h1,h2,h3{margin:0;font-weight:700;letter-spacing:-.01em}
+a{color:var(--red-text)}
+/* Where the keyboard is, on everything focusable. Text fields already show it with their
+   border colour, so they are left out rather than double-ringed. */
+:focus-visible{outline:2px solid var(--gold);outline-offset:2px}
+input:focus-visible,select:focus-visible,textarea:focus-visible{outline:none}
+button{font:inherit;cursor:pointer;border:1px solid var(--line);background:var(--panel2);
+  color:var(--ink);border-radius:6px;padding:7px 12px;transition:.12s}
+button:hover{border-color:var(--red);background:#26262f}
+button.primary{background:var(--red);border-color:var(--red);color:#fff;font-weight:600}
+button.primary:hover{background:#ff3557}
+button.ghost{background:transparent}
+button.unequip{color:var(--ok);border-color:#1d5c3d;background:#10241a}
+button.unequip:hover{border-color:var(--ok);background:#153a28}
+button.gold{background:var(--gold);border-color:var(--gold);color:#1a1508;font-weight:600}
+button.gold:hover{background:#ffd257}
+button.sm{padding:3px 8px;font-size:12px}
+button.danger{color:#ff8a9e;border-color:var(--red-dim)}
+button.danger:hover{background:#2a1218;border-color:var(--red)}
+/* Disabled buttons still take the pointer, so their tooltips (the Loadout lock, an empty Triage
+   chip) explain why; they just do not light up. */
+button:disabled{opacity:.45;cursor:default}
+button:disabled:hover{border-color:var(--line);background:var(--panel2)}
+button.ghost:disabled:hover{background:transparent}
+button.primary:disabled:hover{border-color:var(--red);background:var(--red)}
+input,select,textarea{font:inherit;background:#0f0f13;color:var(--ink);
+  border:1px solid var(--line);border-radius:6px;padding:6px 9px;outline:none}
+input:focus,select:focus,textarea:focus{border-color:var(--red)}
+table{width:100%;border-collapse:collapse}
+th{text-align:left;font-size:11px;text-transform:uppercase;letter-spacing:.06em;
+  color:var(--dim2);font-weight:600;padding:8px 10px;border-bottom:1px solid var(--line);
+  position:sticky;top:0;background:var(--panel);z-index:2}
+td{padding:7px 10px;border-bottom:1px solid #1e1e26;vertical-align:middle}
+tr:hover td{background:#16161c}
+/* A sortable header holds a real <button>, so it is reachable and operable from the keyboard;
+   the button fills the cell and the click bubbles to the <th>, which owns the handler. */
+th.sortH{cursor:pointer;user-select:none;padding:0}
+th.sortH:hover{color:var(--ink)}
+th.sortH .thBtn{all:unset;display:block;box-sizing:border-box;width:100%;padding:8px 10px;cursor:pointer}
+th.sortH.right .thBtn{text-align:right}
+th.sortH .thBtn:focus-visible{outline:2px solid var(--gold);outline-offset:-2px}
+.targets th.sortH .thBtn{padding:5px 8px}
+th.sortH .arrow{opacity:.5;margin-left:3px}
+
+header{background:linear-gradient(180deg,#17171d,#0e0e12);border-bottom:1px solid var(--line);
+  padding:14px 20px;display:flex;align-items:center;gap:16px;flex-wrap:wrap;
+  position:sticky;top:0;z-index:20}
+header .logo{font-size:17px;font-weight:800;display:flex;align-items:center;gap:8px}
+header .logo em{color:var(--red);font-style:normal}
+header .logo img{height:24px;width:24px}
+nav{display:flex;gap:4px;flex-wrap:wrap}
+nav button{border:none;background:transparent;color:var(--dim);padding:7px 13px;border-radius:6px;font-weight:600}
+nav button:hover{color:var(--ink);background:#20202a}
+nav button.on{background:var(--red);color:#fff}
+/* a group of tabs under its name, set off from its neighbours by a thin rule */
+nav{align-items:flex-end}
+.navGroup{display:flex;flex-direction:column;gap:1px;padding-left:8px;border-left:1px solid var(--line)}
+.navGroup:last-of-type{border-right:1px solid var(--line);padding-right:8px}
+.navLbl{font-size:10px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--dim);padding-left:13px}
+.navBtns{display:flex;gap:4px}
+/* The header's right side: the one scoring setting every tab reads, and the file actions
+   every session starts and ends with — nothing persists on its own, so Save is always one
+   click away and says when it is needed. */
+.hdr-right{display:flex;align-items:center;gap:8px;margin-left:auto;flex-wrap:wrap}
+.chipbtn{display:inline-flex;align-items:center;gap:6px;padding:5px 11px;border-radius:20px;font-size:12px;color:var(--dim)}
+.chipbtn b{color:var(--ink);font-family:ui-monospace,monospace}
+.savestate{font-size:12px;color:var(--dim);display:inline-flex;align-items:center;gap:6px;white-space:nowrap}
+.savestate.dirty{color:var(--gold)}
+.savestate .dot{width:8px;height:8px;border-radius:50%;background:var(--gold);box-shadow:0 0 0 3px rgba(232,182,76,.18)}
+.popwrap{position:relative}
+.pop{position:absolute;top:calc(100% + 8px);right:0;z-index:30;width:340px;background:var(--panel2);
+  border:1px solid var(--line);border-radius:10px;padding:14px;box-shadow:0 10px 28px rgba(0,0,0,.55)}
+.pop h3{font-size:13px;margin:0 0 10px}
+.pop h3.sep{margin-top:16px;padding-top:12px;border-top:1px solid var(--line)}
+.dengrid{display:grid;grid-template-columns:1fr 1fr;gap:6px 14px}
+.dengrid label{display:flex;align-items:center;justify-content:space-between;gap:8px;font-size:12px;color:var(--dim)}
+.dengrid input{width:74px}
+main{padding:20px;max-width:1500px;margin:0 auto}
+/* In-page tab strip inside one section (Upgrades). Deliberately not the header nav's
+   look — these switch a view within a tab, not the tab itself, so they read as a
+   segmented control rather than a second row of top-level navigation. */
+.subtabs{display:flex;gap:4px;flex-wrap:wrap;margin-bottom:16px;
+  background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:5px}
+.subtabs button{border:none;background:transparent;color:var(--dim);
+  padding:7px 14px;border-radius:7px;font-weight:600}
+.subtabs button:hover{color:var(--ink);background:#20202a}
+.subtabs button.on{background:var(--panel2);color:var(--ink);box-shadow:inset 0 0 0 1px var(--line)}
+.panel{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:16px;margin-bottom:16px}
+.panel > h2{font-size:14px;text-transform:uppercase;letter-spacing:.07em;color:var(--dim);margin-bottom:12px}
+.row{display:flex;gap:10px;flex-wrap:wrap;align-items:flex-end}
+.field{display:flex;flex-direction:column;gap:4px}
+.field label{font-size:11px;text-transform:uppercase;letter-spacing:.05em;color:var(--dim2);font-weight:600}
+.check{display:flex;align-items:center;gap:6px;font-size:12px;color:var(--dim);cursor:pointer;padding-bottom:8px}
+.muted{color:var(--dim)}
+.tiny{font-size:12px}
+.mono{font-family:ui-monospace,"Cascadia Code",Consolas,monospace}
+/* Persona cards: lufel's Persona art is a full-body cut-out, so it is shown whole over the element tint
+   rather than cropped like a character portrait. A Persona not obtained is dimmed. */
+.portrait.persona img{object-fit:contain;object-position:center bottom;transform:none;padding:10% 8% 14%;box-sizing:border-box}
+.cc:hover .portrait.persona img{transform:scale(1.04)}
+/* the cut-out leaves the background showing, so the initials go once the picture is there */
+.portrait.persona.art .initials{display:none}
+.cc.psOff{opacity:.6}
+.cc.psOff:hover{opacity:1}
+.psHead{display:grid;grid-template-columns:130px 1fr;gap:16px;align-items:start;padding-right:28px}
+.psHead .portrait{border-radius:8px}
+.psOwn{display:inline-flex;gap:6px;align-items:center;font-weight:600;cursor:pointer}
+.scroll{max-height:62vh;overflow:auto;border:1px solid var(--line);border-radius:8px}
+/* A long table that scrolls with the page instead of inside a box of its own; its header pins
+   under the page header (--hdrH, set in logic.js). No overflow here, or the header stops sticking. */
+.flowTable{background:var(--panel);border:1px solid var(--line);border-radius:10px;margin-bottom:16px}
+.flowTable th{top:var(--hdrH,0px)}
+.flowTable thead th:first-child{border-top-left-radius:10px}
+.flowTable thead th:last-child{border-top-right-radius:10px}
+.flowTable tbody tr:last-child td{border-bottom:none}
+
+.tag{display:inline-block;padding:1px 7px;border-radius:20px;font-size:11px;font-weight:600;
+  border:1px solid var(--line);background:#202029;color:var(--dim);white-space:nowrap}
+.tag.r5{color:#f0c260;border-color:#6b5220;background:#2a2213}
+.tag.r4{color:#c08ae8;border-color:#4d3163;background:#241a2e}
+.tag.r3{color:#6fa6ee;border-color:#294466;background:#141e2b}
+.tag.r2{color:#9a9aa6;border-color:#33333d;background:#1b1b22}
+.tag.hit{color:var(--ok);border-color:#1d5c3d;background:#10241a}
+.tag.miss{color:#e87a5c;border-color:#6b3524;background:#2a1712}
+/* build-score bands — see BUILD_BANDS in logic.js */
+.tag.bs-hi{color:var(--ok);border-color:#1d5c3d;background:#10241a}
+.tag.bs-ok{color:#7fc9a0;border-color:#25503a;background:#111f18}
+.tag.bs-mid{color:var(--gold);border-color:#5c4a1d;background:#241f10}
+.tag.bs-lo{color:#e87a5c;border-color:#6b3524;background:#2a1712}
+.tag.bs-none{opacity:.7}
+.tag.bs b{font-family:ui-monospace,monospace}
+
+/* build score readout on the Optimise tab */
+.bscore{display:flex;align-items:center;gap:14px;flex-wrap:wrap}
+.bscore .big{font-family:ui-monospace,monospace;font-size:30px;font-weight:700;line-height:1}
+.bscore .big small{font-size:14px;font-weight:600;color:var(--dim);margin-left:2px}
+.bparts{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;margin-top:12px}
+.bparts .p{border:1px solid var(--line);border-radius:8px;padding:8px 10px;background:#1a1a22}
+/* these bars read "how much of this you have", so full is green, not alarming */
+.bparts .bar>i,.targets .bar>i{background:linear-gradient(90deg,#2e6b4c,var(--ok))}
+.bparts .p.bs-mid .bar>i{background:linear-gradient(90deg,#6b5a20,var(--gold))}
+.bparts .p.bs-lo .bar>i{background:linear-gradient(90deg,var(--red-dim),var(--red))}
+.targets{margin-top:16px;border-top:1px solid var(--line);padding-top:12px}
+.targets h3{font-size:12px;text-transform:uppercase;letter-spacing:.06em;color:var(--dim);margin-bottom:8px}
+.targets h3 .tiny{text-transform:none;letter-spacing:0;font-weight:400}
+.targets th,.targets td{padding:5px 8px}
+.targets .right{text-align:right}
+
+.grid{display:grid;gap:10px}
+.cards{grid-template-columns:repeat(auto-fill,minmax(215px,1fr))}
+.cc{background:var(--panel2);border:1px solid var(--line);border-radius:9px;
+  cursor:pointer;transition:.12s;overflow:hidden;display:flex;flex-direction:column}
+.cc:hover{border-color:var(--red)}
+.cc:hover .portrait img,.cc:hover .portrait .initials{transform:scale(1.05)}
+.cc.owned{border-left:3px solid var(--red)}
+.cc.benched{border-left:3px solid var(--gold);opacity:.72}
+.cc.benched:hover{opacity:1}
+.tag.benched{color:var(--gold);border-color:#5c4a1d;background:#241f10}
+/* The body fills the card and its buttons sit at the bottom, so a card whose tags wrap to a
+   second line does not leave its Targets/Optimize buttons out of line with its neighbours'. */
+.cc .body{padding:10px 11px 11px;flex:1;display:flex;flex-direction:column}
+.cc .body .acts{margin-top:auto;padding-top:9px;gap:6px}
+.cc:focus-visible{outline:2px solid var(--gold);outline-offset:2px}
+.cc .nm{font-weight:700;font-size:14px;line-height:1.25}
+.cc .al{color:var(--dim2);font-size:12px}
+.cc .mt{display:flex;gap:5px;margin-top:7px;flex-wrap:wrap}
+/* Segmented control: a choice between views of the same thing (Roster cards / list). */
+.seg{display:inline-flex;background:#0f0f13;border:1px solid var(--line);border-radius:7px;padding:2px;gap:2px}
+.seg button{border:none;background:transparent;color:var(--dim);padding:5px 12px;border-radius:5px;font-weight:600}
+.seg button:hover{color:var(--ink);background:#20202a}
+.seg button.on{background:var(--panel2);color:var(--ink);box-shadow:inset 0 0 0 1px var(--line)}
+/* Roster list view: every owned character on one screen, one row each. */
+.rlist tr.rrow{cursor:pointer}
+.rlist tr.rrow:focus-visible{outline:2px solid var(--gold);outline-offset:-2px}
+.rlist .nm{font-weight:700}
+.rlist tr.benched td{opacity:.6}
+.rlist td.acts{white-space:nowrap;text-align:right}
+
+/* Character card, laid out like lufel.net's: portrait first, name and rarity
+   over the bottom of the art, details underneath. --el is the element colour,
+   set per card from ELEMENT_COLORS in data.js. */
+.portrait{position:relative;aspect-ratio:3/4;overflow:hidden;background:#0f0f14;
+  background-image:
+    radial-gradient(120% 90% at 50% 8%, color-mix(in srgb, var(--el) 55%, transparent), transparent 70%),
+    repeating-linear-gradient(115deg, rgba(255,255,255,.05) 0 2px, transparent 2px 9px),
+    linear-gradient(170deg, color-mix(in srgb, var(--el) 22%, #101015), #0c0c11 78%)}
+.portrait img,.portrait .initials{position:absolute;inset:0;width:100%;height:100%;
+  transition:transform .18s ease}
+/* lufel.net's images are whole cards, not bare portraits — an ornate border, a
+   notch cut out of the top edge and a star-rating bar along the bottom. Scaling
+   past 1 crops that frame away so only the artwork inside it shows; the vertical
+   offset keeps faces in frame rather than centring on the torso. */
+.portrait img{object-fit:cover;object-position:center 32%;transform:scale(1.17)}
+.cc:hover .portrait img{transform:scale(1.22)}
+.portrait .initials{display:flex;align-items:center;justify-content:center;
+  font-size:52px;font-weight:800;letter-spacing:-.03em;
+  color:color-mix(in srgb, var(--el) 70%, #ffffff);opacity:.5;
+  text-shadow:0 3px 14px rgba(0,0,0,.6)}
+.portrait .veil{position:absolute;inset:auto 0 0 0;height:62%;
+  background:linear-gradient(transparent, rgba(10,10,13,.55) 42%, #141419)}
+.portrait .cap{position:absolute;left:10px;right:10px;bottom:8px}
+.portrait .cap .nm{text-shadow:0 2px 8px rgba(0,0,0,.85)}
+.portrait .corner{position:absolute;top:8px;display:flex;gap:4px}
+.portrait .corner.l{left:8px}
+.portrait .corner.r{right:8px}
+.portrait .corner.more{right:8px;top:34px;z-index:2}
+.portrait .corner.more .moreBtn{width:24px;height:22px;padding:0;line-height:1;font-size:15px;
+  background:rgba(10,10,13,.55);border-color:rgba(255,255,255,.15)}
+.portrait .corner.more .moreBtn:hover{background:rgba(10,10,13,.8)}
+.moreMenu{position:absolute;top:26px;right:0;display:flex;flex-direction:column;gap:5px;
+  background:var(--panel2);border:1px solid var(--line);border-radius:8px;padding:6px;
+  min-width:132px;box-shadow:0 6px 18px rgba(0,0,0,.45)}
+.moreMenu button{width:100%;text-align:left;display:flex;align-items:center;gap:8px}
+/* Menu items are toggles that show their state as a tick, not as a coloured button that
+   reads like a label — "Owned" in red used to be the control that un-owns. */
+.moreMenu .ck{display:inline-block;width:12px;color:var(--ok);font-weight:800}
+.el-dot{display:inline-block;width:8px;height:8px;border-radius:50%;
+  background:var(--el);box-shadow:0 0 0 2px rgba(0,0,0,.45)}
+.tag.el{border-color:color-mix(in srgb, var(--el) 45%, transparent);
+  background:color-mix(in srgb, var(--el) 16%, #16161c);
+  color:color-mix(in srgb, var(--el) 78%, #ffffff);
+  display:inline-flex;align-items:center;gap:5px}
+
+.slot{display:inline-flex;align-items:center;justify-content:center;min-width:34px;height:20px;
+  padding:0 6px;border-radius:5px;font-size:10px;font-weight:800;letter-spacing:.04em;
+  text-transform:uppercase;background:#242430;color:var(--dim)}
+.slot.Sun{background:#3a2a10;color:#f0c260}
+.slot.Moon{background:#1b2438;color:#7fa8e8}
+.slot.Star{background:#332040;color:#c08ae8}
+.slot.Sky{background:#123028;color:#4fc79a}
+.slot.Space{background:#3a1520;color:#f07a92}
+
+/* Slot groupings in the "Best alternatives per slot" table: a heavier top border where
+   a new slot's rows start, plus a faint tint (per slot's own colour) across its rows so
+   the five groups stay visually distinct without a table redesign. */
+tr.grp-start td{border-top:2px solid var(--line)}
+tr.slotrow-Sun td{background:rgba(240,194,96,.05)}
+tr.slotrow-Sun:hover td{background:rgba(240,194,96,.12)}
+tr.slotrow-Moon td{background:rgba(127,168,232,.05)}
+tr.slotrow-Moon:hover td{background:rgba(127,168,232,.12)}
+tr.slotrow-Star td{background:rgba(192,138,232,.05)}
+tr.slotrow-Star:hover td{background:rgba(192,138,232,.12)}
+tr.slotrow-Sky td{background:rgba(79,199,154,.05)}
+tr.slotrow-Sky:hover td{background:rgba(79,199,154,.12)}
+tr.slotrow-Space td{background:rgba(240,122,146,.05)}
+tr.slotrow-Space:hover td{background:rgba(240,122,146,.12)}
+
+.loadout{display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:10px}
+.lo{background:var(--panel2);border:1px solid var(--line);border-radius:9px;padding:12px}
+.lo.empty{border-style:dashed;opacity:.55}
+.lo h4{margin:0 0 6px;font-size:13px;display:flex;align-items:center;gap:7px;flex-wrap:wrap}
+.lo-mainrow{border-bottom:1px solid #33333d;padding-bottom:6px;margin-bottom:5px}
+.lo-tagrow{margin-top:3px;min-height:20px}
+.stat-tile{min-width:130px}
+.lo .sub{display:flex;justify-content:space-between;align-items:baseline;gap:8px;flex-wrap:wrap;
+  font-size:12px;padding:3px 0;border-bottom:1px dotted #26262f}
+.lo .sub > span:first-child{flex:0 0 auto}
+.lo .sub b{text-align:right}
+.lo .sub b{font-weight:600}
+.lo .sub.good b{color:var(--ok)}
+.lo .sub.bad{opacity:.45}
+.score{font-family:ui-monospace,monospace;font-weight:700}
+/* Upgrades' bundle footer — the rows above it are one 4-piece switch, and the set bonus
+   only lands when all of them are worn, so this line carries the number that matters. */
+tr.upGroup td{background:#14141a;border-bottom:2px solid var(--line)}
+tr.upGroup:hover td{background:#191921}
+tr.upGroup .score{color:var(--ok)}
+.bar{height:5px;border-radius:3px;background:#24242e;overflow:hidden;margin-top:4px}
+.bar>i{display:block;height:100%;background:linear-gradient(90deg,var(--red-dim),var(--red))}
+
+.setgrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:0 24px}
+.setRow{display:flex;align-items:center;gap:8px;padding:3px 0}
+.setRow>span:first-child{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.setRow .bar{flex:0 0 70px;margin-top:0}
+.setRow .cnt{flex:0 0 26px;text-align:right;font-family:ui-monospace,monospace}
+
+.wgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(190px,1fr));gap:8px}
+.wrow{display:flex;align-items:center;gap:8px;background:#0f0f14;border:1px solid var(--line);
+  border-radius:6px;padding:5px 8px}
+.wrow span{flex:1;font-size:12px}
+.wrow input{width:52px;padding:3px 6px;text-align:center}
+
+.notice{background:#1a1218;border:1px solid #4a2030;border-left:3px solid var(--red);
+  border-radius:7px;padding:10px 13px;font-size:13px;margin-bottom:12px}
+.notice.info{background:#101a1c;border-color:#1d4a52;border-left-color:#3fbfbf}
+
+/* Import guide: a numbered rail down the left, one step per node. */
+.prose{max-width:900px}
+.prose p{margin:0 0 9px}
+code{font-family:ui-monospace,"Cascadia Code",Consolas,monospace;font-size:.92em;
+  background:#0f0f13;border:1px solid var(--line);border-radius:4px;padding:1px 5px}
+pre.cmd{font-family:ui-monospace,"Cascadia Code",Consolas,monospace;font-size:12.5px;
+  background:#0f0f13;border:1px solid var(--line);border-left:3px solid var(--red-dim);
+  border-radius:7px;padding:10px 12px;margin:0 0 10px;overflow:auto;white-space:pre-wrap}
+pre.cmd .cm{color:var(--dim2)}
+.steps{counter-reset:step;margin:4px 0 0}
+.step{position:relative;padding:0 0 20px 34px;border-left:1px solid var(--line);margin-left:13px}
+.step:last-child{border-left-color:transparent;padding-bottom:0}
+.step::before{counter-increment:step;content:counter(step);position:absolute;left:-13px;top:-3px;
+  width:26px;height:26px;border-radius:50%;background:var(--red);color:#fff;
+  font-size:13px;font-weight:800;display:flex;align-items:center;justify-content:center}
+.step > h3{font-size:15px;margin-bottom:7px}
+.step > h3 .when{font-weight:600;font-size:11px;text-transform:uppercase;letter-spacing:.05em;
+  color:var(--dim2);margin-left:8px}
+.gtable td{font-size:12.5px;vertical-align:top}
+.gtable td:first-child{font-weight:600}
+.gtable th{position:static}
+.linky{background:none;border:none;color:var(--red);padding:0;font:inherit;text-decoration:underline}
+.linky:hover{background:none;color:#ff5a76}
+.subpills{display:flex;flex-wrap:wrap;gap:5px;min-height:22px}
+.subpill{display:inline-flex;align-items:center;gap:5px;padding:2px 4px 2px 9px;border-radius:20px;
+  font-size:11px;font-weight:600;border:1px solid #6b3524;background:#2a1712;color:#e87a5c}
+.subpill button{border:none;background:none;color:inherit;padding:0;width:16px;height:16px;
+  border-radius:50%;font-size:12px;line-height:1;display:flex;align-items:center;justify-content:center}
+.subpill button:hover{background:rgba(255,255,255,.15)}
+dialog{background:var(--panel);color:var(--ink);border:1px solid var(--line);border-radius:12px;
+  padding:20px;max-width:1020px;width:96%;max-height:88vh;overflow-y:auto;position:relative;
+  scrollbar-width:thin;scrollbar-color:var(--line) var(--panel)}
+dialog::backdrop{background:rgba(0,0,0,.7)}
+.dlg-close{position:absolute;top:12px;right:12px;width:28px;height:28px;padding:0;
+  border-radius:50%;font-size:16px;line-height:1;display:flex;align-items:center;justify-content:center;
+  color:var(--dim)}
+.dlg-close:hover{color:var(--ink)}
+dialog::-webkit-scrollbar{width:11px}
+dialog::-webkit-scrollbar-track{background:var(--panel)}
+dialog::-webkit-scrollbar-thumb{background:var(--line);border-radius:6px;border:3px solid var(--panel)}
+dialog::-webkit-scrollbar-thumb:hover{background:var(--dim2)}
+/* ---- how-to-read notes, folded: the first sentence stays visible, the rest opens on click ---- */
+details.explain{margin:8px 0 0;font-size:12px;color:var(--dim);line-height:1.6}
+details.explain>summary{cursor:pointer;list-style:none}
+details.explain>summary::-webkit-details-marker{display:none}
+details.explain>summary::after{content:' More';color:var(--red-text);font-weight:600;white-space:nowrap}
+details.explain[open]>summary::after{content:' Less'}
+details.explain>.body{margin-top:6px}
+details.explain>.body p{margin:0 0 6px}
+/* Fortune Revelation: the character picker, the recommended set, and each row's "who it helps". */
+details.frChars{margin:6px 0 0;font-size:13px}
+details.frChars>summary{cursor:pointer}
+.frGrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:0 14px;max-height:340px;overflow-y:auto;
+  border:1px solid var(--line);border-radius:8px;padding:8px 10px}
+.frGrid .check{padding-bottom:4px}
+.frPick{margin-top:12px;max-width:900px;background:var(--panel2);border:1px solid var(--line);border-radius:10px;padding:12px 14px;font-size:13px}
+.frPick p{margin:6px 0 0}
+.frPickSet{font-size:20px;font-weight:700;margin:2px 0 4px}
+details.frWhy>summary{cursor:pointer}
+details.frWhy[open]>summary{margin-bottom:4px}
+table.frWho td,table.frWho th{padding:4px 8px}
+.nowrap{white-space:nowrap}
+/* Collapsible sections of a dialog (the Loadout popup's Setup and stats). */
+details.sect{border-top:1px solid var(--line);margin-top:14px;padding-top:10px}
+details.sect>summary{cursor:pointer;list-style:none;font-size:13px;font-weight:700;display:flex;align-items:baseline;gap:8px;flex-wrap:wrap}
+details.sect>summary::-webkit-details-marker{display:none}
+details.sect>summary::before{content:'▸';color:var(--dim2);display:inline-block;width:10px}
+details.sect[open]>summary::before{content:'▾'}
+details.sect>summary .tiny{font-weight:400}
+details.sect>.inner{margin-top:10px}
+
+/* ---- Triage verdict chips: the result's headline counts, and the filter on them ---- */
+.vchips{display:flex;gap:6px;flex-wrap:wrap;margin:0 0 12px}
+.vchip{display:inline-flex;align-items:center;gap:7px;padding:5px 11px;border-radius:20px;font-size:12px;font-weight:600;
+  background:#17171d;color:var(--dim);border:1px solid var(--line)}
+.vchip b{font-family:ui-monospace,monospace;color:var(--ink)}
+.vchip.feed b,.vchip.soft b{color:#e87a5c}
+.vchip.keep b,.vchip.lock b,.vchip.rec b{color:var(--ok)}
+.vchip[aria-pressed="true"]{background:var(--panel2);color:var(--ink);border-color:var(--dim)}
+.vchip.feed[aria-pressed="true"],.vchip.soft[aria-pressed="true"]{background:#2a1712;border-color:#e87a5c}
+.vchip.keep[aria-pressed="true"],.vchip.lock[aria-pressed="true"],.vchip.rec[aria-pressed="true"]{background:#10241a;border-color:var(--ok)}
+.vchip:disabled{opacity:.4}
+
+/* ---- a result scored on data that has changed since ---- */
+.notice.stale-run{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;
+  background:#221c10;border-color:#5c4a1d;border-left-color:var(--gold)}
+
+/* ---- one card line everywhere: substats with their units, coloured by worth when a character is in view ---- */
+.subs .s{white-space:nowrap}
+.subs .s.good{color:var(--ok)}
+.subs .s.bad{opacity:.5}
+.subs .s.hi{color:var(--ok);font-weight:700}
+.subs .sep{color:var(--dim2);margin:0 5px}
+
+/* ---- Optimise: the recommendation's headline ---- */
+.rechead{display:flex;align-items:flex-start;gap:12px 20px;flex-wrap:wrap;margin-bottom:14px}
+.rechead h2{font-size:14px;text-transform:uppercase;letter-spacing:.07em;color:var(--dim);margin:0 0 6px}
+.rechead .headline{font-size:15px}
+.rechead .headline .big{font-family:ui-monospace,monospace;font-size:24px;font-weight:700}
+.rechead .headline .arrow{color:var(--dim2);margin:0 6px}
+.rechead .acts{margin-left:auto;display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.notice.trade{margin:0 0 12px}
+.notice.trade.bad{background:#2a1218;border-color:#6b2433;border-left-color:var(--red)}
+.gainpos{color:var(--ok)}
+/* Ink card: the row of the ladder you chose, and the re-roll it recommends. */
+#up-pane-ink tr.on td{background:rgba(127,127,127,.12)}
+#ikTable tr.ikRow{cursor:pointer}
+#ikTable tr.ikRow:hover td{background:rgba(127,127,127,.07)}
+#ikTable tr.ikRow.on td{background:rgba(127,127,127,.16)}
+
+/* ---- card picker: one compact row per candidate ---- */
+.pick td{padding:6px 8px}
+.pick tr.cur td{background:#10241a}
+
+/* ---- undo, and file drop ---- */
+/* Centred with auto margins, not left:50% + translate: that caps a shrink-to-fit box at half
+   the viewport, which on a phone wrapped the message into a column one word wide. */
+.toast{position:fixed;left:0;right:0;bottom:22px;margin:0 auto;width:fit-content;max-width:calc(100vw - 32px);
+  z-index:80;display:flex;align-items:center;gap:10px;
+  background:#22222b;border:1px solid var(--line);border-radius:10px;padding:8px 8px 8px 16px;font-size:13px;
+  box-shadow:0 10px 30px rgba(0,0,0,.55)}
+.toast .tmsg{margin-right:4px}
+.dropzone{position:fixed;inset:12px;z-index:90;display:flex;flex-direction:column;align-items:center;justify-content:center;
+  text-align:center;border:2px dashed var(--red);border-radius:16px;background:rgba(11,11,13,.88);
+  font-size:18px;font-weight:700;pointer-events:none}
+.dropzone small{display:block;font-size:13px;font-weight:400;color:var(--dim);margin-top:8px;max-width:520px}
+
+.hide{display:none!important}
+.right{text-align:right}
+.nowrap{white-space:nowrap}
+
+/* ---- narrow screens: a laptop tool first, but nothing should need sideways scrolling ---- */
+/* ---- Teams tab ---- */
+/* The ? button beside a label, a heading or a line: a small round mark that opens #infoPop (infoBtn in
+   logic.js) with the words that used to sit in a tooltip or a paragraph. `.lnk` is the same button worded
+   as a link ("How the fight was played"). */
+.infoBtn{display:inline-flex;align-items:center;justify-content:center;width:17px;height:17px;padding:0;border-radius:50%;
+  border:1px solid #3a3a48;background:#1b1b24;color:var(--dim);font-size:11px;font-weight:700;line-height:1;vertical-align:middle;flex:0 0 auto}
+.infoBtn:hover,.infoBtn.open{border-color:var(--blue);color:#fff;background:#1f2a40}
+.infoBtn.lnk{width:auto;height:auto;border-radius:20px;padding:2px 9px 2px 6px;font-size:12px;font-weight:600;gap:6px}
+.infoBtn.lnk::before{content:'?';display:inline-flex;align-items:center;justify-content:center;width:15px;height:15px;border-radius:50%;
+  background:#2a2a36;color:var(--dim);font-size:10px}
+.infoBtn.lnk:hover::before{background:var(--blue);color:#fff}
+.lblRow{display:flex;align-items:center;gap:6px}
+.lblRow label{margin:0}
+.infoPop{position:absolute;z-index:40;width:min(440px,calc(100vw - 24px));background:var(--panel2);border:1px solid #3a3a48;
+  border-left:3px solid var(--blue);border-radius:10px;padding:12px 14px;box-shadow:0 12px 32px rgba(0,0,0,.6);font-size:12.5px;line-height:1.6;color:var(--dim)}
+.infoPop .hd{display:flex;align-items:center;gap:10px;margin-bottom:6px}
+.infoPop .hd b{color:var(--ink);font-size:13px;flex:1}
+.infoPop .body p{margin:0 0 8px}
+.infoPop .body p:last-child{margin-bottom:0}
+.infoPop .body b{color:var(--ink)}
+.infoPop .body ul{margin:4px 0 8px 18px}
+/* The controls: three labelled rows (Team, Fight, Wonder) and a Calculate bar. */
+.tmGroup{display:grid;grid-template-columns:76px minmax(0,1fr);gap:8px 14px;align-items:start;padding:10px 0;border-top:1px solid #22222b}
+.tmGroup:first-child{border-top:none;padding-top:0}
+.tmGroup .gl{font-size:11px;text-transform:uppercase;letter-spacing:.08em;font-weight:700;color:var(--red-text);padding-top:22px}
+.tmGroupW .gl{padding-top:22px}
+.tmGroup .gc{min-width:0}
+.tmGroup select{max-width:100%}
+.tmChecks{margin-top:6px;gap:6px 18px}
+.tmChecks .chk{display:inline-flex;align-items:center;gap:5px}
+.tmChecks .check{padding-bottom:0}
+.tmChecks .check:has(input:checked){color:var(--ink)}
+.tmCalcBar{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;margin-top:12px;padding-top:12px;border-top:1px solid var(--line)}
+.tmCalcBtn{padding:9px 26px;font-size:14px;border-radius:8px}
+.tmWonderSect{margin-top:8px;border-top:none;padding-top:0}
+.tmSub{display:flex;align-items:center;gap:8px;flex-wrap:wrap;font-size:12px;font-weight:600;color:var(--dim);margin-bottom:6px}
+.tmSub .tiny{font-weight:400}
+/* The answer first: the team's multiplier as one big number, lufel's team beside it for scale, and the
+   fight as a row of facts. */
+.tmHero{display:flex;align-items:flex-start;gap:14px 28px;flex-wrap:wrap;margin-bottom:14px}
+.tmHero .num{font-family:ui-monospace,monospace;font-size:40px;font-weight:700;line-height:1;color:var(--ok)}
+.tmHero .num.plain{color:var(--ink)}
+.tmHero .num small{font-size:13px;font-weight:600;color:var(--dim);margin-left:6px;font-family:"Segoe UI",-apple-system,system-ui,sans-serif}
+.tmHero .lbl{font-size:12px;color:var(--dim);margin-top:6px;max-width:460px;line-height:1.5}
+.tmHero .cmp{border-left:1px solid var(--line);padding-left:20px;font-size:12.5px;color:var(--dim);max-width:420px;align-self:stretch;display:flex;flex-direction:column;justify-content:center;gap:4px}
+.tmHero .cmp b{color:var(--ink);font-family:ui-monospace,monospace;font-size:14px}
+.tmHero .acts{margin-left:auto;align-self:flex-start}
+.tmHero .cmp .tag{font-size:12px}
+.tmRel{display:inline-block;padding:1px 7px;border-radius:20px;font-size:11.5px;font-weight:700;font-family:ui-monospace,monospace}
+.tmRel.worse{color:#e87a5c;background:#2a1712;border:1px solid #6b3524}
+.tmRel.better{color:var(--ok);background:#10241a;border:1px solid #1d5c3d}
+.tmRel.same{color:var(--dim);background:#1b1b22;border:1px solid #33333d}
+.tmFacts{display:flex;gap:6px;flex-wrap:wrap;align-items:stretch;margin:4px 0 8px}
+.tmFact{display:inline-flex;flex-direction:column;gap:2px;border:1px solid var(--line);background:#16161c;border-radius:8px;padding:5px 10px;font-size:12px;min-width:0}
+/* the label keeps its case: innerText follows text-transform, and a test reads "Highlights and Theurgies used" */
+.tmFact small{font-size:10.5px;letter-spacing:.03em;color:var(--dim2);font-weight:600}
+.tmFact b{font-weight:600;color:var(--ink)}
+.tmFact .muted{font-weight:400}
+.tmLinks{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-top:6px}
+.tmMedicNote{font-size:12px;color:var(--dim);margin:0 0 8px}
+/* One card per seat, striped in the member's element colour: who, their share of the team, what they
+   add, and the buttons, in columns that stack on a phone. The role is coloured by the kind of seat. */
+.tmSeats{display:flex;flex-direction:column;gap:8px}
+.tmSeat{display:grid;grid-template-columns:230px minmax(0,1fr) auto;gap:6px 18px;align-items:start;
+  background:var(--panel2);border:1px solid var(--line);border-left:4px solid var(--el,var(--line));border-radius:9px;padding:11px 14px 11px 13px}
+.tmSeats.calc .tmSeat{grid-template-columns:230px 118px minmax(0,1fr) auto}
+.tmSeat.fixed{background:linear-gradient(90deg,color-mix(in srgb,var(--el) 14%,var(--panel2)),var(--panel2) 60%)}
+.tmSeat.empty{border-style:dashed;border-left-style:solid;opacity:.7}
+.tmSeat .role{font-size:11px;text-transform:uppercase;letter-spacing:.05em;color:var(--dim2);font-weight:700}
+.tmSeat.kind-dps .role{color:var(--red-text)}
+.tmSeat.kind-elu .role{color:#c08ae8}
+.tmSeat.kind-backup .role{color:var(--gold)}
+.tmSeat.kind-wonder .role{color:#6fa6ee}
+.tmSeat.kind-medic .role{color:var(--ok)}
+.tmSeat .nm{font-size:15px;font-weight:700;line-height:1.25;margin-top:1px}
+.tmSeat .nm .muted{font-weight:400;font-size:13px}
+.tmSeat .meta{font-size:12px;color:var(--dim);display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-top:2px}
+.tmSeat .tags{display:flex;gap:5px;flex-wrap:wrap;margin-top:7px}
+.tmSeat .tmWhat{font-size:12px;min-width:0;line-height:1.5}
+.tmSeat .tmWhat .note{color:var(--dim);margin:2px 0 4px}
+.tmSeat .acts{text-align:right;white-space:nowrap}
+/* Wonder's seat has a button per Persona: they wrap, so a phone never scrolls sideways */
+.tmSeat.kind-wonder .acts{white-space:normal;display:flex;flex-wrap:wrap;justify-content:flex-end;gap:4px;max-width:280px}
+/* The short lists under a seat (where the number comes from, not priced, replacements): closed ones sit
+   on one line as links, an open one takes the row. */
+.tmFolds{display:flex;flex-wrap:wrap;gap:2px 16px;margin-top:5px}
+.tmFolds>details{font-size:12px}
+.tmFolds>details[open]{flex-basis:100%}
+.tmFolds>details>summary{cursor:pointer;color:var(--dim);list-style:none;display:inline-block}
+.tmFolds>details>summary::-webkit-details-marker{display:none}
+.tmFolds>details>summary::before{content:'▸ ';color:var(--dim2)}
+.tmFolds>details[open]>summary::before{content:'▾ '}
+.tmFolds>details>summary:hover{color:var(--ink)}
+.tmFolds>details>.in{margin:4px 0 6px 12px;color:var(--dim)}
+.tmFolds>details>.in ul{margin:2px 0 0 16px}
+/* The member's share of the team: a number the eye can rank down the list, and a bar against the
+   largest share in the team. */
+.tmPart{text-align:right;padding-top:2px}
+.tmPart b{display:block;font-family:ui-monospace,monospace;font-size:22px;font-weight:700;line-height:1;color:var(--ok)}
+.tmPart.zero b{color:var(--dim2);font-size:18px}
+.tmPart small{display:block;font-size:10.5px;color:var(--dim2);text-transform:uppercase;letter-spacing:.05em;margin-top:4px}
+.tmPart .bar{margin-top:7px}
+.tmPart .bar>i{background:linear-gradient(90deg,#2e6b4c,var(--ok))}
+/* A member's buffs summed per factor: one pill each, coloured by what it moves in the damage formula
+   (ATK orange, damage red, crit gold, the foe's defence blue, Highlights purple, ailments teal). */
+.tcSum{display:flex;gap:5px;flex-wrap:wrap;margin:0 0 6px}
+.tcSum .st{display:inline-block;border:1px solid var(--line);background:#16161c;border-radius:6px;padding:2px 8px 2px 7px;font-size:12px;white-space:nowrap;
+  border-left:3px solid var(--fc,var(--line))}
+.tcSum .st small{color:var(--dim2);font-size:11px}
+.tcSum .st b{font-family:ui-monospace,monospace;font-weight:700;color:var(--fc,var(--ink))}
+.tcSum .st.f-atk{--fc:#e0955a}
+.tcSum .st.f-dm{--fc:#ee4265}
+.tcSum .st.f-crit{--fc:#e8b64c}
+.tcSum .st.f-def{--fc:#6fa6ee}
+.tcSum .st.f-hl{--fc:#c08ae8}
+.tcSum .st.f-ail{--fc:#3fbfbf}
+.tcSum .st.f-mix{--fc:var(--pc)}
+/* The damage dealer's own damage: a stacked bar of what it was made of, the pills under it. */
+.tmMix{display:flex;height:10px;border-radius:5px;overflow:hidden;background:#24242e;margin:4px 0 6px;max-width:520px}
+.tmMix>i{display:block;height:100%;background:var(--pc)}
+.tmAlt{margin-top:4px;display:flex;flex-direction:column;gap:6px}
+.tmAlt .alt{display:flex;gap:8px;align-items:baseline;flex-wrap:wrap}
+/* Wonder's seat: the Personas in use as chips, and the suggested setup as a box of its own. */
+.tmUse{display:flex;gap:5px;flex-wrap:wrap;margin:4px 0}
+.tmUse .u{display:inline-flex;align-items:center;gap:6px;border:1px solid var(--line);border-radius:20px;padding:1px 9px 1px 6px;font-size:12px;background:#16161c}
+.tmUse .u .el-dot{width:7px;height:7px;box-shadow:none}
+.tmUse .u b{font-family:ui-monospace,monospace}
+.tmUse .u b.rsv{font-family:inherit;font-weight:500;font-style:italic;color:var(--dim)}
+.tmSuggest{margin-top:8px;border:1px solid #2a4a66;border-left:3px solid var(--blue);background:#121a26;border-radius:8px;padding:8px 11px}
+.tmSuggest .hd{display:flex;align-items:center;gap:8px;flex-wrap:wrap;font-size:12px}
+.tmSuggest .hd b{color:var(--ink)}
+.tmSuggest .gain{color:var(--ok);font-family:ui-monospace,monospace;font-weight:700}
+.tmSuggest .lead{font-size:11px;color:#6fa6ee;font-weight:700;text-transform:uppercase;letter-spacing:.05em}
+.tmWonder{display:grid;grid-template-columns:auto repeat(4,minmax(0,1fr));gap:6px 8px;align-items:center;max-width:980px}
+.tmWonder select,.tmWonder input{min-width:0;width:100%}
+.psSkill input{width:170px}
+.tmWonder .hd{font-size:11px;text-transform:uppercase;letter-spacing:.05em;color:var(--dim2);font-weight:600}
+/* Turn order: numbered steps in the member's element colour, the number drawn by CSS so the step's
+   text stays the name and Speed. */
+.tmOrder{display:flex;gap:8px;flex-wrap:wrap;align-items:center;counter-reset:turn}
+/* inline-block, not inline-flex: a flex box reports its text one word per line (the test reads it) */
+.tmOrder .tmStep{display:inline-block;border:1px solid var(--line);border-left:3px solid var(--el,var(--line));border-radius:8px;padding:5px 11px 5px 6px;background:var(--panel2);font-size:13px}
+.tmOrder .tmStep::before{counter-increment:turn;content:counter(turn);display:inline-block;width:20px;height:20px;line-height:20px;text-align:center;
+  border-radius:50%;background:var(--el,var(--red));color:#0b0b0d;font-size:11px;font-weight:800;margin-right:8px;vertical-align:1px}
+.tmOrder .tmStep b{font-family:ui-monospace,monospace}
+.tmOrder .sep{color:var(--dim2)}
+/* Rotation grids: one tile a turn, coloured by what the turn is (tmTurnKind): Skill 1 blue, Skill 2
+   teal, Skill 3 orange, a Highlight or Theurgy purple, several moves in one turn pink, an item gold,
+   Fatigue and idle grey. A turn changed for this team keeps a green ring (.fit). */
+.tmLegend{display:flex;gap:4px 10px;flex-wrap:wrap;align-items:center;font-size:11px;color:var(--dim);margin:0 0 10px}
+.tmLegend .k{display:inline-flex;align-items:center;gap:5px}
+.tmLegend .k i{display:inline-block;width:12px;height:12px;border-radius:3px;background:var(--tc,#1a1a22);border:1px solid var(--tb,var(--line))}
+.tmLegend .k.fit i{box-shadow:inset 0 0 0 2px var(--ok)}
+.tmRot{display:grid;grid-template-columns:repeat(auto-fill,minmax(84px,1fr));gap:4px;margin:6px 0 10px}
+.tmRot .t{border:1px solid var(--tb,var(--line));border-radius:6px;padding:4px 6px;background:var(--tc,#1a1a22);text-align:center}
+.tmRot .t small{display:block;color:var(--dim2);font-size:10px;text-transform:uppercase;letter-spacing:.05em}
+.tmRot .t b{font-family:ui-monospace,monospace;font-size:12px;overflow-wrap:anywhere;color:var(--tt,var(--ink))}
+.tmRot .t.idle b,.tmRot .t.fatigue b{color:var(--dim2)}
+.tmRot .t.fit{box-shadow:inset 0 0 0 2px var(--ok)}
+.tmRot .t.fit small{color:var(--ok)}
+.k-s1,.tmRot .t.s1{--tc:#13202e;--tb:#2b4a6b;--tt:#8fc1f2}
+.k-s2,.tmRot .t.s2{--tc:#102424;--tb:#1f5050;--tt:#6fd6d6}
+.k-s3,.tmRot .t.s3{--tc:#2a1c10;--tb:#6b4420;--tt:#f0b070}
+.k-hl,.tmRot .t.hl{--tc:#211830;--tb:#4d3163;--tt:#d0a0f0}
+.k-burst,.tmRot .t.burst{--tc:#2a1220;--tb:#6b2446;--tt:#f08ab0}
+.k-item,.tmRot .t.item{--tc:#272010;--tb:#5c4a1d;--tt:var(--gold)}
+.k-tok,.tmRot .t.tok{--tc:#1d1d26;--tb:#3a3a48;--tt:var(--ink)}
+.k-idle,.tmRot .t.idle,.tmRot .t.fatigue{--tc:#17171c;--tb:#2a2a33}
+/* Wonder's turns: a skill name and the Persona under it, wider cells than a skill number needs */
+.tmRot.wonder{grid-template-columns:repeat(auto-fill,minmax(120px,1fr))}
+.tmRot.wonder .t b{font-family:inherit;display:block}
+.tmRot .t .who{display:block;color:var(--dim2);font-size:11px;overflow-wrap:anywhere}
+/* Battle rotation (tmBattleHtml): a column per member in the order they act, a row per round; tiles take the
+   rotation grids' colours, a Highlight its own tile under its user, a turn lufel writes otherwise a green ring. */
+.tbWrap{overflow-x:auto;margin:0 -4px;padding-bottom:2px}
+.tbGrid{border-collapse:separate;border-spacing:6px 5px;width:100%;table-layout:fixed;min-width:620px}
+.tbGrid th,.tbGrid td{border-bottom:none}
+.tbGrid th{text-transform:none;letter-spacing:normal}
+/* the round labels stay in view while a phone scrolls the members sideways */
+.tbGrid th.tbRd{width:78px;text-align:left;vertical-align:top;font-weight:400;padding:6px 4px 0 2px;left:0;top:auto;z-index:1;background:var(--panel)}
+.tbGrid thead th.tbRd{z-index:3}
+.tbGrid th.tbRd b{display:block;font-size:13px;color:var(--ink)}
+.tbGrid th.tbRd small{display:block;font-size:10px;color:var(--dim2);text-transform:uppercase;letter-spacing:.05em}
+.tbGrid th.tbRd .tag{margin-top:4px;font-size:10px}
+.tbGauge{display:block;height:4px;border-radius:2px;background:#24242c;margin-top:5px;overflow:hidden;width:60px}
+.tbGauge i{display:block;height:100%;background:linear-gradient(90deg,#7a4fa0,#d0a0f0)}
+.tbGrid tr.encore th.tbRd b{color:#d0a0f0}
+.tbGrid tr.encore td{opacity:.92}
+.tbGrid th.tbWho{vertical-align:bottom;text-align:left;font-weight:400;padding:8px 8px 7px;background:var(--panel2);border:1px solid var(--line);border-top:3px solid var(--el,var(--line));border-radius:9px;position:relative}
+.tbGrid th.tbWho .avatar{display:block;margin-bottom:4px}
+.tbGrid th.tbWho .nm{display:block;font-size:13px;font-weight:700;color:var(--ink);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.tbGrid th.tbWho small{display:block;font-size:10px;color:var(--dim2);line-height:1.35;text-transform:uppercase;letter-spacing:.05em;margin-top:1px}
+.tbGrid th.tbWho .ord{position:absolute;top:7px;right:7px;width:19px;height:19px;line-height:19px;text-align:center;border-radius:50%;background:var(--el,var(--red));color:#0b0b0d;font-size:11px;font-weight:800}
+.tbGrid th.tbWho.kind-elu{border-style:dashed;border-top-style:solid}
+.tbGrid th.tbWho.kind-dps{box-shadow:0 0 0 1px var(--el,var(--line)) inset}
+.tbGrid td{vertical-align:top;padding:0}
+.tbTile{border:1px solid var(--tb,var(--line));background:var(--tc,#1a1a22);border-radius:7px;padding:5px 8px 6px;margin-bottom:4px;line-height:1.25}
+.tbTile:last-child{margin-bottom:0}
+.tbTile b{display:block;font-size:12.5px;font-weight:700;color:var(--tt,var(--ink));overflow-wrap:anywhere}
+.tbTile small{display:block;font-size:10.5px;color:var(--dim);margin-top:1px;overflow-wrap:anywhere}
+.tbTile.k-hl{border-style:dashed}
+.tbTile.k-hl b::before{content:"✦ ";color:#d0a0f0}
+.tbTile.k-idle b,.tbTile.none b{color:var(--dim2);font-weight:400}
+.tbTile.none{background:transparent;border-color:transparent;text-align:center}
+.tbTile.diff{box-shadow:inset 0 0 0 2px var(--ok)}
+/* One card per member in the Rotation and "How this team works" panels. */
+.tmMembers{display:flex;flex-direction:column;gap:8px}
+.tmMember{background:var(--panel2);border:1px solid var(--line);border-left:4px solid var(--el,var(--line));border-radius:9px;padding:11px 14px 11px 13px}
+.tmMember .hd{display:flex;align-items:baseline;gap:8px;flex-wrap:wrap;margin-bottom:4px}
+.tmMember .hd .nm{font-size:14px;font-weight:700}
+.tmMember .hd a{margin-left:auto}
+.tmMember .fitHd{display:flex;align-items:center;gap:8px;flex-wrap:wrap;font-size:12px}
+.tmNote{margin:4px 0;color:var(--dim)}
+.tmParties{display:flex;flex-direction:column}
+.tmParty{display:grid;grid-template-columns:auto minmax(0,1fr) 150px;gap:6px 12px;align-items:center;padding:7px 0}
+.tmParty+.tmParty{border-top:1px solid #1e1e26}
+.tmParty .ms{display:flex;gap:6px;flex-wrap:wrap;align-items:center}
+.tmParty .m{border:1px solid var(--line);border-left:3px solid var(--el,var(--line));border-radius:20px;padding:1px 8px 1px 7px;font-size:12px;background:#16161c}
+.tmParty .m.no{color:#e87a5c;border-color:#6b3524;text-decoration:line-through}
+.tmParty .val{text-align:right;white-space:nowrap;font-size:12.5px}
+.tmParty .val b{font-family:ui-monospace,monospace;font-size:14px}
+.tmParty .val .bar{margin-top:4px}
+.tmParty .val .bar>i{background:linear-gradient(90deg,#2e6b4c,var(--ok))}
+.tmPanelHd{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:12px}
+.tmPanelHd h2{font-size:14px;text-transform:uppercase;letter-spacing:.07em;color:var(--dim);margin:0}
+.tmSyn li{margin:4px 0}
+.tmSyn .m{border:1px solid var(--line);border-left:3px solid var(--el,var(--line));border-radius:20px;padding:0 7px;font-size:12px;background:#16161c;font-weight:600}
+/* ---- the shared visual vocabulary (Nov 2026 UI pass; the helpers are beside buildScoreTag in logic.js) ---- */
+/* Tab icons: one stroke drawing before each label. */
+nav button{display:inline-flex;align-items:center;gap:5px;padding:6px 9px;font-size:13px}
+.navIco{width:14px;height:14px;fill:none;stroke:currentColor;stroke-width:1.9;stroke-linecap:round;stroke-linejoin:round;opacity:.8;flex:0 0 auto}
+nav button.on .navIco{opacity:1}
+/* A ring gauge: --p is the percentage, the band class its colour. The hole is cut with a mask, so a
+   ring sits on any background; the number on a big ring is a sibling drawn over it (.ringWrap). */
+.ringWrap{position:relative;display:inline-flex;align-items:center;justify-content:center;flex:0 0 auto;vertical-align:middle}
+.ringWrap.mini{width:13px;height:13px;margin-right:1px}
+.ringWrap.big{width:96px;height:96px}
+.ring{--p:0;--c:#3a3a46;--w:3px;position:absolute;inset:0;border-radius:50%;
+  background:conic-gradient(var(--c) calc(var(--p) * 1%),#2a2a34 0);
+  -webkit-mask:radial-gradient(farthest-side,transparent calc(100% - var(--w) - .5px),#000 calc(100% - var(--w) + .5px));
+  mask:radial-gradient(farthest-side,transparent calc(100% - var(--w) - .5px),#000 calc(100% - var(--w) + .5px))}
+.ringWrap.big .ring{--w:8px;background:conic-gradient(var(--c) calc(var(--p) * 1%),#22222b 0)}
+.ringWrap.big .big{position:relative;font-size:28px}
+.ring.bs-hi{--c:var(--ok)}.ring.bs-ok{--c:#7fc9a0}.ring.bs-mid{--c:var(--gold)}.ring.bs-lo{--c:#e87a5c}.ring.bs-none{--c:#3a3a46}
+.tag.bs{display:inline-flex;align-items:center;gap:4px}
+/* A number coloured by its band (a card's out-of-100, a build score in a headline). */
+.pb.bs-hi,.bandc.bs-hi{color:var(--ok)}.pb.bs-ok,.bandc.bs-ok{color:#7fc9a0}.pb.bs-mid,.bandc.bs-mid{color:var(--gold)}.pb.bs-lo,.bandc.bs-lo{color:#e87a5c}
+/* A card block's out-of-100 as a thin bar under its header, in the band's colour. */
+.lo-pct{height:4px;border-radius:2px;background:#24242e;overflow:hidden;margin:-2px 0 8px}
+.lo-pct>i{display:block;height:100%;background:#e87a5c}
+.lo.bs-hi .lo-pct>i{background:linear-gradient(90deg,#2e6b4c,var(--ok))}
+.lo.bs-ok .lo-pct>i{background:linear-gradient(90deg,#2e6b4c,#7fc9a0)}
+.lo.bs-mid .lo-pct>i{background:linear-gradient(90deg,#6b5a20,var(--gold))}
+.lo.bs-lo .lo-pct>i{background:linear-gradient(90deg,var(--red-dim),#e87a5c)}
+.gainneg{color:#e87a5c}
+/* A round portrait: the roster's art cropped to the face, element-tinted initials under it (a pseudo-element,
+   so innerText stays the name alone) and a ring in the element's colour. */
+.avatar{--el:#8a8f98;--sz:36px;position:relative;display:inline-flex;flex:0 0 auto;width:var(--sz);height:var(--sz);border-radius:50%;overflow:hidden;
+  vertical-align:middle;background:radial-gradient(120% 90% at 50% 10%,color-mix(in srgb,var(--el) 55%,transparent),#101015 75%);
+  box-shadow:0 0 0 2px color-mix(in srgb,var(--el) 55%,transparent)}
+.avatar::before{content:attr(data-i);position:absolute;inset:0;display:flex;align-items:center;justify-content:center;
+  font-size:calc(var(--sz) * .36);font-weight:800;letter-spacing:-.02em;color:color-mix(in srgb,var(--el) 70%,#fff);opacity:.75}
+.avatar img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;object-position:center 14%;transform:scale(1.6)}
+.who{display:inline-flex;align-items:center;gap:8px;vertical-align:middle}
+.who>span{min-width:0}
+.rlist td .who .nm{display:inline}
+.loHead{display:flex;align-items:center;gap:14px;padding-right:28px}
+.loHead h2{display:inline}
+.loHead .pips{margin-left:4px}
+.upHd{display:flex;align-items:center;gap:8px;flex-wrap:wrap;font-size:15px}
+.upHd .avatar{order:-1}
+.upHd .upHdMeta{display:inline-flex;align-items:center;gap:8px;margin-left:auto;font-weight:400}
+/* Five slot pips: filled in the slot's colour when the worn card is in the recommended set, outlined when
+   it is worn off-set, dashed when the slot is empty. The letters are the same abbreviations the slot badges use. */
+.pips{display:inline-flex;gap:3px;vertical-align:middle;flex-wrap:wrap}
+.pip{display:inline-flex;align-items:center;justify-content:center;width:27px;height:15px;border-radius:4px;font-size:8px;font-weight:800;
+  letter-spacing:.05em;text-transform:uppercase;font-style:normal;border:1px dashed #3d3d4a;color:#5a5a68;background:transparent;line-height:1}
+.pip.on{border-style:solid;border-color:var(--sc);color:var(--sc);background:color-mix(in srgb,var(--sc) 12%,transparent)}
+.pip.on.set{background:var(--sc);color:#0b0b0d}
+.pip.Sun{--sc:#f0c260}.pip.Moon{--sc:#7fa8e8}.pip.Star{--sc:#c08ae8}.pip.Sky{--sc:#4fc79a}.pip.Space{--sc:#f07a92}
+.cc .slotsRow{margin-top:8px}
+/* The roster's "default setup" warning reads as one. */
+.tag.warn{color:var(--gold);border-color:#5c4a1d;background:#241f10}
+.tag.warn::before{content:'⚠ ';font-size:10px}
+/* A card's level: a pill whose underline fills to the cap, gold when there. */
+.lvl{display:inline-flex;flex-direction:column;align-items:center;gap:2px;min-width:30px;padding:1px 6px 2px;border-radius:5px;background:#1b1b22;border:1px solid var(--line)}
+.lvl b{font-family:ui-monospace,monospace;font-weight:700;font-size:12px;line-height:1.2;color:var(--dim)}
+.lvl i{display:block;height:2px;width:0;border-radius:1px;background:var(--dim2);align-self:flex-start;max-width:100%}
+.lvl.max{border-color:#6b5220;background:#2a2213}.lvl.max b{color:#f0c260}.lvl.max i{background:#f0c260}
+.lvl.part b{color:var(--ink)}.lvl.part i{background:#7fa8e8}
+.lvl.zero b{color:var(--dim2)}
+/* Triage verdicts: a glyph and a colour of their own — keep green, hold amber, feed red, lock blue, an
+   Upgrades pick green with an arrow — and the quality bar in the same colour. */
+.tag.vt{display:inline-flex;align-items:center;gap:4px}
+.tag.vt::before{font-size:10px;font-weight:800;line-height:1}
+.tag.v-keep,.tag.v-upgrade{color:var(--ok);border-color:#1d5c3d;background:#10241a}
+.tag.v-keep::before{content:'✓'}
+.tag.v-upgrade::before{content:'↑'}
+.tag.v-hold{color:var(--gold);border-color:#5c4a1d;background:#241f10}
+.tag.v-hold::before{content:'◐'}
+.tag.v-feed{color:#e87a5c;border-color:#6b3524;background:#2a1712}
+.tag.v-feed::before{content:'✕'}
+.tag.v-lock{color:#8fc1f2;border-color:#2b4a6b;background:#13202e}
+.tag.v-lock::before{content:'';width:9px;height:10px;background:currentColor;
+  -webkit-mask:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M6 10V8a6 6 0 0 1 12 0v2h1a1 1 0 0 1 1 1v10a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V11a1 1 0 0 1 1-1zm3 0h6V8a3 3 0 0 0-6 0z'/%3E%3C/svg%3E") center/contain no-repeat;
+  mask:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M6 10V8a6 6 0 0 1 12 0v2h1a1 1 0 0 1 1 1v10a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V11a1 1 0 0 1 1-1zm3 0h6V8a3 3 0 0 0-6 0z'/%3E%3C/svg%3E") center/contain no-repeat}
+.bar.q-keep>i,.bar.q-upgrade>i{background:linear-gradient(90deg,#2e6b4c,var(--ok))}
+.bar.q-hold>i{background:linear-gradient(90deg,#6b5a20,var(--gold))}
+.bar.q-lock>i{background:linear-gradient(90deg,#2b4a6b,#8fc1f2)}
+.bar.q-feed>i{background:linear-gradient(90deg,var(--red-dim),#e87a5c)}
+/* the verdict chips over the Triage table carry the same glyphs */
+.vchip::before{font-size:10px;font-weight:800}
+.vchip.keep::before{content:'✓'}.vchip.rec::before{content:'↑'}.vchip.hold::before{content:'◐';color:var(--gold)}
+.vchip.feed::before,.vchip.soft::before{content:'✕'}.vchip.lock::before{content:'🔒';font-size:9px}
+.vchip.hold b{color:var(--gold)}.vchip.lock b{color:#8fc1f2}
+/* Teams: the seat's portrait beside the role and name; the turn order's steps and the next teams' chips carry one too */
+.tmWho{display:flex;gap:11px;align-items:flex-start}
+.tmWhoIn{min-width:0;flex:1}
+.tmOrder .tmStep .avatar{margin-right:6px;vertical-align:-5px}
+.tmParty .m{display:inline-flex;align-items:center;gap:6px}
+.tmParty .m .avatar{box-shadow:none;margin-left:-3px}
+@media (max-width:760px){
+  header{position:static;padding:10px 12px;gap:8px 10px}
+  header .logo{font-size:15px}
+  nav{order:3;width:100%;flex-wrap:nowrap;overflow-x:auto;scrollbar-width:none}
+  nav button{flex:0 0 auto;padding:6px 10px}
+  .navGroup{flex:0 0 auto}
+  .navLbl{padding-left:10px}
+  .hdr-right{margin-left:0;width:100%}
+  .pop{left:0;right:auto;width:min(340px,calc(100vw - 24px))}
+  main{padding:12px}
+  .panel{padding:12px}
+  /* tables scroll inside themselves instead of widening the page; the .scroll boxes
+     already do, and keep their sticky headers */
+  .panel table,dialog table{display:block;overflow-x:auto}
+  .scroll table{display:table;overflow:visible}
+  .flowTable{overflow-x:auto}
+  .cards{grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
+  .portrait .initials{font-size:36px}
+  .cc .nm{font-size:13px}
+  .rechead .acts{margin-left:0}
+  dialog{padding:14px;width:100%}
+  /* Teams: seat cards stack their columns, the hero loses its divider, the control rows lose their label column */
+  .tmSeat,.tmSeats.calc .tmSeat{grid-template-columns:minmax(0,1fr) auto}
+  .tmSeat .tmWhat,.tmSeat .acts{grid-column:1 / -1}
+  .tmSeat .acts{text-align:left;white-space:normal}
+  .tmSeat.kind-wonder .acts{justify-content:flex-start;max-width:none}
+  .tmHero .cmp{border-left:none;padding-left:0}
+  .tmHero .acts{margin-left:0}
+  .tmParty{grid-template-columns:auto minmax(0,1fr)}
+  .tmParty .val{grid-column:2;text-align:left}
+  .tmGroup{grid-template-columns:minmax(0,1fr)}
+  .tmGroup .gl,.tmGroupW .gl{padding-top:0}
+  .tmCtl select,.tmCtl input{max-width:100%}
+  .tmWonder{grid-template-columns:auto minmax(0,1fr)}
+  .tmWonder .hd{display:none}
+}
+</style>
+
+<header>
+  <div class="logo"><img src="data:image/png;base64,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" alt="">P5<em>X</em> &nbsp;Revelation Planner</div>
+  <!-- The tabs, in two named groups: what to do with the cards, and the team around a damage dealer -->
+  <nav aria-label="Sections">
+    <button data-tab="roster" class="on">Roster</button>
+    <div class="navGroup" role="group" aria-labelledby="navCards"><span class="navLbl" id="navCards">Revelation cards</span>
+      <div class="navBtns"><button data-tab="opt">Optimise</button><button data-tab="inv">Inventory</button><button data-tab="triage">Triage</button><button data-tab="upgrades">Upgrades</button></div></div>
+    <div class="navGroup" role="group" aria-labelledby="navTeams"><span class="navLbl" id="navTeams">Team building</span>
+      <div class="navBtns"><button data-tab="teams">Teams</button><button data-tab="personas">Personas</button><button data-tab="weapons">Wonder loadout</button></div></div>
+    <button data-tab="data">Data</button>
+  </nav>
+  <div class="hdr-right">
+    <div class="popwrap">
+      <button class="ghost chipbtn" id="setBtn" aria-haspopup="true" aria-expanded="false" aria-controls="setPop"
+        title="Scoring settings every tab reads">Team crit <b id="setTc">0%</b></button>
+      <div class="pop hide" id="setPop" role="dialog" aria-label="Scoring settings">
+        <h3>Scoring settings</h3>
+        <div class="field">
+          <label for="rsTeamCrit">Team crit rate %</label>
+          <input id="rsTeamCrit" type="number" value="0" min="0" max="100" step="0.1" style="width:90px">
+        </div>
+        <p class="tiny muted" style="margin:8px 0 0">Crit rate your supports add to every damage dealer: about 15 for
+          one crit buffer such as Summer Ichigo, plus 5-10 from your Elucidator. At 0, only each character's own counts.
+          Lufel's Crit Multiplier picks assume a crit support, so at 0 the tool reads crit rate as scarce and favours
+          Crit Rate instead. It changes every build score, recommendation and Triage score; stat totals and stat
+          targets stay each character's own.</p>
+        <h3 class="sep">Team buffs <span class="tiny muted" style="font-weight:400">to a damage dealer</span></h3>
+        <div class="dengrid">
+          <label>ATK % <input class="teamIn" data-k="atkPct" type="number" min="0" max="500" step="1" value="0"></label>
+          <label>Damage % <input class="teamIn" data-k="dm" type="number" min="0" max="300" step="1" value="0"></label>
+          <label>Crit mult % <input class="teamIn" data-k="cm" type="number" min="0" max="500" step="1" value="0"></label>
+          <label>Enemy DEF down % <input class="teamIn" data-k="defdown" type="number" min="0" max="100" step="1" value="0"></label>
+        </div>
+        <p class="tiny muted" style="margin:8px 0 0">The rest of what your usual supports add, the same way: the more ATK
+          a team already gives, the less an ATK% roll adds and the more crit and damage rolls do. A Teams page team shows
+          what it adds per member; a strong team adds about +80% ATK, +30% damage and +30% crit multiplier.
+          All 0 counts only each character's own. Like the crit rate, it changes build scores and
+          recommendations, not stat totals.</p>
+        <h3 class="sep">Thieves Den <span class="tiny muted" style="font-weight:400">in battle</span></h3>
+        <div class="dengrid">
+          <label>ATK <input class="denIn" data-stat="ATK" type="number" min="0" step="1" value="0"></label>
+          <label>HP <input class="denIn" data-stat="HP" type="number" min="0" step="1" value="0"></label>
+          <label>DEF <input class="denIn" data-stat="DEF" type="number" min="0" step="1" value="0"></label>
+          <label>Speed <input class="denIn" data-stat="Speed" type="number" min="0" step="1" value="0"></label>
+          <label>Crit rate % <input class="denIn" data-stat="Crit Rate" type="number" min="0" step="0.1" value="0"></label>
+          <label>Crit mult % <input class="denIn" data-stat="Crit Multiplier" type="number" min="0" step="0.1" value="0"></label>
+          <label>Ailment acc % <input class="denIn" data-stat="Ailment Accuracy" type="number" min="0" step="0.1" value="0"></label>
+          <label>SP recovery % <input class="denIn" data-stat="SP Recovery" type="number" min="0" step="0.1" value="0"></label>
+        </div>
+        <p class="tiny muted" style="margin:8px 0 0">What the Thieves Den — its level's items and its Qualia rating — adds
+          to every character in combat. The game shows it on the stat screen once a battle starts, not on the character
+          screen, so the difference between the two is the number to enter. It counts toward stat targets and the
+          in-battle totals shown beside them, as lufel's targets include it; nothing else.</p>
+      </div>
+    </div>
+    <span class="savestate" id="saveState" aria-live="polite"></span>
+    <button class="sm" id="hdrLoad" title="Replace everything here with a save file">Load</button>
+    <button class="sm" id="hdrImport" title="Merge a scan's cards.json files into this inventory">Import scan</button>
+    <button class="sm" id="hdrSave" title="Download a save file. This tool keeps nothing between sessions on its own.">Save</button>
+  </div>
+</header>
+
+<main>
+  <div id="nodata" class="notice hide">
+    No cards yet. <button class="primary sm" id="emptyLoad">Load save file</button> or drop one anywhere on this page.
+    Starting fresh? Add cards on the <button class="linky" data-goto="inv">Inventory</button> tab, or
+    <button class="linky" data-goto="howto">scan them in</button>.
+  </div>
+
+  <!-- ===================== OPTIMISE ===================== -->
+  <section id="tab-opt" class="hide">
+    <div class="panel">
+      <div class="row">
+        <div class="field" style="min-width:250px">
+          <label>Character</label>
+          <select id="optChar"></select>
+        </div>
+        <div class="field">
+          <label>Card pool</label>
+          <select id="optPool">
+            <option value="all">All cards</option>
+            <option value="free" selected>Only unequipped cards</option>
+          </select>
+        </div>
+        <div class="field">
+          <label>Minimum rarity</label>
+          <select id="optRarity">
+            <option value="5">5★ only</option>
+            <option value="4">4★ and up</option>
+            <option value="2">Everything</option>
+          </select>
+        </div>
+        <div class="field">
+          <label>Set policy</label>
+          <select id="optPolicy">
+            <option value="pref">Honour preferred sets</option>
+            <option value="force4" selected>Force preferred 4-piece</option>
+            <option value="any4">Best complete 4-piece</option>
+            <option value="stats">Pure stat maximum</option>
+          </select>
+        </div>
+        <div class="field">
+          <label title="How much a 4-piece set effect is worth relative to raw substats. Raise it if you think set effects matter more than the optimiser assumes.">4-piece value</label>
+          <input id="optP4" type="number" value="55" min="0" max="300" step="5" style="width:75px">
+        </div>
+        <button class="primary" id="optRun">Recommend</button>
+      </div>
+      <div id="optNotes" style="margin-top:12px"></div>
+    </div>
+    <div id="optOut"></div>
+  </section>
+
+  <!-- ===================== TEAMS ===================== -->
+  <section id="tab-teams" class="hide">
+    <!-- The settings in three labelled rows — the team, the fight it is priced in, Wonder — and one
+         Calculate bar under them. Every explanation sits behind a ? button (infoBtn; the words are
+         TM_HELP in logic.js) rather than in a tooltip or a paragraph, so the controls read at a glance.
+         The ? sits beside the label, never inside it: a label's click focuses its control. -->
+    <div class="panel tmCtl">
+      <div class="tmGroup">
+        <div class="gl">Team</div>
+        <div class="gc">
+          <div class="row">
+            <div class="field" style="min-width:260px">
+              <div class="lblRow"><label>Damage dealer</label><button type="button" class="infoBtn" data-help="dps" aria-label="About the damage dealer">?</button></div>
+              <select id="tmChar"></select>
+            </div>
+            <div class="field">
+              <div class="lblRow"><label>Build from</label><button type="button" class="infoBtn" data-help="basis" aria-label="About Build from">?</button></div>
+              <select id="tmBasis">
+                <option value="calc" selected>Calculated from the kits</option>
+                <option value="lufel">lufel's recommended teams</option>
+              </select>
+            </div>
+            <div class="field">
+              <div class="lblRow"><label>Rank teams by</label><button type="button" class="infoBtn" data-help="rank" aria-label="About Rank teams by">?</button></div>
+              <select id="tmRank">
+                <option value="team" selected>the whole team's damage</option>
+                <option value="dps">the damage dealer's damage</option>
+              </select>
+            </div>
+          </div>
+          <div class="row tmChecks">
+            <span class="chk"><label class="check"><input type="checkbox" id="tmRotFit" checked> Fit rotations to this team</label><button type="button" class="infoBtn" data-help="fit" aria-label="About fitting rotations">?</button></span>
+            <span class="chk"><label class="check"><input type="checkbox" id="tmRotCompose" checked> Compose them from the kits</label><button type="button" class="infoBtn" data-help="compose" aria-label="About composing rotations">?</button></span>
+            <span class="chk"><label class="check"><input type="checkbox" id="tmMedic"> Include a medic</label><button type="button" class="infoBtn" data-help="medic" aria-label="About including a medic">?</button></span>
+          </div>
+        </div>
+      </div>
+      <!-- The fight the calculated basis plays out turn by turn (prefs): rounds, in which every thief
+           acts once in Speed order and the shared Highlight gauge fills; once-per-battle effects,
+           the opening rounds before the first Highlight and turn order weigh more in a short one. -->
+      <div class="tmGroup">
+        <div class="gl">Fight</div>
+        <div class="gc">
+          <div class="row">
+            <div class="field">
+              <div class="lblRow"><label>Length</label><button type="button" class="infoBtn" data-help="fight" aria-label="About the fight length">?</button></div>
+              <select id="tmFight">
+                <option value="3">3 rounds</option>
+                <option value="6" selected>6 rounds</option>
+                <option value="9">9 rounds</option>
+                <option value="12">12 rounds</option>
+                <option value="15">15 rounds</option>
+                <option value="20">20 rounds</option>
+              </select>
+            </div>
+            <div class="field" style="min-width:220px">
+              <div class="lblRow"><label>Boss</label><button type="button" class="infoBtn" data-help="boss" aria-label="About the boss">?</button></div>
+              <select id="tmBoss"></select>
+            </div>
+            <div class="field">
+              <div class="lblRow"><label>Weakness</label><button type="button" class="infoBtn" data-help="weak" aria-label="About weakness hits">?</button></div>
+              <select id="tmWeak">
+                <option value="all" selected>weak to the damage dealer's element</option>
+                <option value="boss">by the boss's resistances</option>
+                <option value="none">no weakness hits</option>
+              </select>
+            </div>
+            <div class="field">
+              <div class="lblRow"><label>Enemies</label><button type="button" class="infoBtn" data-help="foes" aria-label="About the number of enemies">?</button></div>
+              <select id="tmFoes">
+                <option value="auto" selected>Auto</option>
+                <option value="1">1</option>
+                <option value="2">2</option>
+                <option value="3">3</option>
+                <option value="4">4</option>
+                <option value="5">5</option>
+              </select>
+            </div>
+            <div class="field">
+              <div class="lblRow"><label>Down Points</label><button type="button" class="infoBtn" data-help="down" aria-label="About Down Points">?</button></div>
+              <select id="tmDown">
+                <option value="0" selected>can't be knocked down</option>
+                <option value="1">1</option><option value="2">2</option><option value="3">3</option>
+                <option value="4">4</option><option value="5">5</option><option value="6">6</option>
+                <option value="7">7</option><option value="8">8</option><option value="9">9</option>
+                <option value="10">10</option><option value="12">12</option><option value="15">15</option>
+              </select>
+            </div>
+          </div>
+        </div>
+      </div>
+      <!-- Wonder: his Speed places him in the turn order, so it stays in view; the rest of his setup
+           (Personas, cards, weapon, his own stats, Schema) is set once and folds under a line that says
+           what is set. -->
+      <div class="tmGroup tmGroupW">
+        <div class="gl">Wonder</div>
+        <div class="gc">
+          <div class="row">
+            <div class="field">
+              <div class="lblRow"><label>Speed</label><button type="button" class="infoBtn" data-help="spd" aria-label="About Wonder's Speed">?</button></div>
+              <input id="tmWonderSpd" type="number" min="0" max="999" step="1" placeholder="not set" style="width:90px">
+            </div>
+            <!-- what the box holds: worked out from his lead Persona (the box is then read-only), or typed -->
+            <span class="tiny muted" id="tmWonderSpdNote" style="align-self:flex-end;padding-bottom:6px"></span>
+          </div>
+            <details class="sect tmWonderSect" id="tmWonderSect">
+              <summary>Wonder's setup <span class="tiny muted" id="tmWonderSum"></span></summary>
+              <div class="inner">
+                <div class="tmSub"><span>Personas and skill cards</span><button type="button" class="infoBtn" data-help="setup" aria-label="About Wonder's setup">?</button><span class="tiny muted" id="tmWUnrel"></span></div>
+                <div class="tmWonder" id="tmWonderSlots"></div>
+                <div class="row" style="margin-top:8px">
+                  <div class="field"><label>Wonder's weapon</label><select id="tmWWeapon"></select></div>
+                  <div class="field"><label>Refinement</label><select id="tmWRefine"></select></div>
+                </div>
+                <!-- His own stats as typed: a fallback until the Personas', dagger's and Schema's numbers
+                     work them out (wonderCalc), when the Teams tab uses those for every setup it tries. -->
+                <div class="tmSub" style="margin-top:12px"><span>His own stats, from his character screen</span><button type="button" class="infoBtn" data-help="stats" aria-label="About Wonder's own stats">?</button></div>
+                <div class="row">
+                  <div class="field"><label>ATK</label><input id="tmWonderAtk" type="number" min="0" max="99999" step="1" placeholder="not set" style="width:90px"></div>
+                  <div class="field"><label>Crit rate %</label><input id="tmWonderCr" type="number" min="0" max="100" step="0.1" placeholder="5" style="width:70px"></div>
+                  <div class="field"><label>Crit damage %</label><input id="tmWonderCm" type="number" min="100" max="999" step="0.1" placeholder="150" style="width:70px"></div>
+                </div>
+                <div class="tiny" id="tmWCalc" style="margin-top:8px"></div>
+              </div>
+            </details>
+        </div>
+      </div>
+      <!-- The page calculates only on this button (a fresh calculated team takes a few seconds), so
+           the settings above can be changed one after another without waiting on each. -->
+      <div class="tmCalcBar">
+        <div id="tmBusy" class="tiny"></div>
+        <button class="primary tmCalcBtn" id="tmCalc">Calculate</button>
+      </div>
+    </div>
+    <div id="tmStatus"></div>
+    <div id="tmOut"></div>
+  </section>
+
+  <!-- ===================== PERSONAS ===================== -->
+  <!-- Which of Wonder's Personas the player owns and how far each is raised, with the skill cards each
+       has learned: the Teams tab offers, suggests and prices only these (personasFrom in logic.js). -->
+  <section id="tab-personas" class="hide">
+    <div class="panel">
+      <h2>Personas <span class="muted" id="psCount"></span></h2>
+      <div id="psExplain" style="margin-bottom:10px"></div>
+      <div class="row" style="margin-bottom:10px">
+        <div class="field"><label>Show</label><select id="psShow">
+          <option value="">All</option><option value="own">Obtained</option><option value="not">Not obtained</option></select></div>
+        <div class="field"><label>Rarity</label><select id="psRar">
+          <option value="">Any</option><option value="5">5★</option><option value="4">4★</option>
+          <option value="3">3★</option><option value="2">2★</option><option value="1">1★</option></select></div>
+        <div class="field"><label title="Personas whose skills or talent the Teams tab turns into numbers">In the Teams tab</label><select id="psPriced">
+          <option value="">Any</option><option value="priced">Priced only</option></select></div>
+        <div class="field"><label>Sort</label><select id="psSort">
+          <option value="rarity" selected>Rarity (high-low)</option>
+          <option value="rarity-asc">Rarity (low-high)</option>
+          <option value="name">Name (A-Z)</option>
+          <option value="element">Element</option>
+          <option value="level">Level (high-low)</option>
+          <option value="owned">Obtained first</option>
+          <option value="priced">Used by the Teams tab first</option></select></div>
+        <div class="field"><label>Search</label><input id="psQ" placeholder="Persona, element, skill card..."></div>
+        <button class="ghost" id="psAllOn" title="Mark every Persona in the list below as obtained">Mark shown obtained</button>
+        <button class="ghost" id="psAllOff" title="Mark every Persona in the list below as not obtained">Mark shown not obtained</button>
+      </div>
+      <div class="grid cards" id="psGrid"></div>
+      <div class="tiny muted" id="psFoot" style="margin-top:8px"></div>
+    </div>
+  </section>
+
+  <!-- ===================== WEAPONS ===================== -->
+  <!-- Which of Wonder's weapons the player has and at what refinement; the Teams tab offers and suggests only
+       these, each at its own refinement (weaponsFrom in logic.js) -->
+  <section id="tab-weapons" class="hide">
+    <!-- Wonder's Schema and Ego level: account-wide, the same whatever team or setup is priced, so they sit here
+         beside his weapons rather than under the Teams tab's setup. With each Persona's and the dagger's own stats they
+         work his panel out (wonderCalc). -->
+    <div class="panel">
+      <div class="tmPanelHd"><h2>Schema and Ego</h2><button type="button" class="infoBtn" data-help="schema" aria-label="About the Schema fields">?</button></div>
+      <div class="tiny muted" style="margin-bottom:8px">The totals the Schema screen in the Phantom Thieves menu shows now, and the Ego level from its own node. With these, each weapon's stats below and his Personas' stats, the Teams tab works out Wonder's stats for every setup it tries.</div>
+      <div class="row tmWSchema">
+          <div class="field"><label>Schema HP</label><input id="tmWS_hp" type="number" min="0" step="1" placeholder="—" style="width:76px"></div>
+          <div class="field"><label>HP %</label><input id="tmWS_hpPct" type="number" min="0" step="0.1" placeholder="—" style="width:60px"></div>
+          <div class="field"><label>Schema ATK</label><input id="tmWS_atk" type="number" min="0" step="1" placeholder="—" style="width:76px"></div>
+          <div class="field"><label>ATK %</label><input id="tmWS_atkPct" type="number" min="0" step="0.1" placeholder="—" style="width:60px"></div>
+          <div class="field"><label>Schema DEF</label><input id="tmWS_def" type="number" min="0" step="1" placeholder="—" style="width:76px"></div>
+          <div class="field"><label>DEF %</label><input id="tmWS_defPct" type="number" min="0" step="0.1" placeholder="—" style="width:60px"></div>
+          <div class="field"><label>Crit rate %</label><input id="tmWS_cr" type="number" min="0" step="0.1" placeholder="—" style="width:60px"></div>
+          <div class="field"><label>Crit damage %</label><input id="tmWS_cm" type="number" min="0" step="0.1" placeholder="—" style="width:60px"></div>
+          <div class="field"><label>Ailment acc. %</label><input id="tmWS_aa" type="number" min="0" step="0.1" placeholder="—" style="width:60px"></div>
+          <div class="field"><label>Ego level</label><input id="tmWS_ego" type="number" min="0" step="1" placeholder="—" style="width:60px"></div>
+      </div>
+    </div>
+    <div class="panel">
+      <h2>Weapons <span class="muted" id="wpCount"></span></h2>
+      <div id="wpExplain" style="margin-bottom:10px"></div>
+      <div class="scroll"><table id="wpTable"></table></div>
+    </div>
+  </section>
+
+  <!-- ===================== INVENTORY ===================== -->
+  <section id="tab-inv" class="hide">
+    <div class="panel">
+      <h2>Cards <span class="muted" id="invCount"></span></h2>
+      <div class="row" style="margin-bottom:10px">
+        <div class="field"><label>Slot</label><select id="flSlot"><option value="">Any</option></select></div>
+        <div class="field"><label>Set</label><select id="flSet"><option value="">Any</option></select></div>
+        <div class="field"><label>Rarity</label><select id="flRar">
+          <option value="">Any</option><option value="5">5★</option><option value="4">4★</option>
+          <option value="3">3★</option><option value="2">2★</option></select></div>
+        <div class="field"><label>Main stat</label><select id="flMain"><option value="">Any</option></select></div>
+        <div class="field"><label title="Pick a substat to add it, pick it again (or click its × pill) to remove it.">Substats</label>
+          <select id="flSub" style="min-width:150px"></select></div>
+        <div class="field"><label title="With several substats selected: All requires a card to carry every one of them, Any requires just one.">Match</label>
+          <select id="flSubMode"><option value="all">All selected</option><option value="any">Any selected</option></select></div>
+        <div class="field"><label>Search</label><input id="flQ" placeholder="stat, set, character..."></div>
+        <button class="ghost" id="flClear">Clear</button>
+      </div>
+      <div class="subpills" id="flSubPills" style="margin-bottom:10px"></div>
+      <div class="scroll"><table id="invTable"></table></div>
+    </div>
+
+    <div class="panel">
+      <h2>Add a card</h2>
+      <div class="row">
+        <div class="field"><label>Slot</label><select id="fSlot"></select></div>
+        <div class="field"><label>Set</label><select id="fSet"></select></div>
+        <div class="field"><label>Rarity</label><select id="fRar">
+          <option value="5">5★</option><option value="4">4★</option>
+          <option value="3">3★</option><option value="2">2★</option></select></div>
+        <div class="field"><label>Level</label><input id="fLvl" type="number" value="0" min="0" max="25" style="width:70px"></div>
+        <div class="field"><label>Main stat</label><select id="fMain"></select></div>
+      </div>
+      <div class="row" style="margin-top:10px" id="fSubs"></div>
+      <div class="row" style="margin-top:12px">
+        <button class="primary" id="fAdd">Add card</button>
+        <span class="tiny muted">Tip: press Enter in any substat box to add and reset for the next card.</span>
+        <span id="fMsg" class="tiny"></span>
+      </div>
+    </div>
+
+    <div class="panel">
+      <h2>Cards by set <span class="muted" id="invSetTotal"></span></h2>
+      <div id="invSetOverview"></div>
+    </div>
+  </section>
+
+  <!-- ===================== TRIAGE ===================== -->
+  <!-- Two answers about the same cards, side by side like Upgrades' two views: what the
+       roster you own can use (Keep or feed), and what deserves a lock in the game client
+       whoever you own (Lock for later, the Vault). Triage already reads the Vault's pass, so
+       the verdicts agree; this puts the two halves of "what do I do with this card" together. -->
+  <section id="tab-triage" class="hide">
+    <div class="subtabs" id="trSubtabs" role="tablist" aria-label="Triage views">
+      <button data-trtab="feed" class="on" role="tab" aria-selected="true">Keep or feed</button>
+      <button data-trtab="vault" role="tab" aria-selected="false">Lock for later</button>
+    </div>
+
+    <div id="tr-pane-feed">
+    <div class="panel">
+      <h2>Keep or feed</h2>
+      <details class="explain" style="margin:0 0 12px"><summary>Every unequipped card is scored against every character
+        you own and rated by its best match, graded against the best card of the same slot.</summary>
+        <div class="body">
+          <p>70% of the best card in its slot and up is <b>keep</b>, 35% and up <b>hold</b>, below that <b>feed</b>.
+            A card the Vault rates in the top 2% of its slot for some role reads <b>lock</b> instead of feed, and one it
+            rates in the top 7% keeps its feed verdict with a note and sorts after the rest. A card the Upgrades tab
+            recommends equipping is kept whatever its own score, because most of a set switch is the 4-piece bonus,
+            which lands only with the fourth card.</p>
+          <p>The Score is the build-score points equipping the card adds for whoever gains most from it, against what
+            they really wear, with the card's main stat priced at its level cap. It only knows the characters you have
+            marked as owned — the <b>Lock for later</b> view is the counterweight.</p>
+        </div></details>
+      <div class="row">
+        <div class="field"><label>Rate against</label><select id="trScope">
+          <option value="owned">Characters I own</option>
+          <option value="all">All characters</option></select></div>
+        <div class="field"><label>Show</label><select id="trShow">
+          <option value="worst">Worst first (feed candidates)</option>
+          <option value="best">Best first (keepers)</option></select></div>
+        <div class="field"><label>Minimum rarity</label><select id="trRar">
+          <option value="2">Everything</option><option value="4">4★ and up</option>
+          <option value="5">5★ only</option></select></div>
+        <button class="primary" id="trRun">Rate inventory</button>
+      </div>
+      <div id="trSummary" style="margin-top:12px" aria-live="polite"></div>
+    </div>
+    <div class="panel hide" id="trPanel">
+      <div id="trChips" class="vchips" role="group" aria-label="Show only these verdicts"></div>
+      <div class="row" style="margin-bottom:10px">
+        <div class="field"><label>Slot</label><select id="trFlSlot"><option value="">Any</option></select></div>
+        <div class="field"><label>Set</label><select id="trFlSet"><option value="">Any</option></select></div>
+        <div class="field"><label>Rarity</label><select id="trFlRar">
+          <option value="">Any</option><option value="5">5★</option><option value="4">4★</option>
+          <option value="3">3★</option><option value="2">2★</option></select></div>
+        <div class="field"><label>Main stat</label><select id="trFlMain"><option value="">Any</option></select></div>
+        <div class="field"><label title="Pick a substat to add it, pick it again (or click its × pill) to remove it.">Substats</label>
+          <select id="trFlSub" style="min-width:150px"></select></div>
+        <div class="field"><label title="With several substats selected: All requires a card to carry every one of them, Any requires just one.">Match</label>
+          <select id="trFlSubMode"><option value="all">All selected</option><option value="any">Any selected</option></select></div>
+        <div class="field"><label>Search</label><input id="trFlQ" placeholder="stat, set, character..."></div>
+        <button class="ghost" id="trFlClear">Clear</button>
+        <span class="tiny muted" id="trFlCount" style="align-self:center"></span>
+      </div>
+      <div class="subpills" id="trFlSubPills" style="margin-bottom:10px"></div>
+      <div class="scroll"><table id="trTable"></table></div>
+    </div>
+    </div><!-- /tr-pane-feed -->
+
+    <!-- ===================== VAULT (Lock for later) ===================== -->
+    <div id="tr-pane-vault" class="hide">
+    <div class="panel">
+      <h2>Lock these</h2>
+      <details class="explain" style="margin:0 0 12px"><summary>Cards worth locking in the game client because they will
+        still be good later, whoever you own.</summary>
+        <div class="body">
+          <p>Keep or feed only knows the characters you own today, so it will mark a card feed when nobody on your
+            current roster can wear it. This view is the counterweight. Two reasons qualify a card: it is loaded with
+            the stats every damage dealer wants, or it is near the top of your inventory for one of the eight
+            archetypes, which is the whole space of stat profiles the game asks for.</p>
+          <p>Rankings are within a slot and take no notice of who you own, so pulling a character cannot change them.
+            Lock is the top 2% of a slot for its best role, hold the top 7%.</p>
+        </div></details>
+      <div class="row">
+        <div class="field"><label>Minimum rarity</label><select id="vaRar">
+          <option value="4">4★ and up</option><option value="5">5★ only</option>
+          <option value="2">Everything</option></select></div>
+        <div class="field"><label>Show</label><select id="vaShow">
+          <option value="lock">Lock candidates only</option>
+          <option value="watch">Lock and hold</option>
+          <option value="all">Every card</option></select></div>
+        <button class="primary" id="vaRun">Find keepers</button>
+      </div>
+      <div id="vaSummary" style="margin-top:12px"></div>
+    </div>
+    <div class="panel hide" id="vaPanel">
+      <div class="row" style="margin-bottom:10px">
+        <div class="field"><label>Slot</label><select id="vaFlSlot"><option value="">Any</option></select></div>
+        <div class="field"><label>Set</label><select id="vaFlSet"><option value="">Any</option></select></div>
+        <div class="field"><label>Rarity</label><select id="vaFlRar">
+          <option value="">Any</option><option value="5">5★</option><option value="4">4★</option>
+          <option value="3">3★</option><option value="2">2★</option></select></div>
+        <div class="field"><label>Main stat</label><select id="vaFlMain"><option value="">Any</option></select></div>
+        <div class="field"><label title="Pick a substat to add it, pick it again (or click its × pill) to remove it.">Substats</label>
+          <select id="vaFlSub" style="min-width:150px"></select></div>
+        <div class="field"><label title="With several substats selected: All requires a card to carry every one of them, Any requires just one.">Match</label>
+          <select id="vaFlSubMode"><option value="all">All selected</option><option value="any">Any selected</option></select></div>
+        <div class="field"><label>Search</label><input id="vaFlQ" placeholder="stat, set, character..."></div>
+        <button class="ghost" id="vaFlClear">Clear</button>
+        <span class="tiny muted" id="vaFlCount" style="align-self:center"></span>
+      </div>
+      <div class="subpills" id="vaFlSubPills" style="margin-bottom:10px"></div>
+      <div class="scroll"><table id="vaTable"></table></div>
+    </div>
+    </div><!-- /tr-pane-vault -->
+  </section>
+
+  <!-- ===================== UPGRADES ===================== -->
+  <!-- Two views of the same question, split because they answer different halves of it:
+       "Better cards available" is what you can act on right now with the cards you own;
+       "Weakest slots" is where each character is furthest from the best card that could
+       exist in that slot, whether or not you own it yet. -->
+  <section id="tab-upgrades" class="hide">
+    <div class="subtabs" id="upSubtabs">
+      <button data-uptab="better" class="on">Better cards available</button>
+      <button data-uptab="headroom">Weakest slots</button>
+      <button data-uptab="craft">Custom card</button>
+      <button data-uptab="ink">Ink card</button>
+      <button data-uptab="fortune">Fortune Revelation</button>
+      <button data-uptab="retro">Retrograde Card</button>
+    </div>
+
+    <div id="up-pane-better">
+    <div class="panel">
+      <h2>Better cards available</h2>
+      <details class="explain" style="margin:0 0 12px"><summary>Every owned character's current cards against the best
+        whole loadout your inventory can give them, showing only the slots that would change.</summary>
+        <div class="body">
+          <p>This reuses the Optimise tab's optimiser, so it agrees with what you would get running that tab per
+            character; it just does all of them at once. With "Ignore cards equipped on someone else" unticked it
+            also proposes cards worn by another character, tagged with their current owner and what taking the card
+            costs them.</p>
+          <p>The number in brackets after each card is out of 100 for a perfect card in that slot for that character.
+            <b>Gain</b> is what that one swap adds to the character's build score with their other slots left as they
+            are, in build points, the same scale for everyone, which is also how characters are ordered. Rows that make
+            up one 4-piece switch are bracketed with what the whole switch is worth; that is the number to read, since
+            most of it is the set bonus, which lands only once all of them are equipped.</p>
+        </div></details>
+      <div class="row">
+        <div class="field"><label>Minimum rarity to consider</label><select id="upRar">
+          <option value="4">4★ and up</option>
+          <option value="5">5★ only</option>
+          <option value="2">Everything</option></select></div>
+        <label class="check"><input type="checkbox" id="upSameSet"> Stay in currently-equipped set</label>
+        <label class="check"><input type="checkbox" id="upIgnoreEquipped" checked> Ignore cards equipped on someone else</label>
+        <button class="primary" id="upRun">Find upgrades</button>
+      </div>
+      <div id="upSummary" style="margin-top:12px"></div>
+    </div>
+    <div class="hide" id="upPanel">
+      <div id="upList"></div>
+    </div>
+    </div><!-- /up-pane-better -->
+
+    <div id="up-pane-headroom" class="hide">
+      <div class="panel">
+        <h2>Weakest slots</h2>
+        <details class="explain" style="margin:0 0 12px"><summary>One row per slot on every character you own, ranked by the
+          build-score points a perfect card there would add.</summary>
+          <div class="body">
+            <p>This is "where is this character weakest", measured against a card that may not exist in your inventory,
+              not "what can I equip today"; the other view answers that. <b>Build&nbsp;+</b> is the build-score points a
+              perfect card in the slot would add, and compares across characters; the table is sorted by it out of the box.</p>
+            <p><b>Headroom</b> is the raw score a perfect card for that slot would add over the one worn now, the same
+              number shown beside every card score elsewhere in the tool. It is in one character's own score units, so it
+              compares that character's five slots against each other and nothing else.</p>
+          </div></details>
+        <div class="row">
+          <div class="field"><label>Show</label><select id="hrShow">
+            <option value="all">Every slot</option>
+            <option value="worst">Worst slot per character</option>
+            <option value="empty">Empty slots only</option>
+            <option value="fixable">Only slots an in-set swap improves</option></select></div>
+          <div class="field"><label>Element</label><select id="hrElement"><option value="">Any</option></select></div>
+          <div class="field"><label>Slot</label><select id="hrSlot"><option value="">Any</option></select></div>
+          <div class="field"><label>Equipped rarity</label><select id="hrRar">
+            <option value="">Any</option>
+            <option value="5">5&#9733;</option>
+            <option value="4">4&#9733;</option>
+            <option value="3">3&#9733;</option>
+            <option value="2">2&#9733;</option></select></div>
+          <div class="field"><label>Min headroom</label>
+            <input id="hrMin" type="number" min="0" step="1" placeholder="0" style="width:96px"></div>
+          <div class="field"><label>Search</label><input id="hrQ" placeholder="character, set or main"></div>
+          <label class="check"><input type="checkbox" id="hrTakeEquipped"> In-set swaps may take a card off someone else</label>
+          <button class="ghost" id="hrClear">Clear filters</button>
+        </div>
+        <div id="hrSummary" style="margin-top:12px"></div>
+      </div>
+      <div class="hide" id="hrPanel">
+        <div class="flowTable"><table id="hrTable"></table></div>
+      </div>
+    </div><!-- /up-pane-headroom -->
+
+    <div id="up-pane-craft" class="hide">
+      <div class="panel">
+        <h2>Custom card</h2>
+        <details class="explain" style="margin:0 0 12px"><summary>Which characters gain most from a card you design in an
+          event, and which card to make for each.</summary>
+          <div class="body">
+            <p>The Cycle of Fate event lets you choose a card's set, slot (Sun, Moon, Star or Sky), main stat and four
+              substats; other events make a Space card the same way, so <b>Card type</b> switches between the two. For a
+              Space card the set matters most: it only works with a 4-piece it pairs with, and the other Space sets that
+              would also work are listed beside it. The score counts every Space set that pairs as equal (it does not
+              weigh their different pairing effects), so the character's own recommended Space set comes first. You cannot choose the substats' values: each is a random roll, and the card's five upgrades land
+              on random substats like any other card's. So every card here is valued at level 25 with the rolls you pick
+              below. <b>Typical</b> is each substat at its average roll with the upgrades spread evenly, <b>Perfect</b>
+              every roll at its maximum, <b>Poor</b> every roll at its lowest.</p>
+            <p><b>Gain</b> is the build-score points the card adds over the best loadout your inventory can already give
+              that character. Better cards you already own are counted as worn, so the gain is the new card's alone, and
+              it compares across characters. <b>Now</b> is the build score of what they wear, <b>Without</b> the best they
+              could wear today, <b>With</b> the best with the new card.</p>
+            <p>The card arrives at level 0, so how it turns out is luck: its starting values, which substats the five
+              upgrades land on, and how big each one is. <b>Likely</b> is where the gain lands in 8 of 10 random
+              levellings of the recommended card (hover for the average, worst and best seen). Gain uses the Rolls
+              setting; with Typical it sits close to the middle of that range.</p>
+            <p>A new card can make other changes worth it, most often by completing a 4-piece you are one card short of.
+              When it does, the row lists the other cards to equip with it. Substats are listed most valuable first; with
+              perfect rolls the first one carries the extra upgrade.</p>
+          </div></details>
+        <div class="row">
+          <div class="field"><label>Characters</label><select id="ccScope">
+            <option value="owned">Characters I own</option>
+            <option value="all">All characters</option></select></div>
+          <div class="field"><label>Card type</label><select id="ccKind">
+            <option value="heavens">Sun, Moon, Star or Sky</option>
+            <option value="space">Space</option></select></div>
+          <div class="field"><label>Rolls</label><select id="ccRolls">
+            <option value="typical">Typical</option>
+            <option value="perfect">Perfect</option>
+            <option value="low">Poor</option></select></div>
+          <div class="field"><label>Set policy</label><select id="ccPolicy">
+            <option value="pref">Honour preferred sets</option>
+            <option value="force4">Force preferred 4-piece</option>
+            <option value="any4">Best complete 4-piece</option>
+            <option value="stats">Pure stat maximum</option></select></div>
+          <label class="check"><input type="checkbox" id="ccFree" checked> Ignore cards equipped on someone else</label>
+          <div class="field"><label>Element</label><select id="ccElement"><option value="">Any</option></select></div>
+          <div class="field"><label>Search</label><input id="ccQ" placeholder="character, set or stat"></div>
+          <button class="primary" id="ccRun">Rank characters</button>
+        </div>
+        <div id="ccSummary" style="margin-top:12px"></div>
+      </div>
+      <div class="hide" id="ccPanel">
+        <div class="flowTable"><table id="ccTable"></table></div>
+      </div>
+      <div class="panel" id="ccCheckPanel">
+        <h2>Check a card</h2>
+        <p class="tiny muted" style="margin:0 0 10px">Enter the card as the event shows it — the substats' values are
+          the level-0 rolls — to see what it is worth once levelled, the chance it ends up better than a fresh roll of the
+          recommended card, and who else could use it. Useful for deciding whether to re-roll.</p>
+        <div class="row">
+          <div class="field"><label for="ccChar">Character</label><select id="ccChar"></select></div>
+          <div class="field"><label for="ccSlot">Slot</label><select id="ccSlot">
+            <option>Sun</option><option>Moon</option><option>Star</option><option>Sky</option><option>Space</option></select></div>
+          <div class="field"><label for="ccSet">Set</label><select id="ccSet"></select></div>
+          <div class="field"><label for="ccMain">Main stat</label><select id="ccMain"></select></div>
+        </div>
+        <div class="row" id="ccSubs" style="margin-top:10px"></div>
+        <div class="row" style="margin-top:10px">
+          <button class="ghost" id="ccFillRec">Fill in the recommended card</button>
+          <button class="ghost" id="ccAdd" title="Adds this card at level 0 to your inventory, unequipped">Add to inventory</button>
+        </div>
+        <div id="ccCheckOut" style="margin-top:12px"></div>
+      </div>
+    </div><!-- /up-pane-craft -->
+
+    <div id="up-pane-ink" class="hide">
+      <div class="panel">
+        <h2>Ink card</h2>
+        <details class="explain" style="margin:0 0 12px"><summary>What to make with Vicissitude Ink, how many substats are worth
+          the Elysian Ink, and which substat to re-roll with Prophetic Ink.</summary>
+          <div class="body">
+            <p>The Customize button on the revelation screen makes a new 5★ card at level 0. One <b>Vicissitude Ink</b> buys a
+              Sun, Moon, Star or Sky card in the set and with the main stat you choose. <b>Elysian Ink</b> picks substats: 1, 2, 4
+              or 8 of it in all for one, two, three or four of them. The game fills the rest of the card's four at random.
+              <b>Prophetic Ink</b> rolls each picked substat's value, one each. One more re-rolls a picked substat, and the new
+              value replaces the old one even when it is lower.</p>
+            <p><b>Gain</b> is the build-score points the card adds over the best loadout your inventory can already give that
+              character, averaged over what luck decides: the substats you did not pick and every value. It compares across
+              characters. <b>By substats picked</b> shows the gain with none to all four picked, so you can see what each extra
+              pick is worth against the Elysian Ink it costs. <b>Likely</b> is where the gain lands in 8 of 10 cards made and
+              levelled at random.</p>
+            <p>Once the card is made, <b>Check a roll</b> below takes its substats and values and says which picked substat is
+              worth a re-roll, if any.</p>
+          </div></details>
+        <div class="row">
+          <div class="field"><label>Characters</label><select id="ikScope">
+            <option value="owned">Characters I own</option>
+            <option value="all">All characters</option></select></div>
+          <div class="field"><label>Substats you pick</label><select id="ikPick">
+            <option value="0">None (no Elysian Ink)</option>
+            <option value="1">1 (1 Elysian Ink)</option>
+            <option value="2" selected>2 (2 Elysian Ink)</option>
+            <option value="3">3 (4 Elysian Ink)</option>
+            <option value="4">4 (8 Elysian Ink)</option></select></div>
+          <div class="field"><label>Set policy</label><select id="ikPolicy">
+            <option value="pref">Honour preferred sets</option>
+            <option value="force4">Force preferred 4-piece</option>
+            <option value="any4">Best complete 4-piece</option>
+            <option value="stats">Pure stat maximum</option></select></div>
+          <label class="check"><input type="checkbox" id="ikFree" checked> Ignore cards equipped on someone else</label>
+          <div class="field"><label>Element</label><select id="ikElement"><option value="">Any</option></select></div>
+          <div class="field"><label>Search</label><input id="ikQ" placeholder="character, set or stat"></div>
+          <button class="primary" id="ikRun">Rank characters</button>
+        </div>
+        <div id="ikSummary" style="margin-top:12px"></div>
+      </div>
+      <div class="hide" id="ikPanel">
+        <div class="flowTable"><table id="ikTable"></table></div>
+      </div>
+      <div class="panel" id="ikCheckPanel">
+        <h2>Check a roll</h2>
+        <p class="tiny muted" style="margin:0 0 10px">Enter the card as the Customize screen shows it: all four substats with
+          their level-0 values, the ones you picked ticked. It says what the card adds once levelled and which picked substat,
+          if any, is worth a Prophetic Ink re-roll.</p>
+        <div class="row">
+          <div class="field"><label for="ikChar">Character</label><select id="ikChar"></select></div>
+          <div class="field"><label for="ikSlot">Slot</label><select id="ikSlot">
+            <option>Sun</option><option>Moon</option><option>Star</option><option>Sky</option></select></div>
+          <div class="field"><label for="ikSet">Set</label><select id="ikSet"></select></div>
+          <div class="field"><label for="ikMain">Main stat</label><select id="ikMain"></select></div>
+        </div>
+        <div class="row" id="ikSubs" style="margin-top:10px"></div>
+        <div class="row" style="margin-top:10px">
+          <button class="ghost" id="ikFillRec">Fill in the recommended card</button>
+          <button class="ghost" id="ikAdd" title="Adds this card at level 0 to your inventory, unequipped">Add to inventory</button>
+        </div>
+        <div id="ikCheckOut" style="margin-top:12px"></div>
+      </div>
+    </div><!-- /up-pane-ink -->
+
+    <div id="up-pane-fortune" class="hide">
+      <div class="panel">
+        <h2>Fortune Revelation</h2>
+        <details class="explain" style="margin:0 0 12px"><summary>Which set to choose when you redeem a Fortune Revelation
+          (or an Orange one, for a Space card), and who each set would help.</summary>
+          <div class="body">
+            <p>You choose the set; the game rolls everything else: the slot (Sun, Moon, Star or Sky — always Space for an
+              Orange Fortune Revelation), the main stat, which three or four substats the card starts with, their values,
+              and where its five upgrades land. So no set guarantees a good card. This view draws the same
+              400 random cards in every set, levels each to 25, and checks what each one would add to every character you
+              count, over the best loadout your inventory already gives them.</p>
+            <p>A card can only be worn by one character, so each draw is worth what it adds to whoever gains most from
+              it. <b>Avg value</b> is that, averaged over all the draws, in build points (the same 0-100 scale as the build
+              score); a draw that helps nobody counts as zero, which is why the numbers are small. A set that is often a
+              modest upgrade for one character can beat one that is occasionally a big one for several. <b>Useful</b> is
+              how often a draw is an upgrade for anyone at all.</p>
+            <p>Open a row to see who the set helps: how often the card would go to them, how often it is an upgrade for
+              them at all, what it adds when it is, and which slot and main stat rolls do it. A card can also complete a
+              4-piece someone is one card short of; that is counted. Sets marked <b>about as good</b> are too close to
+              the best to separate on luck alone.</p>
+            <p>No source publishes the drop odds, so they are taken from your own inventory: main stats about evenly
+              spread within a slot, 4 in 10 new cards with four substats, every substat equally likely. Unreleased sets
+              are left out.</p>
+          </div></details>
+        <div class="row">
+          <div class="field"><label>Item</label><select id="frKind">
+            <option value="heavens">Fortune Revelation (Sun, Moon, Star or Sky)</option>
+            <option value="space">Orange Fortune Revelation (Space)</option></select></div>
+          <div class="field"><label>Set policy</label><select id="frPolicy">
+            <option value="pref">Honour preferred sets</option>
+            <option value="force4">Force preferred 4-piece</option>
+            <option value="any4">Best complete 4-piece</option>
+            <option value="stats">Pure stat maximum</option></select></div>
+          <label class="check"><input type="checkbox" id="frFree" checked> Ignore cards equipped on someone else</label>
+          <button class="primary" id="frRun">Rank sets</button>
+        </div>
+        <details class="frChars" id="frCharsBox">
+          <summary id="frCharsSum">Characters counted</summary>
+          <div class="row" style="margin:8px 0">
+            <button class="ghost tiny" id="frDefault" type="button">Owned, not benched (default)</button>
+            <button class="ghost tiny" id="frAllOwned" type="button">All owned, benched too</button>
+            <button class="ghost tiny" id="frNone" type="button">None</button>
+            <span class="tiny muted">Changes mark the ranking out of date; press Rank sets or Re-run to update it.</span>
+          </div>
+          <div class="frGrid" id="frCharList"></div>
+        </details>
+        <div id="frSummary" style="margin-top:12px"></div>
+      </div>
+      <div class="hide" id="frPanel">
+        <div class="flowTable"><table id="frTable"></table></div>
+      </div>
+    </div><!-- /up-pane-fortune -->
+    <div id="up-pane-retro" class="hide">
+      <div class="panel">
+        <h2>Retrograde Card</h2>
+        <details class="explain" style="margin:0 0 12px"><summary>Which levelled card gains most from a reset: good substats
+          for its character, upgrades that went elsewhere.</summary>
+          <div class="body">
+            <p>A Retrograde Card sets a card back to level 0. The substats it dropped with keep their starting values;
+              the upgrades are undone, and levelling it to 25 again lands five new ones on random substats. Each card here
+              is reset and levelled again 300 times at random, and every outcome is priced for the character beside it.</p>
+            <p>Nothing records where a card's upgrades went, so they are read from its values: a substat holding three
+              rolls can only show a value between three of its lowest and three of its highest rolls. <b>×3</b> beside a
+              substat means its starting roll plus two upgrades (<b>×~3</b> when the values leave it unclear). A card is
+              worth resetting when the substats holding many rolls are the faded ones, the stats its character does not
+              want.</p>
+            <p>A card that dropped with three substats got its fourth at its first upgrade, so a reset takes that one off
+              too. The values also tell which cards those are (<b>Dropped with</b>). Whether the fourth comes back the same
+              is not known: Prydwen's guide says a Retrograde Card can change it, so by default it comes back as a random
+              stat. Switch <b>Fourth substat</b> if you find out otherwise.</p>
+            <p><b>For</b> is the wearer, or for a spare card the character in scope it would help most. <b>Gain</b> is the
+              build-score points a reset adds on average against keeping the card, compared across characters. A spare card
+              is never counted below what that character would wear without it, so a reset that still loses to their own
+              card adds nothing; a worn card that comes out worse costs what it costs, since the old card is gone.
+              <b>Likely</b> is where 8 of 10 resets land, and <b>Better / worse</b> the share of resets that beat, or fall
+              short of, keeping it. Only 5★ cards are rated: the roll values are measured for 5★ only.</p>
+          </div></details>
+        <div class="row">
+          <div class="field"><label>Characters</label><select id="rgScope">
+            <option value="owned">Characters I own</option>
+            <option value="all">All characters</option></select></div>
+          <div class="field"><label>Fourth substat</label><select id="rgFourth" title="A card that dropped with three substats gets its fourth at the first upgrade. After a reset:">
+            <option value="random">Comes back as a random stat</option>
+            <option value="same">Comes back the same</option></select></div>
+          <div class="field"><label>Show</label><select id="rgShow">
+            <option value="gain">Cards expected to improve</option>
+            <option value="all">All levelled cards</option></select></div>
+          <div class="field"><label>Slot</label><select id="rgSlot">
+            <option value="">Any</option><option>Sun</option><option>Moon</option><option>Star</option><option>Sky</option><option>Space</option></select></div>
+          <div class="field"><label>Cards</label><select id="rgWho">
+            <option value="any">Worn and spare</option>
+            <option value="worn">Worn only</option>
+            <option value="spare">Spare only</option></select></div>
+          <div class="field"><label>Search</label><input id="rgQ" placeholder="character, set or stat"></div>
+          <button class="primary" id="rgRun">Rate cards</button>
+          <span class="tiny muted" id="rgCount"></span>
+        </div>
+        <div id="rgSummary" style="margin-top:12px"></div>
+      </div>
+      <div class="hide" id="rgPanel">
+        <div class="flowTable"><table id="rgTable"></table></div>
+      </div>
+    </div><!-- /up-pane-retro -->
+  </section>
+
+  <!-- ===================== ROSTER ===================== -->
+  <section id="tab-roster">
+    <div class="panel">
+      <div class="row">
+        <div class="field"><label>Show</label><select id="rsFilter">
+          <option value="all">All characters</option>
+          <option value="owned">Owned</option>
+          <option value="unowned">Not owned</option></select></div>
+        <div class="field"><label>Element</label><select id="rsElement"><option value="">Any</option></select></div>
+        <div class="field"><label>Sort</label><select id="rsSort">
+          <option value="release-desc" selected>Release order (newest first)</option>
+          <option value="release-asc">Release order (oldest first)</option>
+          <option value="name">Name (A-Z)</option>
+          <option value="element">Element</option>
+          <option value="rarity">Rarity (high-low)</option>
+          <option value="build">Build score (high-low)</option>
+          <option value="owned">Owned first</option></select></div>
+        <div class="field"><label>Search</label><input id="rsQ" placeholder="name or element"></div>
+        <label class="check"><input type="checkbox" id="rsHideBenched"> Hide benched</label>
+        <div class="field"><label>View</label>
+          <div class="seg" id="rsView" role="group" aria-label="Roster view">
+            <button type="button" data-view="cards" class="on" aria-pressed="true">Cards</button>
+            <button type="button" data-view="list" aria-pressed="false">List</button>
+          </div></div>
+        <span class="tiny muted" id="rsCount" style="padding-bottom:8px"></span>
+      </div>
+    </div>
+    <div class="grid cards" id="rsGrid"></div>
+    <div class="panel hide" id="rsListPanel"><table class="rlist" id="rsList"></table></div>
+  </section>
+
+  <!-- ===================== DATA ===================== -->
+  <section id="tab-data" class="hide">
+    <div class="panel">
+      <h2>Save your work</h2>
+      <p class="tiny muted" style="margin:0 0 10px">
+        This tool keeps nothing between sessions on its own — download a save file when you are done,
+        and load it back next time. The header's <b>Save</b> button does the same and turns red when there is
+        something unsaved; you can also drop a save file anywhere on the page to load it. The file is plain
+        JSON, so the OCR pipeline can write it directly.
+      </p>
+      <div class="row">
+        <button class="primary" id="dlSave">Download save file</button>
+        <button id="upSave">Load save file</button>
+        <input type="file" id="fileIn" accept=".json" class="hide">
+        <button class="ghost" id="dlCsv">Export cards as CSV</button>
+        <span id="dataMsg" class="tiny muted"></span>
+      </div>
+      <p class="tiny muted" style="margin:10px 0 0">
+        Don't want to type four thousand cards by hand? <button class="linky" data-goto="howto">See how to scan your cards</button>.
+      </p>
+    </div>
+    <div class="panel" id="syncPanel">
+      <h2>Sync with GitHub</h2>
+      <details class="explain" style="margin:0 0 12px"><summary>Keep the save in a private GitHub repository, so the laptop
+        and the phone share one. Once connected, the header's <b>Load</b> and <b>Save</b> use it instead of a file.</summary>
+        <p>The buttons above still download and load files. Every save to GitHub is kept there as a version, so an older one can
+          always be fetched from the repository's history. If the save on GitHub was changed on another device since this one
+          loaded it, Save asks before replacing it.</p>
+        <p><b>Setting it up, once:</b></p>
+        <ol>
+          <li>On GitHub, create a new repository, e.g. <code>p5x-planner-save</code>, and set it to <b>Private</b>. It can stay empty.</li>
+          <li>Make an access token: your picture → <b>Settings</b> → <b>Developer settings</b> → <b>Personal access tokens</b> →
+            <b>Fine-grained tokens</b> → <b>Generate new token</b>. Pick an expiry; under <b>Repository access</b> choose
+            <b>Only select repositories</b> and that repository; under <b>Permissions</b> → <b>Repository permissions</b> set
+            <b>Contents</b> to <b>Read and write</b>. Generate it and copy it.</li>
+          <li>On each device, fill in the repository and the token below and press Connect.</li>
+        </ol>
+        <p>The token can read and write that one repository and nothing else. "Remember on this device" keeps the repository name and the
+          token in this browser so the app opens on your save; your cards are never kept there. Untick it on a shared computer.
+          If a device is lost, delete the token on GitHub.</p>
+      </details>
+      <div class="row">
+        <div class="field"><label for="syncRepo">Repository</label>
+          <input id="syncRepo" placeholder="your-name/p5x-planner-save" autocomplete="off" autocapitalize="off" spellcheck="false" style="width:230px"></div>
+        <div class="field"><label for="syncPath">File in it</label>
+          <input id="syncPath" value="p5x-planner-save.json" autocomplete="off" autocapitalize="off" spellcheck="false" style="width:190px"></div>
+        <div class="field"><label for="syncToken">Access token</label>
+          <input id="syncToken" type="password" placeholder="github_pat_…" autocomplete="off" spellcheck="false" style="width:230px"></div>
+      </div>
+      <div class="row" style="margin-top:10px">
+        <label class="tiny"><input type="checkbox" id="syncRemember" checked> Remember on this device</label>
+        <button class="primary" id="syncConnect">Connect</button>
+        <button class="ghost hide" id="syncDisconnect">Disconnect</button>
+        <span id="syncMsg" class="tiny muted" aria-live="polite"></span>
+      </div>
+    </div>
+    <div class="panel">
+      <h2>Import cards (merge)</h2>
+      <p class="tiny muted" style="margin:0 0 10px">
+        For an incremental scan — new cards found since your last save. Unlike loading a save file
+        above, this merges into your current inventory instead of replacing it: new cards are added,
+        cards that match one you already have but leveled up are updated in place, exact resubmissions
+        are skipped, and anything ambiguous is left for you to decide in a review dialog.
+      </p>
+      <div class="row">
+        <button id="upImport">Import cards files</button>
+        <input type="file" id="fileImport" accept=".json" class="hide" multiple>
+        <span class="tiny muted">Produced by the OCR pipeline —
+          <button class="linky" data-goto="howto">how to scan your cards</button>.</span>
+      </div>
+    </div>
+    <div class="panel">
+      <h2>Where this data came from, and what to distrust</h2>
+      <p class="tiny muted" style="margin:0 0 8px">
+        Sets, Space cards, character builds and base stats come from lufel.net, regenerated on
+        25 Sep 2026 under the Global client's names. Main stat values and substat roll tiers were
+        measured from your own scanned 5★ cards. Four things are worth knowing before you trust a
+        recommendation:
+      </p>
+      <ol class="tiny muted" style="margin:0;padding-left:18px;line-height:1.7">
+        <li><b>Stat totals are floors.</b> My Palace and party buffs are not counted, so you may already
+            clear a target this says you miss. The one party buff you can set is the team crit rate, from
+            the header.</li>
+        <li><b>Only 5★ main stat values are measured.</b> Other rarities are assumed to follow the same
+            curve, and a lower-rarity card with no scanned main value is treated as unknown, never as
+            zero.</li>
+        <li><b>Release status is lufel's.</b> Its tags can lag the Global client by a patch. A set or
+            Space card marked unreleased stays in the tables so imports still resolve, but is never
+            recommended; if you can already farm one, the tags are behind the game.</li>
+        <li><b>Weights are lufel's order, not lufel's numbers.</b> Lufel ranks each character's substats;
+            turning that ranking into weights is this tool's own judgement, and a few characters carry
+            recorded exceptions.</li>
+      </ol>
+      <p class="tiny muted" style="margin:8px 0 0">
+        All of it gets better the moment it is checked against your own game: a screenshot that
+        disagrees with a number here is worth more than any change to the scoring.
+      </p>
+      <p class="tiny muted" style="margin:8px 0 0" id="stamp"></p>
+    </div>
+    <div class="panel">
+      <h2>Danger zone</h2>
+      <button class="danger" id="wipe">Clear everything</button>
+      <span class="tiny muted" style="margin-left:8px">You can undo it for 15 seconds afterwards.</span>
+    </div>
+  </section>
+
+  <!-- ===================== SCANNING CARDS ===================== -->
+  <section id="tab-howto" class="hide">
+    <div class="panel prose">
+      <h2>Scanning your cards in</h2>
+      <p class="tiny muted">
+        Typing four thousand cards into the Inventory tab is not a plan. The <code>ocr/</code> folder
+        in this repository reads card detail panels straight off the screen while you click through the
+        card list, and writes the JSON file the <b>Import scan</b> button imports. The install, the
+        calibration and the one-off check are done once; after that a scan is a single command.
+      </p>
+      <div class="notice info tiny" style="margin:12px 0 0">
+        <b>It reads pixels.</b> Nothing here reads the game's memory or talks to a server; it looks at
+        the screen and nothing else. <b>One file is the exception</b> — <code>autowalk.py</code> sends
+        the WASD keypresses that move you through the list, so you do not have to. That is opt-in, lives
+        in its own file, and every other tool here stays strictly read-only. Sending input to a game
+        client is a ban risk on an account worth thousands of cards; it is on the table only because
+        you decided it was, and it is easy to leave alone — <code>watch.py</code> does the same job while
+        you tap the keys yourself.
+      </div>
+    </div>
+
+    <div class="panel prose">
+      <div class="steps">
+
+        <div class="step">
+          <h3>Install the tooling <span class="when">once</span></h3>
+          <p class="tiny muted">
+            You need <b>Python 3.10+</b> and <b>Tesseract OCR</b> on your PATH. Then, from the repository
+            root:
+          </p>
+          <pre class="cmd">pip install -r ocr/requirements.txt
+npm run export-tables</pre>
+          <p class="tiny muted">
+            That second command writes <code>dist/tables.json</code>: every slot, set, substat, alias and
+            character name exported straight out of <code>src/data.js</code>. The pipeline matches OCR text
+            against that file rather than against a hand-copied list, so it cannot drift from the app it is
+            feeding. Re-run it after any edit to <code>src/data.js</code>.
+          </p>
+        </div>
+
+        <div class="step">
+          <h3>Calibrate the crop regions <span class="when">once per device</span></h3>
+          <p class="tiny muted">
+            The pipeline has to be shown where each field sits on <i>your</i> screen. Point it at a single
+            real screenshot:
+          </p>
+          <pre class="cmd">python ocr/calibrate.py path/to/one-screenshot.png</pre>
+          <p class="tiny muted">
+            A window opens on that image, once per field. Drag a box around the field and press
+            <b>Enter</b> or <b>Space</b> to confirm; press <b>Enter</b> without dragging to skip a field
+            this particular card does not have, such as the fourth substat on a three-substat card;
+            <b>Esc</b> quits without writing anything. What to aim at:
+          </p>
+          <table class="gtable">
+            <thead><tr><th>Field</th><th>Aim at</th></tr></thead>
+            <tbody>
+              <tr><td>slot_tabs</td><td class="muted">The whole Space/Sun/Moon/Star/Sky tab strip, top-left.
+                Read by colour, not text, so the box only has to contain all five tabs.</td></tr>
+              <tr><td>title</td><td class="muted"><b>The bracketed set name inside the Set Effect box</b>,
+                lower right — e.g. <code>[Futility]</code>. <b>Not</b> the big stylized title at the top:
+                that jagged comic-book font could not be read under any Tesseract configuration tried
+                against a real screenshot. The same name appears in the Set Effect box in a plain readable
+                font, which is why it is read from there.</td></tr>
+              <tr><td>level</td><td class="muted">The <code>Lv.25</code> text, tight around it.</td></tr>
+              <tr><td>main_label</td><td class="muted">The <i>name</i> of the first stat — the one with its
+                own icon, e.g. <code>Crit Rate</code> — not its number. Sun and Space cards have a fixed
+                main stat, so this is not used for them.</td></tr>
+              <tr><td>sub1…sub4</td><td class="muted">A label box and a value box for each substat row. The
+                value box matters more than it looks: <code>ATK</code>, <code>DEF</code> and <code>HP</code>
+                each exist as both a flat and a percentage substat under the same label, and only the
+                <code>%</code> in the value tells them apart.</td></tr>
+            </tbody>
+          </table>
+          <p class="tiny muted" style="margin-top:10px">
+            The result lands in <code>ocr/config/crop_regions.json</code> as fractions of the image, so it
+            is resolution-independent and only has to be done once per device. To redo a single bad box
+            without dragging all twelve again:
+          </p>
+          <pre class="cmd">python ocr/calibrate.py path/to/one-screenshot.png --only sub4_label sub4_value</pre>
+          <div class="notice tiny" style="margin:10px 0 0">
+            <b>Moving the <code>level</code> box invalidates the level templates.</b> The level is matched
+            against known renders rather than read (see the review step below), and those renders are tied
+            to that box at that pixel size. Recalibrate it and they stop matching — safely, they refuse
+            rather than guess, but every card lands in review until you rebuild them:
+            <code>python ocr/build_level_templates.py --shots &lt;your screenshots folder&gt;</code>.
+          </div>
+        </div>
+
+        <div class="step">
+          <h3>Check it can see the game <span class="when">once, and after any change</span></h3>
+          <p class="tiny muted">
+            Open the inventory with a card selected, run this, and alt-tab back to the game during the
+            five-second countdown:
+          </p>
+          <pre class="cmd">python ocr/watch.py --probe --rarity 5</pre>
+          <p class="tiny muted">
+            It waits for the panel to hold still, grabs one frame, and tells you what it found: the
+            resolution, which slot tab is lit, and the card it read. Every setup problem shows up here,
+            and each looks different:
+          </p>
+          <table class="gtable">
+            <thead><tr><th>What it says</th><th>What is wrong</th></tr></thead>
+            <tbody>
+              <tr><td class="muted">The frame is entirely black</td><td class="muted">The game is in
+                <b>fullscreen exclusive</b> mode, which a screen grab cannot see through. Switch it to
+                borderless windowed.</td></tr>
+              <tr><td class="muted">Wrong resolution</td><td class="muted">The crop boxes are fractions of
+                the frame, so they only land correctly at the resolution you calibrated on. If you play
+                windowed, add <code>--window "Persona5"</code> to grab the game's client area instead of
+                the whole screen.</td></tr>
+              <tr><td class="muted">No lit tab found</td><td class="muted">The inventory is not open, or
+                the <code>slot_tabs</code> box needs recalibrating.</td></tr>
+              <tr><td class="muted">Never held still</td><td class="muted">Something is animating
+                continuously. Anything read is suspect — a mid-animation artefact and a bad crop box look
+                identical and have completely different fixes.</td></tr>
+              <tr><td class="muted">Fields cut off or empty</td><td class="muted">Crop boxes need moving.
+                The frame is kept at <code>ocr/_probe.png</code>, so you can point
+                <code>calibrate.py</code> straight at it.</td></tr>
+            </tbody>
+          </table>
+          <p class="tiny muted" style="margin-top:10px">
+            <b>A clean read is not the same as a correct one.</b> Check the values against the panel with
+            your own eyes before scanning hundreds of cards — the checks catch what is <i>illegal</i>, not
+            what is merely wrong.
+          </p>
+        </div>
+
+        <div class="step">
+          <h3>Capture the cards <span class="when">per scan</span></h3>
+          <p class="tiny muted">
+            Start the watcher, then click through the card list. It reads each panel off the screen as you
+            go — no screenshot key, no folder of images to move afterwards.
+          </p>
+          <pre class="cmd">python ocr/watch.py --rarity 5</pre>
+          <p class="tiny muted">
+            It prints a line per card and stops on <b>Ctrl-C</b>, writing the same two files the pipeline
+            writes. Two cards per row means the keyboard walk is a repeating <code>D S A S</code> cycle —
+            one keypress per card. Run <b>the check above</b> first; it catches every setup problem in one
+            command, and they all look like OCR faults if you skip it.
+          </p>
+          <p class="tiny muted" style="margin-top:10px">
+            <b>Or have it press the keys too.</b> <code>autowalk.py</code> walks the list <i>and</i> reads
+            it, so one command scans and exits:
+          </p>
+          <pre class="cmd">python ocr/autowalk.py --rarity 5 --tabs all --dry-run   <span class="cm"># prints the plan, sends nothing</span>
+python ocr/autowalk.py --rarity 5 --tabs all             <span class="cm"># every tab, to the end of each</span>
+python ocr/autowalk.py --rarity 5                        <span class="cm"># just the tab that is open</span></pre>
+          <p class="tiny muted">
+            Always <code>--dry-run</code> first. It counts down five seconds so you can alt-tab to the
+            game, then locks onto whatever window is in front and checks that window is still in front
+            before <i>every</i> key and click — so alt-tab is the stop gesture, and a stray <code>D</code>
+            cannot land in your browser. Start it on any card: it presses W until nothing moves, reads which
+            column the red selection frame is in, and presses A only if it needs to, so it begins at the
+            first card. It tracks where the cursor is, so it knows the end of the list
+            when it gets there — a whole cycle that turns up nothing new ends the tab — and
+            <code>--count</code> is only a hard ceiling behind that. With <code>--tabs all</code> it then
+            clicks the next tab on the strip, checks by colour that the strip really changed before it
+            sends another key, and walks that one too. Set the game's rarity filter first and run once
+            per rarity: that is the one thing the screen never shows.
+          </p>
+          <div class="notice tiny" style="margin:10px 0">
+            <b>This is the one thing that sends input to the game.</b> It is a fixed repeating key cycle,
+            which is exactly the shape of a macro, and that is a ban risk. There is deliberately no
+            randomised timing or anything else that would help it avoid notice — accepting a risk is not
+            the same as hiding from it. <code>watch.py</code> above does the identical job with your own
+            fingers on the keys.
+          </div>
+          <div class="notice tiny" style="margin:10px 0">
+            <b>Let the panel settle.</b> The stat labels animate into place when a card is selected, and a
+            frame caught halfway through holds a real but part-assembled label — <code>ntAcc. A</code> for
+            <code>Ailment Acc.</code> — with the crop box perfectly correct. The watcher only reads a panel
+            that has held still for <code>--settle</code> seconds (0.25 by default), so it cannot capture a
+            half-drawn label. If you outrun it the card goes past unread, it clicks at you, and it tells you
+            how many you missed at the end. Tap a little slower, or lower <code>--settle</code>.
+          </div>
+          <p class="tiny muted" style="margin-top:10px">Three capture rules decide whether this works at all:</p>
+          <ol class="tiny muted" style="margin:0;padding-left:18px;line-height:1.7">
+            <li><b>One rarity per run.</b> Rarity is not printed on the detail panel anywhere, so you supply
+              it on the command line and every card in the run is stamped with it. Use the game's own rarity
+              filter and scan your 5★ separately from your 4★. A mis-stamped 5★ run does get caught: every
+              card is checked against what the scan itself proved — a level-0 substat must be one of its
+              stat's five roll values and the main stat's value must be the one its level prints — so a
+              card whose numbers are not a 5★'s goes to review instead of into the inventory.</li>
+            <li><b>Slot comes free, so tabs can be mixed.</b> It is read off the Space/Sun/Moon/Star/Sky tab
+              strip by <i>colour</i> — which tab is highlighted red — because the game's title font is
+              unreadable to OCR. That happens per frame, so switching tabs mid-run is fine. Only pass
+              <code>--slot</code> when you are staying on one tab: it is a fallback for frames where the
+              strip is hidden, and every card whose strip disagrees with it goes to review rather than being
+              filed wrongly.</li>
+            <li><b>Same resolution and window size throughout.</b> Crop boxes are stored as fractions of the
+              frame, so they survive between sessions — but not across a resolution change without
+              recalibrating. Play fullscreen at the resolution you calibrated on.</li>
+          </ol>
+          <p class="tiny muted" style="margin-top:10px">
+            A tooltip, popup or notification over a field reads as noise and sends that card to review. The
+            watcher does at least know what screen you are on — no lit tab means the inventory is not up, so
+            menus, loading screens and battles are skipped rather than captured as unreadable cards. You can
+            leave it running.
+          </p>
+          <p class="tiny muted" style="margin-top:10px">
+            <b>Catching up after a few pulls.</b> Save first (the header's <b>Save</b> button), sort
+            the inventory by order obtained, and start from the newest end:
+          </p>
+          <pre class="cmd">python ocr/watch.py --rarity 5 --known p5x-save.json --expect 12</pre>
+          <p class="tiny muted">
+            Each card is labelled new or already-held as it is read, and it stops once it has found the 12
+            new ones. Use <code>--stop-after 20</code> instead if you do not know the number — it stops
+            after twenty consecutive cards you already have. Neither is load-bearing: every card read is
+            written out either way, and the import below is the authority on what is actually new. Getting
+            the number wrong costs you a few keypresses, nothing more.
+          </p>
+          <p class="tiny muted" style="margin-top:10px">
+            <b>Or capture by hand.</b> One screenshot per card, all in one folder — filenames do not matter;
+            <code>.png</code>, <code>.jpg</code> and <code>.jpeg</code> are all read. Then point
+            <code>pipeline.py</code> at the folder instead, as below. The same three rules apply, minus the
+            settle guard, which is why a hand-taken batch is the one that produces scrambled labels.
+          </p>
+          <p class="tiny muted" style="margin-top:9px">
+            Two things are never scanned because the panel does not show them: <b>rarity</b>, handled above,
+            and <b>which character the card is equipped on</b>. You set that in the app instead: run the
+            <button class="linky" data-goto="opt">Optimise</button> tab and press <i>Mark these as
+            equipped</i> to record a whole loadout at once, or set <i>Equipped on</i> in a card's
+            <button class="linky" data-goto="inv">Inventory</button> edit dialog to record one card —
+            useful when what you actually have on is not what the optimiser recommends.
+          </p>
+        </div>
+
+        <div class="step">
+          <h3>Run the pipeline <span class="when">only if you captured by hand</span></h3>
+          <pre class="cmd">python ocr/pipeline.py path/to/screenshots --rarity 5 --slot Star --out cards.json</pre>
+          <p class="tiny muted">
+            Skip this step if you used the watcher — it has already written both files. Either way, every
+            card that comes out is checked against the same rules this app applies to a pasted line or
+            a loaded save file — legal slot, legal set for that slot, legal main stat, substat count for the
+            rarity, no substat duplicating the main, no value beyond what five maximum rolls could produce.
+            Two files are written:
+          </p>
+          <table class="gtable"><tbody>
+            <tr><td>cards.json</td><td class="muted">Cards that read cleanly and passed validation. This is
+              the file you import.</td></tr>
+            <tr><td>cards-review.json</td><td class="muted">Everything else — each entry carrying the source
+              frame's filename, the card exactly as it was read, a per-field confidence score, the validation
+              errors and a plain-English note about what was ambiguous. Only written when something is
+              actually flagged; a batch that comes back completely clean leaves no file behind.</td></tr>
+          </tbody></table>
+          <p class="tiny muted" style="margin-top:10px">
+            A card that fails on one field still shows you every other field it read, so working the review
+            pile is usually a one-number fix rather than a rescan. Try five screenshots before you try five
+            hundred.
+          </p>
+        </div>
+
+        <div class="step">
+          <h3>Import into the planner <span class="when">per scan</span></h3>
+          <p class="tiny muted">
+            Press <b>Import scan</b> in the header (or <button class="linky" data-goto="data">Data</button> → <b>Import cards (merge)</b>)
+            and pick <code>cards.json</code>. You can select several at once, and you should: a session
+            leaves one file per rarity tier, and importing them separately merges each against an inventory
+            the previous import already changed. Picked together they are read into a single review.
+            This merges rather than replaces: new cards are added, cards
+            that have leveled up since your last scan are updated in place, exact resubmissions are skipped,
+            and anything that looks like a card you already own but whose numbers do not line up as a clean
+            level-up is parked in a review table where you choose <i>skip</i>, <i>add as new</i> or
+            <i>replace</i>. Rescanning a slot you have already scanned is therefore safe.
+          </p>
+          <p class="tiny muted">
+            Then press <b>Download save file</b> on that same tab. This app deliberately keeps nothing
+            between sessions — no cookies, no browser storage — so an import you do not save is an import
+            you lose when the tab closes.
+          </p>
+        </div>
+
+        <div class="step">
+          <h3>Work the review pile <span class="when">per scan</span></h3>
+          <p class="tiny muted">
+            No <code>*-review.json</code> file means nothing was flagged — its absence is the all-clear, not
+            something to go check for. When one exists, look for a pattern before touching individual cards:
+            if the <i>same</i> error appears across dozens of them, a crop box is wrong, not the cards.
+            Recalibrate that one field with <code>--only</code> and re-run the batch rather than correcting
+            each by hand.
+          </p>
+          <div class="notice info tiny" style="margin:10px 0">
+            <b>The level is matched, not read.</b> That small slanted <code>Lv.0</code> is the one
+            field OCR cannot do reliably &mdash; two captures of the same card differ by nine pixels,
+            and that is enough to turn <code>Lv.0</code> into <code>9</code>. Since the game draws a
+            given level identically every time, it is compared against known renders instead, which
+            is exact. A level it has never seen comes back <i>unknown</i> and lands here rather than
+            being guessed at &mdash; and correcting it below teaches that render, so the same level
+            is only ever unknown once.
+          </div>
+          <p class="tiny muted">For what's left, walk the pile card by card instead of hand-editing JSON:</p>
+          <pre class="cmd">python ocr/review_cards.py cards   <span class="cm"># reads cards-review.json / cards.json</span>
+python ocr/review_cards.py cards-2 <span class="cm"># for a batch run with --out cards-2.json</span></pre>
+          <p class="tiny muted">
+            Each card shows as a numbered field list with the note that flagged it. Type a field's number to
+            correct it — values resolve through the same vocabulary the OCR itself uses, so <code>crit
+            dmg</code> becomes <code>Crit Multiplier</code> and a typo is rejected with the legal options
+            listed rather than written through unchecked. Then:
+          </p>
+          <table class="gtable"><tbody>
+            <tr><td><code>a</code></td><td class="muted">Accept the card as shown. Refused while any
+              <code>X</code> line is still showing, so fix those first. Accepting is what actually clears the
+              card to merge — most of what lands in review is a value that is perfectly <i>legal</i> and
+              simply wrong (a real Lv.18 misread as Lv.8 passes every range check there is), so a card that
+              already looks right still gets held until you say so.</td></tr>
+            <tr><td><code>d</code></td><td class="muted">Drop the card — the frame was bad, not the read.
+              Delete the screenshot and recapture that card.</td></tr>
+            <tr><td><code>o</code></td><td class="muted">Open the source screenshot in your image viewer to
+              check the panel directly. Needs <code>--shots path/to/screenshots</code> (searched recursively
+              — point it at the screenshots root, no need to name the exact batch subfolder) or a
+              <code>P5X_SHOTS</code> environment variable set the same way. Windows only.</td></tr>
+            <tr><td><code>q</code></td><td class="muted">Stop here. Everything not yet accepted or dropped —
+              including a card you were mid-edit on — stays in the review file for next time.</td></tr>
+          </tbody></table>
+          <p class="tiny muted" style="margin-top:10px">
+            Accepted cards merge into <code>cards.json</code> automatically once you finish the pile. Prefer
+            editing the JSON in a text editor instead? Correct the <code>card</code> object by hand, clear
+            its <code>notes</code> and <code>errors</code> arrays, then merge on its own:
+          </p>
+          <pre class="cmd">python ocr/merge_review.py cards-2</pre>
+          <p class="tiny muted">
+            Either way, only entries with both arrays empty are merged, and every card is re-validated on the
+            way in — so a correction typed wrong is held and printed with the reason rather than written
+            through. Once every entry is resolved, the review file is deleted rather than left behind empty.
+          </p>
+        </div>
+
+      </div>
+    </div>
+
+    <div class="panel prose">
+      <h2>When it goes wrong</h2>
+      <table class="gtable">
+        <thead><tr><th style="width:31%">What you see</th><th>What it usually means, and what to do</th></tr></thead>
+        <tbody>
+          <tr><td>Every card lands in review with <code>could not resolve set from title</code></td>
+              <td class="muted">The <code>title</code> box is on the big stylized card title, which OCR
+                cannot read. Recalibrate it onto the bracketed name in the Set Effect box:
+                <code>--only title</code>.</td></tr>
+          <tr><td>Levels come back as nonsense — <code>Lv 128</code> on a 5★</td>
+              <td class="muted">The <code>level</code> box is catching neighbouring text or the enhancement
+                bar. Tighten it with <code>--only level</code>. The validator catches this one for you,
+                since 25 is the ceiling.</td></tr>
+          <tr><td><code>could not read the slot tab strip</code></td>
+              <td class="muted">The strip is occluded or out of frame, or the frame is not a detail panel at
+                all. Pass <code>--slot</code> so there is a fallback, and drop the frames that are not
+                cards.</td></tr>
+          <tr><td><code>slot tab strip reads "Sky" but slot="Star" was passed in</code></td>
+              <td class="muted">The capture mixed two slot tabs. What the strip says wins, because
+                per-frame evidence beats a batch-wide assumption, but the card still goes to review rather
+                than being silently resolved. Split the capture by tab.</td></tr>
+          <tr><td><code>"Ruin" is not a legal set for Sky</code></td>
+              <td class="muted">Not your fault and not fixable by recalibrating. Two set names from the
+                community guides — <b>Ruin</b> and <b>Prudence</b> — could not be matched to any verified
+                set list. See the provenance notes on the
+                <button class="linky" data-goto="data">Data</button> tab.</td></tr>
+          <tr><td>A substat value is rejected as out of range</td>
+              <td class="muted">That <code>sub{n}_value</code> box is overlapping the row above or below.
+                Recalibrate the one box.</td></tr>
+          <tr><td>A set or stat name resolves to the wrong thing</td>
+              <td class="muted">OCR text is matched exactly first, then by alias, and only then fuzzily
+                above an 80% threshold — a fuzzy hit is recorded with its confidence in the review file.
+                If a name is wrong across the board, the fix belongs in <code>src/data.js</code>, followed
+                by <code>npm run export-tables</code>.</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="panel prose">
+      <h2>If you would rather not install any of that</h2>
+      <p class="tiny muted" style="margin:0">
+        Nothing here is required. The <button class="linky" data-goto="inv">Inventory</button> tab takes
+        cards one at a time through a keyboard-driven form, and the
+        <button class="linky" data-goto="data">Data</button> tab's file picker takes a whole
+        <code>cards.json</code> or saved file at once, merging it into what you already have. For a few
+        dozen cards the form is faster than calibrating anything. It is the four-thousand-card case the
+        pipeline exists for.
+      </p>
+    </div>
+  </section>
+</main>
+
+<dialog id="dlg">
+  <button class="ghost dlg-close" onclick="document.getElementById('dlg').close()" aria-label="Close" title="Close">✕</button>
+  <div id="dlgBody"></div>
+</dialog>
+
+<!-- One-level undo for the actions that are easy to regret. Moved into the dialog while one
+     is open, since a modal dialog sits above everything else on the page. -->
+<div id="toast" class="toast hide" role="status" aria-live="polite">
+  <span class="tmsg" id="toastMsg"></span>
+  <button class="sm" id="toastUndo">Undo</button>
+  <button class="ghost sm" id="toastClose" aria-label="Dismiss" title="Dismiss">✕</button>
+</div>
+<!-- The explanation behind a ? button (infoBtn in logic.js): one popover for the page, placed under the
+     button pressed, closed by its ✕, Escape or a click elsewhere. -->
+<div id="infoPop" class="infoPop hide" role="dialog" aria-labelledby="infoPopTitle">
+  <div class="hd"><b id="infoPopTitle"></b><button class="ghost sm" id="infoPopClose" aria-label="Close" title="Close">✕</button></div>
+  <div class="body" id="infoPopBody"></div>
+</div>
+<div id="dropzone" class="dropzone hide" aria-hidden="true">Drop to load
+  <small>A save file replaces everything here. Scan files (cards.json, one or several) are merged into this
+    inventory through the import review instead.</small></div>

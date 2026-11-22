@@ -1,0 +1,5548 @@
+const { chromium } = require('playwright');
+const path = require('path');
+const fs = require('fs');
+const vm = require('vm');
+const PAGE = 'file://' + path.join(__dirname, '..', 'dist', 'p5x-planner.html');
+
+/* Rebuilt 18 Sep 2026 from CLAUDE.md, docs/SCORING.md and the code, after the working copy
+   of this file was reverted to a six-week-old commit by mistake. Every "a test asserts…"
+   the docs make is pinned here again; the expected values were re-derived from the source
+   and checked against the live page before being written down. Where the old file's exact
+   wording is unknown the invariant is stated fresh — the point is what the code must keep
+   doing, not what the old file said. */
+
+/* WEIGHT_OVERRIDES lives in tools/gen-data-from-lufel.js — hand-tuned substat magnitudes
+   that win over lufel's flat 10/8/6 tier map. src/data.js is generated FROM that table,
+   so the two can only disagree if someone edited src/data.js by hand (which the next
+   regeneration would silently revert) or edited the table without regenerating. Neither
+   is visible from inside the page, so it is checked out here, where both files are
+   readable. See "Lufel publishes an order, not magnitudes" in CLAUDE.md. */
+const readRepo = f => fs.readFileSync(path.join(__dirname, '..', f), 'utf8');
+/* A generator's `const NAME = {...}` table as source text (braces inside its strings would
+   miscount; none of the tables read here has any). */
+const grabTable = (src, name) => {
+  const at = src.indexOf(`const ${name} = {`);
+  if (at < 0) return null;
+  let i = src.indexOf('{', at), depth = 0, j = i;
+  for (; j < src.length; j++) {
+    if (src[j] === '{') depth++;
+    else if (src[j] === '}' && --depth === 0) { j++; break; }
+  }
+  return src.slice(i, j);
+};
+
+function weightOverrideDrift() {
+  const read = readRepo, grab = grabTable;
+  const table = grab(read('tools/gen-data-from-lufel.js'), 'WEIGHT_OVERRIDES');
+  if (!table) return ['tools/gen-data-from-lufel.js no longer defines WEIGHT_OVERRIDES'];
+  const overrides = vm.runInContext('(' + table + ')', vm.createContext({}));
+  const dataCtx = vm.createContext({});
+  vm.runInContext(read('src/data.js').replace(/^(\s*)(?:const|let)\s+/gm, '$1var '), dataCtx);
+  const out = [];
+  for (const [name, spec] of Object.entries(overrides)) {
+    const c = dataCtx.CHARACTERS.find(x => x.n === name);
+    if (!c) { out.push(`WEIGHT_OVERRIDES names "${name}", who is not in CHARACTERS`); continue; }
+    if (!spec.why) out.push(`WEIGHT_OVERRIDES["${name}"] has no \`why\` — every entry must say what it knows that lufel's tiers do not`);
+    const w = (c.ov && c.ov.w) || {};
+    for (const [st, val] of Object.entries(spec.w))
+      if (w[st] !== val)
+        out.push(`${name}: WEIGHT_OVERRIDES says ${st}=${val}, src/data.js has ${w[st] === undefined ? 'no override' : w[st]} — re-run tools/gen-data-from-lufel.js`);
+  }
+  return out;
+}
+
+/* GLB_AWARENESS_OVERRIDES in tools/gen-awareness.js holds Global Awareness text that differs
+   from lufel's (Fuuka's 4.12 buff). Same reasoning as above: src/data.js is written from it,
+   so a hand edit or an un-rerun generator shows up here. */
+function awarenessOverrideDrift() {
+  const table = grabTable(readRepo('tools/gen-awareness.js'), 'GLB_AWARENESS_OVERRIDES');
+  if (!table) return ['tools/gen-awareness.js no longer defines GLB_AWARENESS_OVERRIDES'];
+  const overrides = vm.runInContext('(' + table + ')', vm.createContext({}));
+  const dataCtx = vm.createContext({});
+  vm.runInContext(readRepo('src/data.js').replace(/^(\s*)(?:const|let)\s+/gm, '$1var '), dataCtx);
+  const out = [];
+  for (const [name, spec] of Object.entries(overrides)) {
+    const cs = dataCtx.CHAR_STATS[name];
+    if (!cs) { out.push(`GLB_AWARENESS_OVERRIDES names "${name}", who is not in CHAR_STATS`); continue; }
+    if (!spec.why) out.push(`GLB_AWARENESS_OVERRIDES["${name}"] has no \`why\``);
+    for (const [lvl, text] of Object.entries(spec)) {
+      if (lvl === 'why') continue;
+      const node = (cs.awareness || [])[+lvl];
+      if (!node || node.d !== text) out.push(`${name}: Awareness ${lvl} in src/data.js is not the override's text — re-run tools/gen-awareness.js`);
+    }
+  }
+  return out;
+}
+
+(async () => {
+  const b = await chromium.launch();
+  const p = await b.newPage();
+  const errs = [];
+  p.on('pageerror', e => errs.push('PAGEERROR: ' + e.message));
+  p.on('console', m => {
+    if (m.type() !== 'error') return;
+    // Roster portraits are optional files in art/ next to the HTML; each <img>
+    // removes itself on error so a missing one falls back to the initials
+    // placeholder. With no art/ folder that is 68 expected 404s, which are the
+    // feature working, not a fault — but only ignore that exact case.
+    const loc = (m.location() && m.location().url) || '';
+    if (/\/art\/[^/]+\.webp$/.test(loc)) return;
+    // The GitHub sync checks answer 404 (no save yet) and 409 (a newer save) on purpose; the
+    // browser logs each as a failed resource.
+    if (/^https:\/\/api\.github\.com\//.test(loc)) return;
+    errs.push('CONSOLE: ' + m.text());
+  });
+  await p.goto(PAGE);
+  await p.waitForTimeout(400);
+
+  const r = await p.evaluate(() => {
+    // ---- build a synthetic inventory: 600 cards ----
+    let seed = 42; const rnd = () => (seed = (seed * 1103515245 + 12345) % 2147483648) / 2147483648;
+    const pickR = a => a[Math.floor(rnd() * a.length)];
+    const heavens = ['Sun', 'Moon', 'Star', 'Sky'];
+    const setNames = Object.keys(SETS), spaceNames = Object.keys(SPACE_SETS);
+    const subPool = Object.keys(SUBSTATS);
+    state.cards = [];
+    for (let i = 0; i < 600; i++) {
+      const slot = rnd() < 0.15 ? 'Space' : pickR(heavens);
+      const set = slot === 'Space' ? pickR(spaceNames) : pickR(setNames);
+      const rarity = pickR([5, 5, 5, 4, 4, 3, 2]);
+      const info = SLOT_INFO[slot];
+      const main = info.fixed ? info.mains[0] : pickR(info.mains);
+      const subs = []; const used = new Set([main]);
+      const n = rarity >= 4 ? 4 : rarity === 3 ? 3 : 2;
+      while (subs.length < n) {
+        const st = pickR(subPool);
+        if (used.has(st)) continue; used.add(st);
+        const mx = slot === 'Space' ? (SUBSTATS[st].maxRollSpace || SUBSTATS[st].maxRoll) : SUBSTATS[st].maxRoll;
+        subs.push({ stat: st, value: +(mx * (0.5 + rnd() * 2.5)).toFixed(1) });
+      }
+      state.cards.push({ id: 'c' + i, slot, set, rarity, level: rarity * 5, main, subs, equipped: null });
+    }
+    state.nextId = 601;
+
+    const out = { checks: [], plans: [] };
+    const fail = (name, cond, detail) => out.checks.push({ name, pass: !!cond, detail: detail || '' });
+    const J = x => JSON.stringify(x);
+    const mk = (slot, set, main, subs, extra) => Object.assign({ slot, set, rarity: 5, level: 25, main,
+      subs: subs.map(([stat, value]) => ({ stat, value })) }, extra || {});
+    const lo = aw => Object.assign({}, DEFAULT_LOADOUT, { awareness: aw });
+    const near = (a, b, eps) => Math.abs(a - b) <= (eps == null ? 1e-9 : eps);
+
+    /* ================================================================================
+       1. The optimiser over the whole roster — plan legality and integrity
+       ================================================================================ */
+    let planned = 0, incomplete = 0;
+    const legality = [], policyBad = [], evalBad = [], spaceBad = [];
+    for (const ch of CHARACTERS) {
+      const t = target(ch);
+      const pool = state.cards.filter(c => c.rarity >= 2);
+      const res = bestPlan(ch, pool, { policy: 'pref' });
+      if (!res.best) { incomplete++; continue; }
+      planned++;
+      for (const sl of heavens) {
+        const pk = res.best.picks[sl];
+        if (pk && pk.c.slot !== sl) legality.push(`${ch.n}: ${sl} got a ${pk.c.slot} card`);
+      }
+      if (res.best.kind === '4pc') {
+        const S = res.best.sets[0];
+        for (const sl of heavens) if (res.best.picks[sl].c.set !== S) legality.push(`${ch.n}: 4pc ${S} contains ${res.best.picks[sl].c.set}`);
+      }
+      if (res.best.kind === '2+2') {
+        const counts = {};
+        heavens.forEach(sl => { const s = res.best.picks[sl].c.set; counts[s] = (counts[s] || 0) + 1; });
+        const vals = Object.values(counts).sort();
+        if (vals.length !== 2 || vals[0] !== 2 || vals[1] !== 2) legality.push(`${ch.n}: 2+2 plan is actually ${J(counts)}`);
+      }
+      // within the same policy class, nothing may beat the chosen plan
+      const sameClass = res.alternatives.filter(a => a.sets.some(s => t.sets.includes(s)));
+      for (const alt of sameClass) if (alt.total > res.best.total + 1e-9) legality.push(`${ch.n}: alt "${alt.label}" (${alt.total}) beats best (${res.best.total})`);
+      const keys = new Set([res.best, ...res.alternatives].map(pl => heavens.map(sl => pl.picks[sl].c.id).sort().join('|')));
+      if (keys.size !== res.alternatives.length + 1) legality.push(`${ch.n}: duplicate loadouts in alternatives`);
+      for (const S of res.best.sets) {
+        const def = SETS[S];
+        if (def && def.elem && def.elem !== ch.e && res.best.kind === '4pc')
+          legality.push(`${ch.n} (${ch.e}): recommended off-element 4pc ${S}`);
+      }
+      if (!isFinite(res.best.total)) evalBad.push(`${ch.n}: best total ${res.best.total}`);
+      /* r.loadoutTotal is the plan search's own evaluator: a plan's total must be what it
+         says over the five cards it puts on, and exactly the build score's numerator — the
+         optimiser maximises the number the Roster reports, not a look-alike of its own. */
+      const worn = heavens.map(sl => res.best.picks[sl].c).concat(res.space ? [res.space.c] : []);
+      const ht = res.loadoutTotal(worn), idlCh = idealLoadout(ch, t, 55);
+      if (!near(ht.total, res.best.total, 1e-6)) evalBad.push(`${ch.n}: loadoutTotal ${ht.total} vs best.total ${res.best.total}`);
+      const bsBest = buildScoreOf(ch, worn, 55, charLoadout(ch.n), idlCh, t);
+      if (!near(bsBest.total, res.best.total, 1e-6)) evalBad.push(`${ch.n}: plan total ${res.best.total} vs build-score numerator ${bsBest.total}`);
+      // ...so among the plans it considered and its policy allows, none scores higher once worn
+      for (const alt of sameClass) {
+        const aw = heavens.map(sl => alt.picks[sl].c).concat(alt.space ? [alt.space.c] : []);
+        if (buildScoreOf(ch, aw, 55, charLoadout(ch.n), idlCh, t).raw > bsBest.raw + 1e-9) evalBad.push(`${ch.n}: "${alt.label}" builds higher than the pick`);
+      }
+      // ...nor does any of the next POLISH_DEPTH cards of the same set in any slot, Space included —
+      // what Weakest slots' "Available now" prices; the per-card ranking alone let one build 1.25
+      // points higher (Kotone Shiomi), and until the polish covered Space it never tried one
+      const sameSet = sl => sl === 'Space'
+        ? pool.filter(c => c.slot === 'Space' && res.space && c.set === res.space.c.set).map(c => ({ c, s: cardScore(c, t) })).sort((a, b) => b.s - a.s)
+        : ((res.idx[sl] || {})[res.best.picks[sl].c.set] || []);
+      SLOTS.forEach(sl => {
+        const cur = sl === 'Space' ? res.space && res.space.c : res.best.picks[sl].c;
+        if (!cur) return;
+        sameSet(sl).slice(0, POLISH_DEPTH).forEach(o => {
+          if (o.c === cur) return;
+          const sw = worn.map(c => (c === cur ? o.c : c));
+          if (buildScoreOf(ch, sw, 55, charLoadout(ch.n), idlCh, t).raw > bsBest.raw + 1e-9) evalBad.push(`${ch.n}: swapping in ${o.c.set} ${sl} builds higher than the pick`);
+        });
+      });
+      // Space: with a 4-piece active and a pairing card in the pool, the pick must pair
+      if (res.best.kind === '4pc' && res.space) {
+        const anyPairs = pool.some(c => c.slot === 'Space' && SPACE_SETS[c.set] && SPACE_SETS[c.set].pairs.includes(res.best.sets[0]));
+        if (anyPairs && !res.space.pairs) spaceBad.push(`${ch.n}: 4pc ${res.best.sets[0]} but Space ${res.space.c.set} does not pair`);
+      }
+      // policies
+      const f4 = bestPlan(ch, pool, { policy: 'force4' });
+      if (f4.best && f4.best.kind !== '4pc' && f4.alternatives.some(a => a.kind === '4pc')) policyBad.push(`${ch.n}: force4 chose ${f4.best.kind}`);
+      const st = bestPlan(ch, pool, { policy: 'stats' });
+      if (st.best && st.statMax && st.best !== st.statMax) policyBad.push(`${ch.n}: stats policy did not pick statMax`);
+      const a4 = bestPlan(ch, pool, { policy: 'any4' });
+      if (a4.best && a4.best.kind !== '4pc' && a4.alternatives.some(a => a.kind === '4pc')) policyBad.push(`${ch.n}: any4 chose ${a4.best.kind}`);
+      if (res.best.sets.length && !res.best.sets.some(s => t.sets.includes(s)) &&
+        res.alternatives.some(a => a.sets.some(s => t.sets.includes(s)))) policyBad.push(`${ch.n}: pref ignored a preferred-set plan`);
+      if (out.plans.length < 6) out.plans.push({
+        char: ch.n, elem: ch.e, plan: res.best.label, total: +res.best.total.toFixed(1),
+        space: res.space ? res.space.c.set + (res.space.pairs ? ' (pairs)' : ' (no synergy)') : 'none',
+        mains: heavens.map(sl => `${sl}:${res.best.picks[sl].c.main}`).join(' ')
+      });
+    }
+    fail('every character produced a plan', incomplete === 0, `${incomplete} without a plan`);
+    fail('no slot/set legality violations', legality.length === 0, legality.slice(0, 5).join(' | '));
+    fail('every plan total is finite, equals its own loadoutTotal and the build score\'s numerator, and no allowed alternative builds higher',
+      evalBad.length === 0, evalBad.slice(0, 4).join(' | '));
+    fail('the Space pick pairs with an active 4-piece whenever a pairing card exists', spaceBad.length === 0, spaceBad.slice(0, 4).join(' | '));
+    fail('set policies pick what they say they pick (force4 / any4 / stats / pref)', policyBad.length === 0, policyBad.slice(0, 4).join(' | '));
+    fail('poolFor("free") excludes cards worn by others and keeps the character\'s own', (() => {
+      const a = state.cards[0], bb = state.cards[1], c = state.cards[2];
+      a.equipped = 'Ren Amamiya'; bb.equipped = 'Morgana'; c.equipped = 'Morgana'; c.locked = true;
+      const free = poolFor('free', 2, 'Ren Amamiya'), all = poolFor('all', 2, 'Ren Amamiya');
+      const ok = free.includes(a) && !free.includes(bb) && !free.includes(c) && all.includes(bb) && !all.includes(c);
+      a.equipped = null; bb.equipped = null; c.equipped = null; c.locked = false;
+      return ok;
+    })());
+
+    /* ================================================================================
+       2. Data integrity — CHARACTERS, SETS, SPACE_SETS, tables
+       ================================================================================ */
+    fail('the roster is the documented 68 characters in release order (not re-sorted by name)',
+      CHARACTERS.length === 68 && CHARACTERS.slice().sort((a, b) => a.n.localeCompare(b.n)).some((c, i) => c !== CHARACTERS[i]));
+    const names = CHARACTERS.map(c => c.n);
+    fail('no duplicate character names', new Set(names).size === names.length, names.filter((n, i) => names.indexOf(n) !== i).join(', '));
+    fail('every character has a known archetype and element',
+      CHARACTERS.every(c => ARCHETYPES[c.arch] && ELEMENTS.includes(c.e)),
+      CHARACTERS.filter(c => !ARCHETYPES[c.arch] || !ELEMENTS.includes(c.e)).map(c => c.n).join(', '));
+    const badMain = [];
+    for (const ch of CHARACTERS) {
+      const t = target(ch);
+      for (const sl of ['Moon', 'Star', 'Sky']) {
+        const list = mainList(t, sl);
+        list.forEach(m => { if (!SLOT_INFO[sl].mains.includes(m)) badMain.push(`${ch.n} ${sl}=${m}`); });
+        if (new Set(list).size !== list.length) badMain.push(`${ch.n} ${sl} lists a main twice`);
+      }
+    }
+    fail('all target main stats are legal for their slot, listed once, best first', badMain.length === 0, badMain.join(' | '));
+    /* An open slot (lufel's "-") recommends nothing: the perfect card takes whichever legal
+       main scores best, not the slot's first entry or an archetype placeholder. */
+    const openSlots = [];
+    CHARACTERS.forEach(ch => { const t = target(ch); ['Moon', 'Star', 'Sky'].forEach(sl => { if (!mainList(t, sl).length) openSlots.push([ch, t, sl]); }); });
+    const openBest = ([ch, t, sl]) => near(cardScore(idealCard(sl, t, ''), t), Math.max(...SLOT_INFO[sl].mains.map(m => cardScore(idealCardFor(sl, t, '', m), t))), 1e-9);
+    fail('lufel\'s "-" slots are open, Chizuko\'s and Runa\'s Moon and Sky among them',
+      ['Chizuko Nagao|Moon', 'Chizuko Nagao|Sky', 'Runa Dogenzaka|Moon', 'Runa Dogenzaka|Sky', 'Aran Hirano|Moon'].every(k => openSlots.some(([c, , sl]) => `${c.n}|${sl}` === k)),
+      openSlots.map(([c, , sl]) => c.n + ' ' + sl).join(', '));
+    fail('an open slot\'s perfect card takes the best-scoring legal main', openSlots.every(openBest),
+      openSlots.filter(o => !openBest(o)).map(([c, , sl]) => c.n + ' ' + sl).join(', '));
+    const badRef = [];
+    for (const ch of CHARACTERS) {
+      (ch.sets || []).forEach(s => { if (!SETS[s]) badRef.push(`${ch.n} set ${s}`); });
+      if (ch.space && !SPACE_SETS[ch.space]) badRef.push(`${ch.n} space ${ch.space}`);
+    }
+    fail('all referenced sets exist', badRef.length === 0, badRef.join(' | '));
+    const badPair = [];
+    Object.entries(SPACE_SETS).forEach(([k, v]) => v.pairs.forEach(pp => { if (!SETS[pp]) badPair.push(`${k}->${pp}`); }));
+    fail('all space pairings reference real sets', badPair.length === 0, badPair.join(' | '));
+    /* Most cards pair with three sets. Acuity has one on Global (its Wealth and Hindrance
+       pairings are later releases of their own), Nativity and Ego two, Perseverance four. */
+    fail('every Space card names at least one pairing and an effect for each',
+      Object.values(SPACE_SETS).every(v => v.pairs.length >= 1 && v.pairs.length <= 4 && v.pairs.every(pp => v.effects && v.effects[pp])) &&
+      Object.values(SPACE_SETS).filter(v => v.pairs.length >= 3).length >= 16,
+      Object.entries(SPACE_SETS).map(([k, v]) => `${k} ${v.pairs.length}`).join(', '));
+    /* Pairings are Global's: lufel's English table, less any pairing the GLB schedule has not
+       dated yet. Since Oct 2026 the English table lists Acuity + Hindrance ahead of 4.16, and
+       the generator holds it back. Update this when a refresh dates the pairing — never by
+       taking it early, which would hand Koromaru and Aran an effect their server does not have.
+       Wealth is listed because its set is itself unreleased, so nobody can target it. */
+    fail('Acuity pairs as it does on Global (Satiety; Wealth unreleased; Hindrance not until 4.16)',
+      SPACE_SETS.Acuity && SPACE_SETS.Acuity.pairs.join() === 'Wealth,Satiety' &&
+      ['Koromaru', 'Aran Hirano'].every(n => CHARACTERS.find(c => c.n === n).space !== 'Acuity'),
+      SPACE_SETS.Acuity && SPACE_SETS.Acuity.pairs.join());
+    const deadOwnSets = [];
+    for (const ch of CHARACTERS) (ch.sets || []).forEach(s => {
+      const def = SETS[s];
+      if (def && def.elem && def.elem !== ch.e) deadOwnSets.push(`${ch.n} (${ch.e}) lists off-element set ${s} (${def.elem})`);
+    });
+    fail('no character lists an off-element set among their own preferred sets', deadOwnSets.length === 0, deadOwnSets.join(' | '));
+    /* Six Heavens sets and two Space cards are lufel-listed but unshipped on Global. They
+       stay in the tables so an import resolves, but nobody may be built around one. Named,
+       not counted, so a release that moves one is a line to review on the next refresh
+       rather than a number that silently still adds up. */
+    const unreleased = Object.keys(SETS).filter(s => SETS[s].unreleased).sort();
+    const unreleasedSpace = Object.keys(SPACE_SETS).filter(s => SPACE_SETS[s].unreleased).sort();
+    fail('the unreleased sets are still marked',
+      unreleased.join() === 'Cruelty,Debauch,Failure,Happiness,Tenacity,Wealth' && unreleasedSpace.join() === 'Ego,Purity',
+      `${unreleased.join(', ')} / ${unreleasedSpace.join(', ')}`);
+    fail('no character targets an unreleased set or Space card',
+      CHARACTERS.every(c => !(c.sets || []).some(s => SETS[s] && SETS[s].unreleased) && !(c.space && SPACE_SETS[c.space] && SPACE_SETS[c.space].unreleased)),
+      CHARACTERS.filter(c => (c.sets || []).some(s => SETS[s] && SETS[s].unreleased) || (c.space && SPACE_SETS[c.space] && SPACE_SETS[c.space].unreleased)).map(c => c.n).join(', '));
+    fail('every set carries a 2-piece model on a real stat', Object.values(SETS).every(s => s.bonus2 && (SUBSTATS[s.bonus2.stat] || s.bonus2.stat === 'HP Recovery') && s.bonus2.amt > 0));
+    fail('a 2-piece\'s further terms name real stats with a signed, non-zero amount (only Prudence\'s Speed cost today)',
+      Object.values(SETS).every(s => !s.bonus2Also || (Array.isArray(s.bonus2Also) && s.bonus2Also.every(x => SUBSTATS[x.stat] && isFinite(x.amt) && x.amt !== 0))) &&
+      J(SETS.Prudence.bonus2Also) === J([{ stat: 'Speed', amt: -3 }]) && Object.values(SETS).filter(s => s.bonus2Also).length === 1);
+    fail('every element-locked set names a real element', Object.values(SETS).every(s => !s.elem || ELEMENTS.includes(s.elem)));
+    fail('set aliases resolve to real sets and never shadow a real name',
+      Object.entries(SET_ALIASES).every(([k, v]) => SETS[v] && !SETS[k] && !Object.keys(SETS).some(s => s.toLowerCase() === k)));
+    fail('stat aliases resolve to real stats', Object.values(STAT_ALIASES).every(v => SUBSTATS[v] || v === 'HP Recovery'));
+    fail('every archetype supplies a legal main for Moon/Star/Sky and a weight for every substat',
+      Object.values(ARCHETYPES).every(A => ['Moon', 'Star', 'Sky'].every(sl => SLOT_INFO[sl].mains.includes(A.main[sl])) &&
+        Object.keys(SUBSTATS).every(s => typeof A.w[s] === 'number')));
+    const badW = [];
+    CHARACTERS.forEach(c => Object.entries((c.ov && c.ov.w) || {}).forEach(([s, v]) => {
+      if (!SUBSTATS[s]) badW.push(`${c.n}: unknown stat ${s}`);
+      if (!(v >= 0 && v <= 10)) badW.push(`${c.n}: ${s}=${v}`);
+    }));
+    fail('every per-character weight names a substat and sits in 0-10', badW.length === 0, badW.join(' | '));
+    const badT = [];
+    CHARACTERS.forEach(c => ((c.ov && c.ov.targets) || []).forEach(x => {
+      if (!SUBSTATS[x.sub]) badT.push(`${c.n}: target sub ${x.sub}`);
+      if (!(x.sub === x.s || FLAT_TO_PERCENT[x.s] === x.sub)) badT.push(`${c.n}: ${x.s} scored through ${x.sub}`);
+      const keys = Object.keys(x.tiers || {});
+      if (!keys.length || !keys.every(k => /^LV\d+(\+5)?$/.test(k) && typeof x.tiers[k] === 'number')) badT.push(`${c.n}: tiers ${J(x.tiers)}`);
+    }));
+    fail('every stat target scores a real substat against its own stat and carries LV-keyed tiers', badT.length === 0, badT.join(' | '));
+    fail('39 characters carry stat targets', CHARACTERS.filter(c => c.ov && c.ov.targets && c.ov.targets.length).length === 39);
+
+    // ---- measured tables ----
+    fail('ROLL_TIERS: five ascending tiers per stat on both layouts, top tier equal to maxRoll',
+      Object.keys(SUBSTATS).every(s => {
+        const rt = ROLL_TIERS[s]; if (!rt) return false;
+        const asc = a => a.length === 5 && a.every((v, i) => i === 0 || v > a[i - 1]);
+        return asc(rt.heavens) && asc(rt.space) && near(rt.heavens[4], SUBSTATS[s].maxRoll) && near(rt.space[4], SUBSTATS[s].maxRollSpace || SUBSTATS[s].maxRoll);
+      }), Object.keys(SUBSTATS).filter(s => !ROLL_TIERS[s]).join(', '));
+    fail('MAIN_MAGNITUDE covers every legal main and grows with level',
+      SLOTS.every(sl => SLOT_INFO[sl].mains.every(m => MAIN_MAGNITUDE[m] && MAIN_MAGNITUDE[m][1] > MAIN_MAGNITUDE[m][0] && MAIN_MAGNITUDE[m][0] > 0)));
+    fail('a max-level main is worth about nine max rolls for every stat with a substat (8.5-9.5)',
+      ['Moon', 'Star', 'Sky'].every(sl => SLOT_INFO[sl].mains.every(m => { const v = mainRolls(m, sl, 25); return v >= 8.5 && v <= 9.5; })) &&
+      near(mainRolls('HP Recovery', 'Moon', 25), MAIN_ROLLS_FALLBACK),
+      ['Moon', 'Star', 'Sky'].map(sl => SLOT_INFO[sl].mains.map(m => m + '=' + mainRolls(m, sl, 25).toFixed(2)).join(' ')).join(' | '));
+    fail('a level-0 main is worth well under two rolls (main growth is what levelling buys)', mainRolls('ATK%', 'Moon', 0) < 2 && mainRolls('ATK%', 'Moon', 0) > 1);
+    fail('RARITY: 5★ Lv25 five upgrades, 4★ Lv20 four, 3★ Lv15 three, 2★ Lv10 two',
+      RARITY[5].maxLevel === 25 && RARITY[5].upgrades === 5 && RARITY[4].maxLevel === 20 && RARITY[4].upgrades === 4 &&
+      RARITY[3].maxLevel === 15 && RARITY[3].upgrades === 3 && RARITY[2].maxLevel === 10 && RARITY[2].upgrades === 2);
+    fail('CHAR_STATS covers every character with a base triple, speed, crit and a 5★ weapon',
+      CHARACTERS.every(c => { const cs = CHAR_STATS[c.n]; return cs && cs.l80 && cs.l80.length === 3 && typeof cs.spd === 'number' && typeof cs.cr === 'number' && typeof cs.cm === 'number' && cs.w5; }),
+      CHARACTERS.filter(c => !CHAR_STATS[c.n]).map(c => c.n).join(', '));
+    // all eight Elucidators carry a 0% / 0% crit base: Fuuka joined on 10 Nov 2026 (the user's screen; lufel's 5 / 150 was a placeholder)
+    fail('every Elucidator, and only they, has a 0% / 0% crit base (Fuuka included)',
+      (() => { const z = CHARACTERS.filter(c => CHAR_STATS[c.n] && CHAR_STATS[c.n].cr === 0 && CHAR_STATS[c.n].cm === 0); return z.length === 8 && z.every(c => c.arch === 'Navigator') && z.some(c => c.n === 'Fuuka Yamagishi'); })());
+    fail('eight Elucidators on the roster', CHARACTERS.filter(c => c.arch === 'Navigator').length === 8);
+
+    /* A weapon's `extra` is the passive text the generator refused to count. It must never
+       be a plain unconditional "Increase <stat> by <ladder>." — that would be a stat the
+       character always has, silently dropped. Same vocabulary and regex as
+       tools/gen-data-from-lufel.js's WEAPON_RE, ported here because the generator is not
+       loadable from inside the page. */
+    const VOC = ['attack', 'defense', 'max hp', 'hp', 'speed', 'critical rate', 'critical damage', 'ailment accuracy', 'penetration', 'pierce rate', 'sp recovery']
+      .concat(['Physical', 'Gun', 'Fire', 'Ice', 'Electric', 'Wind', 'Psychokinesis', 'Nuclear', 'Bless', 'Curse', 'Almighty'].map(e => e.toLowerCase() + ' damage'));
+    const WEAPON_RE = new RegExp('^Increases?\\s+(' + VOC.join('|') + ')\\s+by\\s+([\\d.]+(?:\\s*%?\\s*/\\s*[\\d.]+)*)\\s*(%?)\\s*\\.?$', 'i');
+    const extras = [];
+    Object.keys(CHAR_STATS).forEach(n => ['w4', 'w5'].forEach(k => {
+      const w = CHAR_STATS[n][k];
+      if (w && w.extra) extras.push({ n, k, first: String(w.extra).split(/\n/)[0].split(/(?<=\.)\s*(?=[A-Z[])/)[0].trim() });
+    }));
+    fail('no weapon `extra` is really a plain unconditional stat line', extras.every(x => !WEAPON_RE.test(x.first)),
+      extras.filter(x => WEAPON_RE.test(x.first)).map(x => `${x.n} ${x.k}: ${x.first}`).join(' | '));
+    fail('a weapon may carry both a counted ladder and an uncounted clause (Mermaid Dreamer)',
+      Object.values(CHAR_STATS).some(cs => ['w4', 'w5'].some(k => cs[k] && cs[k].b && cs[k].extra)));
+    fail('every counted weapon ladder has seven refinement steps on a real stat',
+      Object.values(CHAR_STATS).every(cs => ['w4', 'w5'].every(k => !cs[k] || !cs[k].b || (cs[k].b.r.length === 7 && (SUBSTATS[cs[k].b.s] || cs[k].b.s === 'HP Recovery')))));
+
+    // ---- the hand-kept judgement tables ----
+    fail('KIT_STAT_BUFFS names real characters and every line carries a stat, a value and a reason',
+      Object.entries(KIT_STAT_BUFFS).every(([n, lines]) => charDef(n) && lines.every(x =>
+        (SUBSTATS[x.s] || x.s === 'HP Recovery') && x.why && (typeof x.v === 'number' || (x.tiers && x.tiers.length === 4) || (x.ladder && x.ladder.length === 7)))),
+      Object.keys(KIT_STAT_BUFFS).filter(n => !charDef(n)).join(', '));
+    fail('CONVERSIONS names real characters, real source and destination stats, and a reason',
+      Object.entries(CONVERSIONS).every(([n, list]) => charDef(n) && list.every(cv =>
+        (SUBSTATS[cv.from] || cv.from === 'HP Recovery') && ['ATK%', 'ATK', 'Crit Multiplier', 'Damage Multiplier', 'HP'].includes(cv.to) && cv.rate > 0 && cv.why)));
+    fail('CRIT_PROFILE names real characters with a locked share in (0,1] or an extra-crit share on a weapon ladder (the no-crit share is measured: kitMix)',
+      Object.entries(CRIT_PROFILE).every(([n, pr]) => charDef(n) && !('nocrit' in pr) && ((pr.locked > 0 && pr.locked <= 1) ||
+        (pr.extraCr && pr.extraCr.share > 0 && pr.extraCr.share < 1 && (pr.extraCr.v > 0 || (Array.isArray(pr.extraCr.ladder) && pr.extraCr.ladder.length === 7))))) &&
+      !CRIT_PROFILE['Ryuji Sakamoto'] && CRIT_PROFILE['Shun Kano [Pioneer]'].locked === 1);
+    fail('DAMAGE_SCALE names the eight DEF/HP-scaling kits, each weighting ATK% at zero',
+      Object.keys(DAMAGE_SCALE).length === 8 && Object.entries(DAMAGE_SCALE).every(([n, s]) => charDef(n) && ['DEF', 'HP'].includes(s) && target(charDef(n)).w['ATK%'] === 0) &&
+      DAMAGE_SCALE['Minami Miyashita [Beachflower]'] === 'HP' && !DAMAGE_SCALE['Yukimi Fujikawa'] && !DAMAGE_SCALE['Motoha Arai [Tropical]']);
+    fail('TARGET_TIER_AWARENESS_5 names real characters', [...TARGET_TIER_AWARENESS_5].every(n => charDef(n)));
+
+    /* ================================================================================
+       3. Constants — docs/SCORING.md §7 in one place. Changing one changes every score;
+          this makes the docs and the code disagree loudly instead of silently.
+       ================================================================================ */
+    fail('documented constants match docs/SCORING.md §7',
+      MAIN_MATCH_BONUS === 10 && MAIN_ALT_DECAY === 0.85 && J(IDEAL_ROLLS) === '[3,2,2,2]' && SPACE_PAIR_VALUE === 9 &&
+      BREAKPOINT_VALUE === 80 && SPREAD_VALUE === 80 && J(COUPLE_CLAMP) === '[0.4,2.5]' && VAULT_LOCK === 0.98 && VAULT_WATCH === 0.93 &&
+      J(AWARENESS_STAT_PCT) === '[0,2,5,7,10,12,15]' && MAIN_CHOICES === 3 && MAIN_ROLLS_FALLBACK === 9 &&
+      J(BUILD_BANDS.map(x => x.min)) === '[80,60,40,0]' && J([5, 4, 3, 2].map(rarityPenalty)) === '[1,0.82,0.6,0.4]' &&
+      DEFAULT_LOADOUT.level === 80 && DEFAULT_LOADOUT.asc === 7 && DEFAULT_LOADOUT.weapon === '5' && DEFAULT_LOADOUT.refine === 1 && DEFAULT_LOADOUT.awareness === 0);
+    fail('charLoadout forces Level 80 / Ascension 7 whatever a save says', (() => {
+      state.chars['Morgana'].loadout = { level: 60, asc: 2, weapon: '4', refine: 3 };
+      const L = charLoadout('Morgana'); state.chars['Morgana'].loadout = null;
+      return L.level === 80 && L.asc === 7 && L.weapon === '4' && L.refine === 3;
+    })());
+    fail('a pre-Mindscape-paths save\'s `mind` boolean maps to both stat paths maxed', (() => {
+      state.chars['Morgana'].loadout = { mind: true };
+      const L = charLoadout('Morgana'); state.chars['Morgana'].loadout = null;
+      return L.mindSkill === true && L.mind1 === 5 && L.mind2 === 5 && L.mind === undefined;
+    })());
+
+    /* ================================================================================
+       4. Pricing one card — cardScore, the main, the coupling
+       ================================================================================ */
+    const joker = charDef('Ren Amamiya'), tj = target(joker), lj = charLoadout(joker.n);
+    const good = mk('Star', 'Hindrance', 'Crit Rate', [['Crit Multiplier', 16.4], ['Resistance Pierce', 8.4], ['ATK%', 14], ['Speed', 6.6]]);
+    const bad = mk('Star', 'Hindrance', 'DEF%', [['DEF', 184], ['HP', 560], ['HP%', 14.4], ['Speed', 6.6]]);
+    fail('on-target card outscores junk', cardScore(good, tj) > cardScore(bad, tj) * 3, `${cardScore(good, tj).toFixed(1)} vs ${cardScore(bad, tj).toFixed(1)}`);
+    fail('a wanted main with no substats beats a dead main with strong ones',
+      cardScore(mk('Star', 'Hindrance', 'Crit Rate', []), tj) > cardScore(bad, tj));
+    fail('rarity penalty orders the same card 5★ > 4★ > 3★ > 2★', (() => {
+      const base = mk('Star', 'Hindrance', 'Crit Rate', [['Crit Multiplier', 4], ['ATK%', 3]], { level: 10 });
+      const s = [5, 4, 3, 2].map(rr => cardScore(Object.assign({}, base, { rarity: rr }), tj));
+      return s[0] > s[1] && s[1] > s[2] && s[2] > s[3] && near(s[1] / s[0], 0.82);
+    })());
+    fail('a Sun card\'s fixed HP main is priced at nothing (substats only)',
+      near(cardScore(mk('Sun', 'Hindrance', 'HP', []), tj), 0) && cardScore(mk('Sun', 'Hindrance', 'HP', [['Crit Rate', 2]]), tj) > 0);
+    fail('a Space card\'s fixed ATK + DEF main is priced at nothing', near(cardScore(mk('Space', 'Departure', 'ATK + DEF', []), tj), 0));
+    /* Lufel's printed order is a tie-break and nothing more: with the coupling neutral
+       (Speed and SP Recovery sit in no product) the second-ranked main loses exactly
+       MAIN_MATCH_BONUS × (1 − MAIN_ALT_DECAY). */
+    const tA = { sets: [], space: '', targets: [], main: { Sky: ['Speed'] }, w: { Speed: 5, 'SP Recovery': 5 } };
+    const tB = { sets: [], space: '', targets: [], main: { Sky: ['SP Recovery', 'Speed'] }, w: { Speed: 5, 'SP Recovery': 5 } };
+    const spdCard = mk('Sky', 'Power', 'Speed', []);
+    fail('the alternative-main decay is exactly MAIN_MATCH_BONUS × (1 − MAIN_ALT_DECAY) when the coupling is neutral',
+      near(cardScore(spdCard, tA) - cardScore(spdCard, tB), MAIN_MATCH_BONUS * (1 - MAIN_ALT_DECAY), 1e-9),
+      (cardScore(spdCard, tA) - cardScore(spdCard, tB)).toFixed(4));
+    fail('mainList/mainTop accept a bare string and a list alike',
+      J(mainList({ main: { Moon: 'ATK%' } }, 'Moon')) === '["ATK%"]' && J(mainList({ main: { Moon: ['ATK%', 'HP%'] } }, 'Moon')) === '["ATK%","HP%"]' &&
+      mainTop({ main: { Moon: ['DEF%', 'HP%'] } }, 'Moon') === 'DEF%' && mainList({ main: {} }, 'Moon').length === 0);
+    fail('an unrecommended main earns no match bonus', (() => {
+      const t1 = { sets: [], space: '', targets: [], main: { Sky: ['Speed'] }, w: { Speed: 5, 'SP Recovery': 5 } };
+      const sp = mk('Sky', 'Power', 'SP Recovery', []);
+      return near(cardScore(sp, t1), 5 * mainRolls('SP Recovery', 'Sky', 25));
+    })());
+    // HP Recovery, the one main-only stat
+    const yukari = charDef('Yukari Takeba');
+    fail('HP Recovery as a main is worth a character\'s top weight only where lufel lists it, else nothing',
+      hpRecoveryMainWeight(target(yukari), 'Moon') === Math.max(...Object.values(target(yukari).w)) && hpRecoveryMainWeight(tj, 'Moon') === 0 &&
+      hpRecoveryMainWeight({ w: { 'HP Recovery': 3 }, main: { Moon: ['ATK%'] } }, 'Moon') === 3);
+    fail('an HP Recovery Moon never beats a wanted main for a damage dealer',
+      cardScore(mk('Moon', 'Hindrance', 'HP Recovery', []), tj) < cardScore(mk('Moon', 'Hindrance', mainTop(tj, 'Moon'), []), tj));
+    /* Healing has one price wherever it lands. Love's +9% 2-piece used to be a flat 1.5 x the
+       HP% weight (6-15 points) where the same 9% as a Moon main was 36, which is how Worry, a
+       set neither lists, beat Love for Morgana and Lufel. */
+    const morgH = charDef('Morgana'), tMorgH = target(morgH), yuki = charDef('Yukimi Fujikawa'), tYuki = target(yuki);
+    const healPct = SETS.Love.bonus2.amt, perPct = mainRolls('HP Recovery', 'Moon', 25) / MAIN_MAGNITUDE['HP Recovery'][1];
+    fail('Love\'s healing 2-piece is priced exactly as the same healing on an HP Recovery main',
+      SETS.Love.bonus2.stat === 'HP Recovery' && near(bonus2Value('Love', morgH, tMorgH), hpRecoveryMainWeight(tMorgH, 'Moon') * healPct * perPct) &&
+      near(bonus2Value('Love', yukari, target(yukari)), hpRecoveryMainWeight(target(yukari), 'Moon') * healPct * perPct));
+    fail('Love\'s 2-piece is worth nothing to a character lufel lists no healing main for, whatever their HP% weight',
+      !mainList(tYuki, 'Moon').includes('HP Recovery') && (tYuki.w['HP%'] || 0) > 0 && bonus2Value('Love', yuki, tYuki) === 0);
+    const lufelH = charDef('Lufel'), tLufelH = target(lufelH);
+    fail('Lufel\'s and Morgana\'s own Love beats Worry on set bonuses alone (Lufel\'s Worry used to win, 85 to 73)',
+      [[lufelH, tLufelH], [morgH, tMorgH]].every(([c, tt]) => tt.sets[0] === 'Love' &&
+        55 + bonus2Value('Love', c, tt) > 55 * 0.22 + bonus2Value('Worry', c, tt)) && bonus4Value('Love', morgH, tMorgH, 55) === 55);
+    // Skull and Messa: kit facts the tiers cannot express
+    const skull = charDef('Ryuji Sakamoto'), ts = target(skull);
+    fail('Skull weights Crit Rate as lufel leaves it, unlisted (4): only God Hand Burst in Rebound always crits', ts.w['Crit Rate'] === 4, 'w=' + ts.w['Crit Rate']);
+    fail('Skull wants Crit Multiplier on Star', mainTop(ts, 'Star') === 'Crit Multiplier', J(mainList(ts, 'Star')));
+    const messa = charDef('Kira Kitazato'), tm0 = target(messa);
+    fail('Messa weights both crit stats at 0', tm0.w['Crit Rate'] === 0 && tm0.w['Crit Multiplier'] === 0);
+    fail('no coupling where there is no trade-off (Messa\'s crit product has no live stat)',
+      Object.keys(couplingFactors(tm0, 'Star', 'Crit Rate')).every(k => k !== 'Crit Rate' && k !== 'Crit Multiplier'));
+    fail('a guaranteed crit is marked per hit (DPS_KIT_BONUS lock): such a hit deals its crit damage, held to 250-350% for Akihiko; the build model reads the share his fight measures, and for Ryuji the share from God Hand Burst in Rebound', (() => {
+      const aki = charDef('Akihiko Sanada'), ta0 = target(aki), lo0 = Object.assign({}, DEFAULT_LOADOUT, { awareness: 0, bare: true });
+      const f1 = damageFactors([], aki, ta0, lo0, { lk: 1 }), f0 = damageFactors([], aki, ta0, lo0, { lk: 0 }), cm = damageBase(aki, lo0).cm;
+      const kA = kitMix(aki, Object.assign({}, DEFAULT_LOADOUT, { awareness: 0 })), kR = kitMix(skull, Object.assign({}, DEFAULT_LOADOUT, { awareness: 0 }));
+      return near(f1.crit, Math.min(350, Math.max(250, cm)) / 100) && f0.crit < f1.crit && kA && kA.lk > 0.05 && kA.lk < 0.6 && kR && kR.lk != null && kR.lk < 1 && !critProfile(skull);
+    })());
+
+    // ---- coupling: complements inside a product ----
+    const ann = charDef('Ann Takamaki'), ta = target(ann);
+    const fAtk = couplingFactors(ta, 'Moon', 'ATK%'), fDmg = couplingFactors(ta, 'Moon', 'Damage Multiplier');
+    fail('taking the Damage Multiplier main makes ATK% substats worth more (Ann)', fDmg['ATK%'] > fAtk['ATK%'] && fAtk['Damage Multiplier'] > fDmg['Damage Multiplier'],
+      `ATK% ${fAtk['ATK%'].toFixed(3)} -> ${fDmg['ATK%'].toFixed(3)}`);
+    const fCR = couplingFactors(tj, 'Star', 'Crit Rate'), fCM = couplingFactors(tj, 'Star', 'Crit Multiplier');
+    fail('taking a Crit Rate main makes Crit Multiplier substats worth more, and vice versa',
+      fCR['Crit Multiplier'] > fCM['Crit Multiplier'] && fCM['Crit Rate'] > fCR['Crit Rate']);
+    fail('coupling adjustments are scale-neutral (the live factors of a product multiply to 1 unless clamped)',
+      CHARACTERS.every(c => {
+        const t = target(c);
+        return ['Moon', 'Star', 'Sky'].every(sl => mainList(t, sl).every(m => {
+          const f = couplingFactors(t, sl, m);
+          return statProducts(c).every(product => {
+            const live = Object.keys(product).filter(s => f[s] != null);
+            if (live.length < 2) return true;
+            const prod = live.reduce((s, k) => s * f[k], 1);
+            return Math.abs(Math.log(prod)) < 1e-6 || live.some(k => f[k] === COUPLE_CLAMP[0] || f[k] === COUPLE_CLAMP[1] || f[k] === 0);
+          });
+        }));
+      }));
+    fail('every coupling factor sits inside COUPLE_CLAMP or is the hard zero',
+      CHARACTERS.every(c => { const t = target(c); return SLOTS.every(sl => SLOT_INFO[sl].mains.every(m => Object.values(couplingFactors(t, sl, m)).every(v => v === 0 || (v >= COUPLE_CLAMP[0] - 1e-12 && v <= COUPLE_CLAMP[1] + 1e-12)))); }));
+    /* Seeded coupling: the pre-board baseline is the character's own. YUI starts above 50%
+       crit with her weapon, so a Crit Multiplier roll is worth more than a Crit Rate roll to
+       her before any card is placed. An Elucidator is not coupled at all: the stats are
+       donated, so what a roll is worth is decided by an ally's board, not theirs. */
+    const yui = charDef('YUI');
+    const fy = couplingFactors(target(yui), 'Moon', 'ATK%');
+    fail('a high-crit character\'s baseline favours Crit Multiplier over Crit Rate', fy['Crit Multiplier'] > fy['Crit Rate'] && damageBase(yui).cr > 40,
+      `CM ${fy['Crit Multiplier'].toFixed(2)} CR ${fy['Crit Rate'].toFixed(2)} at ${damageBase(yui).cr}% crit`);
+    const navi = charDef('Hatsune Miku'), tn = target(navi);
+    const generic = Object.assign({}, tn, { n: undefined });
+    const fN = couplingFactors(tn, 'Moon', 'ATK%'), fG = couplingFactors(generic, 'Moon', 'ATK%');
+    fail('an Elucidator\'s cards are priced on their weights alone: no coupling for any slot or main',
+      CHARACTERS.filter(c => !spreadApplies(c)).every(c => { const t = target(c); return SLOTS.every(sl => SLOT_INFO[sl].mains.every(m => Object.keys(couplingFactors(t, sl, m)).length === 0)); }) &&
+      Object.keys(fN).length === 0 && Object.keys(fG).length > 0 && seedBaseline(tn) === null && seedBaseline(tj) !== null);
+    fail('Fuuka\'s perfect Star is lufel\'s Crit Multiplier, not a Crit Rate the generic board over-priced',
+      idealCard('Star', target(charDef('Fuuka Yamagishi')), '').main === 'Crit Multiplier');
+    fail('a DPS\'s seeded baseline reads their own weapon and Awakening (Joker above 100% ATK, real crit)',
+      seedBaseline(tj)['ATK%'] > 100 && near(seedBaseline(tj)['Crit Rate'], damageBase(joker).cr));
+    fail('target() stamps the owner\'s name on generated and saved targets alike', (() => {
+      state.chars['Morgana'].targets = { sets: ['Love'], space: 'Acceptance', main: { Moon: ['ATK%'] }, w: { 'ATK%': 10 }, targets: [] };
+      const ok = target(charDef('Morgana')).n === 'Morgana' && tj.n === 'Ren Amamiya';
+      state.chars['Morgana'].targets = null; return ok;
+    })());
+    /* Saved targets are a diff over the data, so a data fix still reaches every field the
+       user did not change — a full snapshot froze Kiyoshi's and Yusuke's ATK% at a 4 the
+       DEF/HP-kit override had since set to 0. */
+    fail('a saved target applies only its own edits; every other field, and the stat targets, follow the data', (() => {
+      const kumiT = defaultTarget(charDef('Kumi Katayama'));
+      state.chars['Kumi Katayama'].targets = { v: 2, space: 'Hope', w: { 'Speed': 3 } };
+      const t = target(charDef('Kumi Katayama'));
+      const ok = t.space === 'Hope' && t.w.Speed === 3 && J(t.sets) === J(kumiT.sets) && t.w['ATK%'] === kumiT.w['ATK%'] &&
+        J(t.main) === J(kumiT.main) && J(t.targets) === J(kumiT.targets) && target(charDef('Kumi Katayama')) === t;
+      state.chars['Kumi Katayama'].targets = null;
+      return ok && target(charDef('Kumi Katayama')) !== t && target(charDef('Kumi Katayama')).space === kumiT.space;
+    })());
+    fail('targetEdits stores only what differs from the data, and nothing when nothing does', (() => {
+      const base = defaultTarget(joker), mine = JSON.parse(JSON.stringify(base));
+      if (targetEdits(base, mine) !== null) return false;
+      mine.w['Speed'] = (base.w.Speed || 0) + 1; mine.main.Star = ['Crit Multiplier']; mine.space = 'Hope';
+      const e = targetEdits(base, mine);
+      return e && e.v === 2 && J(Object.keys(e).sort()) === J(['main', 'space', 'v', 'w']) && J(Object.keys(e.w)) === '["Speed"]' &&
+        J(e.main) === J({ Star: ['Crit Multiplier'] }) && e.space === 'Hope';
+    })());
+    fail('an old full snapshot converts to a diff: set/Space/main changes kept, a differing weight handed back and reported, stat targets from the data', (() => {
+      const yk = charDef('Yusuke Kitagawa'), yd = defaultTarget(yk);
+      const legacy = JSON.parse(JSON.stringify(yd));
+      legacy.space = 'Growth'; legacy.w['ATK%'] = 4; legacy.targets = [{ s: 'Speed', sub: 'Speed', pct: false, tiers: { LV10: 999 } }];
+      state.chars[yk.n].targets = legacy;
+      const dropped = migrateSavedTargets(), e = state.chars[yk.n].targets;
+      const ok = J(e) === J({ v: 2, space: 'Growth' }) && dropped.length === 1 && dropped[0].n === yk.n && dropped[0].stat === 'ATK%' &&
+        dropped[0].saved === 4 && dropped[0].data === 0 && target(yk).w['ATK%'] === 0 && J(target(yk).targets) === J(yd.targets) &&
+        migrateSavedTargets().length === 0 && J(state.chars[yk.n].targets) === J(e);
+      state.chars[yk.n].targets = null;
+      return ok;
+    })());
+    fail('an old snapshot\'s main for a slot the data now leaves open is handed back and reported, its other edits kept', (() => {
+      const cz = charDef('Chizuko Nagao'), legacy = JSON.parse(JSON.stringify(defaultTarget(cz)));
+      legacy.main.Moon = ['Damage Multiplier']; legacy.main.Sky = ['Speed']; legacy.sets = ['Truth']; legacy.space = 'Harmony';
+      state.chars[cz.n].targets = legacy;
+      const dropped = migrateSavedTargets(), e = state.chars[cz.n].targets;
+      const ok = J(e) === J({ v: 2, sets: ['Truth'], space: 'Harmony' }) && dropped.length === 2 &&
+        dropped.every(d => d.n === cz.n && / main$/.test(d.stat) && d.data === 'any') && mainList(target(cz), 'Moon').length === 0;
+      state.chars[cz.n].targets = null;
+      return ok;
+    })());
+    /* Capped Crit Rate: once what is held reaches 100 points, a Crit Rate roll is worth zero.
+       A team crit rate of 100 puts anyone there before a card is worn. */
+    const morg = charDef('Morgana'), tm = target(morg);
+    const cappedOk = (() => {
+      const was = state.teamCrit; state.teamCrit = 100;
+      const ok = heldCritRate(tm, 'ATK%') >= 100 && couplingFactors(tm, 'Moon', 'ATK%')['Crit Rate'] === 0 &&
+        near(cardScore(mk('Moon', 'Love', 'ATK%', [['Crit Rate', 6]]), tm), cardScore(mk('Moon', 'Love', 'ATK%', []), tm));
+      state.teamCrit = was;
+      return ok;
+    })();
+    fail('a crit rate already at 100% prices a Crit Rate roll at zero', cappedOk);
+    fail('below the cap the generic path leaves Crit Rate live', couplingFactors(target(yui), 'Star', 'Crit Rate')['Crit Rate'] > 0);
+    fail('cf() treats a hard zero as an answer and only a missing factor as neutral', cf({ 'Crit Rate': 0 }, 'Crit Rate') === 0 && cf({}, 'Crit Rate') === 1);
+    /* A saved target is the same object for as long as it exists, and the coupling and the
+       perfect-card score memoised on it depend on the loadout too (seedBaseline reads the
+       weapon and Awareness). A Setup change must reach them without a reload (targetMemo). */
+    fail('a Setup change reaches a saved target\'s coupling and perfect-card score without a reload', (() => {
+      state.chars[morg.n].targets = JSON.parse(JSON.stringify(target(morg)));
+      const t = target(morg), probe = tt => J(couplingFactors(tt, 'Moon', mainTop(tt, 'Moon'))) + '|' + idealCardScore('Star', tt);
+      const before = probe(t);
+      state.chars[morg.n].loadout = Object.assign({}, DEFAULT_LOADOUT, { refine: 7, awareness: 6 });
+      const after = probe(t), fresh = probe(Object.assign(JSON.parse(JSON.stringify(t)), { n: morg.n }));
+      const same = target(morg) === t;
+      state.chars[morg.n].targets = null; state.chars[morg.n].loadout = null;
+      return same && after === fresh && after !== before;
+    })());
+
+    /* Scaling stat: Yusuke's ⓐ is DEF, so the coupling pairs DEF% with Damage Multiplier. */
+    const yu = charDef('Yusuke Kitagawa'), yt = target(yu), ylo = charLoadout(yu.n);
+    fail('the coupling pairs a DEF-scaling kit\'s DEF% with Damage Multiplier, and leaves ATK% out',
+      couplingFactors(yt, 'Moon', 'DEF%')['DEF%'] != null && couplingFactors(yt, 'Moon', 'DEF%')['ATK%'] == null && scaleStat(yu) === 'DEF' && scalePctStat(charDef('Junpei Iori')) === 'HP%');
+
+    /* ---- coupling arithmetic must always produce a number ------------------------
+       A live bug (18 Sep 2026). A board's 'Crit Multiplier' supply is a TOTAL MINUS 100
+       and the seven Buff-element supports carry a 0% crit damage base, so on a board that has
+       not made up the difference it came back NEGATIVE; computeCoupling took Math.log of it
+       and the whole crit product went NaN. cardScore's `if (!ws) continue` then dropped every
+       crit substat silently while a crit MAIN scored NaN outright, and bestPlan's sort on NaN
+       left the slot in pool order — which is why Hatsune Miku's recommendation ignored the
+       four Labor cards she wore. A supply of exactly zero is the same failure by another
+       route (log 0 -> -Infinity -> 0/0), so the guard is on the supply, not the sign. */
+    const nanSweep = [];
+    CHARACTERS.forEach(c => {
+      const tc = target(c);
+      SLOTS.forEach(sl => SLOT_INFO[sl].mains.forEach(m => {
+        const f = couplingFactors(tc, sl, m);
+        Object.keys(f).forEach(k => { if (!isFinite(f[k])) nanSweep.push(`${c.n} ${sl}/${m}: ${k}=${f[k]}`); });
+        const probe = mk(sl, 'Labor', m, [['Crit Rate', 6], ['Crit Multiplier', 8], ['ATK%', 10]]);
+        if (!isFinite(cardScore(probe, tc))) nanSweep.push(`${c.n} ${sl}/${m}: cardScore NaN`);
+      }));
+    });
+    fail('no coupling factor or card score is ever NaN', !nanSweep.length, nanSweep.slice(0, 4).join(' | '));
+    fail('a sub-100% crit damage total floors at zero supply, never goes negative',
+      CHARACTERS.every(c => { const sb = seedBaseline(target(c)); return !sb || sb['Crit Multiplier'] >= 0; }),
+      CHARACTERS.filter(c => { const sb = seedBaseline(target(c)); return sb && sb['Crit Multiplier'] < 0; }).map(c => c.n).join(', '));
+    /* An Elucidator's stats are donated, so they have no baseline of their own and every
+       per-card price is the uncoupled one (see computeCoupling). */
+    fail('an Elucidator gets no baseline of their own, and everyone else with a stat block does',
+      CHARACTERS.every(c => !CHAR_STATS[c.n] || (seedBaseline(target(c)) === null) === !spreadApplies(c)));
+    /* The optimiser shortlists on the build score's own card price — for everyone, since the
+       ranking against the plan's other cards went (Sep 2026). */
+    fail('the optimiser ranks each slot by the build score\'s own card price', [navi, charDef('Kotone Shiomi'), yui].every(ch => {
+      const r = bestPlan(ch, state.cards.filter(c => c.rarity >= 2), { policy: 'pref' }), tt = target(ch);
+      return r.scored.length > 0 && r.scored.every(o => near(o.s, cardScore(o.c, tt), 1e-9));
+    }));
+    const mikuStar = mk('Star', 'Labor', 'Crit Rate', [['Crit Multiplier', 9.2], ['ATK%', 3.2], ['Damage Multiplier', 7.8]]);
+    fail('an Elucidator\'s crit-main Star prices finite and positive', isFinite(cardScore(mikuStar, tn)) && cardScore(mikuStar, tn) > 0);
+
+    // ---- the ideal card, and the per-card percentage ----
+    const idealBad = [];
+    CHARACTERS.forEach(c => {
+      const t = target(c);
+      const idl = idealLoadout(c, t, 55);
+      idl.cards.forEach(card => { const e = validateCard(card); if (e.length) idealBad.push(`${c.n} ${card.slot}: ${e[0]}`); });
+      SLOTS.forEach(sl => {
+        const ic = idealCard(sl, t, '');
+        if (ic.subs.some(s => s.stat === ic.main)) idealBad.push(`${c.n} ${sl}: ideal duplicates its main`);
+        if (ic.level !== RARITY[5].maxLevel || ic.rarity !== 5) idealBad.push(`${c.n} ${sl}: ideal not a max-level 5★`);
+        mainList(t, sl).forEach(m => { if (cardScore(idealCardFor(sl, t, '', m), t) > cardScore(ic, t) + 1e-9) idealBad.push(`${c.n} ${sl}: ${m} beats the ideal's ${ic.main}`); });
+        if (cardPct(cardScore(ic, t), sl, t) !== 100 || !near(cardHeadroom(cardScore(ic, t), sl, t), 0)) idealBad.push(`${c.n} ${sl}: ideal is not 100 / 0 headroom`);
+      });
+    });
+    fail('every ideal card is a legal max-level 5★ that takes the best-scoring allowed main and reads 100%', idealBad.length === 0, idealBad.slice(0, 4).join(' | '));
+    fail('idealSubs excludes the card\'s own main and fills the four best stats',
+      !idealSubs(tj, 'Crit Rate').includes('Crit Rate') && idealSubs(tj, 'Crit Rate').length === IDEAL_ROLLS.length && idealSubs(tj).length === IDEAL_ROLLS.length);
+    fail('a stat with a hard target goes into the ideal card whatever its weight',
+      (() => { const kumi = charDef('Kumi Katayama'); return idealSubs(target(kumi)).includes('Speed'); })());
+    fail('cardPct clamps to 0-100 and a wrong-main empty card reads low',
+      cardPct(cardScore(bad, tj), 'Star', tj) < 30 && cardPct(1e9, 'Star', tj) === 100 && cardPct(-5, 'Star', tj) === 0);
+    fail('potentialCardScore is a ceiling: above the score at level 0, equal at the cap, and grows the main',
+      (() => { const c0 = mk('Star', 'Hindrance', 'Crit Rate', [['Crit Multiplier', 4.1], ['ATK%', 3.5], ['Speed', 2.2]], { level: 0 });
+        const c25 = Object.assign({}, c0, { level: 25 });
+        const up = bestCaseUpgrades(c0, tj), subGrowth = up.mint.reduce((s, x) => s + x.w, 0) + up.rolls * up.w;
+        return potentialCardScore(c0, tj) > cardScore(c0, tj) && near(potentialCardScore(c25, tj), cardScore(c25, tj)) &&
+          potentialCardScore(c0, tj) > cardScore(c0, tj) + subGrowth; })());
+    /* A card minted with three substats gains a fourth on its first upgrade (the accounting
+       validateCard and mergeImport use). The best case must mint the most valuable stat the
+       card lacks and spend only the REMAINING upgrades as rolls — 60% of the real level-0
+       inventory is three-substat cards, and the old rule (every upgrade a roll on an existing
+       substat) labelled 763 card/character pairs "even maxed, not an upgrade" wrongly. */
+    fail('a three-substat card mints the most valuable stat it lacks (never its main) at one roll, then rolls the rest',
+      (() => { const c0 = mk('Star', 'Hindrance', 'Crit Rate', [['Crit Multiplier', 4.1], ['ATK%', 3.5], ['Speed', 2.2]], { level: 0 });
+        const up = bestCaseUpgrades(c0, tj), f = couplingFactors(tj, 'Star', 'Crit Rate'), w = s => (tj.w[s] || 0) * cf(f, s);
+        const lacking = Object.keys(SUBSTATS).filter(s => !['Crit Multiplier', 'ATK%', 'Speed', 'Crit Rate'].includes(s));
+        const top = Math.max(...lacking.map(w));
+        return up.mint.length === 1 && lacking.includes(up.mint[0].stat) && near(up.mint[0].w, top) &&
+          up.rolls === remainingUpgrades(c0) - 1 && near(up.w, Math.max(top, ...['Crit Multiplier', 'ATK%', 'Speed'].map(w))); })());
+    fail('a four-substat card mints nothing and rolls every remaining upgrade onto its best substat', (() => {
+      const c4 = mk('Star', 'Hindrance', 'Crit Rate', [['Crit Multiplier', 4.1], ['ATK%', 3.5], ['Speed', 2.2], ['DEF', 27]], { level: 0 });
+      const up = bestCaseUpgrades(c4, tj);
+      return up.mint.length === 0 && up.rolls === remainingUpgrades(c4) && up.onto.length >= 1 &&
+        near(potentialCardScore(c4, tj), cardScore(c4, tj) + up.rolls * up.w + mainWeightFor(c4, tj) * (mainRolls('Crit Rate', 'Star', 25) - mainRolls('Crit Rate', 'Star', 0)));
+    })());
+    fail('a three-substat card of junk can still reach a keeper through its fourth substat', (() => {
+      const junk = mk('Sun', 'Hindrance', 'HP', [['DEF', 27], ['HP%', 2.1], ['SP Recovery', 5.9]], { level: 0 });
+      const up = bestCaseUpgrades(junk, tj), existingBest = Math.max(...junk.subs.map(s => (tj.w[s.stat] || 0) * cf(couplingFactors(tj, 'Sun', 'HP'), s.stat)));
+      return up.mint.length === 1 && up.w > existingBest && up.onto.includes(up.mint[0].stat) &&
+        potentialCardScore(junk, tj) > cardScore(junk, tj) + remainingUpgrades(junk) * existingBest;
+    })());
+    fail('atMaxLevel lifts the level to the rarity cap and leaves the substats as rolled',
+      (() => { const c0 = mk('Star', 'Hindrance', 'Crit Rate', [['Crit Multiplier', 4.1]], { level: 3, rarity: 4 }); const m = atMaxLevel(c0);
+        return m.level === 20 && m.subs === c0.subs && c0.level === 3 && atMaxLevel(Object.assign({}, c0, { level: 20 })).level === 20; })());
+    fail('upgradesUsed follows the rarity\'s cadence (5★: one per five levels)',
+      upgradesUsed(5, 0) === 0 && upgradesUsed(5, 4) === 0 && upgradesUsed(5, 5) === 1 && upgradesUsed(5, 25) === 5 && upgradesUsed(4, 20) === 4 && upgradesUsed(2, 10) === 2);
+
+    /* ================================================================================
+       5. Pricing a loadout — sets, synergy, the build score
+       ================================================================================ */
+    const hind = 'Hindrance';
+    fail('bonus2Value is zero off-element, for an unknown set, and for a stat weighted zero',
+      bonus2Value('Strife', joker, tj) === 0 && bonus2Value('Nope', joker, tj) === 0 && bonus2Value(hind, joker, tj) > 0 &&
+      bonus2Value('Love', joker, tj) === 0);
+    fail('a 2-piece is worth its amount in max rolls times the stat\'s weight',
+      near(bonus2Value(hind, joker, tj), tj.w[SETS[hind].bonus2.stat] * SETS[hind].bonus2.amt / maxRoll(SETS[hind].bonus2.stat, 'Sun')));
+    fail('bonus4Value pays base for the preferred set, ×0.72 for the alternative, ×0.22 otherwise, 0 off-element',
+      bonus4Value(tj.sets[0], joker, tj, 55) === 55 && near(bonus4Value(tj.sets[1], joker, tj, 55), 55 * 0.72) &&
+      near(bonus4Value('Power', joker, tj, 55), 55 * 0.22) && bonus4Value('Strife', joker, tj, 55) === 0 && bonus4Value(tj.sets[0], joker, tj) === 55);
+    const four = heavens.map(sl => mk(sl, hind, sl === 'Sun' ? 'HP' : mainTop(tj, sl), []));
+    fail('loadoutSetBonus: four of a set pays the 4-piece plus its 2-piece and names the active set',
+      (() => { const bon = loadoutSetBonus(four, joker, tj, 55); return bon.active4 === hind && near(bon.value, bonus4Value(hind, joker, tj, 55) + bonus2Value(hind, joker, tj)); })());
+    fail('loadoutSetBonus: two pairs pay two 2-pieces and no 4-piece', (() => {
+      const cards = [mk('Sun', hind, 'HP', []), mk('Moon', hind, 'ATK%', []), mk('Star', 'Power', 'Crit Rate', []), mk('Sky', 'Power', 'ATK%', [])];
+      const bon = loadoutSetBonus(cards, joker, tj, 55);
+      return bon.active4 === null && near(bon.value, bonus2Value(hind, joker, tj) + bonus2Value('Power', joker, tj));
+    })());
+    fail('an off-element 4-piece grants nothing at all', loadoutSetBonus(heavens.map(sl => mk(sl, 'Strife', sl === 'Sun' ? 'HP' : mainTop(tj, sl), [])), joker, tj, 55).value === 0);
+    fail('scoreLoadout counts only the best card per slot', (() => {
+      const s1 = mk('Star', hind, 'Crit Rate', [['Crit Multiplier', 10]]), s2 = mk('Star', hind, 'Crit Rate', [['Crit Multiplier', 2]]);
+      return near(scoreLoadout([s1, s2], joker, tj, 55).cards, cardScore(s1, tj)) && scoreLoadout([s1, s2], joker, tj, 55).filled === 1;
+    })());
+    fail('a Space card pairing with the active 4-piece is worth SPACE_PAIR_VALUE, a non-pairing one nothing', (() => {
+      const pairing = Object.keys(SPACE_SETS).find(s => SPACE_SETS[s].pairs.includes(hind));
+      const other = Object.keys(SPACE_SETS).find(s => !SPACE_SETS[s].pairs.includes(hind));
+      const a = scoreLoadout(four.concat([mk('Space', pairing, 'ATK + DEF', [])]), joker, tj, 55);
+      const bb = scoreLoadout(four.concat([mk('Space', other, 'ATK + DEF', [])]), joker, tj, 55);
+      return a.synergy === SPACE_PAIR_VALUE && a.pairs && bb.synergy === 0 && !bb.pairs;
+    })());
+
+    /* ---- perfect is a ceiling: lufel's order holds against every other configuration ----
+       Whole loadouts of perfect cards, stat targets and the damage-spread term included, since
+       a 2-piece's stat and a main's feed both. The 4-piece value is this tool's invention and
+       yields to lufel's set order (setLift); mains are left to the model, which gets them right
+       everywhere but one documented case. */
+    const spacesR = Object.keys(SPACE_SETS).filter(x => !SPACE_SETS[x].unreleased);
+    const ceilingBreaks = () => {
+    const liftBad = [], lifted = [], mainBad = [];
+    let morg = 0;
+    CHARACTERS.forEach(c => {
+      const t = target(c), lc = charLoadout(c.n), idl = idealLoadout(c, t, 55);
+      const heav = idl.cards.filter(x => x.slot !== 'Space'), sp = idl.cards.filter(x => x.slot === 'Space')[0];
+      const tot = (sets, space) => buildScoreOf(c, heav.map((x, i) => Object.assign({}, x, { set: sets[i] })).concat([Object.assign({}, sp, { set: space })]), 55, lc, idl, t).total;
+      const base = buildScoreOf(c, idl.cards, 55, lc, idl, t).total;
+      const usable = Object.keys(SETS).filter(x => !SETS[x].unreleased && !(SETS[x].elem && SETS[x].elem !== c.e));
+      const pairFor = x => spacesR.filter(y => SPACE_SETS[y].pairs.includes(x))[0] || sp.set;
+      const four = {}; usable.forEach(x => four[x] = tot([x, x, x, x], pairFor(x)));
+      const listed = t.sets.filter(x => usable.includes(x));
+      usable.forEach(x => { if (x !== listed[0] && four[x] > base + 1e-6) liftBad.push(`${c.n}: 4pc ${x}`); });
+      for (let i = 0; i < usable.length; i++) for (let j = i + 1; j < usable.length; j++) {
+        if (tot([usable[i], usable[i], usable[j], usable[j]], sp.set) > base + 1e-6) liftBad.push(`${c.n}: ${usable[i]} 2 + ${usable[j]} 2`);
+      }
+      if (listed[0] && bonus4Value(listed[0], c, t, 55) > 55 + 1e-9) lifted.push(c.n);
+      ['Moon', 'Star', 'Sky'].forEach(sl => SLOT_INFO[sl].mains.forEach(m => {
+        const r = buildScoreOf(c, idl.cards.map(x => x.slot === sl ? idealCardFor(sl, t, x.set, m) : x), 55, lc, idl, t).total / base;
+        if (c.n === 'Morgana [Starlight]' && sl === 'Star') morg = Math.max(morg, r);
+        if (r > 1 + 1e-4) mainBad.push(`${c.n} ${sl}: ${m}`);
+      }));
+    });
+    return { liftBad, lifted, mainBad, morg };
+    };
+    const { liftBad, lifted, mainBad } = ceilingBreaks();
+    fail('no other 4-piece and no two 2-pieces of perfect cards beat the preferred 4-piece, targets and spread counted', liftBad.length === 0, liftBad.slice(0, 5).join(' | '));
+    fail('the preferred set is lifted only where the flat 4-piece value contradicted lufel: Elucidators and healers, never a DPS like Joker',
+      lifted.length > 0 && lifted.length <= 18 && lifted.includes('Futaba Sakura') && lifted.includes('Lufel') && !lifted.includes('Ren Amamiya') && !lifted.includes('Ann Takamaki') &&
+      CHARACTERS.every(c => { const t = target(c); return t.sets.slice(1).every(a => !SETS[a] || bonus4Value(a, c, t, 55) === 0 || near(bonus4Value(a, c, t, 55), 55 * 0.72)); }),
+      lifted.join(', '));
+    /* The one known exception: lufel lists only Crit Multiplier for Wavecatcher Miyu's Star, the
+       right call in a party that supplies crit rate — which lufel's builds assume, and which the
+       team crit rate models only when the user sets it. On her own board a Crit Rate Star is
+       ahead (docs/SCORING.md, known gaps). */
+    fail('no main outscores the perfect card\'s own, loadout-wide, but Wavecatcher Miyu\'s Star',
+      mainBad.every(x => x === 'Miyu Sahara [Wavecatcher] Star: Crit Rate'), mainBad.join(' | '));
+
+    /* ---- the team crit rate (Roster) ----
+       The crit rate the user's supports add, in points: into every damage dealer's crit rate in
+       the damage model and both coupling baselines, never an Elucidator's, never an on-screen
+       total or a stat target. Every memo that reads it has to drop when it changes. */
+    const annC = charDef('Ann Takamaki'), tAnn = target(annC), futabaC = charDef('Futaba Sakura');
+    const critAt = () => ({ cr: damageBase(annC).cr, crF: damageBase(futabaC).cr,
+      tot: totalStat(annC, 'Crit Rate', 'Crit Rate', [], charLoadout(annC.n)).total,
+      f: Object.assign({}, couplingFactors(tAnn, 'Star', 'Crit Multiplier')), v: Object.assign({}, couplingFactors(VAULT_TARGET, 'Star', 'Crit Multiplier')),
+      ideal: idealCardScore('Star', tAnn) });
+    const c0 = critAt();
+    state.teamCrit = 20;
+    const c20 = critAt(), ceil20 = ceilingBreaks();
+    state.teamCrit = 0;
+    const cBack = critAt();
+    fail('the team crit rate adds to a damage dealer\'s crit rate in the damage model, never an Elucidator\'s or an on-screen total',
+      state.teamCrit === 0 && near(c20.cr, c0.cr + 20) && near(c20.crF, c0.crF) && near(c20.tot, c0.tot), JSON.stringify({ c0: c0.cr, c20: c20.cr }));
+    /* The team buffs (ATK, damage, crit multiplier, enemy DEF down) go where the team crit rate goes: a damage dealer's
+       base, both coupling baselines, every memo that reads them; never an Elucidator's or an on-screen total. ATK only
+       for a kit that scales off ATK. */
+    const yuK = charDef('Yusuke Kitagawa');
+    const tbAt = () => ({ b: Object.assign({}, damageBase(annC)), y: damageBase(yuK).atkPct, f: damageBase(futabaC).dm,
+      tot: totalStat(annC, 'ATK', 'ATK', [], charLoadout(annC.n)).total, cp: Object.assign({}, couplingFactors(tAnn, 'Moon', 'ATK%')), sig: teamSig() });
+    const tb0 = tbAt();
+    state.teamBuffs = { atkPct: 80, dm: 30, cm: 30, defdown: 20 };
+    const tb1 = tbAt();
+    state.teamBuffs = {};
+    const tbBack = tbAt();
+    fail('the team buffs add to a damage dealer\'s base (ATK for an ATK kit only), never an Elucidator\'s or an on-screen total, and reprice the coupling',
+      near(tb1.b.atkPct, tb0.b.atkPct + 80) && near(tb1.b.dm, tb0.b.dm + 30) && near(tb1.b.cm, tb0.b.cm + 30) && near(tb1.b.defdown, tb0.b.defdown + 20) &&
+      near(tb1.y, tb0.y) && near(tb1.f, tb0.f) && near(tb1.tot, tb0.tot) && tb1.cp['ATK%'] < tb0.cp['ATK%'] && tb1.sig !== tb0.sig &&
+      near(tbBack.cp['ATK%'], tb0.cp['ATK%']) && tbBack.sig === tb0.sig, JSON.stringify({ tb0: tb0.b, tb1: tb1.b }));
+    fail('a new team crit rate reprices the coupling at once — Crit Multiplier up, Crit Rate down, the Vault\'s generic board too — and 0 restores it exactly',
+      c20.f['Crit Multiplier'] > c0.f['Crit Multiplier'] && c20.f['Crit Rate'] < c0.f['Crit Rate'] && c20.v['Crit Multiplier'] > c0.v['Crit Multiplier'] &&
+      c20.ideal !== c0.ideal && near(cBack.f['Crit Multiplier'], c0.f['Crit Multiplier']) && near(cBack.f['Crit Rate'], c0.f['Crit Rate']) && near(cBack.ideal, c0.ideal));
+    /* Starlight Morgana is the one exception: half her damage is a Highlight that cannot crit, and since her own
+       damage-taken debuffs count on her own hits (Nov 2026) her kit adds 90% damage, so at 20 an ATK% Star ties her
+       lufel crit Stars (0.1% ahead of Crit Rate). */
+    fail('at a 20% team crit rate perfect is a ceiling for everyone, Wavecatcher Miyu\'s Crit Multiplier Star included (Starlight Morgana\'s ATK% Star within 0.5%)',
+      ceil20.mainBad.every(x => x === 'Morgana [Starlight] Star: ATK%') && ceil20.liftBad.length === 0 && ceil20.morg < 1.005, ceil20.mainBad.concat(ceil20.liftBad).slice(0, 5).join(' | ') + ' ' + ceil20.morg);
+    const toshiya = charDef('Toshiya Sumi'), runaD = charDef('Runa Dogenzaka');
+    fail('Defeat\'s 4-piece works for Fire only, its ailment-accuracy 2-piece for anyone',
+      SETS.Defeat.elem4 === 'Fire' && !SETS.Defeat.elem && bonus4Value('Defeat', toshiya, target(toshiya), 55) === 0 &&
+      bonus4Value('Defeat', runaD, target(runaD), 55) > 0 && bonus2Value('Defeat', toshiya, target(toshiya)) > 0);
+    const bm = charDef('Minami Miyashita [Beachflower]'), tbm = target(bm);
+    const wsum = (tt, list) => list.reduce((acc, x) => acc + (tt.w[x] || 0), 0);
+    fail('Beachflower Minami scales off HP, and her crit multiplier and HP buff allies: uncoupled, not booked as her damage, lufel\'s Crit Multiplier Star her ideal',
+      scaleStat(bm) === 'HP' && tbm.w['ATK%'] === 0 && SLOT_INFO.Star.mains.every(m => Object.keys(couplingFactors(tbm, 'Star', m)).length === 0) &&
+      idealCard('Star', tbm, '').main === 'Crit Multiplier' &&
+      near(damageShare(tbm, bm), wsum(tbm, ['HP', 'Damage Multiplier', 'Crit Rate', 'Resistance Pierce']) / wsum(tbm, Object.keys(tbm.w))));
+    const lufelC = charDef('Lufel'), tlu = target(lufelC);
+    fail('Lufel\'s heal-scaling ATK% is her top weight, and lufel\'s ATK% Star and Sky are her ideal',
+      tlu.w['ATK%'] === Math.max(...Object.values(tlu.w)) && idealCard('Star', tlu, '').main === 'ATK%' && idealCard('Sky', tlu, '').main === 'ATK%');
+    const kira = charDef('Kira Kitazato');
+    const kiraAA = wpn => { const b = charBaseStat(kira, 'Ailment Accuracy', Object.assign({}, charLoadout(kira.n), { weapon: wpn })); return b.flat + b.pct; };
+    fail('Kira: Doctor mode and Bloodletter\'s unconditional line count toward his ailment accuracy, and lufel\'s ATK% Star is his ideal',
+      near(kiraAA('4'), 36) && near(kiraAA('5'), 51) && idealCard('Star', target(kira), '').main === 'ATK%');
+    fail('Wavecatcher Miyu\'s Resonance crit rate lifts her crit factor for its share, and only with Mermaid Dreamer', (() => {
+      const wm = charDef('Miyu Sahara [Wavecatcher]'), twm = target(wm), L5 = Object.assign({}, charLoadout(wm.n), { weapon: '5' }), L4 = Object.assign({}, L5, { weapon: '4' });
+      const board = idealLoadout(wm, twm, 55).cards, prof = CRIT_PROFILE[wm.n];
+      const with5 = damageFactors(board, wm, twm, L5).crit, with4 = damageFactors(board, wm, twm, L4).crit;
+      delete CRIT_PROFILE[wm.n];
+      const plain5 = damageFactors(board, wm, twm, L5).crit, plain4 = damageFactors(board, wm, twm, L4).crit;
+      CRIT_PROFILE[wm.n] = prof;
+      return with5 > plain5 && near(with4, plain4) && extraCritFor(prof, L4) === null && extraCritFor(prof, L5).cr === prof.extraCr.ladder[L5.refine - 1];
+    })());
+    fail('the archetype floor never lifts a stat to one lufel ranks above it (Minami, Seaside Tomoko, Ichigo)',
+      target(charDef('Minami Miyashita')).w['SP Recovery'] < target(charDef('Minami Miyashita')).w['DEF%'] &&
+      target(charDef('Ichigo Shikano')).w['Crit Rate'] < target(charDef('Ichigo Shikano')).w['ATK%'] &&
+      target(charDef('Tomoko Noge [Seaside]')).w['SP Recovery'] === 6);
+
+    // ---- build score ----
+    const notHundred = [];
+    CHARACTERS.forEach(c => {
+      const t = target(c), lc = charLoadout(c.n), idl = idealLoadout(c, t, 55);
+      const bs = buildScore(c, idl.cards, 55, lc, idl, t);
+      if (!bs || bs.score !== 100 || !near(bs.raw, 100, 1e-6)) notHundred.push(`${c.n}=${bs && bs.score}`);
+    });
+    fail('a perfect loadout scores exactly 100 for every character', notHundred.length === 0, notHundred.slice(0, 6).join(', '));
+    fail('buildScore is null with nothing equipped, and reads 1-100 with something', buildScore(joker, [], 55) === null && (() => {
+      const bs = buildScore(joker, [mk('Sun', hind, 'HP', [['DEF', 27]])], 55); return bs && bs.score >= 1 && bs.score <= 100 && bs.raw >= 0 && bs.raw <= 100 && bs.filled === 1; })());
+    fail('buildScore breaks down into the documented parts', (() => {
+      const bs = buildScore(joker, four, 55); const labels = bs.parts.map(x => x.label);
+      return labels.includes('Card stats') && labels.includes('Set bonuses') && labels.includes('Space synergy') && labels.includes('Damage spread') &&
+        bs.parts.every(x => x.got <= x.max + 1e-9);
+    })());
+    fail('p4value scales both halves of the build score: the perfect loadout is 100 whatever the 4-piece is worth',
+      (() => { const idl = idealLoadout(joker, tj, 120); return buildScore(joker, idl.cards, 120, lj, idl, tj).score === 100 && buildScore(joker, idl.cards, 120, lj, idl, tj).raw > 100 - 1e-6; })());
+    fail('`raw` is the unrounded ratio and `score` is round(raw) floored at 1', (() => {
+      const bs = buildScore(joker, [mk('Sun', 'Power', 'HP', [['HP', 84]])], 55);
+      return bs.raw !== bs.score && bs.score === Math.max(1, Math.min(100, Math.round(bs.raw))) && bs.raw > 0 && bs.raw < 10;
+    })());
+
+    /* ================================================================================
+       6. The damage model — ⓐⓑⓓ, spread, share, gates
+       ================================================================================ */
+    const dbBad = [];
+    CHARACTERS.forEach(c => {
+      // bare: the character alone, without the team buffs setting or the kit's measured numbers on top
+      const lc = charLoadout(c.n), B = damageBase(c, Object.assign({}, lc, { bare: true }));
+      [['Crit Rate', B.cr], ['Crit Multiplier', B.cm], ['Damage Multiplier', B.dm]].forEach(([s, v]) => {
+        const x = charBaseStat(c, s, lc); if (!near(x.flat + x.pct, v)) dbBad.push(`${c.n} ${s}: ${x.flat}+${x.pct} vs ${v}`);
+      });
+    });
+    fail('damageBase reads flat + pct for Crit Rate, Crit Multiplier and Damage Multiplier (weapon ladders count)', dbBad.length === 0, dbBad.slice(0, 3).join(' | '));
+    fail('Morgana with Golden Legacy: Awakening-7 crit replaces the base (22.4) and the weapon adds its 18 on top',
+      near(charBaseStat(morg, 'Crit Rate').flat, 22.4) && near(charBaseStat(morg, 'Crit Rate').pct, 18) && near(damageBase(morg).cr, 40.4));
+    const crCard = mk('Sun', 'Power', 'HP', [['Crit Rate', 10]]), cmCard = mk('Sun', 'Power', 'HP', [['Crit Multiplier', 20]]);
+    const critDown = [];
+    CHARACTERS.forEach(c => {
+      const t = target(c), lc = charLoadout(c.n), d0 = damageFactors([], c, t, lc).value;
+      if (damageFactors([crCard], c, t, lc).value < d0 - 1e-9) critDown.push(c.n + ' CR');
+      if (damageFactors([cmCard], c, t, lc).value < d0 - 1e-9) critDown.push(c.n + ' CM');
+    });
+    fail('adding Crit Rate or Crit Multiplier never lowers modelled damage for anyone (ⓓ floored at 1)', critDown.length === 0, critDown.slice(0, 5).join(', '));
+    fail('a 0%-crit-base support gains nothing from crit stats rather than losing (Miku)',
+      (() => { const d0 = damageFactors([], navi, tn, charLoadout(navi.n)).value; return near(damageFactors([crCard], navi, tn, charLoadout(navi.n)).value, d0); })());
+    fail('a DEF-scaling kit\'s damage moves with DEF% and not with ATK% (Yusuke)', (() => {
+      const y0 = damageFactors([], yu, yt, ylo).value;
+      return damageFactors([mk('Sun', 'Opulence', 'HP', [['DEF%', 15]])], yu, yt, ylo).value > y0 * 1.05 && near(damageFactors([mk('Sun', 'Opulence', 'HP', [['ATK%', 15]])], yu, yt, ylo).value, y0);
+    })());
+    fail('an HP-scaling kit books HP% as a damage stat (Junpei), a DEF-scaling one DEF% (Yusuke)',
+      modelledStats(charDef('Junpei Iori')).includes('HP%') && !modelledStats(charDef('Junpei Iori')).includes('ATK%') && modelledStats(yu).includes('DEF%') && modelledStats(joker).includes('ATK%'));
+    fail('a party DEF or max HP buff reaches the kit that scales with it and no other (TEAM_BUFFS def%/def, hp%/hp)', (() => {
+      const jp = charDef('Junpei Iori'), b = { bare: true }, f = (c, x) => damageFactors([], c, target(c), Object.assign({}, charLoadout(c.n), b), x).atk;
+      return f(yu, { defPct: 30 }) > f(yu, {}) * 1.05 && f(yu, { def: 500 }) > f(yu, {}) && f(yu, { hpPct: 30 }) === f(yu, {}) &&
+        f(jp, { hpPct: 30 }) > f(jp, {}) * 1.05 && f(jp, { hp: 1000 }) > f(jp, {}) && f(jp, { defPct: 30 }) === f(jp, {}) &&
+        f(joker, { defPct: 30, hpPct: 30, def: 500, hp: 1000 }) === f(joker, {}) && TC_FROM_K['def%'] === 'defPct' && TC_FROM_K['hp%'] === 'hpPct';
+    })());
+    /* Locked crit: Pioneer Shun's every hit crits, so Crit Rate moves nothing and Crit Multiplier is ⓓ (Skull was the
+       standing case until his crits were read per hit, Nov 2026). */
+    const shp = charDef('Shun Kano [Pioneer]'), tsp = target(shp), ls = Object.assign({}, charLoadout(shp.n), { bare: true });
+    // against a Sun card with no substats: an HP kit's Sun main counts towards its damage
+    const sun0 = mk('Sun', 'Power', 'HP', []);
+    fail('a fully locked-crit kit ignores Crit Rate and scales with Crit Multiplier (Pioneer Shun)',
+      near(damageFactors([crCard], shp, tsp, ls).value, damageFactors([sun0], shp, tsp, ls).value) && damageFactors([cmCard], shp, tsp, ls).value > damageFactors([sun0], shp, tsp, ls).value * 1.02);
+    fail('lockedCritSupply adds nothing for a fully locked or unlocked kit and locked/(1-locked) otherwise',
+      lockedCritSupply({ locked: 1 }, 150) === 0 && lockedCritSupply(null, 150) === 0 && near(lockedCritSupply({ locked: 0.3 }, 150), 100 * 0.3 / 0.7) &&
+      lockedCritSupply({ locked: 0.3, cmClamp: [250, 350] }, 150) === 0 && near(lockedCritSupply({ locked: 0.3, cmClamp: [250, 350] }, 300), 100 * 0.3 / 0.7));
+    /* Kumi's Highlight cannot crit until Awareness 6, so a Crit Rate roll buys less before it: the share is
+       measured in her fight alone (kitMix), and her A6 Highlight crits (TC_HL_CRIT_AW). */
+    const kumi = charDef('Kumi Katayama'), tk = target(kumi);
+    fail('a no-crit share makes Crit Rate worth less until the Awareness node lifts it (Kumi)', (() => {
+      const g = aw => damageFactors([crCard], kumi, tk, lo(aw)).value / damageFactors([], kumi, tk, lo(aw)).value;
+      const k0 = kitMix(kumi, lo(0)), k6 = kitMix(kumi, lo(6));
+      return g(0) < g(6) && k0 && k6 && k0.nc > 0.2 && k6.nc < k0.nc && damageBase(kumi, lo(0)).nc === k0.nc;
+    })(), JSON.stringify([kitMix(kumi, lo(0)), kitMix(kumi, lo(6))]));
+    /* Stat conversions feed the damage model from the in-battle source total. */
+    const runa = charDef('Runa Dogenzaka'), tr = target(runa), lr = charLoadout(runa.n);
+    const aaCard = mk('Sun', 'Defeat', 'HP', [['Ailment Accuracy', 20]]);
+    const r0 = damageFactors([], runa, tr, lr), r1 = damageFactors([aaCard], runa, tr, lr);
+    /* The kit, read off its fight alone (kitMix): the same whatever is worn and whatever the Teams page is set to, its
+       timed lines out of the base and in its numbers at their uptime, and nothing of it in the fight's own (bare) base. */
+    const annK = charDef('Ann Takamaki'), annLo = charLoadout(annK.n);
+    const kitFresh = () => { Object.keys(kitMixCache).forEach(k => delete kitMixCache[k]); Object.keys(damageBaseCache).forEach(k => delete damageBaseCache[k]); return kitMix(annK); };
+    const kA = kitFresh();
+    const keepWorn = state.cards.map(c => [c, c.equipped]);
+    state.cards.filter(c => c.equipped === annK.n).forEach(c => { c.equipped = null; });
+    const foesEl = document.getElementById('tmFoes'), fightEl = document.getElementById('tmFight'), keepFoes = foesEl.value, keepFight = fightEl.value;
+    foesEl.value = '3'; fightEl.value = '6';
+    const kB = kitFresh();
+    foesEl.value = keepFoes; fightEl.value = keepFight; keepWorn.forEach(([c, e]) => { c.equipped = e; });
+    kitFresh();
+    fail('kitMix is the kit alone: the same whatever the character wears and whatever the Teams page is set to',
+      !!kA && JSON.stringify(kA) === JSON.stringify(kB) && kA.nc > 0 && kA.nc < 1, JSON.stringify([kA, kB]));
+    const annBare = damageBase(annK, Object.assign({}, annLo, { bare: true })), annFull = damageBase(annK, annLo);
+    const annNt = n => { const x = charBaseStat(annK, n, Object.assign({}, annLo, { noTimed: true })); return x.flat + x.pct; };
+    fail('the build model\'s base is the base without the kit\'s timed lines plus what the kit adds; the fight\'s own base has neither',
+      near(annFull.dm, annNt('Damage Multiplier') + kA.x.dm) && near(annFull.atkPct - annBare.atkPct, kA.x.atkPct + (charBaseStat(annK, 'ATK', Object.assign({}, annLo, { noTimed: true })).pct - charBaseStat(annK, 'ATK', annLo).pct)) &&
+      annBare.nc === 0 && near(annFull.nc, kA.nc) && damageFactors([], annK, target(annK), Object.assign({}, annLo, { bare: true })).def === 1,
+      JSON.stringify({ annBare, annFull, kx: kA.x }));
+    fail('an Elucidator, and a kit with no skill numbers, get no kit numbers', kitMix(charDef('Futaba Sakura')) === null && CHARACTERS.filter(c => !SKILL_DMG[c.n]).every(c => kitMix(c) === null));
+    /* ⓒ: Pierce raises the damage model, and more once the team takes DEF off the foe — lufel's formula subtracts DEF down
+       after Pierce has scaled the DEF, so each Pierce point is a larger share of the DEF that is left */
+    const pierceCard = mk('Sun', 'Opulence', 'HP', [['Resistance Pierce', 10]]);
+    const pierceGain = () => damageFactors([pierceCard], joker, tj, lj).value / damageFactors([], joker, tj, lj).value;
+    const pg0 = pierceGain();
+    state.teamBuffs = { defdown: 40 }; const pg40 = pierceGain(); state.teamBuffs = {};
+    fail('a Pierce roll raises the damage model (ⓒ), and more once the team takes DEF off the foe', pg0 > 1.01 && pg40 > pg0, `${pg0} ${pg40}`);
+    fail('ⓒ is lufel\'s defence formula against the Auto boss: the single boss for a single-target kit, the area boss for an AoE DPS',
+      (() => { const st = CHARACTERS.find(c => c.arch === 'ST DPS'), E = 1280 * 2.584;
+        return !!st && buildBoss(st).def === 1280 && near(buildDefence(st, 0, 0), 1 - E / (E + 1400)); })() && joker.arch === 'AoE DPS' && buildBoss(joker).def === 821);
+    fail('an accuracy roll raises Runa\'s ATK factor through her conversion',
+      near(r1.atk / r0.atk, 1 + 0.6 * 20 / (100 + damageBase(runa, lr).atkPct + conversionBonus(runa, [], lr)['ATK%']), 1e-9), `${r0.atk.toFixed(0)} -> ${r1.atk.toFixed(0)}`);
+    fail('a conversion source stat counts as modelled for its owner and nobody else',
+      modelledStats(runa).includes('Ailment Accuracy') && !modelledStats(ann).includes('Ailment Accuracy'));
+    fail('a conversion cap holds (Yaoling\'s ATK% from Speed stops at 90)',
+      conversionBonus(charDef('Yaoling Li'), [mk('Sky', 'Power', 'Speed', [['Speed', 200]])], charLoadout('Yaoling Li'))['ATK%'] === 90);
+    fail('conversionBonus is all zeros for a character without conversions', Object.values(conversionBonus(joker, [], lj)).every(v => v === 0));
+
+    // ---- damageShare and the spread term ----
+    fail('damageShare is high for a DPS, near zero for a shield Guardian, and in between for an HP-scaling tank',
+      damageShare(tj, joker) > 0.6 && damageShare(target(charDef('Yukimi Fujikawa')), charDef('Yukimi Fujikawa')) < 0.1 &&
+      (() => { const s = damageShare(target(charDef('Junpei Iori')), charDef('Junpei Iori')); return s > 0.3 && s < 0.75; })(),
+      `joker ${damageShare(tj, joker).toFixed(2)} fujikawa ${damageShare(target(charDef('Yukimi Fujikawa')), charDef('Yukimi Fujikawa')).toFixed(2)}`);
+    fail('Resistance Pierce is modelled (ⓒ) for every character', MODELLED_STATS.includes('Resistance Pierce') && CHARACTERS.every(c => modelledStats(c).includes('Resistance Pierce')));
+    fail('spreadApplies is false for every Elucidator and true for everyone else', CHARACTERS.every(c => spreadApplies(c) === (c.arch !== 'Navigator')));
+    fail('an Elucidator\'s build score carries no Damage spread part', CHARACTERS.filter(c => c.arch === 'Navigator').every(c => {
+      const t = target(c), idl = idealLoadout(c, t, 55); const bs = buildScore(c, idl.cards, 55, charLoadout(c.n), idl, t);
+      return spreadRow(idl.cards, idl.cards, c, t, charLoadout(c.n)).max === 0 && !bs.parts.some(x => x.label === 'Damage spread');
+    }));
+    fail('a DPS\'s spread term is worth SPREAD_VALUE × damageShare and saturates on the ideal',
+      (() => { const idl = idealLoadout(joker, tj, 55); const sr = spreadRow(idl.cards, idl.cards, joker, tj, lj);
+        return near(sr.max, SPREAD_VALUE * damageShare(tj, joker)) && near(sr.ratio, 1) && near(sr.got, sr.max); })());
+    /* The spread term is what sees stat balance: on a board already saturated with Crit
+       Rate, a Crit Multiplier Star earns more spread credit than a Crit Rate Star even though
+       the Crit Rate Star's context-free cardScore is higher. It is a bounded correction, not
+       an override — the card term can still carry the total — so the term itself is pinned. */
+    fail('a card filling a starved damage factor earns more spread credit than one piling onto a saturated one, despite a lower cardScore', (() => {
+      const set = tj.sets[0], ij = idealLoadout(joker, tj, 55);
+      const board = [
+        mk('Sun', set, 'HP', [['Crit Rate', 20], ['ATK%', 5], ['Damage Multiplier', 5], ['DEF', 92]]),
+        mk('Moon', set, 'Damage Multiplier', [['Crit Rate', 20], ['ATK%', 5], ['HP', 280], ['DEF', 92]]),
+        mk('Sky', set, 'ATK%', [['Crit Rate', 20], ['Damage Multiplier', 5], ['HP', 280], ['DEF', 92]])
+      ];
+      const A = mk('Star', set, 'Crit Rate', [['ATK', 92], ['HP', 280], ['DEF', 92], ['Speed', 2]]);
+      const B = mk('Star', set, 'Crit Multiplier', [['ATK', 92], ['HP', 280], ['DEF', 92], ['Speed', 2]]);
+      const sA = buildScore(joker, board.concat([A]), 55, lj, ij, tj).spread.got, sB = buildScore(joker, board.concat([B]), 55, lj, ij, tj).spread.got;
+      return cardScore(A, tj) > cardScore(B, tj) && sB > sA;
+    })());
+    fail('damageFactors exposes ⓐ, ⓑ, ⓓ and their product', (() => { const d = damageFactors(four, joker, tj, lj); return d.atk > 0 && d.dmg >= 1 && d.crit >= 1 && d.def > 0 && d.def < 1 && near(d.value, d.atk * d.dmg * d.crit * d.def, 1e-6); })());
+    /* The fixed mains are flat stat added after the percentage, at their real magnitude for
+       the card's level: a Space card's ATK + DEF for ATK and DEF kits, a Sun card's HP for HP
+       kits. They used to be left out as "cancelling", which a flat term in a ratio does not. */
+    fail('the fixed mains feed ⓐ as flat stat at their level\'s magnitude, for the kits whose scaling stat they are', (() => {
+      const sp = mk('Space', 'Hope', 'ATK + DEF', []), sun = mk('Sun', 'Opulence', 'HP', []), sun0 = mk('Sun', 'Opulence', 'HP', [], { level: 0 });
+      const jun = charDef('Junpei Iori'), tjun = target(jun), ljun = charLoadout(jun.n);
+      const dA = (cards, c, t, l) => damageFactors(cards, c, t, l).atk - damageFactors([], c, t, l).atk;
+      return near(dA([sp], joker, tj, lj), MAIN_MAGNITUDE['ATK + DEF'][1], 1e-6) && near(dA([sp], yu, yt, ylo), MAIN_MAGNITUDE['ATK + DEF'][1], 1e-6) &&
+        near(dA([sun], jun, tjun, ljun), MAIN_MAGNITUDE.HP[1], 1e-6) && near(dA([sun0], jun, tjun, ljun), MAIN_MAGNITUDE.HP[0], 1e-6) &&
+        near(dA([sun], joker, tj, lj), 0, 1e-9) && near(dA([sp], jun, tjun, ljun), 0, 1e-9);
+    })());
+
+    /* ================================================================================
+       7. Stat targets — totals, tiers, the breakpoint term
+       ================================================================================ */
+    const bpBad = [];
+    CHARACTERS.forEach(c => {
+      const t = target(c), lc = charLoadout(c.n), idl = idealLoadout(c, t, 55);
+      breakpointRows(idl.cards, idl.cards, c, t, lc).forEach(row => {
+        if (!near(row.ratio, 1)) bpBad.push(`${c.n} ${row.stat} ideal ratio ${row.ratio.toFixed(3)}`);
+        if (row.effBar > row.bar + 1e-9) bpBad.push(`${c.n} ${row.stat} effBar above bar`);
+      });
+      breakpointRows([], idl.cards, c, t, lc).forEach(row => { if (!(row.ratio >= 0 && row.ratio <= 1)) bpBad.push(`${c.n} ${row.stat} empty ratio ${row.ratio}`); });
+    });
+    fail('every stat target is satisfied by the ideal loadout (bar capped at what a perfect build reaches)', bpBad.length === 0, bpBad.slice(0, 4).join(' | '));
+    fail('a character with no targets has no breakpoint rows', breakpointRows([], idealLoadout(joker, tj).cards, joker, tj, lj).length === 0 && (tj.targets || []).length === 0);
+    /* A target already met with no cards cannot be earned by any loadout, so it is shown but
+       left out of the block: Mitsuru's LV10 ATK sits under her no-card ATK — until a Setup whose
+       tier her base does not clear. Fuuka's Crit Multiplier target (lufel's 64-78%, the crit damage
+       at which Spirit Wave caps) was the other case while her base was taken as 150; it is 0 on
+       Global (the user's screen, 10 Nov 2026), so with no cards she is short of it and cards earn
+       it. Each setup gets its own idealLoadout, since breakpointRows caches the ideal side per
+       idealCards array. */
+    fail('a target met with no cards is shown but not scored (Mitsuru\'s ATK until her tier outgrows her base); Fuuka\'s Crit Multiplier, short with no cards at her 0 base, is scored', (() => {
+      const fu = charDef('Fuuka Yamagishi'), tf = target(fu), lf = charLoadout(fu.n), idf = idealLoadout(fu, tf, 55);
+      const card = mk('Sun', 'Labor', 'HP', [['ATK%', 3.5]]);
+      const bs = buildScoreOf(fu, [card], 55, lf, idf, tf), part = bs.parts.find(x => x.label === 'Stat targets');
+      const cm = bs.targets.find(r => r.stat === 'Crit Multiplier'), atk = bs.targets.find(r => r.stat === 'ATK');
+      const mi = charDef('Mitsuru Kirijo'), tmi = target(mi);
+      const lm0 = Object.assign({}, DEFAULT_LOADOUT), lm5 = Object.assign({}, DEFAULT_LOADOUT, { mindSkill: true });
+      const bm0 = buildScoreOf(mi, [card], 55, lm0, idealLoadout(mi, tmi, 55), tmi), bm5 = buildScoreOf(mi, [card], 55, lm5, idealLoadout(mi, tmi, 55), tmi);
+      return bs.targets.length === 2 && !cm.metBare && cm.bare < cm.bar && !atk.metBare && part && part.max === BREAKPOINT_VALUE &&
+        bm0.targets[0].metBare && !bm0.parts.some(x => x.label === 'Stat targets') &&
+        !bm5.targets[0].metBare && bm5.parts.some(x => x.label === 'Stat targets');
+    })());
+    /* Progress toward a target is measured from the character's no-card total, so base stats
+       earn none of the block and the cards earn all of it. Measured from zero, the median target
+       was 64% met before a card was worn and a naked character took about 49 of its 80 points. */
+    fail('an unmet target reads 0 with no cards and fills linearly from the no-card total to the bar', (() => {
+      const bad = [];
+      CHARACTERS.forEach(c => {
+        const t = target(c); if (!(t.targets || []).length) return;
+        const lc = charLoadout(c.n), idl = idealLoadout(c, t, 55);
+        breakpointRows([], idl.cards, c, t, lc).forEach(r => { if (r.exact && !r.metBare && r.ratio !== 0) bad.push(`${c.n} ${r.stat} ${r.ratio}`); });
+      });
+      const y = charDef('Yaoling Li'), ty = target(y), ly = charLoadout(y.n), idy = idealLoadout(y, ty, 55);
+      const r0 = breakpointRows([], idy.cards, y, ty, ly)[0], need = r0.effBar - r0.bare;
+      const half = mk('Sun', 'Control', 'HP', [['Speed', need / 2]]);
+      const r1 = breakpointRows([half], idy.cards, y, ty, ly)[0];
+      const html = targetHtml(buildScoreOf(y, [half], 55, ly, idy, ty));
+      return bad.length === 0 && r0.stat === 'Speed' && need > 0 && near(r1.ratio, 0.5, 1e-9) &&
+        /close this share of the gap from/.test(html) && /no-card total and the target/.test(html);
+    })());
+    fail('the breakpoint block is worth BREAKPOINT_VALUE however many targets it holds', (() => {
+      const two = CHARACTERS.find(c => c.ov && c.ov.targets && c.ov.targets.length >= 2);
+      const t = target(two), idl = idealLoadout(two, t, 55); const bs = buildScore(two, idl.cards, 55, charLoadout(two.n), idl, t);
+      const part = bs.parts.find(x => x.label === 'Stat targets'); return part && part.max === BREAKPOINT_VALUE;
+    })());
+    // tiers
+    const aran = charDef('Aran Hirano'), tiersA = aran.ov.targets[0].tiers, tiersK = kumi.ov.targets[0].tiers;
+    fail('pickTier: Awareness selects the family, Mindscape the +5, a single-family character always lands there (Aran)',
+      pickTier(tiersA, lo(0), 3).key === 'LV10' && pickTier(tiersA, lo(3), 3).key === 'LV12' && pickTier(tiersA, Object.assign(lo(3), { mindSkill: true }), 3).key === 'LV12+5' &&
+      pickTier(tiersA, lo(6), 3).key === 'LV12');
+    fail('pickTier: the switch is Awareness 5 for TARGET_TIER_AWARENESS_5 characters (Kumi), 3 otherwise',
+      TARGET_TIER_AWARENESS_5.has(kumi.n) && pickTier(tiersK, lo(3), 5).key === 'LV10' && pickTier(tiersK, lo(5), 5).key === 'LV13' && pickTier(tiersK, lo(3), 3).key === 'LV13');
+    fail('a target\'s in-battle bar moves with weapon, refinement and Mindscape (Kumi\'s 180 Speed)', (() => {
+      const lo4 = Object.assign({}, DEFAULT_LOADOUT, { weapon: '4', refine: 1 });
+      const lo5 = Object.assign({}, DEFAULT_LOADOUT, { weapon: '5', refine: 7, mindSkill: true, mind1: 5, mind2: 5 });
+      const a = totalStat(kumi, 'Speed', 'Speed', [], lo4).total, bb = totalStat(kumi, 'Speed', 'Speed', [], lo5).total;
+      return bb > a + 20 && 180.2 - bb < 25 && 180.2 - a > 40;
+    })());
+    fail('totalStat is null for a character with no stat block', totalStat({ n: 'Nobody' }, 'ATK', 'ATK%', [], DEFAULT_LOADOUT) === null);
+    /* Ailment Accuracy reads 0% on the in-game panel with no cards (the user, 25 Sep 2026);
+       it was modelled at 100%. At 0, Awakening 7's `ailment_accuracy` is unambiguous and read. */
+    fail('Ailment Accuracy starts at 0% and Awakening 7\'s ailment_accuracy is read (Ann none, Runa 34.9)',
+      charBaseStat(ann, 'Ailment Accuracy', charLoadout(ann.n)).flat === 0 && !(CHAR_STATS[ann.n].aw || {}).ailment_accuracy &&
+      near(charBaseStat(runa, 'Ailment Accuracy', lr).flat, CHAR_STATS[runa.n].aw.ailment_accuracy) && near(CHAR_STATS[runa.n].aw.ailment_accuracy, 34.9));
+    fail('Haru\'s 150 and Shoki\'s 100 Ailment Accuracy are not met with no cards (nor their conversions capped), and a perfect build reaches both', (() => {
+      return ['Haru Okumura', 'Shoki Ikenami'].every(n => {
+        const c = charDef(n), t = target(c), l = charLoadout(n), idl = idealLoadout(c, t, 55);
+        const row = rs => rs.find(x => x.stat === 'Ailment Accuracy');
+        const bare = row(breakpointRows([], idl.cards, c, t, l)), full = row(breakpointRows(idl.cards, idl.cards, c, t, l));
+        // any AA conversion at its cap — Shoki's ATK% caps at 100 AA, Haru's crit stacks at 150
+        const anyCapped = cards => CONVERSIONS[n].some(cv => cv.from === 'Ailment Accuracy' && cv.cap != null &&
+          conversionBonus(c, cards, l)[cv.to] >= cv.cap - 1e-9);
+        return bare.exact && bare.ratio < 0.7 && full.reach >= full.bar && !anyCapped([]) && anyCapped(idl.cards);
+      });
+    })());
+    fail('Prudence\'s 2-piece costs 3 Speed, in the in-battle total and in what the 2-piece is worth', (() => {
+      const pair = [mk('Moon', 'Prudence', 'ATK%', []), mk('Star', 'Prudence', 'Crit Rate', [])];
+      const plain = [mk('Moon', 'Power', 'ATK%', []), mk('Star', 'Sorrow', 'Crit Rate', [])];
+      const lk = charLoadout(kumi.n), tw = { sets: [], space: '', targets: [], main: {}, w: { 'ATK%': 6, 'Speed': 10 } };
+      return near(totalStat(kumi, 'Speed', 'Speed', pair, lk).total, totalStat(kumi, 'Speed', 'Speed', plain, lk).total - 3) &&
+        near(bonus2Value('Prudence', kumi, tw), 6 * 18 / maxRoll('ATK%', 'Sun') - 10 * 3 / maxRoll('Speed', 'Sun')) &&
+        near(statSupply(pair, kumi, 'ATK%'), 18);
+    })());
+    fail('a Space card\'s ATK + DEF main counts toward both ATK and DEF totals at its real magnitude', (() => {
+      const sp = mk('Space', 'Hope', 'ATK + DEF', []);
+      return near(cardStatContribution([sp], joker, 'ATK', 'ATK%').flat, MAIN_MAGNITUDE['ATK + DEF'][1]) && near(cardStatContribution([sp], joker, 'DEF', 'DEF%').flat, MAIN_MAGNITUDE['ATK + DEF'][1]);
+    })());
+    fail('an unscanned non-5★ main is unknown (mainsMissing), a scanned mainValue wins, a 5★ falls on the measured curve', (() => {
+      const four4 = mk('Space', 'Hope', 'ATK + DEF', [], { rarity: 4, level: 20 });
+      const scanned = Object.assign({}, four4, { mainValue: 300 });
+      const five = mk('Moon', 'Power', 'ATK%', [], { level: 14 });
+      return cardStatContribution([four4], joker, 'ATK', 'ATK%').mainsMissing === 1 && near(cardStatContribution([scanned], joker, 'ATK', 'ATK%').flat, 300) &&
+        near(mainMagnitudeFor(five), 4.6 + 14 * (31.4 - 4.6) / 25) && mainMagnitudeFor(four4) === null;
+    })());
+    fail('a 5★ mainValue off its level\'s curve (scanned at Lv0, levelled up after) reads the level, as cardScore does; one display unit of rounding still counts', (() => {
+      const stale = mk('Sky', 'Strife', 'ATK%', [], { mainValue: 4.6 });            // Lv25, Lv0 value
+      const hp = mk('Sun', 'Strife', 'HP', [], { level: 20, mainValue: 897 });       // real panel, line gives 896.4
+      return near(mainMagnitudeFor(stale), 31.4) && !mainValueFitsLevel(stale) &&
+        mainMagnitudeFor(hp) === 897 && mainValueFitsLevel(hp) &&
+        near(cardStatContribution([stale], joker, 'ATK', 'ATK%').pct, cardStatContribution([mk('Sky', 'Strife', 'ATK%', [])], joker, 'ATK', 'ATK%').pct);
+    })());
+    fail('a target whose mains are unknown falls back to the relative measure rather than an undercount', (() => {
+      const bad4 = mk('Sky', 'Power', 'Speed', [['Speed', 4]], { rarity: 4, level: 20 });
+      const row = breakpointRows([bad4], idealLoadout(kumi, tk).cards, kumi, tk, charLoadout(kumi.n))[0];
+      return row.mainsMissing === 1 && row.exact === false && near(row.ratio, row.relative);
+    })());
+    fail('totalStat scales ATK/HP/DEF by the percent bonus and adds flat after', (() => {
+      const base = charBaseStat(joker, 'ATK', lj); const tot = totalStat(joker, 'ATK', 'ATK%', [mk('Sun', 'Power', 'HP', [['ATK%', 10], ['ATK', 100]])], lj);
+      return near(tot.total, base.flat * (1 + (base.pct + 10) / 100) + 100);
+    })());
+    // the character's own side of the total
+    fail('the Awareness curve adds 15% HP/ATK/DEF at level 6 and nothing to Speed (Morgana, no kit lines)',
+      !KIT_STAT_BUFFS['Morgana'] && ['ATK', 'HP', 'DEF'].every(s => near(charBaseStat(morg, s, lo(6)).pct - charBaseStat(morg, s, lo(0)).pct, 15)) &&
+      near(charBaseStat(morg, 'Speed', lo(6)).flat, charBaseStat(morg, 'Speed', lo(0)).flat));
+    fail('a kit line gated on a weapon counts only while that weapon is held (Seiji\'s Venus Sunrise +12% crit damage)', (() => {
+      const seiji = charDef('Seiji Shiratori');
+      const w5 = charBaseStat(seiji, 'Crit Multiplier', Object.assign({}, DEFAULT_LOADOUT, { weapon: '5' })), w4 = charBaseStat(seiji, 'Crit Multiplier', Object.assign({}, DEFAULT_LOADOUT, { weapon: '4' }));
+      return near(w5.pct - w4.pct, 12) && kitStatBuffs(seiji, Object.assign({}, DEFAULT_LOADOUT, { weapon: '4' })).every(x => x.weapon !== '5');
+    })());
+    fail('a kit line gated on Awareness counts only at or above it (Joker\'s Meditate at Awareness 2)', (() => {
+      const has = aw => kitStatBuffs(joker, lo(aw)).some(x => /Meditate/.test(x.why));
+      return !has(1) && has(2) && near(charBaseStat(joker, 'ATK', lo(2)).pct - charBaseStat(joker, 'ATK', lo(1)).pct, 50 + AWARENESS_STAT_PCT[2] - AWARENESS_STAT_PCT[1]);
+    })());
+    fail('per-stack kit lines multiply by the stacks held (Seiji\'s Right to Strike at 3)',
+      kitStatBuffs(charDef('Seiji Shiratori'), lo(0)).some(x => x.s === 'ATK%' && x.stacks === 3 && x.v === 21));
+    fail('kitTierIndex follows the target-tier rule (YUI: LV10 / LV12 / +5)',
+      kitTierIndex(yui, lo(0)) === 0 && kitTierIndex(yui, lo(3)) === 2 && kitTierIndex(yui, Object.assign(lo(3), { mindSkill: true })) === 3 &&
+      kitStatBuffs(yui, lo(0)).find(x => x.tiers).v === 39 && kitStatBuffs(yui, lo(3)).find(x => x.tiers).v === 41.4);
+    fail('each Mindscape skill path moves its own skills a fifth of the way to lufel\'s +5 per level (Fuuka\'s Luminous Force: 12.0 / 12.48 / 12.72 / 13.2 on path 1, Skills 1 and 2; path 2 leaves it); an old save\'s "unlocked" reads as 5 and 5; a stat target goes by the mean of the two', (() => {
+      const fu = charDef('Fuuka Yamagishi'), v = [12, 13.2, 13.44, 14.64], at = (a, b) => tierVal(v, fu, Object.assign({}, DEFAULT_LOADOUT, { ms1: a, ms2: b }), '1');
+      const tiers = { LV10: 3502, 'LV10+5': 3852 }, t22 = pickTier(tiers, Object.assign({}, DEFAULT_LOADOUT, { ms1: 2, ms2: 2 }), 3);
+      return JSON.stringify(MIND_SKILL_PATHS[fu.n]) === '[["1","2"],["3"]]' && near(at(0, 5), 12) && near(at(2, 2), 12.48) && near(at(3, 0), 12.72) && near(at(5, 0), 13.2) &&
+        near(tierVal(v, fu, Object.assign({}, DEFAULT_LOADOUT, { ms1: 0, ms2: 5 }), '3'), 13.2) && near(tierVal(v, fu, Object.assign({}, DEFAULT_LOADOUT, { mindSkill: true }), '1'), 13.2) &&
+        near(tierVal(v, fu, Object.assign({}, DEFAULT_LOADOUT, { ms1: 5, ms2: 0 }), 'passive'), 12.6) &&
+        t22.key === 'LV10+2' && near(t22.value, 3502 + 350 * 0.4) && pickTier(tiers, Object.assign({}, DEFAULT_LOADOUT, { ms1: 5, ms2: 5 }), 3).key === 'LV10+5';
+    })());
+    fail('each skill reads its higher column from the Awareness node that raises it (Chizuko: Skills 1 and 2 at 3, Skill 3 and Highlight at 5; a line of no known skill keeps the one-level rule)', (() => {
+      const ch = charDef('Chizuko Nagao'), v = [170.8, 188.3, 177.8, 195.3], at = (aw, s) => tierVal(v, ch, Object.assign({}, DEFAULT_LOADOUT, { awareness: aw }), s);
+      return at(2, '1') === 170.8 && at(3, '1') === 177.8 && at(3, '2') === 177.8 && at(3, '3') === 170.8 && at(4, 'HL') === 170.8 &&
+        at(5, '3') === 177.8 && at(5, 'HL') === 177.8 && at(3, 'passive') === 177.8 && at(2, 'passive') === 170.8 &&
+        kitTierIndex(ch, Object.assign({}, DEFAULT_LOADOUT, { awareness: 4 }), '3') === 0 && kitTierIndex(ch, Object.assign({}, DEFAULT_LOADOUT, { awareness: 4 }), '1') === 2;
+    })());
+    fail('SKILL_LEVEL_AW: every character\'s skill-level nodes are at Awareness 3 and 5, each names a level whose Awareness text raises a skill level, and every thief with a Highlight has all four of Skills 1-3 and HL', (() => {
+      const bad = [];
+      for (const c of CHARACTERS) {
+        const m = SKILL_LEVEL_AW[c.n];
+        if (!m) { bad.push(c.n + ': none'); continue; }
+        for (const [k, lv] of Object.entries(m)) {
+          const node = ((CHAR_STATS[c.n] || {}).awareness || [])[lv];
+          if (![3, 5].includes(lv) || !node || !/skill levels? of/i.test(node.d)) bad.push(`${c.n} ${k}@${lv}`);
+        }
+        if (c.arch !== 'Navigator' && SKILL_DMG[c.n] && SKILL_DMG[c.n].hl && !['1', '2', '3', 'HL'].every(k => m[k] != null)) bad.push(c.n + ': missing a skill');
+      }
+      if (bad.length) console.log('    ' + bad.join('; '));
+      return !bad.length;
+    })());
+    fail('a weapon ladder is read at the refinement step held', (() => {
+      const r1 = charBaseStat(morg, 'Crit Rate', Object.assign({}, DEFAULT_LOADOUT, { refine: 1 })).pct, r7 = charBaseStat(morg, 'Crit Rate', Object.assign({}, DEFAULT_LOADOUT, { refine: 7 })).pct;
+      return near(r1, 18) && near(r7, 34.2);
+    })());
+    fail('Mindscape stat paths scale linearly to lufel\'s maxed value', (() => {
+      const m = CHAR_STATS[morg.n].mind[1]; // ATK% 20 at level 5
+      const at = l => charBaseStat(morg, 'ATK', Object.assign({}, DEFAULT_LOADOUT, { mind2: l })).pct;
+      return m.s === 'ATK%' && near(at(5) - at(0), m.v) && near(at(2) - at(0), m.v * 2 / 5);
+    })());
+
+    /* The user's own Miku, card for card (26 Sep 2026): Awareness 0, 5★ weapon at R0, both
+       Mindscape paths at 5. Her character screen read ATK 4627, HP 9358, DEF 1790, crit rate 38,
+       crit multiplier 58.5; in battle, with the Thieves Den, ATK 4746, HP 9831, crit 39, crit
+       multiplier 60.5. Pins her Awakening 7 (+19% on Global), her Labor 4-piece's +8% on her own
+       stats, the weapon's party crit damage staying out of them, and the Den being flat. */
+    {
+      const miku = charDef('Hatsune Miku');
+      const mc = (slot, set, main, mainValue, subs) => ({ slot, set, rarity: 5, level: 25, main, mainValue, subs: subs.map(([stat, value]) => ({ stat, value })) });
+      const cards = [
+        mc('Sun', 'Labor', 'HP', 1080, [['DEF%', 5.2], ['Crit Rate', 3.3], ['Crit Multiplier', 13.9], ['Damage Multiplier', 5.3]]),
+        mc('Moon', 'Labor', 'Damage Multiplier', 25.1, [['DEF%', 8.9], ['ATK%', 7.7], ['Crit Rate', 1.7], ['Crit Multiplier', 11.2]]),
+        mc('Star', 'Labor', 'Crit Rate', 18.8, [['Ailment Accuracy', 7.1], ['Crit Multiplier', 9.2], ['ATK%', 3.2], ['Damage Multiplier', 7.8]]),
+        mc('Sky', 'Labor', 'ATK%', 31.4, [['Damage Multiplier', 5], ['Crit Rate', 2], ['Resistance Pierce', 4.6], ['Crit Multiplier', 10.9]]),
+        mc('Space', 'Hope', 'ATK + DEF', 359, [['DEF%', 10.9], ['SP Recovery', 7.5], ['HP%', 12.8], ['Crit Multiplier', 13.1]])
+      ];
+      const lo = Object.assign({}, DEFAULT_LOADOUT, { weapon: '5', refine: 1, awareness: 0, mind1: 5, mind2: 5, mindSkill: true });
+      const tot = (st, sub) => totalStat(miku, st, sub, cards, lo).total;
+      const screen = { ATK: tot('ATK', 'ATK%'), HP: tot('HP', 'HP%'), DEF: tot('DEF', 'DEF%'), CR: tot('Crit Rate', null), CM: tot('Crit Multiplier', null) };
+      const within = (v, want, rel) => Math.abs(v - want) <= want * rel;
+      fail('the planner reproduces Miku\'s character screen card for card (ATK/HP/DEF within 1.2%, crit exact to the display)',
+        within(screen.ATK, 4627, 0.012) && within(screen.HP, 9358, 0.012) && within(screen.DEF, 1790, 0.012) &&
+        Math.abs(screen.CR - 38) <= 0.5 && Math.abs(screen.CM - 58.5) <= 0.5, JSON.stringify(screen));
+      const noLabor = Object.assign({}, miku, { arch: 'ST DPS' });
+      fail('a Labor 4-piece adds its +8% HP/ATK/DEF only when an Elucidator wears it',
+        near(set4StatLines(cards, miku)['ATK%'], 8) && Object.keys(set4StatLines(cards, noLabor)).length === 0 &&
+        Object.keys(set4StatLines(cards.slice(1), miku)).length === 0);
+      const was = state.den;
+      state.den = { ATK: 119, HP: 473, 'Crit Rate': 1, 'Crit Multiplier': 2 };
+      const row = breakpointRows(cards, idealLoadout(miku, target(miku), 55).cards, miku, target(miku), lo).find(r => r.stat === 'ATK');
+      const summary = statsSummaryHtml(miku, cards, lo, false, null);
+      state.den = was;
+      fail('the Thieves Den is added to the in-battle totals a stat target reads (Miku in battle: ATK 4746)',
+        row && within(row.total, 4746, 0.012) && near(row.den, 119) && /Thieves Den is counted/.test(summary),
+        JSON.stringify(row && { total: row.total, den: row.den }));
+      fail('refinement reads as the game counts it: R0 for a weapon with no extra copies, R6 at the top',
+        refineLabel(1) === 'R0' && refineLabel(7) === 'R6' && refineLabel(undefined) === 'R0');
+    }
+
+    /* The user's Kotone Shiomi (28 Sep 2026): the damage model's ⓐ read 5316 beside her ATK tile's
+       5603, exactly Strife's +15% of her 1910 base, because a 4-piece's stat line was counted in the
+       in-battle totals and not in ⓐⓑⓓ. Both must see the same ATK, on her cards and on the perfect
+       build alike, and a broken 4-piece must lose the line in both. */
+    {
+      const kot = charDef('Kotone Shiomi'), kt = target(kot);
+      const kc = (slot, set, main, subs) => ({ slot, set, rarity: 5, level: 25, main, subs: subs.map(([stat, value]) => ({ stat, value })) });
+      const cards = [
+        kc('Sun', 'Strife', 'HP', [['ATK%', 6.3], ['Crit Multiplier', 6.7], ['Resistance Pierce', 3.5], ['HP%', 6.1]]),
+        kc('Moon', 'Strife', 'ATK%', [['Damage Multiplier', 3.7], ['HP', 321], ['Crit Rate', 1.7], ['Resistance Pierce', 2.6]]),
+        kc('Star', 'Strife', 'ATK%', [['HP%', 6.1], ['Crit Rate', 3.8], ['SP Recovery', 15.9], ['Damage Multiplier', 3.9]]),
+        kc('Sky', 'Strife', 'ATK%', [['DEF%', 8.3], ['Crit Rate', 4.7], ['HP%', 5.4], ['SP Recovery', 15]]),
+        kc('Space', 'Nativity', 'ATK + DEF', [['Resistance Pierce', 4.3], ['Crit Rate', 5.8], ['HP', 245], ['Speed', 4.2]])
+      ];
+      const lo = Object.assign({}, DEFAULT_LOADOUT);
+      const same = cs => { const a = damageFactors(cs, kot, kt, lo).atk, b = totalStat(kot, 'ATK', 'ATK%', cs, lo).total; return { a, b, ok: Math.abs(a - b) < 0.5 }; };
+      const worn = same(cards), ideal = same(idealLoadout(kot, kt, 55).cards);
+      const broken = same(cards.map(c => c.slot === 'Moon' ? Object.assign({}, c, { set: 'Ruin' }) : c));
+      fail('ⓐ counts a 4-piece\'s stat line exactly as the ATK tile does (Kotone\'s Strife: 5603 on both, perfect build too, and neither once the 4-piece breaks)',
+        worn.ok && ideal.ok && broken.ok && Math.abs(worn.a - 5603) < 1 && broken.a < worn.a - 280,
+        JSON.stringify({ worn, ideal, broken }));
+    }
+
+    /* ================================================================================
+       8. Triage, Vault, Upgrades, Headroom on the synthetic inventory
+       ================================================================================ */
+    const own = ['Ren Amamiya', 'Ryuji Sakamoto', 'Morgana', 'Kira Kitazato', 'Yusuke Kitagawa', 'Makoto Yuki', 'Hatsune Miku'];
+    own.forEach(n => { state.chars[n].owned = true; state.chars[n].benched = false; });
+    /* Dress the owned characters from a deliberately narrow slice of the pool, so better
+       cards of the same set are still available for Upgrades and Headroom to find. */
+    own.forEach((n, k) => {
+      const ch = charDef(n);
+      const pool = state.cards.filter((c, i) => !c.equipped && c.rarity >= 4 && i < 260);
+      const res = bestPlan(ch, pool, { policy: 'pref' });
+      if (!res.best) return;
+      heavens.forEach(sl => { const pk = res.best.picks[sl]; if (pk) pk.c.equipped = n; });
+      if (res.space && k % 2 === 0) res.space.c.equipped = n;
+    });
+    fail('every owned character got dressed for the tab checks', own.every(n => state.cards.some(c => c.equipped === n)));
+    fail('ownedChars honours the benched flag', (() => { state.chars['Morgana'].benched = true; const ok = !ownedChars().some(c => c.n === 'Morgana'); state.chars['Morgana'].benched = false; return ok && ownedChars().length === own.length; })());
+    fail('the Roster flags an owned character still on the default Setup, and stops once one is saved', (() => {
+      const n = own[0], was = state.chars[n].loadout;
+      const card = () => document.querySelector(`#rsGrid .cc[data-ch="${n}"]`);
+      state.chars[n].loadout = null; renderRoster();
+      const flagged = !!card() && /default setup/.test(card().textContent) && /on the default setup/.test($('#rsCount').textContent);
+      state.chars[n].loadout = Object.assign({}, DEFAULT_LOADOUT); renderRoster();
+      const cleared = !!card() && !/default setup/.test(card().textContent);
+      state.chars[n].loadout = was; renderRoster();
+      return flagged && cleared;
+    })());
+
+    // ---- Triage ----
+    $('#trScope').value = 'owned'; $('#trRar').value = '2';
+    runTriage();
+    const rated = trCache.rated;
+    fail('Triage rates exactly the unequipped cards at or above the rarity floor', rated.length === state.cards.filter(c => c.rarity >= 2 && !c.equipped).length);
+    fail('Triage: every slot has a 100% card (graded within the slot, never across)', (() => {
+      const slots = new Set(rated.map(x => x.card.slot));
+      return [...slots].every(sl => rated.some(x => x.card.slot === sl && x.pct === 1)) && rated.every(x => x.pct <= 1 && isFinite(x.best));
+    })(), JSON.stringify(Object.fromEntries([...new Set(rated.map(x => x.card.slot))].map(sl => [sl, Math.max(...rated.filter(x => x.card.slot === sl).map(x => x.best))]))));
+    /* A marginal can dip below zero: a 4★ card with no scanned main magnitude flips a stat
+       target from its exact in-battle ratio to the relative fallback (unknown, never zero —
+       see breakpointRows), and that fallback can sit below the exact figure it replaced. */
+    fail('Triage: negative marginals are rare and small (the unknown-main fallback, not a scoring fault)',
+      rated.filter(x => x.best < 0).length < rated.length * 0.05 && rated.every(x => x.best > -20), `${rated.filter(x => x.best < 0).length} negative, min ${Math.min(...rated.map(x => x.best))}`);
+    fail('Triage: a named best fit always runs the card\'s set and is never off an element-locked set\'s element',
+      rated.filter(x => x.who).every(x => {
+        const t = target(charDef(x.who)), def = SETS[x.card.set];
+        const runs = x.card.slot === 'Space' ? t.space === x.card.set : (t.sets || []).includes(x.card.set);
+        return runs && (!def || !def.elem || def.elem === charDef(x.who).e);
+      }));
+    fail('Triage: a card nobody in scope runs reads "no one in scope" and is flagged when the element is on the roster',
+      rated.filter(x => !x.who).every(x => x.noSetMatch === (!(SETS[x.card.set] && SETS[x.card.set].elem) || ownedChars().some(c => c.e === SETS[x.card.set].elem))) &&
+      rated.filter(x => !x.who && x.noSetMatch).every(x => x.best === 0));
+    fail('Triage: an element-locked set with nobody of that element owned still scores against the whole roster', (() => {
+      const locked = rated.filter(x => !x.who && !x.noSetMatch);
+      return locked.length === 0 || locked.some(x => x.best > 0);
+    })());
+    fail('Triage renders a verdict per row', $('#trTable').querySelectorAll('tbody tr').length > 0 && $('#trTable').innerHTML.indexOf('NaN') < 0);
+    /* A card the Upgrades tab tells someone to equip is never feed: Triage prices one card
+       at a time, and a set switch pays off only with the fourth card. */
+    {
+      const upR = +$('#upRar').value, same = $('#upSameSet').checked, free = $('#upIgnoreEquipped').checked;
+      const byId = new Map(rated.map(x => [x.card.id, x]));
+      const want = new Map();
+      ownedChars().forEach(c => upgradesFor(c, upR, same, free).forEach(row => {
+        const card = row.rec, prev = card && want.get(card.id);
+        if (card && !card.equipped && card.rarity >= 2 && (!prev || upPts(row) > prev.pts)) want.set(card.id, { n: c.n, pts: upPts(row) });
+      }));
+      const bad = [...want].filter(([id, w]) => !byId.get(id) || byId.get(id).rec !== w.n);
+      const low = [...want.keys()].filter(id => byId.get(id) && byId.get(id).pct < 0.35).length;
+      fail('Triage keeps every card the Upgrades tab recommends, for the character it recommends it to',
+        want.size > 0 && bad.length === 0 && rated.filter(x => x.rec).length === want.size,
+        `${want.size} recommended, ${bad.length} not kept, ${low} would have read feed on their own swap score`);
+    }
+    fail('Triage\'s default "worst first" order is the verdict\'s: feed, then Vault-held feed, lock, hold, keep', (() => {
+      const was = trSort.key; trSort.key = null; $('#trShow').value = 'worst';
+      const rank = x => x.rec ? 5 : { keep: 4, hold: 3, lock: 2, feed: x.vault === 'watch' ? 1 : 0 }[trVerdict(x)];
+      const order = sortTrRows(rated).map(rank);
+      trSort.key = was;
+      return order.every((v, i) => i === 0 || v >= order[i - 1]);
+    })());
+    /* Triage is relative to the owned roster and the Vault is not; a fed card does not come
+       back, so a would-be feed the Vault rates worth a lock is marked lock. */
+    fail('Triage marks lock, never feed, a card the Vault rates worth a lock (at the Vault tab\'s own floor)', (() => {
+      const va = new Map(vaultRate(state.cards.filter(c => c.rarity >= +$('#vaRar').value)).rated.map(v => [v.card.id, v]));
+      const vOf = x => (va.get(x.card.id) || {}).verdict || '';
+      const low = rated.filter(x => !x.rec && x.pct < 0.35);
+      return rated.every(x => x.vault === vOf(x)) && low.every(x => trVerdict(x) === (vOf(x) === 'lock' ? 'lock' : 'feed')) &&
+        rated.filter(x => trVerdict(x) === 'lock').every(x => vOf(x) === 'lock' && x.pct < 0.35);
+    })(), `${rated.filter(x => trVerdict(x) === 'lock').length} marked lock of ${rated.filter(x => !x.rec && x.pct < 0.35).length} below 35%`);
+    fail('Triage marks the main at its level cap: a level-0 card of a wanted main can grade as a keeper', (() => {
+      const set = tj.sets[0];
+      const c0 = mk('Star', set, mainTop(tj, 'Star'), [['Crit Multiplier', 4.1], ['ATK%', 3.5], ['Damage Multiplier', 2.8]], { level: 0, id: 'lv0probe', equipped: null });
+      state.cards.push(c0); runTriage();
+      const row = trCache.rated.find(x => x.card.id === 'lv0probe');
+      state.cards.pop(); runTriage();
+      return row && row.pct > 0.5 && row.who === 'Ren Amamiya';
+    })());
+    /* Triage subtracts buildScore RAW values: the rounded `score` left the real inventory on
+       about thirty distinct Score values and moved 6% of its verdicts across the 35% / 70%
+       lines. And an empty board is not worth 0 — see buildScoreOf. */
+    fail('Triage marginals are unrounded build-score deltas', rated.some(x => Math.abs(x.best - Math.round(x.best)) > 1e-6),
+      `${new Set(rated.map(x => x.best.toFixed(6))).size} distinct values`);
+    fail('an empty board is worth what its base stats earn (buildScoreOf), while buildScore still reads it as nothing', (() => {
+      const lk = charLoadout(kumi.n), ik = idealLoadout(kumi, tk, 55), e = buildScoreOf(kumi, [], 55, lk, ik, tk);
+      return buildScore(kumi, [], 55, lk, ik, tk) === null && e && e.raw > 0 && e.filled === 0 &&
+        near(e.raw, 100 * e.parts.reduce((s, x) => s + x.got, 0) / e.parts.reduce((s, x) => s + x.max, 0), 1e-9);
+    })());
+    fail('Triage prices a card for a bare character against their bare board, not against zero', (() => {
+      const was = Object.assign({}, state.chars[kumi.n]);
+      state.chars[kumi.n].owned = true; state.chars[kumi.n].benched = false;
+      runTriage();
+      const lk = charLoadout(kumi.n), ik = idealLoadout(kumi, tk, 55), empty = buildScoreOf(kumi, [], 55, lk, ik, tk).raw;
+      const hers = trCache.rated.filter(x => x.who === kumi.n);
+      const ok = hers.length > 0 && hers.every(x => near(x.best, buildScoreOf(kumi, [atMaxLevel(x.card)], 55, lk, ik, tk).raw - empty, 1e-9));
+      state.chars[kumi.n].owned = was.owned; state.chars[kumi.n].benched = was.benched; runTriage();
+      return ok;
+    })());
+
+    // ---- Vault ----
+    $('#vaRar').value = '2';
+    runVault();
+    const va = vaCache.rated;
+    fail('Vault: every slot present has a 100% card on both yardsticks', (() => {
+      const slots = new Set(va.map(x => x.card.slot));
+      return [...slots].every(sl => va.some(x => x.card.slot === sl && x.genPct === 1) && va.some(x => x.card.slot === sl && x.rolePct === 1));
+    })());
+    fail('Vault: verdicts follow the percentile thresholds', va.every(x => x.verdict === (x.rank >= VAULT_LOCK ? 'lock' : x.rank >= VAULT_WATCH ? 'watch' : '') && near(x.rank, Math.max(x.genPct, x.rolePct))));
+    fail('Vault: a lock list is a small share of the inventory (top 2% per slot per role)', va.filter(x => x.verdict === 'lock').length < va.length * 0.2 && va.some(x => x.verdict === 'lock'));
+    fail('Vault verdicts do not depend on who is owned', (() => {
+      const before = va.map(x => x.card.id + ':' + x.verdict + ':' + x.role).join(',');
+      const saved = own.map(n => state.chars[n].owned); own.forEach(n => state.chars[n].owned = false);
+      runVault(); const after = vaCache.rated.map(x => x.card.id + ':' + x.verdict + ':' + x.role).join(',');
+      own.forEach((n, i) => state.chars[n].owned = saved[i]); runVault();
+      return before === after;
+    })());
+    fail('VAULT_TARGET weights support stats at zero and archTarget mirrors each archetype',
+      ['Speed', 'SP Recovery', 'Ailment Accuracy', 'HP%', 'DEF%'].every(s => VAULT_TARGET.w[s] === 0) && Object.keys(ARCHETYPES).every(a => archTarget(a).w === ARCHETYPES[a].w && archTarget(a) === archTarget(a)));
+
+    // ---- Upgrades ----
+    const upBad = [];
+    let anyRows = false;
+    own.forEach(n => {
+      const ch = charDef(n), t = target(ch);
+      [[false, false], [true, false], [false, true], [true, true]].forEach(([same, ign]) => {
+        const rows = upgradesFor(ch, 4, same, ign);
+        if (rows.length) anyRows = true;
+        const worn = heavens.map(sl => state.cards.find(c => c.equipped === n && c.slot === sl));
+        const active = loadoutSetBonus(worn.filter(Boolean), ch, t, 55).active4;
+        rows.forEach(row => {
+          if (row.rec.slot !== row.slot) upBad.push(`${n}: ${row.slot} row proposes a ${row.rec.slot}`);
+          if (!isFinite(row.delta) || (row.group != null && !isFinite(row.group))) upBad.push(`${n}: non-finite gain`);
+          if (row.slot !== 'Space' && !(t.sets || []).includes(row.rec.set)) upBad.push(`${n}: proposes ${row.rec.set}, not one of ${J(t.sets)}`);
+          if (row.slot !== 'Space' && same && active && row.rec.set !== active) upBad.push(`${n}: same-set switch into ${row.rec.set}`);
+          if (ign && row.rec.equipped && row.rec.equipped !== n) upBad.push(`${n}: ignoreEquipped proposed a card on ${row.rec.equipped}`);
+          if (row.rec.locked && row.rec.equipped !== n) upBad.push(`${n}: proposed a locked card`);
+        });
+        const grouped = rows.filter(x => x.group != null);
+        if (grouped.length && (new Set(grouped.map(x => x.group)).size !== 1 || grouped.length < 2)) upBad.push(`${n}: grouped rows disagree on the group total`);
+        if (grouped.length && !(grouped[0].groupPts >= UPGRADE_MIN_GAIN)) upBad.push(`${n}: group below the gate`);
+        // the gate reads the receiver's own gain; a trade's net (upPts) may fall below it and is shown, not hidden
+        rows.forEach(row => { if (!(row.pts >= UPGRADE_MIN_GAIN - 1e-9) && row.group == null) upBad.push(`${n}: ${row.slot} row below the gate`); });
+        for (let i = 1; i < rows.length; i++) if (upGain(rows[i]) > upGain(rows[i - 1]) + 1e-9) upBad.push(`${n}: rows not sorted by upGain`);
+      });
+    });
+    fail('Upgrades proposes only whole preferred-set 4-pieces, honours the same-set and ignore-equipped flags, and groups rows consistently', upBad.length === 0, upBad.slice(0, 4).join(' | '));
+    fail('Upgrades found at least one better card on the narrowly-dressed roster', anyRows);
+    fail('upGain reads the group total when there is one, else the row\'s own delta', upGain({ delta: 3, group: 28 }) === 28 && upGain({ delta: -2 }) === -2 && gainStr(-2.5) === '−2.5' && gainStr(3) === '+3.0');
+    /* A raw gain is in the character's own units, so across characters it measures the size of
+       their yardstick as much as the upgrade. Each row carries its gain in build points too —
+       exactly the build score it adds — and that is what orders characters and fills the column. */
+    fail('an Upgrades row\'s build points are exactly the build score its swap adds', (() => {
+      let checked = 0;
+      const ok = own.every(n => {
+        const ch = charDef(n), t = target(ch), lo = charLoadout(n), idl = idealLoadout(ch, t, 55);
+        const worn = SLOTS.map(sl => state.cards.find(c => c.equipped === n && c.slot === sl)).filter(Boolean);
+        const base = buildScoreOf(ch, worn, 55, lo, idl, t);
+        return upgradesFor(ch, 4, false, false).every(row => {
+          const after = worn.filter(c => c.slot !== row.slot).concat([row.rec]);
+          const b1 = buildScoreOf(ch, after, 55, lo, idl, t);
+          checked++;
+          // a Space row is priced against the Heavens as they will be once the rows above are on
+          return (row.slot === 'Space' || near(row.pts, 100 * (b1.total - base.total) / base.idealTotal, 1e-6)) && near(row.pts, row.delta * 100 / base.idealTotal, 1e-6);
+        });
+      });
+      return ok && checked > 0;
+    })());
+    fail('Upgrades orders characters by build points, not raw gains', (() => {
+      runUpgrades();
+      const names = [...document.querySelectorAll('#upList .panel h3')].map(h => h.firstChild.textContent.trim());
+      const best = names.map(n => Math.max(...upgradesFor(charDef(n), +document.getElementById('upRar').value,
+        document.getElementById('upSameSet').checked, document.getElementById('upIgnoreEquipped').checked).map(upPts)));
+      return names.length >= 2 && best.every((v, i) => i === 0 || v <= best[i - 1] + 1e-9);
+    })());
+    /* A trade is priced on both sides: a card taken off someone else carries what it costs
+       them (giverLoss: build points lost after they put back their best free card of the slot),
+       and upPts nets it off. If the synthetic roster offers no trade, one is made by putting a
+       character's best free upgrade on someone else first. */
+    const tradeCheck = (() => {
+      const find = () => {
+        for (const n of own) { const rows = upgradesFor(charDef(n), 4, false, false); const row = rows.find(x => x.rec.equipped && x.rec.equipped !== n); if (row) return { n, rows, row }; }
+        return null;
+      };
+      let hit = find(), undo = null;
+      if (!hit) for (const n of own) {
+        const r = upgradesFor(charDef(n), 4, false, true).find(x => !x.rec.equipped);
+        if (!r) continue;
+        const other = own.find(m => m !== n), prev = state.cards.find(c => c.equipped === other && c.slot === r.rec.slot);
+        undo = () => { r.rec.equipped = null; if (prev) prev.equipped = other; };
+        if (prev) prev.equipped = null;
+        r.rec.equipped = other;
+        hit = find();
+        break;
+      }
+      let ok = false, why = 'no trade found or made';
+      if (hit) {
+        const { n, rows, row } = hit, giver = charDef(row.rec.equipped);
+        const own1 = giverLoss(giver, [row.rec], new Set(rows.map(x => x.rec.id)), 4);
+        const grouped = rows.filter(x => x.group != null);
+        ok = near(row.giverPts, own1, 1e-9) &&
+          (row.group == null ? near(row.lossPts, row.giverPts, 1e-9) && near(upPts(row), row.pts - row.lossPts, 1e-9)
+            : grouped.every(x => near(x.lossPts, row.lossPts, 1e-12)) && near(upPts(row), row.groupPts - row.lossPts, 1e-9)) &&
+          upgradesFor(charDef(n), 4, false, true).every(x => !x.lossPts && x.giverPts == null);
+        why = `${n} takes ${row.rec.slot} ${row.rec.set} from ${giver.n}: gain ${upPts(row) + row.lossPts}, giver loss ${row.giverPts}, net ${upPts(row)}`;
+      }
+      if (undo) undo();
+      return { ok, why };
+    })();
+    fail('Upgrades prices a trade on both sides: the giver\'s loss is charged, and upPts is net of it', tradeCheck.ok, tradeCheck.why);
+    fail('Optimise says what a loadout that takes cards off someone else costs them, and nets it', (() => {
+      const n = own[0], other = own[1];
+      const r0 = bestPlan(charDef(n), poolFor('free', 2, n), { policy: 'force4', p4value: 55 });
+      const c = r0.best && heavens.map(sl => r0.best.picks[sl] && r0.best.picks[sl].c).find(x => x && !x.equipped);
+      if (!c) return false;
+      const prev = state.cards.find(x => x.equipped === other && x.slot === c.slot);
+      const was = { pool: $('#optPool').value, rar: $('#optRarity').value, ch: $('#optChar').value };
+      if (prev) prev.equipped = null;
+      c.equipped = other;
+      renderOpt(n); $('#optChar').value = n; $('#optPool').value = 'all'; $('#optRarity').value = '2';
+      runOpt();
+      const html = $('#optOut').innerHTML;
+      c.equipped = null; if (prev) prev.equipped = other;
+      $('#optPool').value = was.pool; $('#optRarity').value = was.rar; renderOpt(); $('#optChar').value = was.ch;
+      return /It takes \d+ cards? off /.test(html) && /net <b>[−+]\d/.test(html) && /on [^<]+ · [−+]\d/.test(html);
+    })());
+    // The user's choice (Oct 2026). The select is not in the prefs, so its markup default is
+    // what every session opens on.
+    fail('Optimise\'s Card pool opens on "Only unequipped cards"',
+      [...$('#optPool').options].filter(o => o.defaultSelected).map(o => o.value).join() === 'free');
+
+    // ---- Headroom ----
+    const hr = headroomRows(false);
+    fail('Headroom: one row per owned character and slot', hr.length === ownedChars().length * SLOTS.length);
+    fail('Headroom: gain is a non-negative build-score delta, headroom the raw distance to the ideal, empty slots the whole ideal',
+      hr.every(row => row.gain >= 0 && isFinite(row.gain) && row.room >= 0 && (row.card || near(row.room, idealCardScore(row.slot, row.t)))));
+    fail('Headroom: the available card is always the same slot and set, and only ever reported as a positive build gain',
+      hr.every(row => !row.alt || (row.alt.slot === row.slot && row.alt.set === row.card.set && row.altGain > 0 && row.alt.id !== row.card.id && (!row.alt.equipped || row.alt.equipped === row.ch.n))));
+    fail('Headroom: with takeEquipped the pool may name a card worn by someone else, never a locked one',
+      headroomRows(true).every(row => !row.alt || !(row.alt.locked && row.alt.equipped !== row.ch.n)));
+    fail('Headroom: shares of a character\'s room sum to one', own.every(n => { const rows = hr.filter(x => x.ch.n === n); const s = rows.reduce((a, x) => a + x.share, 0); return near(s, 1, 1e-9) || rows.every(x => x.share === 0); }));
+    fail('Headroom measures a bare character\'s gains from their bare board, not from zero', (() => {
+      const was = Object.assign({}, state.chars[kumi.n]);
+      state.chars[kumi.n].owned = true; state.chars[kumi.n].benched = false;
+      const rows = headroomRows(false).filter(x => x.ch.n === kumi.n);
+      state.chars[kumi.n].owned = was.owned; state.chars[kumi.n].benched = was.benched;
+      const lk = charLoadout(kumi.n), ik = idealLoadout(kumi, tk, HR_P4), empty = buildScoreOf(kumi, [], HR_P4, lk, ik, tk).raw;
+      return rows.length === SLOTS.length && rows.every(x => x.card === null && x.build === null &&
+        near(x.gain, buildScoreOf(kumi, [idealCard(x.slot, tk, hrSetFor(x.slot, [], tk))], HR_P4, lk, ik, tk).raw - empty, 1e-9));
+    })());
+
+    // ---- Custom card (the Cycle of Fate event) ----
+    {
+      const o = { free: true, policy: 'pref', mode: 'typical', scope: 'owned' };
+      const chars = own.slice(0, 4).map(charDef);
+      const rows = chars.map(ch => ccRow(ch, o));
+      const bad = [];
+      rows.forEach(r => {
+        const b = r.best, n = r.ch.n;
+        if (!b) { bad.push(n + ': no card'); return; }
+        const c = b.card, S = SETS[c.set];
+        if (HEAVENS.indexOf(c.slot) < 0) bad.push(n + ': not a Heavens slot (the event cannot make Space)');
+        if (!S || S.unreleased || (S.elem && S.elem !== r.ch.e)) bad.push(n + ': set ' + c.set + ' is unreleased or off-element');
+        if (c.rarity !== 5 || c.level !== RARITY[5].maxLevel) bad.push(n + ': not a level-25 5★');
+        if (SLOT_INFO[c.slot].mains.indexOf(c.main) < 0) bad.push(n + ': main ' + c.main + ' is not legal on ' + c.slot);
+        const st = c.subs.map(x => x.stat);
+        if (st.length !== 4 || new Set(st).size !== 4 || st.indexOf(c.main) >= 0) bad.push(n + ': substats ' + st.join(','));
+        if (validateCard(c).length) bad.push(n + ': ' + validateCard(c)[0]);
+        if (b.cards.indexOf(c) < 0 || new Set(b.cards.map(x => x.slot)).size !== b.cards.length) bad.push(n + ': its loadout does not hold it once per slot');
+        if (!(r.gain >= 0 && isFinite(r.gain)) || !near(r.after, Math.min(100, r.inv + r.gain), 1e-6) || r.after > 100) bad.push(n + ': gain/after inconsistent');
+        if (r.ctx.base.total + 1e-9 < r.ctx.ev(r.ctx.worn).total) bad.push(n + ': baseline is below what is worn');
+        if (!near(r.ctx.ev(b.cards).total, b.total, 1e-6)) bad.push(n + ': total is not the build score numerator');
+      });
+      fail('Custom card: a legal level-25 5★ Heavens card in a released, on-element set, priced as the build score of a legal loadout over the best already wearable', !bad.length);
+      if (bad.length) out.customCardBad = bad;
+      const per = mode => chars.map(ch => ccRow(ch, Object.assign({}, o, { mode })).gain);
+      const lo = per('low'), pf = per('perfect');
+      fail('Custom card: poor rolls never beat typical ones, and typical never beats perfect',
+        rows.every((r, i) => lo[i] <= r.gain + 0.05 && r.gain <= pf[i] + 0.05));
+      rows.sort((a, b) => b.gain - a.gain);
+      const sec = ccSecond(rows, o);
+      fail('Custom card: the second card is another character\'s best, or a second one for the first priced after the first',
+        !!sec && isFinite(sec.gain) && sec.gain >= 0 && (sec.same ? sec.ch === rows[0].ch : sec.ch !== rows[0].ch && near(sec.gain, rows.filter(r => r !== rows[0])[0].gain, 1e-9)));
+      fail('Custom card: the likely range is ordered, holds the typical gain near its average, and reads the same every run',
+        rows.every(r => {
+          const g = r.range;
+          return g && g.min <= g.lo && g.lo <= g.mean + 1e-9 && g.mean <= g.hi + 1e-9 && g.hi <= g.max && Math.abs(g.mean - r.gain) < 0.6 &&
+            JSON.stringify(ccRange(ccOptionOutcomes(r.ctx, r.best))) === JSON.stringify(g);
+        }));
+      {
+        const r = rows[0], b = r.best, rest = b.cards.filter(c => c !== b.card);
+        const fresh = ccOptionOutcomes(r.ctx, b, 600);
+        const tierAt = k => b.card.subs.map(s => ccTiers(s.stat, b.slot)[k]);
+        const low = ccOutcomes(r.ctx, b.card, rest, tierAt(0), 600), high = ccOutcomes(r.ctx, b.card, rest, tierAt(4), 600);
+        const pLow = ccChanceBetter(low, fresh), pHigh = ccChanceBetter(high, fresh), pSelf = ccChanceBetter(fresh, fresh);
+        fail('Custom card: a card that started on its lowest rolls is less likely than a fresh roll to end up better, one on its highest more likely, and a card against itself is even',
+          pLow < 0.5 && pHigh > 0.5 && near(pSelf, 0.5, 1e-9) && near(ccChanceBetter([1, 2], [1.5]), 0.5, 1e-9));
+      }
+      const spaceBad = [];
+      chars.forEach(ch => {
+        const r = ccRow(ch, Object.assign({}, o, { kind: 'space' })), c = r.best && r.best.card;
+        if (!c) { spaceBad.push(ch.n + ': no card'); return; }
+        if (c.slot !== 'Space' || c.main !== 'ATK + DEF' || !SPACE_SETS[c.set] || SPACE_SETS[c.set].unreleased) spaceBad.push(ch.n + ': ' + c.slot + ' ' + c.set + ' ' + c.main);
+        if (validateCard(c).length) spaceBad.push(ch.n + ': ' + validateCard(c)[0]);
+        if (c.subs.some(x => x.value > maxRoll(x.stat, 'Space') * 3 + 0.05)) spaceBad.push(ch.n + ': rolled past the Space table');
+        if (r.slots.some(x => x.slot !== 'Space') || !(r.gain >= 0) || r.after > 100) spaceBad.push(ch.n + ': options or gain');
+      });
+      fail('Custom card, Space: a legal level-25 Space card in a released Space set, rolled on the Space table, with the other Space sets as its alternatives', !spaceBad.length);
+      if (spaceBad.length) out.customCardSpaceBad = spaceBad;
+      fail('Custom card: the pool cut gives the optimiser the same answer as the whole inventory', chars.every(ch => {
+        const t = target(ch), full = bestPlan(ch, poolFor('free', 2, ch.n), { policy: 'pref', p4value: CC_P4 });
+        const cut = bestPlan(ch, ccContext(ch, o).pool, { policy: 'pref', p4value: CC_P4 });
+        return (!full.best && !cut.best) || (full.best && cut.best && near(full.best.total, cut.best.total, 1e-6));
+      }));
+    }
+
+    // ---- Ink card (Vicissitude / Elysian / Prophetic Ink: pick some substats, the rest is random) ----
+    {
+      const o = { free: true, policy: 'pref', scope: 'owned', pick: 2 };
+      const chars = own.slice(0, 4).map(charDef);
+      const rows = chars.map(ch => ikRow(ch, o));
+      const bad = [];
+      fail('Ink card: every fill is counted once — 495 for none picked, 165 for one, 45 for two, 9 for three, 1 for four — and a Sun card is never filled with HP',
+        [495, 165, 45, 9, 1].every((n, k) => ikCombos(ikLeft('Moon', 'ATK%', ['Crit Rate', 'Crit Multiplier', 'Speed', 'HP%'].slice(0, k)), 4 - k).length === n) &&
+        ikLeft('Sun', 'HP', []).indexOf('HP') < 0 && ikLeft('Sun', 'HP', []).length === Object.keys(SUBSTATS).length - 1);
+      rows.forEach(r => {
+        const n = r.ch.n, cc = ccRow(r.ch, Object.assign({}, o, { mode: 'typical', kind: 'heavens' }));
+        if (r.byK.some(x => !x)) { bad.push(n + ': a pick count has no card'); return; }
+        r.byK.forEach((x, k) => {
+          const stats = x.opt.card.subs.map(s => s.stat);
+          if (x.picked.length !== k || x.picked.some(s => stats.indexOf(s) < 0)) bad.push(n + ' k=' + k + ': picks ' + x.picked.join(',') + ' are not the design\'s');
+          if (HEAVENS.indexOf(x.opt.slot) < 0) bad.push(n + ' k=' + k + ': slot ' + x.opt.slot);
+          const fill = ikLeft(x.opt.slot, x.opt.card.main, x.picked).slice(0, 4 - k);
+          const c = ccCard(x.opt.slot, x.opt.set, x.opt.card.main, x.picked.concat(fill), 'typical');
+          if (validateCard(c).length) bad.push(n + ' k=' + k + ': ' + validateCard(c)[0]);
+          if (!(x.gain >= 0 && isFinite(x.gain))) bad.push(n + ' k=' + k + ': gain ' + x.gain);
+          if (k && x.gain + 0.02 < r.byK[k - 1].gain) bad.push(n + ': picking ' + k + ' is worth less than ' + (k - 1));
+        });
+        if (!near(r.byK[4].gain, cc.gain, 1e-6)) bad.push(n + ': four picked ' + r.byK[4].gain + ' is not the Custom card view\'s ' + cc.gain);
+        if (r.best !== r.byK[o.pick] || !near(r.after, Math.min(100, r.inv + r.gain), 1e-6)) bad.push(n + ': row gain/after');
+        const g = r.range;
+        if (!g || !(g.min <= g.lo && g.lo <= g.hi && g.hi <= g.max) || Math.abs(g.mean - r.gain) > 0.6 ||
+          JSON.stringify(ccRange(ikOutcomes(r.ctx, r.best, null, IK_SAMPLES))) !== JSON.stringify(g)) bad.push(n + ': likely range');
+      });
+      fail('Ink card: each pick count gets a legal card whose picks are the Custom card design\'s, picking more is never worth less, all four picked is the Custom card view\'s gain, and the likely range sits around the gain and reads the same every run', !bad.length);
+      if (bad.length) out.inkCardBad = bad.slice(0, 8);
+    }
+
+    // ---- Retrograde Card (reset a levelled card to level 0, keep its starting values, level it again) ----
+    {
+      const bad = [];
+      // Every roll count is forced: one roll is the most each of the first three can hold, and the
+      // ATK% total only fits six rolls (21.0: nine in all, dropped with four) or five (10.5: eight, dropped with three).
+      const four = mk('Moon', 'Power', 'Damage Multiplier', [['Crit Rate', 2.0], ['Crit Multiplier', 4.1], ['Speed', 2.2], ['ATK%', 21.0]], { id: 'rg4' });
+      const three = mk('Moon', 'Power', 'Damage Multiplier', [['Crit Rate', 2.0], ['Crit Multiplier', 4.1], ['Speed', 2.2], ['ATK%', 10.5]], { id: 'rg3' });
+      const i4 = rgInfer(four), i3 = rgInfer(three);
+      fail('Retrograde: a card\'s roll counts and whether it dropped with three or four substats are read from its values',
+        i4.states.length && J(i4.states[0].k) === J([1, 1, 1, 6]) && i4.pLate < 1e-9 &&
+        i3.states.length && i3.states.every(s => J(s.k) === J([1, 1, 1, 5])) && i3.pLate > 1 - 1e-9 && near(i4.states.reduce((a, s) => a + s.p, 0), 1, 1e-9),
+        J({ i4: i4.states.slice(0, 2), i3: i3.states.slice(0, 2) }));
+      const r4 = rgResets(four, i4, 200, 'random'), r3 = rgResets(three, i3, 200, 'random'), r3s = rgResets(three, i3, 200, 'same');
+      [r4, r3, r3s].forEach(list => list.forEach(c => { const e = validateCard(c); if (e.length) bad.push(c.id + ': ' + e[0]); if (c.level !== 25) bad.push(c.id + ': level ' + c.level); }));
+      // A card that dropped with four keeps all four, each starting from the one drop roll its value allows.
+      if (!r4.every(c => J(c.subs.map(s => s.stat)) === J(four.subs.map(s => s.stat)) && c.subs.every((s, i) => s.value >= four.subs[i].value - 1e-9 || i === 3)))
+        bad.push('dropped with four: a substat changed or fell below its drop roll');
+      // 21.0 is six top rolls give or take the display rounding, so its drop roll is one of the top two tiers
+      if (!r4.every(c => c.subs[3].value >= 3.2 - 1e-9)) bad.push('dropped with four: ATK% fell below a 3.2 drop roll');
+      const names = list => new Set(list.map(c => c.subs.map(s => s.stat).sort().join(','))).size;
+      if (!(names(r3) > 1)) bad.push('dropped with three: the fourth substat never changed with "random"');
+      if (names(r3s) !== 1) bad.push('dropped with three: the substats changed with "same"');
+      if (J(rgResets(four, i4, 200, 'random')) !== J(r4)) bad.push('resets differ between runs');
+      if (rgKeeps(four, 50).length !== 1 || rgKeeps(Object.assign({}, four, { level: 15 }), 50).some(c => c.level !== 25)) bad.push('keeping a card levels it on to 25');
+      if (rgCandidates().some(c => c.rarity !== 5 || upgradesUsed(5, c.level) < 1)) bad.push('a level-0 or non-5★ card is a candidate');
+      // Upgrades piled on a stat the character ignores: a reset should pay off. All five on their best
+      // stat at maximum: it should not.
+      const ch = charDef(own[0]), t = target(ch), cx = Object.assign(rgCharCtx(ch, []), { worn: [] });   // nothing worn, nothing spare to fall back on
+      const main = mainTop(t, 'Moon') || 'ATK%', f = couplingFactors(t, 'Moon', main);
+      const ranked = Object.keys(SUBSTATS).filter(s => s !== main).sort((a, b) => (t.w[b] || 0) * cf(f, b) - (t.w[a] || 0) * cf(f, a));
+      const top = ranked.slice(0, 3), dead = ranked[ranked.length - 1];
+      const tier = (s, i) => ROLL_TIERS[s].heavens[i];
+      const wasted = mk('Moon', t.sets[0], main, top.map(s => [s, tier(s, 4)]).concat([[dead, +(6 * tier(dead, 4)).toFixed(1)]]), { id: 'rgW' });
+      const lucky = mk('Moon', t.sets[0], main, [[top[0], +(6 * tier(top[0], 4)).toFixed(1)]].concat(top.slice(1).concat([dead]).map(s => [s, tier(s, 0)])), { id: 'rgL' });
+      const price = card => { const inf = rgInfer(card); return rgPrice(cx, card, rgKeeps(card, RG_SAMPLES), rgResets(card, inf, RG_SAMPLES, 'random')); };
+      const pw = price(wasted), pl = price(lucky);
+      if (!(pw.mean > 0 && pw.better > 0.5)) bad.push(`upgrades on ${dead}: average ${pw.mean.toFixed(2)}, better ${pw.better}`);
+      if (!(pl.mean < 0 && pl.worse > 0.5)) bad.push(`upgrades on ${top[0]}: average ${pl.mean.toFixed(2)}, worse ${pl.worse}`);
+      if (!pw.gains.every((g, i, a) => !i || a[i - 1] <= g) || !near(pw.mean, pw.gains.reduce((a, x) => a + x, 0) / pw.gains.length, 1e-9)) bad.push('gains not sorted or mean off');
+      fail('Retrograde: resets are legal level-25 cards that keep the drop substats (re-rolling the fourth only on a three-substat drop, and only when asked), read the same every run, and pay off for wasted upgrades but not for lucky ones', !bad.length, J(bad.slice(0, 8)));
+      if (bad.length) out.retroBad = bad.slice(0, 8);
+    }
+
+    // ---- Fortune Revelation (choose the set, the rest is random) ----
+    {
+      const drawBad = [];
+      ['heavens', 'space'].forEach(kind => {
+        const dr = frDraws(kind, 300), again = frDraws(kind, 300);
+        if (JSON.stringify(dr) !== JSON.stringify(again)) drawBad.push(kind + ': draws differ between runs');
+        dr.forEach((x, k) => {
+          const card = { slot: x.slot, set: frSets(kind)[0], rarity: 5, level: RARITY[5].maxLevel, main: x.main, subs: x.subs };
+          const st = x.subs.map(s => s.stat);
+          if (frSlots(kind).indexOf(x.slot) < 0) drawBad.push(kind + ' #' + k + ': slot ' + x.slot);
+          if (st.length !== 4 || new Set(st).size !== 4 || st.some(s => frNoSub(x.slot, x.main).indexOf(s) >= 0)) drawBad.push(kind + ' #' + k + ': substats ' + st.join(','));
+          if (validateCard(card).length) drawBad.push(kind + ' #' + k + ': ' + validateCard(card)[0]);
+        });
+        if (frSets(kind).some(s => frSetTable(kind)[s].unreleased)) drawBad.push(kind + ': an unreleased set is offered');
+      });
+      const heav = frDraws('heavens', 2000);
+      HEAVENS.forEach(sl => { const n = heav.filter(x => x.slot === sl).length; if (n < 400 || n > 600) drawBad.push(sl + ' drawn ' + n + ' of 2000'); });
+      fail('Fortune Revelation: every draw is a legal level-25 5★ card of the item\'s slots, with four substats the slot can carry, the same every run, slots evenly spread', !drawBad.length);
+      if (drawBad.length) out.fortuneDrawBad = drawBad.slice(0, 8);
+
+      const o = { kind: 'heavens', policy: 'pref', free: true };
+      const chars = own.slice(0, 5).map(charDef), draws = frDraws('heavens', 160);
+      const datas = chars.map(ch => frCharData(ch, o));
+      const rated = frSets('heavens').map(s => frRateSet(s, draws, datas)).sort((a, b) => b.value - a.value);
+      const rateBad = [];
+      rated.forEach(r => {
+        const mean = r.vals.reduce((a, x) => a + x, 0) / r.vals.length;
+        if (!near(mean, r.value, 1e-9) || r.vals.some(v => !(v >= 0) || !isFinite(v))) rateBad.push(r.set + ': value is not the mean of its draws');
+        if (!near(r.who.reduce((a, w) => a + w.gets, 0), r.useful, 1e-9)) rateBad.push(r.set + ': who it goes to does not add up to how often it is useful');
+        if (r.who.some(w => w.gets > w.helps + 1e-9 || !(w.avg >= UPGRADE_MIN_GAIN))) rateBad.push(r.set + ': goes to someone it does not help');
+      });
+      // A draw's gain to a character is the best of its loadouts, never below wearing it in the best they have now.
+      const d0 = datas[0], probe = draws.map(x => ({ id: 'fortune', slot: x.slot, set: rated[0].set, rarity: 5, level: RARITY[5].maxLevel, main: x.main, subs: x.subs }));
+      if (probe.some(c => d0.can[c.set][c.slot][c.main] && frGain(d0, c) + 1e-9 <
+        Math.max(0, 100 * (d0.ctx.ev(d0.ctx.base.cards.filter(x => x.slot !== c.slot).concat([c])).total - d0.ctx.base.total) / d0.ctx.idealTotal))) rateBad.push('a gain is below a plain swap into the best loadout');
+      fail('Fortune Revelation: a set\'s value is the average over its draws of the best gain, and who it goes to adds up to how often it is useful', !rateBad.length);
+      if (rateBad.length) out.fortuneRateBad = rateBad.slice(0, 8);
+      // Skipping draws no card of their kind could improve changes nothing.
+      const always = new Proxy({}, { get: () => new Proxy({}, { get: () => new Proxy({}, { get: () => true }) }) });
+      const loose = datas.map(d => Object.assign({}, d, { can: always }));
+      fail('Fortune Revelation: skipping hopeless draws gives the same values as pricing every one',
+        rated.slice(0, 6).every(r => near(frRateSet(r.set, draws, loose).value, r.value, 1e-9)));
+      fail('Fortune Revelation: a set is as good as itself, and the best is not called close to a set worth nothing',
+        frClose(rated[0], rated[0]) && (rated[0].value <= 0 || !frClose(rated[0], Object.assign({}, rated[0], { vals: rated[0].vals.map(() => 0) }))));
+
+      const saved = Object.assign({}, frChosen);
+      frChosen = {};
+      const def = frChars().map(c => c.n).join('|') === ownedChars().map(c => c.n).join('|');
+      const someone = ownedChars()[0], stranger = CHARACTERS.filter(c => !state.chars[c.n].owned)[0];
+      frSetIncluded(someone.n, false); if (stranger) frSetIncluded(stranger.n, true);
+      const changed = !frIncluded(someone) && (!stranger || frIncluded(stranger)) && Object.keys(frChosen).length === (stranger ? 2 : 1);
+      const p = collectPrefs(); frChosen = {}; applyPrefs(p);
+      const roundTrip = !frIncluded(someone) && (!stranger || frIncluded(stranger));
+      frSetIncluded(someone.n, true);
+      const backToDefault = !Object.prototype.hasOwnProperty.call(frChosen, someone.n);
+      frChosen = saved;
+      fail('Fortune Revelation: everyone owned and not benched counts by default, a tick or untick is kept only where it departs from that, and it survives a save',
+        def && changed && backToDefault && roundTrip);
+    }
+
+    // ---- equip plumbing ----
+    $('#optChar').value = 'Ren Amamiya';
+    fail('swapCard moves a card onto the slot, unequips whoever wore either end, and clears a lock on the way out', (() => {
+      const jStar = state.cards.find(c => c.equipped === 'Ren Amamiya' && c.slot === 'Star');
+      const mStar = state.cards.find(c => c.equipped === 'Morgana' && c.slot === 'Star');
+      if (!jStar || !mStar) return false;
+      jStar.locked = true;
+      swapCard('Ren Amamiya', 'Star', mStar.id);
+      const ok = mStar.equipped === 'Ren Amamiya' && jStar.equipped === null && jStar.locked === false && !state.cards.some(c => c.equipped === 'Morgana' && c.slot === 'Star');
+      swapCard('Morgana', 'Star', mStar.id); swapCard('Ren Amamiya', 'Star', jStar.id);
+      return ok && jStar.equipped === 'Ren Amamiya' && mStar.equipped === 'Morgana';
+    })());
+    fail('toggleLoadoutLock locks every worn card and a locked card leaves every other character\'s pool', (() => {
+      toggleLoadoutLock('Morgana');
+      const worn = state.cards.filter(c => c.equipped === 'Morgana');
+      const ok = worn.length > 0 && worn.every(c => c.locked) && !poolFor('all', 2, 'Ren Amamiya').some(c => c.equipped === 'Morgana') && poolFor('all', 2, 'Morgana').some(c => c.equipped === 'Morgana');
+      toggleLoadoutLock('Morgana');
+      return ok && worn.every(c => !c.locked);
+    })());
+    fail('an equip made while the Upgrades tab is hidden defers its pass, and opening the tab runs it', (() => {
+      showTab('roster');
+      const c = state.cards.find(x => x.equipped === 'Ren Amamiya');
+      upViewsStale = false;
+      const before = document.getElementById('upList').innerHTML;
+      unequipCard(c.id);
+      const deferred = upViewsStale === true && document.getElementById('upList').innerHTML === before;
+      swapCard('Ren Amamiya', c.slot, c.id);
+      showTab('upgrades');
+      const ran = upViewsStale === false;
+      showTab('roster');
+      return deferred && ran && c.equipped === 'Ren Amamiya';
+    })());
+    fail('unequipCard clears the wearer and the lock', (() => {
+      const c = state.cards.find(x => x.equipped === 'Ryuji Sakamoto' && x.slot === 'Sun'); if (!c) return false;
+      c.locked = true; unequipCard(c.id); const ok = c.equipped === null && !c.locked; swapCard('Ryuji Sakamoto', 'Sun', c.id); return ok && c.equipped === 'Ryuji Sakamoto';
+    })());
+    fail('equippedByChar groups the board by wearer', (() => { const m = equippedByChar(); return own.every(n => m[n] && m[n].every(c => c.equipped === n)) && Object.values(m).reduce((s, a) => s + a.length, 0) === state.cards.filter(c => c.equipped).length; })());
+
+    /* ================================================================================
+       9. Import — normalisation, validation, merge
+       ================================================================================ */
+    fail('alias CDMG resolves', normStat('CDMG') === 'Crit Multiplier');
+    fail('alias EHR resolves', normStat('ehr') === 'Ailment Accuracy');
+    fail('in-game label "Pierce Rate" resolves', normStat('Pierce Rate') === 'Resistance Pierce');
+    fail('in-game label "Ailment Acc." resolves', normStat('Ailment Acc.') === 'Ailment Accuracy');
+    fail('in-game label "Crit Mult." resolves', normStat('Crit Mult.') === 'Crit Multiplier');
+    fail('in-game label "Damage Mult.+" resolves', normStat('Damage Mult.+') === 'Damage Multiplier');
+    fail('bare "Attack" with no percent hint stays flat ATK', normStat('Attack') === 'ATK');
+    fail('bare "Attack" with a percent hint resolves to ATK%', normStat('Attack', true) === 'ATK%');
+    fail('bare "Defense" with a percent hint resolves to DEF%', normStat('Defense', true) === 'DEF%');
+    fail('bare "HP" with a percent hint resolves to HP%', normStat('HP', true) === 'HP%');
+    fail('a stat with no flat/percent pair ignores the percent hint', normStat('Speed', true) === 'Speed');
+    fail('a canonical stat name resolves to itself, garbage to nothing', normStat('Crit Rate') === 'Crit Rate' && !normStat('banana'));
+    fail('alias Strength -> Power', normSet('strength') === 'Power');
+    fail('Ruin is its own set, not aliased away', normSet('Ruin') === 'Ruin' && !!SETS['Ruin']);
+    fail('Prudence is its own set', normSet('prudence') === 'Prudence' && !!SETS['Prudence']);
+    fail('a Space set resolves through normSet too', normSet('departure') === 'Departure' && !normSet('nonsense'));
+    fail('Makoto Yuki prefers Ruin', target(charDef('Makoto Yuki')).sets[0] === 'Ruin');
+    fail('normalizeCard resolves aliases, keeps a scanned mainValue and drops a lock on an unequipped card', (() => {
+      const c = normalizeCard({ slot: 'Star', set: 'interference', rarity: '5', level: '25', main: 'crit', subs: [{ stat: 'cdmg', value: '16.4' }, { stat: 'Attack', value: 14 }], mainValue: '18.8', locked: true, src: 'x.png' });
+      return c.set === 'Hindrance' && c.main === 'Crit Rate' && c.subs[0].stat === 'Crit Multiplier' && c.subs[0].value === 16.4 && c.subs[1].stat === 'ATK' &&
+        c.mainValue === 18.8 && c.level === 25 && c.rarity === 5 && c.equipped === null && !c.locked && c.src === 'x.png';
+    })());
+    fail('normalizeCard forces the fixed main on Sun and Space', normalizeCard({ slot: 'Sun', set: 'Power', rarity: 5, level: 0, main: 'whatever', subs: [] }).main === 'HP' &&
+      normalizeCard({ slot: 'Space', set: 'Hope', rarity: 5, level: 0, main: '', subs: [] }).main === 'ATK + DEF');
+
+    // ---- validateCard ----
+    const vGood = mk('Star', 'Hindrance', 'Crit Rate', [['Crit Multiplier', 16.4], ['Resistance Pierce', 8.4], ['ATK%', 14], ['Speed', 6.6]]);
+    fail('validateCard accepts a well-formed card', validateCard(vGood).length === 0, validateCard(vGood).join('; '));
+    fail('validateCard rejects an unknown slot, set or rarity',
+      validateCard(Object.assign({}, vGood, { slot: 'Planet' })).length > 0 && validateCard(Object.assign({}, vGood, { set: 'Nonsense' })).length > 0 && validateCard(Object.assign({}, vGood, { rarity: 9 })).length > 0);
+    fail('validateCard rejects a Heavens set on a Space card and vice versa',
+      validateCard(mk('Space', 'Hindrance', 'ATK + DEF', [['Crit Rate', 1.6], ['ATK%', 2.6], ['Speed', 1.6]])).length > 0 && validateCard(mk('Star', 'Departure', 'Crit Rate', [['Crit Multiplier', 2.5], ['ATK%', 2], ['Speed', 1.3]])).length > 0);
+    fail('validateCard rejects an illegal main stat for the slot', validateCard(Object.assign({}, vGood, { main: 'SP Recovery' })).length > 0);
+    fail('validateCard rejects a substat that duplicates the main stat', validateCard(Object.assign({}, vGood, { subs: vGood.subs.slice(0, 3).concat([{ stat: 'Crit Rate', value: 5 }]) })).length > 0);
+    fail('validateCard rejects a substat listed twice', validateCard(Object.assign({}, vGood, { subs: vGood.subs.slice(0, 3).concat([{ stat: 'ATK%', value: 5 }]) })).length > 0);
+    fail('validateCard rejects too many substats for the rarity', validateCard(Object.assign({}, vGood, { rarity: 2 })).length > 0);
+    fail('validateCard rejects too few substats for the rarity', validateCard(Object.assign({}, vGood, { subs: vGood.subs.slice(0, 2) })).length > 0);
+    fail('validateCard rejects a level past the rarity cap', validateCard(Object.assign({}, vGood, { level: 26 })).length > 0 && validateCard(Object.assign({}, vGood, { rarity: 4, level: 21 })).length > 0);
+    fail('validateCard rejects a substat value far above its roll ceiling', validateCard(Object.assign({}, vGood, { subs: [{ stat: 'Crit Multiplier', value: 500 }].concat(vGood.subs.slice(1)) })).length > 0);
+    fail('validateCard bounds a substat by the rolls its level allows (a Lv0 Speed 4 is impossible, at Lv25 it is fine)',
+      validateCard(mk('Star', 'Hindrance', 'Crit Rate', [['Speed', 4], ['ATK%', 2], ['DEF', 27]], { level: 0 })).length > 0 &&
+      validateCard(mk('Star', 'Hindrance', 'Crit Rate', [['Speed', 4], ['ATK%', 2], ['DEF', 27]], { level: 25 })).length === 0);
+    fail('validateCard allows one display unit of OCR slack', validateCard(mk('Star', 'Hindrance', 'Crit Rate', [['Speed', 2.2], ['ATK%', 3.5], ['DEF', 46]], { level: 0 })).length === 0);
+
+    // ---- mergeImport ----
+    const cardA = { id: 'a1', slot: 'Star', set: 'Hindrance', rarity: 5, level: 15, main: 'Crit Rate', equipped: null,
+      subs: [{ stat: 'Crit Multiplier', value: 10 }, { stat: 'ATK%', value: 8 }, { stat: 'Speed', value: 4 }] };
+    const leveledUp = Object.assign({}, cardA, { level: 25,   // two upgrades: one CM roll, one minted fourth substat
+      subs: [{ stat: 'Crit Multiplier', value: 13.5 }, { stat: 'ATK%', value: 8 }, { stat: 'Speed', value: 4 }, { stat: 'Resistance Pierce', value: 1.7 }] });
+    const sum = x => J({ add: x.toAdd.length, upd: x.toUpdate.length, dup: x.duplicates.length, amb: x.ambiguous.length, unm: x.unmatched.length, copies: x.unmatchedCopies.length, near: x.unmatchedNear.length });
+    const m1 = mergeImport([cardA], [leveledUp]);
+    fail('mergeImport treats an affordable monotonic level-up as an update, not a duplicate or a new card', m1.toUpdate.length === 1 && m1.toAdd.length === 0 && m1.ambiguous.length === 0 && m1.toUpdate[0].existingId === 'a1', sum(m1));
+    const cardB = Object.assign({}, cardA, { id: 'b1' });
+    const exactDup = { slot: 'Star', set: 'Hindrance', rarity: 5, level: 15, main: 'Crit Rate', equipped: null, subs: cardB.subs.map(s => Object.assign({}, s)) };
+    const m2 = mergeImport([cardB], [exactDup]);
+    fail('mergeImport skips an exact resubmission as a duplicate', m2.duplicates.length === 1 && m2.toAdd.length === 0 && m2.toUpdate.length === 0 && m2.unmatched.length === 0, sum(m2));
+    const cardC = Object.assign({}, cardA, { id: 'c1' });
+    const shrunk = { slot: 'Star', set: 'Hindrance', rarity: 5, level: 20, main: 'Crit Rate', equipped: null, subs: [{ stat: 'Crit Multiplier', value: 2 }, { stat: 'ATK%', value: 1 }, { stat: 'Speed', value: 0.5 }] };
+    const m3 = mergeImport([cardC], [shrunk]);
+    fail('mergeImport flags a higher-level read whose values went DOWN as ambiguous instead of silently overwriting', m3.ambiguous.length === 1 && m3.toUpdate.length === 0 && m3.duplicates.length === 0, sum(m3));
+    const brandNew = { slot: 'Sky', set: 'Departure', rarity: 5, level: 25, main: 'Speed', equipped: null, subs: [{ stat: 'ATK%', value: 10 }, { stat: 'DEF%', value: 5 }, { stat: 'HP', value: 80 }] };
+    const m4 = mergeImport([cardA], [brandNew]);
+    fail('mergeImport adds a card with no fingerprint match as new and reports the existing card as unmatched', m4.toAdd.length === 1 && m4.unmatched.length === 1, sum(m4));
+    /* Growth has to be affordable: k whole rolls within k×min..k×max per stat, Σk ≤ upgrades
+       gained, minting the fourth substat costing one. */
+    const ex0 = { id: 'e1', slot: 'Star', set: 'Hindrance', rarity: 5, level: 0, main: 'Crit Rate', equipped: null, subs: [{ stat: 'Crit Multiplier', value: 2.5 }, { stat: 'ATK%', value: 2.0 }, { stat: 'Speed', value: 1.3 }] };
+    const okUp = { slot: 'Star', set: 'Hindrance', rarity: 5, level: 25, main: 'Crit Rate', equipped: null, subs: [{ stat: 'Crit Multiplier', value: 14.8 }, { stat: 'ATK%', value: 5.5 }, { stat: 'Speed', value: 1.3 }, { stat: 'Resistance Pierce', value: 1.7 }] };
+    const tooRich = { slot: 'Star', set: 'Hindrance', rarity: 5, level: 25, main: 'Crit Rate', equipped: null, subs: [{ stat: 'Crit Multiplier', value: 27.1 }, { stat: 'ATK%', value: 16 }, { stat: 'Speed', value: 8 }, { stat: 'Resistance Pierce', value: 8 }] };
+    fail('a Lv0 -> Lv25 read that spends its five upgrades exactly (three rolls, one roll, a minted fourth) is a level-up', (() => { const x = mergeImport([ex0], [okUp]); return x.toUpdate.length === 1 && x.toAdd.length === 0; })());
+    fail('a same-fingerprint read whose growth no upgrade budget can explain is a NEW card, never an update or a decision', (() => { const x = mergeImport([ex0], [tooRich]); return x.toAdd.length === 1 && x.toUpdate.length === 0 && x.ambiguous.length === 0 && x.unmatched.length === 1; })());
+    fail('rollBudgetFits agrees: strict passes the affordable pair, both refuse the impossible one', rollBudgetFits(ex0, okUp, true) && !rollBudgetFits(ex0, tooRich, true) && !rollBudgetFits(ex0, tooRich, false));
+    /* Same level means same card or a different card, never a decision — and a one-value
+       difference is reported side by side, since a misread digit looks exactly like this. */
+    const sameLvOff = { slot: 'Star', set: 'Hindrance', rarity: 5, level: 0, main: 'Crit Rate', equipped: null, subs: [{ stat: 'Crit Multiplier', value: 2.5 }, { stat: 'ATK%', value: 2.0 }, { stat: 'Speed', value: 4.0 }] };
+    fail('a same-level read one value off is added as new, kept alongside the original, and reported as a near pair', (() => {
+      const x = mergeImport([ex0], [sameLvOff]); return x.toAdd.length === 1 && x.ambiguous.length === 0 && x.unmatched.length === 0 && x.unmatchedNear.length === 1 && x.unmatchedNear[0].existing === ex0;
+    })());
+    fail('a lower-level read of a same-fingerprint card is new, never a level-down', (() => { const x = mergeImport([Object.assign({}, cardA, { id: 'd1' })], [Object.assign({}, ex0, { id: undefined })]); return x.toAdd.length === 1 && x.ambiguous.length === 0; })());
+    /* Two identical cards in the save, one read in the scan: on the real save (Nov 2026) such pairs were one card
+       saved twice by the old screenshot import, so the left-over copy is offered for removal like any unmatched card,
+       marked as a copy; the worn one of the pair is the one the scan claims, so removing the copy unequips nobody. */
+    fail('an unmatched card whose exact copy the scan did read is offered for removal, marked as a copy, and the worn copy is kept', (() => {
+      const worn = Object.assign({}, ex0, { id: 'e2', equipped: 'Ann' });
+      const x = mergeImport([ex0, worn], [Object.assign({}, ex0, { id: undefined })]);
+      return x.duplicates.length === 1 && x.duplicates[0].existing === worn && x.unmatched.length === 1 && x.unmatched[0] === ex0 &&
+        x.unmatchedCopies.length === 1 && x.unmatchedCopies[0] === ex0;
+    })(), J(mergeImport([ex0, Object.assign({}, ex0, { id: 'e2', equipped: 'Ann' })], [Object.assign({}, ex0, { id: undefined })]).unmatched.map(c => c.id)));
+    fail('the merge matches the closest pair across a pool, not in arrival order', (() => {
+      const far = Object.assign({}, cardA, { id: 'f1', subs: [{ stat: 'Crit Multiplier', value: 3 }, { stat: 'ATK%', value: 3 }, { stat: 'Speed', value: 1.5 }] });
+      const x = mergeImport([far, Object.assign({}, cardA, { id: 'f2' })], [leveledUp]);
+      return x.toUpdate.length === 1 && x.toUpdate[0].existingId === 'f2';
+    })());
+    fail('cardFingerprint and exactKey behave as the scanner\'s KnownIndex expects', cardFingerprint(cardA) === 'Star|Hindrance|5|Crit Rate' && exactKey(cardA) === exactKey(Object.assign({}, cardA, { id: 'zz' })) && exactKey(cardA) !== exactKey(leveledUp));
+
+    out.charCount = CHARACTERS.length;
+    out.planned = planned;
+    out.owned = own;
+    return out;
+  });
+
+  /* ================================================================================
+     10. The real UI — tabs, buttons, dialogs, save/load
+     ================================================================================ */
+  const ui = [];
+  const check = (name, cond, detail) => ui.push({ name, pass: !!cond, detail: detail || '' });
+
+  // Roster: an owned, dressed character shows a build chip; the owned toggle is wired
+  await p.click('nav button[data-tab="roster"]');
+  await p.evaluate(() => { document.getElementById('rsFilter').value = 'all'; renderRoster(); });
+  const chip = await p.evaluate(() => { const g = document.getElementById('rsGrid').innerHTML; return { build: /build <b>\d+<\/b>/.test(g), cards: document.querySelectorAll('#rsGrid [data-own]').length }; });
+  check('the roster renders a build chip for a dressed character and an owned toggle per card', chip.build && chip.cards >= 65, JSON.stringify(chip));
+  const toggled = await p.evaluate(() => { const before = state.chars['Ann Takamaki'].owned; document.querySelector('[data-own="Ann Takamaki"]').click(); const after = state.chars['Ann Takamaki'].owned; document.querySelector('[data-own="Ann Takamaki"]').click(); return before === false && after === true && state.chars['Ann Takamaki'].owned === false; });
+  check('clicking "Mark owned" toggles ownership', toggled);
+
+  // Optimise: run, equip the recommendation, per-slot buttons
+  await p.click('nav button[data-tab="opt"]');
+  await p.selectOption('#optChar', 'Makoto Yuki');
+  await p.click('#optRun'); await p.waitForTimeout(200);
+  const optText = await p.textContent('#optOut');
+  check('Optimise renders a recommended loadout', /Recommended loadout/.test(optText) && optText.indexOf('NaN') < 0);
+  await p.evaluate(() => state.cards.forEach(c => { if (c.equipped === 'Makoto Yuki') clearEquip(c); }));
+  await p.click('#optRun'); await p.waitForTimeout(150);
+  await p.click('#equipBtn'); await p.waitForTimeout(200);
+  const equippedCount = await p.evaluate(() => state.cards.filter(c => c.equipped === 'Makoto Yuki').length);
+  check('"Mark these as equipped" dresses the character in the whole recommendation', equippedCount >= 4, `${equippedCount} equipped`);
+  const slotBtn = await p.evaluate(() => { const b = document.querySelector('#optOut .slotEquip'); if (!b) return null; const id = b.dataset.card, slot = b.dataset.slot; b.click(); return { ok: state.cards.find(c => c.id === id).equipped === 'Makoto Yuki', slot, one: state.cards.filter(c => c.equipped === 'Makoto Yuki' && c.slot === slot).length }; });
+  check('a per-slot Equip button swaps that one card in and leaves one card in the slot', slotBtn && slotBtn.ok && slotBtn.one === 1, JSON.stringify(slotBtn));
+
+  // Triage and Vault through their buttons. A run already exists, so opening the tab starts none
+  // (the first-visit run has its own check below) and the click here is the button's own.
+  await p.evaluate(() => { if (!trCache) runTriage(); });
+  await p.click('nav button[data-tab="triage"]');
+  // the button says so first and runs on the next frame; click and read in one task, or the
+  // run can finish before a separate read arrives — then wait for the fresh summary, not a fixed delay
+  const trBusy = await p.evaluate(() => { const b = document.getElementById('trRun'); const idle = !b.disabled; b.click();
+    return idle && /Rating the inventory/.test(document.getElementById('trSummary').textContent) && b.disabled; });
+  await p.waitForFunction(() => /Rated \d+/.test(document.getElementById('trSummary').textContent), null, { timeout: 20000 }).catch(() => {});
+  const trRows = await p.evaluate(() => document.querySelectorAll('#trTable tbody tr').length);
+  const trDone = await p.evaluate(() => !document.getElementById('trRun').disabled);
+  check('Triage renders rows from its Run button, saying it is working first', trRows > 0 && trBusy && trDone, JSON.stringify({ trRows, trBusy, trDone }));
+  // The Vault is Triage's second view now
+  await p.click('#trSubtabs button[data-trtab="vault"]');
+  await p.click('#vaRun'); await p.waitForTimeout(300);
+  const vaRows = await p.evaluate(() => document.querySelectorAll('#vaTable tbody tr').length);
+  check('Vault renders rows from its Run button, inside the Triage tab', vaRows > 0 &&
+    await p.evaluate(() => !document.getElementById('tab-triage').classList.contains('hide') && !document.getElementById('tr-pane-vault').classList.contains('hide')));
+  check('showTab("vault") still lands on the Vault, now Triage\'s "Lock for later" view', await p.evaluate(() => {
+    showTab('roster'); showTab('vault');
+    const ok = !document.getElementById('tab-triage').classList.contains('hide') && !document.getElementById('tr-pane-vault').classList.contains('hide') &&
+      document.getElementById('tr-pane-feed').classList.contains('hide') && !document.querySelector('nav button[data-tab="vault"]');
+    showTrPane('feed'); return ok;
+  }));
+
+  // Upgrades: both sub-tabs
+  await p.click('nav button[data-tab="upgrades"]');
+  await p.click('#upRun'); await p.waitForTimeout(300);
+  const upState = await p.evaluate(() => ({ panels: document.querySelectorAll('#upList .panel').length, hidden: document.getElementById('upPanel').classList.contains('hide'), nan: document.getElementById('upList').innerHTML.indexOf('NaN') >= 0 }));
+  check('Upgrades renders a panel per character with a better card, without NaN', !upState.nan && (upState.panels > 0 || upState.hidden), JSON.stringify(upState));
+  await p.click('#upSubtabs button[data-uptab="headroom"]'); await p.waitForTimeout(400);
+  const hrState = await p.evaluate(() => ({ rows: document.querySelectorAll('#hrTable tbody tr').length, cache: hrRowsCache.length, owned: ownedChars().length, nan: document.getElementById('hrTable').innerHTML.indexOf('NaN') >= 0 }));
+  check('the Weakest slots sub-tab runs its pass on the way in (five rows per owned character)', hrState.cache === hrState.owned * 5 && hrState.rows > 0 && !hrState.nan, JSON.stringify(hrState));
+  await p.click('#upSubtabs button[data-uptab="craft"]');
+  await p.waitForFunction(() => ccCache, null, { timeout: 60000 });
+  const ccState = await p.evaluate(() => ({ rows: document.querySelectorAll('#ccTable tbody tr').length, owned: ownedChars().length,
+    first: /First card/.test(document.getElementById('ccSummary').innerHTML) && /likely \+\d/.test(document.getElementById('ccSummary').innerHTML),
+    likely: document.querySelectorAll('#ccTable tbody tr').length === document.querySelectorAll('#ccTable td span[title^="8 in 10"]').length,
+    chance: /^Chance this card ends up better than .*: \d{1,3}%/.test((document.querySelector('#ccCheckOut .ccChance') || {}).textContent.trim().replace(/\s+/g, ' ') || ''),
+    checkRows: document.querySelectorAll('#ccCheckOut tbody tr').length,
+    nan: /NaN|undefined/.test(document.getElementById('ccTable').innerHTML + document.getElementById('ccCheckOut').innerHTML + document.getElementById('ccSummary').innerHTML),
+    sorted: ccCache.rows.every((r, i, a) => !i || a[i - 1].gain >= r.gain) }));
+  check('the Custom card sub-tab ranks every owned character on the way in, largest gain first, names two cards and prices the check panel',
+    ccState.rows === ccState.owned && ccState.first && ccState.likely && ccState.chance && ccState.checkRows === 3 && !ccState.nan && ccState.sorted, JSON.stringify(ccState));
+  const ccFlow = await p.evaluate(() => {
+    const r = { n: state.cards.length };
+    document.querySelector('#ccTable .ccTry').click();
+    r.filled = document.getElementById('ccChar').value === ccCache.rows[0].ch.n && document.getElementById('ccSlot').value === ccCache.rows[0].best.slot;
+    document.getElementById('ccAdd').click();
+    const added = state.cards[state.cards.length - 1];
+    r.added = state.cards.length === r.n + 1 && added.level === 0 && added.rarity === 5 && !added.equipped && validateCard(added).length === 0;
+    r.stale = !!document.querySelector('#ccSummary .stale-run');
+    undo();
+    r.undone = state.cards.length === r.n;
+    r.fresh = !document.querySelector('#ccSummary .stale-run');
+    document.getElementById('ccElement').value = ccCache.rows[0].ch.e; renderCustomCard();
+    r.filtered = Array.from(document.querySelectorAll('#ccTable tbody tr')).length === ccCache.rows.filter(x => x.ch.e === ccCache.rows[0].ch.e).length;
+    document.getElementById('ccElement').value = ''; renderCustomCard();
+    return r;
+  });
+  const ccSpace = await p.evaluate(async () => {
+    const k = document.getElementById('ccKind');
+    k.value = 'space'; k.dispatchEvent(new Event('change'));
+    while (!ccCache || ccCache.o.kind !== 'space') await new Promise(res => setTimeout(res, 50));
+    const r = { allSpace: ccCache.rows.every(x => !x.best || x.best.slot === 'Space'), header: /Other Space sets/.test(document.getElementById('ccTable').innerHTML),
+      checkSlot: document.getElementById('ccSlot').value, checkSet: !!SPACE_SETS[document.getElementById('ccSet').value],
+      checkRows: document.querySelectorAll('#ccCheckOut tbody tr').length, nan: /NaN|undefined/.test(document.getElementById('ccTable').innerHTML + document.getElementById('ccCheckOut').innerHTML) };
+    k.value = 'heavens'; k.dispatchEvent(new Event('change'));
+    while (!ccCache || ccCache.o.kind !== 'heavens') await new Promise(res => setTimeout(res, 50));
+    r.back = document.getElementById('ccSlot').value !== 'Space';
+    return r;
+  });
+  check('Custom card: the card type switches the ranking and the check panel to Space cards and back',
+    ccSpace.allSpace && ccSpace.header && ccSpace.checkSlot === 'Space' && ccSpace.checkSet && ccSpace.checkRows === 3 && !ccSpace.nan && ccSpace.back, JSON.stringify(ccSpace));
+  check('Custom card: "Check a roll" fills the check panel, "Add to inventory" adds a level-0 card and marks the ranking stale, undo takes both back, and the element filter narrows the table',
+    ccFlow.filled && ccFlow.added && ccFlow.stale && ccFlow.undone && ccFlow.fresh && ccFlow.filtered, JSON.stringify(ccFlow));
+  await p.click('#upSubtabs button[data-uptab="ink"]');
+  await p.waitForFunction(() => ikCache, null, { timeout: 60000 });
+  const ikState = await p.evaluate(() => {
+    const html = () => document.getElementById('ikSummary').innerHTML + document.getElementById('ikTable').innerHTML + document.getElementById('ikCheckOut').innerHTML;
+    const r = { rows: document.querySelectorAll('#ikTable tbody tr').length, owned: ownedChars().length,
+      ladder: document.querySelectorAll('#ikSummary tbody tr').length, sorted: ikCache.rows.every((x, i, a) => !i || a[i - 1].gain >= x.gain),
+      likely: document.querySelectorAll('#ikTable tbody tr').length === document.querySelectorAll('#ikTable td span[title^="8 in 10"]').length,
+      needsAll: /Enter all four substats/.test(document.getElementById('ikCheckOut').textContent), nan: /NaN|undefined/.test(html()) };
+    // A click on another row puts that character in the table above; its buttons do not, and Enter does.
+    const focusName = () => (document.querySelector('#ikFocusBox b') || {}).textContent;
+    const rowsEl = [...document.querySelectorAll('#ikTable tr.ikRow')];
+    r.focusTop = focusName() === ikCache.rows[0].ch.n && rowsEl[0].classList.contains('on');
+    if (rowsEl.length > 2) {
+      rowsEl[1].querySelector('td').click();
+      const second = rowsEl[1].dataset.char;
+      r.focusClick = focusName() === second && rowsEl[1].classList.contains('on') && !rowsEl[0].classList.contains('on') &&
+        document.querySelectorAll('#ikFocusBox tbody tr').length === 5 &&
+        document.querySelector('#ikFocusBox').innerHTML.indexOf('+' + ikCache.rows.find(x => x.ch.n === second).byK[4].gain.toFixed(1)) >= 0;
+      rowsEl[2].querySelector('.ikOpt').onclick = () => {};   // keep the popup shut; the row must still ignore the click
+      rowsEl[2].querySelector('.ikOpt').click();
+      r.focusButton = focusName() === second;
+      rowsEl[2].dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
+      r.focusKey = focusName() === rowsEl[2].dataset.char;
+      renderInkCard();
+      r.focusKept = focusName() === rowsEl[2].dataset.char && document.querySelector('#ikTable tr.ikRow.on').dataset.char === rowsEl[2].dataset.char;
+      rowsEl[0].click();
+    } else Object.assign(r, { focusClick: true, focusButton: true, focusKey: true, focusKept: true });
+    // Fill the two random substats in, then put the first picked one on its lowest roll and the other on its highest.
+    const first = ikCache.rows[0], picked = first.best.picked, slot = first.best.opt.slot;
+    const free = ikLeft(slot, first.best.opt.card.main, picked);
+    const subs = [0, 1, 2, 3].map(i => i < picked.length
+      ? { stat: picked[i], value: ccTiers(picked[i], slot)[i === 0 ? 0 : 4], picked: true }
+      : { stat: free[i - picked.length], value: ccTiers(free[i - picked.length], slot)[2], picked: false });
+    ikRenderSubs(subs); ikCheck();
+    const advice = (document.querySelector('#ikCheckOut .ikAdvice') || {}).textContent || '';
+    r.lowRerolled = picked.length > 0 && new RegExp('Re-roll ' + picked[0].replace(/[%]/g, '.')).test(advice);
+    r.checkRows = document.querySelectorAll('#ikCheckOut tbody tr').length === picked.length;
+    ikRenderSubs(subs.map(s => s.picked ? Object.assign({}, s, { value: ccTiers(s.stat, slot)[4] }) : s)); ikCheck();
+    r.keepTop = /Keep it/.test((document.querySelector('#ikCheckOut .ikAdvice') || {}).textContent || '');
+    const n = state.cards.length;
+    document.getElementById('ikAdd').click();
+    r.added = state.cards.length === n + 1 && state.cards[n].level === 0 && validateCard(state.cards[n]).length === 0;
+    r.stale = !!document.querySelector('#ikSummary .stale-run');
+    undo();
+    r.undone = state.cards.length === n && !document.querySelector('#ikSummary .stale-run');
+    r.nan = r.nan || /NaN|undefined/.test(html());
+    return r;
+  });
+  check('Ink card: the sub-tab ranks every owned character on the way in, shows what each extra pick adds, and the check panel re-rolls a picked substat on its lowest roll and keeps one on its highest; adding the card marks the ranking stale and undo takes it back',
+    ikState.rows === ikState.owned && ikState.ladder === 5 && ikState.sorted && ikState.likely && ikState.needsAll && ikState.lowRerolled && ikState.checkRows &&
+    ikState.keepTop && ikState.added && ikState.stale && ikState.undone && !ikState.nan, JSON.stringify(ikState));
+  check('Ink card: the table of what more or fewer picks add follows the clicked row (or Enter on it), not its buttons, and survives a redraw',
+    ikState.focusTop && ikState.focusClick && ikState.focusButton && ikState.focusKey && ikState.focusKept, JSON.stringify(ikState));
+  await p.click('#upSubtabs button[data-uptab="fortune"]');
+  await p.waitForFunction(() => frCache, null, { timeout: 60000 });
+  const frState = await p.evaluate(async () => {
+    const html = () => document.getElementById('frSummary').innerHTML + document.getElementById('frTable').innerHTML;
+    const r = { rows: document.querySelectorAll('#frTable > tbody > tr').length, sets: frSets('heavens').length,
+      counted: frCache.chars.length === ownedChars().length, boxes: document.querySelectorAll('#frCharList input[data-fr]').length === CHARACTERS.length,
+      ticked: document.querySelectorAll('#frCharList input[data-fr]:checked').length === ownedChars().length,
+      pick: /Pick this set/.test(document.getElementById('frSummary').innerHTML) || /No set/.test(document.getElementById('frSummary').innerHTML),
+      sorted: frCache.rated.every((x, i, a) => !i || a[i - 1].value >= x.value), nan: /NaN|undefined/.test(html()) };
+    const box = document.querySelector('#frCharList input[data-fr]:checked');
+    box.checked = false; box.dispatchEvent(new Event('change'));
+    r.stale = !!document.querySelector('#frSummary .stale-run');
+    box.checked = true; box.dispatchEvent(new Event('change'));
+    r.fresh = !document.querySelector('#frSummary .stale-run');
+    const k = document.getElementById('frKind');
+    k.value = 'space'; k.dispatchEvent(new Event('change'));
+    while (!frCache || frCache.o.kind !== 'space') await new Promise(res => setTimeout(res, 50));
+    r.space = document.querySelectorAll('#frTable > tbody > tr').length === frSets('space').length && !/By slot/.test(document.getElementById('frTable').innerHTML) && !/NaN|undefined/.test(html());
+    k.value = 'heavens'; k.dispatchEvent(new Event('change'));
+    while (!frCache || frCache.o.kind !== 'heavens') await new Promise(res => setTimeout(res, 50));
+    return r;
+  });
+  check('Fortune Revelation: the sub-tab ranks every released set on the way in for everyone owned and not benched, best first; unticking a character marks it stale, and Orange switches to Space sets',
+    frState.rows === frState.sets && frState.counted && frState.boxes && frState.ticked && frState.pick && frState.sorted && !frState.nan &&
+    frState.stale && frState.fresh && frState.space, JSON.stringify(frState));
+  // Retrograde Card: a levelled spare card whose five upgrades all went to flat HP is added first,
+  // since the synthetic inventory's values are not drawn from the roll tables.
+  await p.evaluate(() => {
+    state.cards.push({ id: 'rgTest', slot: 'Moon', set: Object.keys(SETS).filter(s => !SETS[s].elem)[0], rarity: 5, level: 25, main: 'ATK%', equipped: null,
+      subs: [{ stat: 'Crit Rate', value: 2.0 }, { stat: 'Crit Multiplier', value: 4.1 }, { stat: 'Speed', value: 2.2 }, { stat: 'HP', value: 840 }] });
+    commit();
+  });
+  await p.click('#upSubtabs button[data-uptab="retro"]');
+  await p.waitForFunction(() => rgCache, null, { timeout: 60000 });
+  const rgState = await p.evaluate(async () => {
+    const html = () => document.getElementById('rgSummary').innerHTML + document.getElementById('rgTable').innerHTML;
+    const drawn = () => document.querySelectorAll('#rgTable > tbody > tr').length;
+    const set = (id, v) => { const el = document.getElementById(id); el.value = v; el.dispatchEvent(new Event('change')); };
+    const r = { rated: rgCache.rows.length, test: rgCache.rows.some(x => x.card.id === 'rgTest'),
+      sorted: rgCache.rows.every((x, i, a) => !i || a[i - 1].p.mean >= x.p.mean),
+      gainRows: drawn() === rgCache.rows.filter(x => x.p.mean >= UPGRADE_MIN_GAIN).length, nan: /NaN|undefined/.test(html()) };
+    set('rgShow', 'all');
+    r.allRows = drawn() === rgCache.rows.length;
+    set('rgSlot', 'Moon');
+    r.slot = drawn() === rgCache.rows.filter(x => x.card.slot === 'Moon').length && drawn() > 0;
+    set('rgSlot', ''); set('rgShow', 'gain');
+    const card = state.cards.find(c => c.id === 'rgTest');
+    card.level = 20; commit();
+    r.stale = !!document.querySelector('#rgSummary .stale-run');
+    card.level = 25; commit();
+    r.fresh = !document.querySelector('#rgSummary .stale-run');
+    set('rgFourth', 'same');
+    while (!rgCache || rgCache.o.fourth !== 'same') await new Promise(res => setTimeout(res, 50));
+    r.same = rgCache.rows.some(x => x.card.id === 'rgTest') && !/NaN|undefined/.test(html());
+    set('rgFourth', 'random');
+    while (!rgCache || rgCache.o.fourth !== 'random') await new Promise(res => setTimeout(res, 50));
+    state.cards = state.cards.filter(c => c.id !== 'rgTest'); commit();
+    return r;
+  });
+  check('Retrograde Card: the sub-tab rates every levelled 5★ card on the way in, largest average gain first; Show, Slot and the staleness banner work, and the fourth-substat rule re-runs it',
+    rgState.rated > 0 && rgState.test && rgState.sorted && rgState.gainRows && !rgState.nan && rgState.allRows && rgState.slot &&
+    rgState.stale && rgState.fresh && rgState.same, JSON.stringify(rgState));
+
+  // Targets dialog: open, save, reset. The Setup is edited in one place, the Loadout popup; the
+  // Targets dialog used to carry a second copy that saved on its own button.
+  await p.click('nav button[data-tab="roster"]');
+  await p.evaluate(() => editTargets('Hatsune Miku'));   // has stat targets, so the dialog shows her Setup line
+  await p.waitForTimeout(150);
+  const dlgOpen = await p.evaluate(() => document.getElementById('dlg').open && !!document.getElementById('tSave') &&
+    !document.getElementById('lWeapon') && !!document.getElementById('tOpenSetup'));
+  check('the Targets dialog opens without a second Setup editor, and links to the Loadout popup for it', dlgOpen);
+  await p.evaluate(() => { document.getElementById('tMMoon2').value = 'HP%'; document.getElementById('tSave').click(); });
+  await p.waitForTimeout(150);
+  const savedT = await p.evaluate(() => { const t = state.chars['Hatsune Miku'].targets; return { moon: t && t.main.Moon, closed: !document.getElementById('dlg').open, stamped: target(charDef('Hatsune Miku')).n }; });
+  check('saving targets stores a best-first main list', savedT.moon && savedT.moon.length === 3 && savedT.moon[2] === 'HP%' && savedT.closed && savedT.stamped === 'Hatsune Miku', JSON.stringify(savedT));
+  const setupSaved = await p.evaluate(() => {
+    editTargets('Hatsune Miku'); document.getElementById('tOpenSetup').click();
+    const body = document.getElementById('dlgBody');
+    const r = { inPopup: body.dataset.view === 'loadout' && body.dataset.name === 'Hatsune Miku' && !!document.getElementById('lRefine') };
+    const sel = document.getElementById('lRefine'); sel.value = '5'; sel.dispatchEvent(new Event('change'));
+    Object.assign(r, { refine: charLoadout('Hatsune Miku').refine, stillOpen: document.getElementById('dlg').open,
+      setupKeptOpen: !!document.querySelector('#dlgBody details.sect[data-k="setup"][open]'), targetsKept: !!state.chars['Hatsune Miku'].targets });
+    document.getElementById('dlg').close(); return r;
+  });
+  check('the Setup link opens the Loadout popup, whose fields save on change, keep the popup and its open section, and leave the target alone',
+    setupSaved.inPopup && setupSaved.refine === 5 && setupSaved.stillOpen && setupSaved.setupKeptOpen && setupSaved.targetsKept, JSON.stringify(setupSaved));
+  const editedOnly = await p.evaluate(() => { const t = state.chars['Hatsune Miku'].targets; editTargets('Hatsune Miku');
+    const r = { keys: Object.keys(t).sort().join(','), slots: Object.keys(t.main).join(','), hint: /data: ATK% \/ Damage Multiplier/.test(document.getElementById('dlgBody').innerHTML) };
+    document.getElementById('dlg').close(); return r; });
+  check('the save keeps only the edit (the Moon list) and the dialog shows the data\'s value beside it', editedOnly.keys === 'main,v' && editedOnly.slots === 'Moon' && editedOnly.hint, JSON.stringify(editedOnly));
+  await p.evaluate(() => { editTargets('Hatsune Miku'); document.getElementById('tReset').click(); });
+  await p.waitForTimeout(100);
+  check('"Reset to default" clears the saved target, keeps the Setup, and offers undo', await p.evaluate(() => state.chars['Hatsune Miku'].targets === null &&
+    state.chars['Hatsune Miku'].loadout && state.chars['Hatsune Miku'].loadout.refine === 5 && !document.getElementById('dlg').open &&
+    !document.getElementById('toast').classList.contains('hide') && !!undoSnap));
+  check('undo brings the reset target back, and a second undo has nothing left to take', await p.evaluate(() => {
+    document.getElementById('toastUndo').click();
+    const t = state.chars['Hatsune Miku'].targets;
+    const back = !!t && t.main.Moon.length === 3 && document.getElementById('toast').classList.contains('hide') && undoSnap === null;
+    undo();   // nothing to undo: a no-op
+    const still = !!state.chars['Hatsune Miku'].targets;
+    editTargets('Hatsune Miku'); document.getElementById('tReset').click(); hideToast();
+    return back && still && state.chars['Hatsune Miku'].targets === null;
+  }));
+  check('a Setup change in the Loadout popup stores no target, so the character keeps following the data',
+    await p.evaluate(() => {
+      openLoadout('Hatsune Miku');
+      const sel = document.getElementById('lRefine'); sel.value = '3'; sel.dispatchEvent(new Event('change'));
+      document.getElementById('dlg').close();
+      return state.chars['Hatsune Miku'].targets === null && charLoadout('Hatsune Miku').refine === 3;
+    }));
+  const teamCritUi = await p.evaluate(() => {
+    const input = document.getElementById('rsTeamCrit'), ren = charDef('Ren Amamiya');
+    const r = { field: input.value, before: buildScoreOf(ren, state.cards.filter(c => c.equipped === ren.n)).raw };
+    runTriage();
+    input.value = '25'; input.dispatchEvent(new Event('change'));
+    r.state = state.teamCrit; r.after = buildScoreOf(ren, state.cards.filter(c => c.equipped === ren.n)).raw;
+    r.stale = !!document.querySelector('#trSummary .stale-tc');
+    input.value = '250'; input.dispatchEvent(new Event('change')); r.clamped = state.teamCrit;
+    input.value = '0'; input.dispatchEvent(new Event('change'));
+    r.backToZero = state.teamCrit === 0 && !document.querySelector('#trSummary .stale-tc');
+    return r;
+  });
+  check('the Roster\'s team crit rate starts at 0, reprices a build when changed, clamps to 100 and flags a Triage run scored at the old value',
+    teamCritUi.field === '0' && teamCritUi.state === 25 && Math.abs(teamCritUi.after - teamCritUi.before) > 1e-9 && teamCritUi.stale && teamCritUi.clamped === 100 && teamCritUi.backToZero,
+    JSON.stringify(teamCritUi));
+  const teamBuffUi = await p.evaluate(() => {
+    const input = document.querySelector('.teamIn[data-k="atkPct"]'), ren = charDef('Ren Amamiya');
+    const r = { field: input.value, before: buildScoreOf(ren, state.cards.filter(c => c.equipped === ren.n)).raw, sig: dataSignature() };
+    runTriage();
+    input.value = '80'; input.dispatchEvent(new Event('change'));
+    r.state = state.teamBuffs.atkPct; r.after = buildScoreOf(ren, state.cards.filter(c => c.equipped === ren.n)).raw;
+    r.stale = (document.querySelector('#trSummary .stale-tc') || {}).textContent || '';
+    r.sigMoved = dataSignature() !== r.sig; r.chip = document.getElementById('setTc').textContent;
+    input.value = '9999'; input.dispatchEvent(new Event('change')); r.clamped = state.teamBuffs.atkPct;
+    input.value = '0'; input.dispatchEvent(new Event('change'));
+    r.backToZero = !('atkPct' in state.teamBuffs) && !document.querySelector('#trSummary .stale-tc') && dataSignature() === r.sig;
+    return r;
+  });
+  check('the team buffs start at 0, reprice a build when changed, clamp, show on the chip, flag a Triage run scored without them, and 0 restores the fingerprint',
+    teamBuffUi.field === '0' && teamBuffUi.state === 80 && Math.abs(teamBuffUi.after - teamBuffUi.before) > 1e-9 && /ATK \+80%/.test(teamBuffUi.stale) &&
+    teamBuffUi.sigMoved && /buffs/.test(teamBuffUi.chip) && teamBuffUi.clamped === 500 && teamBuffUi.backToZero, JSON.stringify(teamBuffUi));
+  const anyMain = await p.evaluate(() => { editTargets('Chizuko Nagao'); const sel = document.getElementById('tMMoon0');
+    const r = { v: sel.value, label: sel.options[sel.selectedIndex].text }; document.getElementById('tSave').click();
+    return Object.assign(r, { saved: state.chars['Chizuko Nagao'].targets }); });
+  check('an open slot reads "any" in the Targets dialog, and saving it unchanged stores no target', anyMain.v === '' && anyMain.label === 'any' && anyMain.saved === null, JSON.stringify(anyMain));
+
+  // Inventory: the add-card form
+  await p.click('nav button[data-tab="inv"]');
+  const before = await p.evaluate(() => state.cards.length);
+  await p.selectOption('#fSlot', 'Star');
+  await p.evaluate(() => { document.getElementById('fSlot').dispatchEvent(new Event('change')); });
+  await p.selectOption('#fSet', 'Hindrance');
+  await p.selectOption('#fRar', '5');
+  await p.fill('#fLvl', '0');
+  await p.selectOption('#fMain', 'Crit Rate');
+  await p.selectOption('.subStat[data-i="1"]', 'Speed'); await p.fill('.subVal[data-i="1"]', '4');
+  await p.selectOption('.subStat[data-i="2"]', 'ATK%'); await p.fill('.subVal[data-i="2"]', '2');
+  await p.selectOption('.subStat[data-i="3"]', 'DEF'); await p.fill('.subVal[data-i="3"]', '27');
+  await p.click('#fAdd'); await p.waitForTimeout(100);
+  const rejected = await p.evaluate(() => ({ n: state.cards.length, msg: document.getElementById('fMsg').textContent }));
+  check('the add-card form refuses an impossible card and says why', rejected.n === before && /Speed/.test(rejected.msg), rejected.msg);
+  await p.fill('.subVal[data-i="1"]', '2');
+  await p.click('#fAdd'); await p.waitForTimeout(100);
+  const added = await p.evaluate(() => ({ n: state.cards.length, last: state.cards[state.cards.length - 1], rows: document.querySelectorAll('#invTable tbody tr').length }));
+  check('the add-card form adds a legal card and redraws the inventory', added.n === before + 1 && added.last.slot === 'Star' && added.last.main === 'Crit Rate' && added.last.subs.length === 3 && added.rows > 0, JSON.stringify({ n: added.n, before }));
+
+  // Import review dialog: renders ambiguous rows, applies decisions, offers removal of unseen cards
+  await p.click('nav button[data-tab="data"]');
+  const importCheck = await p.evaluate(() => {
+    const ix1 = { id: 'ix1', slot: 'Moon', set: 'Power', rarity: 5, level: 15, main: 'ATK%', equipped: null, subs: [{ stat: 'Speed', value: 2 }, { stat: 'HP', value: 84 }, { stat: 'DEF', value: 27 }] };
+    const ix2 = { id: 'ix2', slot: 'Star', set: 'Opulence', rarity: 5, level: 15, main: 'Crit Rate', equipped: null, subs: [{ stat: 'Crit Multiplier', value: 8 }, { stat: 'ATK%', value: 6 }, { stat: 'DEF', value: 27 }] };
+    state.cards.push(ix1, ix2);
+    const incomingUpdate = { slot: 'Moon', set: 'Power', rarity: 5, level: 25, main: 'ATK%', equipped: null, subs: [{ stat: 'Speed', value: 4 }, { stat: 'HP', value: 84 }, { stat: 'DEF', value: 27 }, { stat: 'ATK', value: 27 }] };
+    // a fingerprint the synthetic inventory does not hold, so this is new outright
+    const freshSet = Object.keys(SETS).find(s => !state.cards.some(c => c.slot === 'Sky' && c.set === s && c.rarity === 4 && c.main === 'DEF%'));
+    const incomingNew = { slot: 'Sky', set: freshSet, rarity: 4, level: 20, main: 'DEF%', equipped: null, subs: [{ stat: 'HP%', value: 2.1 }, { stat: 'DEF', value: 27 }, { stat: 'ATK', value: 27 }] };
+    const incomingAmbiguous = { slot: 'Star', set: 'Opulence', rarity: 5, level: 20, main: 'Crit Rate', equipped: null, subs: [{ stat: 'Crit Multiplier', value: 1 }, { stat: 'ATK%', value: 1 }, { stat: 'DEF', value: 27 }] };
+    const result = mergeImport(state.cards, [incomingUpdate, incomingNew, incomingAmbiguous]);
+    renderImportReview(result, ['card 9: made up']);
+    return {
+      ambiguousShown: document.querySelectorAll('[data-amb]').length, dlgOpen: document.getElementById('dlg').open,
+      toAdd: result.toAdd.length, toUpdate: result.toUpdate.length, unmatched: result.unmatched.length,
+      removeBox: !!document.getElementById('impRemoveUnseen'), invalidShown: /made up/.test(document.getElementById('dlgBody').innerHTML),
+      total: state.cards.length
+    };
+  });
+  check('the import review classifies 1 new / 1 level-up / 1 decision and lists the rest as unmatched', importCheck.toAdd === 1 && importCheck.toUpdate === 1 && importCheck.ambiguousShown === 1 && importCheck.unmatched > 0, JSON.stringify(importCheck));
+  check('the import review opens, shows the invalid list and offers unseen-card removal behind an unchecked box', importCheck.dlgOpen && importCheck.invalidShown && importCheck.removeBox);
+  await p.evaluate(() => { document.getElementById('applyImport').click(); });
+  await p.waitForTimeout(150);
+  const afterImport = await p.evaluate(t => ({
+    ix1Level: (state.cards.find(c => c.id === 'ix1') || {}).level,
+    ix2StillAtOldLevel: (state.cards.find(c => c.id === 'ix2') || {}).level === 15,
+    totalCards: state.cards.length, expected: t + 1, msg: document.getElementById('dataMsg').textContent
+  }), importCheck.total);
+  check('applying the review updates the level-up in place, adds the new card, and skips the ambiguous one by default',
+    afterImport.ix1Level === 25 && afterImport.ix2StillAtOldLevel && afterImport.totalCards === afterImport.expected && /applied/i.test(afterImport.msg), JSON.stringify(afterImport));
+  check('applying without the removal box ticked removes nothing', afterImport.totalCards === afterImport.expected);
+  const decided = await p.evaluate(() => {
+    const ix3 = { id: 'ix3', slot: 'Star', set: 'Opulence', rarity: 5, level: 15, main: 'Crit Rate', equipped: null, subs: [{ stat: 'Crit Multiplier', value: 8 }, { stat: 'ATK%', value: 6 }, { stat: 'DEF', value: 27 }] };
+    state.cards.push(ix3);
+    const inc = { slot: 'Star', set: 'Opulence', rarity: 5, level: 20, main: 'Crit Rate', equipped: null, subs: [{ stat: 'Crit Multiplier', value: 1 }, { stat: 'ATK%', value: 1 }, { stat: 'DEF', value: 27 }] };
+    const result = mergeImport([ix3], [inc]);
+    renderImportReview(result, []);
+    const sel = document.querySelector('[data-amb]'); sel.value = 'replace';
+    const n = state.cards.length;
+    document.getElementById('applyImport').click();
+    return { replaced: state.cards.find(c => c.id === 'ix3').level === 20, same: state.cards.length === n };
+  });
+  check('an ambiguous row set to "Replace existing" overwrites in place under the same id', decided.replaced && decided.same);
+
+  /* ================================================================================
+     11. The page's safety net and layout (the Sep 2026 UI pass). Each of these was a real
+         defect on the user's 4000-card save, or is the invariant a fix rests on.
+     ================================================================================ */
+  const noCjk = await p.evaluate(() => {
+    const re = /[가-힣ᄀ-ᇿ㄰-㆏぀-ヿ一-鿿]/, bad = [];
+    const walk = (v, where) => {
+      if (typeof v === 'string') { if (re.test(v)) bad.push(where); }
+      else if (v && typeof v === 'object') Object.keys(v).forEach(k => walk(v[k], where + '.' + k));
+    };
+    walk(CHARACTERS, 'CHARACTERS'); walk(SETS, 'SETS'); walk(SPACE_SETS, 'SPACE_SETS'); walk(CHAR_STATS, 'CHAR_STATS');
+    return bad;
+  });
+  check('no character, set, Space card or stat text the page shows carries Korean or Japanese script', noCjk.length === 0, noCjk.slice(0, 3).join(' | '));
+  const tiles = await p.evaluate(() => {
+    let nulls = 0, notNeeded = 0;
+    CHARACTERS.forEach(c => {
+      const t = target(c), h = statsSummaryHtml(c, [], charLoadout(c.n), false, idealLoadout(c, t, 55).cards);
+      if (/width:null/.test(h)) nulls++;
+      if (/not in the perfect build/.test(h)) notNeeded++;
+    });
+    return { nulls, notNeeded };
+  });
+  check('a stat the perfect build carries none of reads "not in the perfect build", never a full bar from width:null%', tiles.nulls === 0 && tiles.notNeeded > 0, JSON.stringify(tiles));
+
+  const saveUi = await p.evaluate(() => {
+    markSaved();
+    const st = () => document.getElementById('saveState').textContent;
+    const r = { clean0: !isDirty() && !/Unsaved/.test(st()) };
+    toggleOwned('Aigis');
+    r.dirty = isDirty() && /Unsaved changes/.test(st()) && document.getElementById('hdrSave').classList.contains('primary');
+    r.toast = !document.getElementById('toast').classList.contains('hide');
+    undo();
+    r.cleanAgain = !isDirty() && !/Unsaved/.test(st()) && state.chars['Aigis'].owned === false;
+    return r;
+  });
+  check('the header says when there are unsaved changes, and an undo back to the saved state clears it', saveUi.clean0 && saveUi.dirty && saveUi.toast && saveUi.cleanAgain, JSON.stringify(saveUi));
+
+  const delUi = await p.evaluate(() => {
+    showTab('inv');
+    const n0 = state.cards.length, c = state.cards.find(x => x.equipped === 'Ren Amamiya');
+    document.getElementById('flQ').value = 'Ren Amamiya'; renderInv();
+    const chip = () => document.querySelector('#rsGrid .cc[data-ch="Ren Amamiya"] .tag.bs').getAttribute('title');
+    const before = chip();
+    document.querySelector(`#invTable [data-del="${c.id}"]`).click();
+    const r = { gone: !state.cards.some(x => x.id === c.id) && state.cards.length === n0 - 1, rosterRedrawn: chip() !== before,
+      toast: /Deleted/.test(document.getElementById('toastMsg').textContent) && !document.getElementById('toast').classList.contains('hide') };
+    document.getElementById('toastUndo').click();
+    const back = state.cards.find(x => x.id === c.id);
+    r.restored = !!back && back.equipped === 'Ren Amamiya' && state.cards.length === n0 && chip() === before;
+    document.getElementById('flQ').value = ''; renderInv();
+    return r;
+  });
+  check('deleting a card from the Inventory redraws the Roster too, and offers an undo that brings it back where it was', delUi.gone && delUi.rosterRedrawn && delUi.toast && delUi.restored, JSON.stringify(delUi));
+
+  const staleUi = await p.evaluate(() => {
+    runTriage();
+    const r = { fresh: !document.querySelector('#trSummary .stale-run') };
+    const c = state.cards.find(x => x.equipped === 'Morgana' && x.slot === 'Sun' && !x.locked);
+    unequipCard(c.id);
+    r.stale = !!document.querySelector('#trSummary .stale-run') && !document.querySelector('#trSummary .stale-tc');
+    swapCard('Morgana', 'Sun', c.id);
+    r.freshAgain = !document.querySelector('#trSummary .stale-run');
+    return r;
+  });
+  check('a Triage run says it is stale after any change it read (an unequip), and not once the change is put back', staleUi.fresh && staleUi.stale && staleUi.freshAgain, JSON.stringify(staleUi));
+
+  const vaultStale = await p.evaluate(() => {
+    runVault();
+    const banner = () => !!document.querySelector('#vaSummary .stale-run');
+    const worn = state.cards.find(x => x.equipped && !x.locked), who = worn.equipped;
+    unequipCard(worn.id);
+    const r = { afterUnequip: banner() };     // the Vault never reads who wears a card
+    swapCard(who, worn.slot, worn.id);
+    const c = state.cards.find(x => x.subs && x.subs.length);
+    c.subs[0].value = +(c.subs[0].value + 0.1).toFixed(1); commit();
+    r.afterRoll = banner();                    // ...but it does read the card itself
+    c.subs[0].value = +(c.subs[0].value - 0.1).toFixed(1); commit();
+    r.afterRevert = banner();
+    return r;
+  });
+  check('the Vault is not marked stale by an equip it never reads, and is by a change to a card', !vaultStale.afterUnequip && vaultStale.afterRoll && !vaultStale.afterRevert, JSON.stringify(vaultStale));
+
+  const undoExpiry = await p.evaluate(() => {
+    const before = snapshotState();
+    const c = state.cards.find(x => !x.equipped);
+    deleteCard(c.id);
+    const r = { offered: !!undoSnap };
+    // a later change that offers no undo of its own: the delete's undo must not survive it, or
+    // pressing it would silently revert this change too
+    openLoadout('Ren Amamiya');
+    const sel = document.getElementById('lRefine'); sel.value = sel.value === '7' ? '6' : '7'; sel.dispatchEvent(new Event('change'));
+    document.getElementById('dlg').close();
+    r.expired = undoSnap === null && document.getElementById('toast').classList.contains('hide');
+    undoSnap = before; undo();                 // put everything back for the checks below
+    r.restored = state.cards.some(x => x.id === c.id);
+    return r;
+  });
+  check('an undo is only offered until the next change, so it can never revert a later edit', undoExpiry.offered && undoExpiry.expired && undoExpiry.restored, JSON.stringify(undoExpiry));
+
+  const optPick = await p.evaluate(() => {
+    const sel = () => document.getElementById('optChar').value;
+    openCharacterDetail('Aigis');                                      // not owned: a roster click-through
+    const c = state.cards.find(x => x.equipped && !x.locked), who = c.equipped;
+    unequipCard(c.id); swapCard(who, c.slot, c.id);                    // two commits
+    const r = { forcedHolds: sel() === 'Aigis' };
+    const opt = document.getElementById('optChar'); opt.value = 'Ren Amamiya'; opt.dispatchEvent(new Event('change'));
+    toggleBenched('Ren Amamiya');                                      // benching the one being looked at
+    r.benchedLeaves = sel() !== 'Ren Amamiya' && !/not owned/.test(opt.options[opt.selectedIndex].text);
+    toggleBenched('Ren Amamiya'); hideToast(); showTab('roster');
+    return r;
+  });
+  check('Optimise holds a character it was sent to, but an ordinary pick follows the owned list', optPick.forcedHolds && optPick.benchedLeaves, JSON.stringify(optPick));
+
+  const loSect = await p.evaluate(() => {
+    const secOpen = k => !!document.querySelector(`#dlgBody details.sect[data-k="${k}"][open]`);
+    openLoadout('Ren Amamiya');
+    document.querySelector('#dlgBody details.sect[data-k="stats"]').open = true;
+    document.querySelector('#dlgBody [data-pick-slot]').click();      // to the card picker...
+    document.getElementById('cpBack').click();                        // ...and back
+    const r = { statsKept: secOpen('stats') };
+    // a character whose Setup was saved, with the section collapsed: the Setup link still opens it
+    openLoadout('Hatsune Miku');
+    document.querySelector('#dlgBody details.sect[data-k="setup"]').open = false;
+    document.getElementById('dlg').close();
+    editTargets('Hatsune Miku'); document.getElementById('tOpenSetup').click();
+    r.linkOpensSetup = !setupIsDefault('Hatsune Miku') && secOpen('setup');
+    document.getElementById('dlg').close();
+    return r;
+  });
+  check('the Loadout popup keeps its open sections through the card picker, and a Setup link opens the Setup', loSect.statsKept && loSect.linkOpensSetup, JSON.stringify(loSect));
+
+  const sameScore = await p.evaluate(() => {
+    openLoadout('Ren Amamiya');
+    const block = [...document.querySelectorAll('#dlgBody .loadout .lo')].find(b => b.querySelector('[data-edit-slot]'));
+    const sl = block.querySelector('[data-edit-slot]').dataset.editSlot;
+    const popup = block.querySelector('h4 .score').textContent.trim();
+    openCardPicker('Ren Amamiya', sl);
+    const picker = document.querySelector('#dlgBody .pick tr.cur td.score').textContent.trim();
+    document.getElementById('dlg').close();
+    return { sl, popup, picker };
+  });
+  check('an equipped card reads the same score in the Loadout popup and in the card picker it opens', sameScore.popup === sameScore.picker, JSON.stringify(sameScore));
+
+  /* confirm() answers an instant false in a sandboxed frame without allow-modals, which would
+     make Load do nothing whenever there is unsaved work, so the question is asked in the toast. */
+  const askUi = await p.evaluate(() => {
+    const snap = snapshotState();
+    toggleBenched('Ren Amamiya');                                    // something unsaved
+    const fi = document.getElementById('fileIn'); let picked = 0; fi.click = () => { picked++; };
+    requestLoad();
+    const r = { asked: !document.getElementById('toast').classList.contains('hide') &&
+      document.getElementById('toastUndo').textContent === 'Load anyway' && picked === 0 };
+    document.getElementById('toastUndo').click();
+    r.yesOpensPicker = picked === 1;
+    markSaved(); requestLoad(); r.noQuestionWhenSaved = picked === 2;
+    delete fi.click; undoSnap = snap; undo();
+    return r;
+  });
+  check('Load over unsaved changes asks in the toast, and its button opens the file picker; with nothing unsaved it just opens',
+    askUi.asked && askUi.yesOpensPicker && askUi.noQuestionWhenSaved, JSON.stringify(askUi));
+
+  const bindUi = await p.evaluate(() => {
+    showTab('inv'); renderInv(); renderRoster();   // the Roster drawn last used to capture Inventory's Edit buttons
+    document.querySelector('#invTable [data-edit]').click();
+    const view = () => document.getElementById('dlg').open && document.getElementById('dlgBody').dataset.view;
+    const r = { invEdit: view() === 'card' };
+    document.getElementById('dlg').close();
+    renderRoster(); renderInv();                     // ...and the Inventory drawn last, the Roster's Targets buttons
+    document.querySelector('#rsGrid [data-edit]').click();
+    r.rosterTargets = view() === 'targets';
+    document.getElementById('dlg').close();
+    const was = { tr: trSort.key, trDir: trSort.dir, inv: invSort.key };
+    document.querySelector('#trTable th.sortH[data-sort="set"] button').click();
+    r.triageSorted = trSort.key === 'set' && invSort.key === was.inv;
+    trSort.key = was.tr; trSort.dir = was.trDir; renderTriageTable();
+    return r;
+  });
+  check('every table and grid binds its own buttons: Inventory Edit, Roster Targets and a Triage column header each do their own job', bindUi.invEdit && bindUi.rosterTargets && bindUi.triageSorted, JSON.stringify(bindUi));
+
+  const chipUi = await p.evaluate(() => {
+    trVerdictSel = []; renderTriageTable();
+    const chip = [...document.querySelectorAll('#trChips [data-tier]')].find(b => !b.disabled);
+    const tier = +chip.dataset.tier, count = +chip.querySelector('b').textContent;
+    chip.click();
+    const shown = parseInt(document.getElementById('trFlCount').textContent, 10);
+    const want = trCache.rated.filter(x => trTier(x) === tier).length;
+    const r = { tier, count, shown, want, pressed: document.querySelector(`#trChips [data-tier="${tier}"]`).getAttribute('aria-pressed') === 'true' };
+    document.querySelector(`#trChips [data-tier="${tier}"]`).click();
+    r.cleared = trVerdictSel.length === 0;
+    return r;
+  });
+  check('a Triage verdict chip counts its verdict and narrows the table to it', chipUi.count === chipUi.want && chipUi.shown === chipUi.want && chipUi.pressed && chipUi.cleared, JSON.stringify(chipUi));
+
+  await p.evaluate(() => { showTab('roster'); trCache = null; vaCache = null; document.getElementById('trPanel').classList.add('hide'); document.getElementById('trSummary').innerHTML = ''; });
+  await p.click('nav button[data-tab="triage"]');
+  await p.waitForFunction(() => /Rated \d+/.test(document.getElementById('trSummary').textContent), null, { timeout: 20000 }).catch(() => {});
+  check('Triage runs by itself the first time it is opened, and so does its Lock for later view', await p.evaluate(() => {
+    const ran = !!trCache && document.querySelectorAll('#trTable tbody tr').length > 0;
+    showTrPane('vault'); const vault = !!vaCache && document.querySelectorAll('#vaTable tbody tr').length > 0;
+    showTrPane('feed'); return ran && vault;
+  }));
+
+  const dlgClick = await p.evaluate(() => {
+    editCard(state.cards[0].id);
+    const d = document.getElementById('dlg'), rc = d.getBoundingClientRect();
+    d.dispatchEvent(new MouseEvent('click', { bubbles: true, clientX: rc.left + 6, clientY: rc.top + 6 }));   // its own padding
+    const stays = d.open;
+    d.dispatchEvent(new MouseEvent('click', { bubbles: true, clientX: 1, clientY: 1 }));                       // the backdrop
+    return { stays, closes: !d.open };
+  });
+  check('a click in the dialog\'s own padding leaves it open; a click on the backdrop closes it', dlgClick.stays && dlgClick.closes, JSON.stringify(dlgClick));
+
+  const a11y = await p.evaluate(() => {
+    showTab('roster'); renderRoster();
+    const fields = [...document.querySelectorAll('main .field')].filter(f => f.querySelector('input, select, textarea'));
+    const unlinked = fields.filter(f => { const l = f.querySelector('label'); return !l || !l.htmlFor || !document.getElementById(l.htmlFor); });
+    const heads = [...document.querySelectorAll('th.sortH')];
+    const cards = document.querySelectorAll('#rsGrid .cc');
+    return { fields: fields.length, unlinked: unlinked.length, heads: heads.length,
+      buttons: heads.filter(h => h.querySelector('button.thBtn') && h.hasAttribute('aria-sort')).length,
+      cardsFocusable: cards.length > 0 && [...cards].every(c => c.tabIndex === 0 && c.getAttribute('role') === 'button') };
+  });
+  check('every field has a linked label, every sortable header is a button with aria-sort, and roster cards are focusable buttons',
+    a11y.fields > 20 && a11y.unlinked === 0 && a11y.heads > 0 && a11y.buttons === a11y.heads && a11y.cardsFocusable, JSON.stringify(a11y));
+
+  const kb = await p.evaluate(() => {
+    const card = document.querySelector('#rsGrid .cc[data-ch]');
+    card.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
+    const body = document.getElementById('dlgBody');
+    const r = { opened: document.getElementById('dlg').open && body.dataset.view === 'loadout' && body.dataset.name === card.dataset.ch };
+    const lo = body.querySelector('.loadout'), setup = body.querySelector('details.sect[data-k="setup"]');
+    r.cardsFirst = !!lo && !!setup && !!(lo.compareDocumentPosition(setup) & Node.DOCUMENT_POSITION_FOLLOWING);
+    document.getElementById('dlg').close();
+    return r;
+  });
+  check('Enter on a roster card opens its Loadout popup, which shows the five cards before the Setup', kb.opened && kb.cardsFirst, JSON.stringify(kb));
+
+  /* The visual vocabulary (Nov 2026): a build score carries a ring, a character's five slots are pips
+     whose state is the worn card's, every tab has an icon, a Triage verdict has its kind as a class
+     and its word as its text, an avatar's initials are a pseudo-element so innerText is the name alone. */
+  const viz = await p.evaluate(() => {
+    const n = ownedChars()[0].n, t = target(charDef(n));
+    const card = document.querySelector(`#rsGrid .cc[data-ch="${CSS.escape(n)}"]`);
+    const pips = card ? [...card.querySelectorAll('.pips .pip')] : [];
+    const worn = state.cards.filter(c => c.equipped === n);
+    const pipsRight = pips.length === SLOTS.length && SLOTS.every((sl, i) => {
+      const c = worn.find(x => x.slot === sl), p = pips[i];
+      const inSet = c && (sl === 'Space' ? t.space === c.set : (t.sets || []).includes(c.set));
+      return p.classList.contains(sl) && p.classList.contains('on') === !!c && p.classList.contains('set') === !!inSet;
+    });
+    const tag = card && card.querySelector('.tag.bs');
+    const ring = tag && tag.querySelector('.ring');
+    const ringRight = !!ring && (worn.length ? Math.abs(+ring.style.getPropertyValue('--p') - buildScore(charDef(n), worn).score) < 1e-9 : true);
+    const icons = [...document.querySelectorAll('nav button[data-tab]')].every(b => b.querySelector('svg.navIco'));
+    const vt = document.querySelector('#trTable .tag.vt');
+    const verdictRight = !!vt && /^(keep|hold|feed|lock)$/.test(vt.textContent.trim()) && [...vt.classList].some(c => /^v-(keep|hold|feed|lock|upgrade)$/.test(c));
+    const av = document.createElement('div'); av.innerHTML = avatarHtml(n, 24);
+    const avatarRight = av.textContent.trim() === '' && av.querySelector('.avatar').dataset.i === initials(n);
+    return { n, pipsRight, ringRight, icons, verdictRight, avatarRight, pips: pips.length };
+  });
+  check('the Roster card carries five slot pips in the worn cards\' state and a build-score ring; tabs have icons; a Triage verdict is a word with its kind as a class; an avatar has no text',
+    viz.pipsRight && viz.ringRight && viz.icons && viz.verdictRight && viz.avatarRight, JSON.stringify(viz));
+
+  const listUi = await p.evaluate(() => {
+    rosterView = 'list'; renderRoster();
+    const r = { rows: document.querySelectorAll('#rsList tr.rrow').length, shown: parseInt(document.getElementById('rsCount').textContent, 10),
+      gridEmpty: document.getElementById('rsGrid').children.length === 0, panel: !document.getElementById('rsListPanel').classList.contains('hide') };
+    document.querySelector('#rsList tr.rrow').click();
+    r.opens = document.getElementById('dlg').open; document.getElementById('dlg').close();
+    rosterView = 'cards'; renderRoster();
+    return r;
+  });
+  check('the Roster\'s list view draws one row per character shown, and a row opens the Loadout popup', listUi.rows === listUi.shown && listUi.gridEmpty && listUi.panel && listUi.opens, JSON.stringify(listUi));
+  check('a save that ticked the old "Hide not owned" box opens the Roster on owned characters', await p.evaluate(() => {
+    const was = document.getElementById('rsFilter').value;
+    document.getElementById('rsFilter').value = 'all'; applyPrefs({ rsHideUnowned: true });
+    const ok = document.getElementById('rsFilter').value === 'owned';
+    document.getElementById('rsFilter').value = was; renderRoster(); return ok;
+  }));
+
+  const optUi = await p.evaluate(() => {
+    const n = 'Makoto Yuki';
+    renderOpt(n); optStale = false; showTab('opt'); runOpt();
+    const panels = [...document.querySelectorAll('#optOut > .panel')];
+    const plans = panels.filter(pn => /Other set plans considered/.test(pn.textContent))
+      .flatMap(pn => [...pn.querySelectorAll('tbody td.score')].map(td => parseFloat(td.textContent)));
+    // the first alternative's figure is the build score its own five cards would earn
+    const ch = charDef(n), t = target(ch), P4 = +document.getElementById('optP4').value;
+    const rr = bestPlan(ch, poolFor(document.getElementById('optPool').value, +document.getElementById('optRarity').value, n),
+      { policy: document.getElementById('optPolicy').value, p4value: P4 });
+    const a0 = rr.alternatives[0];
+    const a0cards = a0 ? ['Sun', 'Moon', 'Star', 'Sky'].map(sl => a0.picks[sl].c).concat(a0.space ? [a0.space.c] : []) : [];
+    const want = a0 ? buildScoreOf(ch, a0cards, P4, charLoadout(n), idealLoadout(ch, t, P4), t).raw : NaN;
+    const r = { recFirst: panels.length > 1 && /Recommended loadout/.test(panels[0].querySelector('h2').textContent) && /Build score/.test(panels[0].textContent),
+      plans: plans.length, onScale: plans.length > 0 && plans.every(v => v > 0 && v <= 100.5) && Math.abs(plans[0] - want) < 0.051, first: plans[0], want };
+    // "Mark these as equipped" can be taken back
+    const worn = () => state.cards.filter(c => c.equipped === 'Makoto Yuki').map(c => c.id).sort().join();
+    const one = state.cards.find(c => c.equipped === 'Makoto Yuki');
+    unequipCard(one.id);
+    const stripped = worn();
+    document.getElementById('equipBtn').click();
+    r.equipped = worn() !== stripped;
+    document.getElementById('toastUndo').click();
+    r.undone = worn() === stripped;
+    swapCard('Makoto Yuki', one.slot, one.id); hideToast();
+    return r;
+  });
+  check('Optimise leads with the recommendation, scores other plans on the 0-100 build scale, and "Mark these as equipped" can be undone',
+    optUi.recFirst && optUi.onScale && optUi.equipped && optUi.undone, JSON.stringify(optUi));
+
+  /* The alternatives table is ordered by what the pick was made on (build score with the card in
+     the pick's place), not by the per-card Score: bestPlan's same-set swap can pick a card that
+     scores lower on its own, and sorted on the Score the table put the passed-over card first,
+     under a loadout that recommended the other (Kotone Shiomi, 28 Sep 2026). */
+  const altUi = await p.evaluate(() => {
+    const bad = [];
+    const was = $('#optChar').value;
+    ownedChars().slice(0, 8).forEach(ch => {
+      renderOpt(ch.n); $('#optChar').value = ch.n; runOpt();
+      const panel = [...document.querySelectorAll('#optOut > .panel')].find(pn => /Best alternatives per slot/.test(pn.textContent));
+      if (!panel) { bad.push(ch.n + ': no table'); return; }
+      const r = bestPlan(ch, poolFor($('#optPool').value, +$('#optRarity').value, ch.n), { policy: $('#optPolicy').value, p4value: +$('#optP4').value });
+      SLOTS.forEach(sl => {
+        const cells = [...panel.querySelectorAll('tr.slotrow-' + sl)].map(tr => tr.children[6].textContent.trim());
+        if (!cells.length) return;
+        const vals = cells.map(s => s === 'picked' ? 0 : parseFloat(s.replace('−', '-')));
+        if (cells.filter(s => s === 'picked').length !== 1) bad.push(`${ch.n} ${sl}: ${cells.join('/')}`);
+        if (vals.some((v, i) => i && v > vals[i - 1] + 0.05)) bad.push(`${ch.n} ${sl} out of order: ${cells.join('/')}`);
+        if (r.best.kind === '4pc' && sl !== 'Space' && cells[0] !== 'picked') bad.push(`${ch.n} ${sl}: pick not first (${cells.join('/')})`);
+      });
+    });
+    renderOpt(); $('#optChar').value = was;
+    return bad;
+  });
+  check('Optimise\'s alternatives are ordered by "vs pick", and in a 4-piece plan the pick heads every Heavens slot', altUi.length === 0, altUi.join('; '));
+
+  /* When the preferred 4-piece cannot be built and the pick is another set, Optimise says so at the
+     top (Shoki [Notte], Nov 2026: a Gain Sun and Moon only, and a Virtue 4-piece read as the planner
+     preferring Virtue). Not when the pick uses the preferred set, and not under "Pure stat maximum". */
+  const prefMiss = await p.evaluate(() => {
+    const bad = [];
+    const was = { ch: $('#optChar').value, pol: $('#optPolicy').value, pool: $('#optPool').value };
+    const shown = () => !!document.querySelector('#optNotes .optPrefMissing');
+    let seenOn = 0, seenOff = 0;
+    ownedChars().slice(0, 12).forEach(ch => {
+      ['force4', 'pref', 'stats'].forEach(pol => {
+        renderOpt(ch.n); $('#optChar').value = ch.n; $('#optPolicy').value = pol; runOpt();
+        const t = target(ch);
+        const r = bestPlan(ch, poolFor($('#optPool').value, +$('#optRarity').value, ch.n), { policy: pol, p4value: +$('#optP4').value });
+        if (!r.best) return;
+        const want = pol !== 'stats' && !r.best.sets.some(s => t.sets.includes(s)) && r.incomplete.length > 0;
+        if (want !== shown()) bad.push(`${ch.n} ${pol}: notice ${shown()}, expected ${want}`);
+        if (want) { seenOn++; if (!r.incomplete.every(pl => $('#optNotes').textContent.includes(pl.sets[0]))) bad.push(ch.n + ': set not named'); }
+        else seenOff++;
+      });
+    });
+    // A character whose preferred set cannot be completed: take every card of it out of the pool.
+    const ch = ownedChars()[0], t = target(ch), pref = t.sets[0];
+    const saved = state.cards.slice();
+    state.cards = state.cards.filter(c => !(c.set === pref && c.slot !== 'Space' && c.slot !== 'Sun'));
+    renderOpt(ch.n); $('#optChar').value = ch.n; $('#optPolicy').value = 'force4'; runOpt();
+    if (!shown()) bad.push(`${ch.n} with no ${pref} Moon/Star/Sky: no notice`);
+    else if (!/Moon or Star or Sky/.test($('#optNotes').textContent)) bad.push('missing slots not named: ' + $('#optNotes').textContent);
+    state.cards = saved;
+    $('#optPolicy').value = was.pol; $('#optPool').value = was.pool; renderOpt(); $('#optChar').value = was.ch;
+    return { bad, seenOn, seenOff };
+  });
+  check('Optimise says at the top when the preferred 4-piece cannot be built and the pick is another set',
+    prefMiss.bad.length === 0 && prefMiss.seenOff > 0, JSON.stringify(prefMiss));
+
+  /* Each alternatives row can open its card in the editor ready for a level-up (the user, Oct
+     2026: level a card in the game, enter it from where it was suggested). Saving re-runs the
+     recommendation on the new values. */
+  const altEdit = await p.evaluate(() => {
+    const bad = [];
+    const was = $('#optChar').value;
+    const ch = ownedChars()[0];
+    renderOpt(ch.n); $('#optChar').value = ch.n; runOpt();
+    const panel = [...document.querySelectorAll('#optOut > .panel')].find(pn => /Best alternatives per slot/.test(pn.textContent));
+    const rows = panel ? [...panel.querySelectorAll('tbody tr')] : [];
+    if (!rows.length) bad.push('no rows');
+    if (rows.some(tr => !tr.querySelector('[data-edit-lvl]'))) bad.push('a row has no edit button');
+    const btn = rows.map(tr => tr.querySelector('[data-edit-lvl]')).find(b => b && state.cards.find(c => c.id === b.dataset.editLvl).level < 25);
+    if (btn) {
+      const card = state.cards.find(c => c.id === btn.dataset.editLvl), lvl = card.level;
+      const before = JSON.parse(JSON.stringify(card));
+      btn.click();
+      if (!document.getElementById('dlg').open || document.activeElement !== $('#eLvl')) bad.push('editor did not open on the level');
+      if (+$('#eLvl').value !== lvl) bad.push('editor shows another card');
+      $('#eLvl').value = lvl + 1;   // a same-card edit; substats stay valid at any level
+      $('#eSave').click();
+      if (card.level !== lvl + 1) bad.push('level not saved: ' + $('#eErr').textContent);
+      if (document.getElementById('dlg').open) document.getElementById('dlg').close();
+      Object.keys(card).forEach(k => delete card[k]); Object.assign(card, before); commit();
+    }
+    renderOpt(); $('#optChar').value = was;
+    return bad;
+  });
+  check('Every row of Optimise\'s alternatives opens its card in the editor on the level field, and saving it sticks', altEdit.length === 0, altEdit.join('; '));
+
+  /* Every place that proposes a single swap chooses it on the build score, not on the card's own
+     score (they disagree where the stat targets or the damage balance have a say): the card
+     picker's default order, Weakest slots' "Available now", and each Optimise card's own gain. */
+  const swapUi = await p.evaluate(() => {
+    const bad = [];
+    const parse = s => parseFloat(s.replace('−', '-'));
+    const chars = ownedChars().filter(ch => state.cards.some(c => c.equipped === ch.n)).slice(0, 4);
+    chars.forEach(ch => {
+      const t = target(ch), lo = charLoadout(ch.n), idl = idealLoadout(ch, t, 55);
+      const worn = state.cards.filter(c => c.equipped === ch.n);
+      const base = buildScoreOf(ch, worn, 55, lo, idl, t).raw;
+      const gainOf = (sl, c) => buildScoreOf(ch, worn.filter(x => x.slot !== sl).concat([c]), 55, lo, idl, t).raw - base;
+      // the picker: default order is the Build column, which is that marginal
+      const sl = worn[0].slot;
+      openCardPicker(ch.n, sl);
+      const trs = [...document.querySelectorAll('#dlgBody .pick tbody tr')].filter(tr => !tr.classList.contains('cur'));
+      const vals = trs.map(tr => parse(tr.querySelector('.pickGain').textContent));
+      if (vals.some((v, i) => i && v > vals[i - 1] + 1e-9)) bad.push(`${ch.n} picker out of order`);
+      const btn = trs[0] && trs[0].querySelector('[data-equip-card]');
+      if (btn) { const c = state.cards.find(x => x.id === btn.dataset.equipCard); if (Math.abs(gainOf(sl, c) - vals[0]) > 0.051) bad.push(`${ch.n} picker gain ${vals[0]} vs ${gainOf(sl, c)}`); }
+      document.getElementById('dlg').close();
+      // Optimise: "equip only this" is the same marginal
+      renderOpt(ch.n); $('#optChar').value = ch.n; runOpt();
+      const r = bestPlan(ch, poolFor($('#optPool').value, +$('#optRarity').value, ch.n), { policy: $('#optPolicy').value, p4value: +$('#optP4').value });
+      const blocks = [...document.querySelectorAll('#optOut .loadout .lo')];
+      ['Sun', 'Moon', 'Star', 'Sky'].forEach((s, i) => {
+        const c = r.best.picks[s].c, m = (blocks[i].textContent.match(/equip only this: ([−+][\d.]+)/) || [])[1];
+        if (c.equipped === ch.n ? m : (!m || Math.abs(parse(m) - gainOf(s, c)) > 0.051)) bad.push(`${ch.n} ${s} alone ${m} vs ${c.equipped === ch.n ? 'worn' : gainOf(s, c)}`);
+      });
+    });
+    // Weakest slots: the offered card is the best build gain among same-slot, same-set cards
+    headroomRows(false).filter(row => row.card).slice(0, 40).forEach(row => {
+      const ch = row.ch, t = row.t, lo = charLoadout(ch.n), idl = idealLoadout(ch, t, HR_P4);
+      const worn = state.cards.filter(c => c.equipped === ch.n), others = worn.filter(c => c.slot !== row.slot);
+      const base = buildScoreOf(ch, worn, HR_P4, lo, idl, t).raw;
+      let best = 0;
+      state.cards.forEach(c => {
+        if (c.slot !== row.slot || c.set !== row.card.set || c === row.card || c.locked && c.equipped !== ch.n || c.equipped && c.equipped !== ch.n) return;
+        best = Math.max(best, buildScoreOf(ch, others.concat([c]), HR_P4, lo, idl, t).raw - base);
+      });
+      if (best >= 0.05 ? Math.abs(row.altGain - best) > 1e-9 : row.alt) bad.push(`${ch.n} ${row.slot} available ${row.altGain} vs best ${best}`);
+    });
+    return bad;
+  });
+  check('the card picker, Weakest slots and Optimise\'s per-card gain all choose a swap on the build score', swapUi.length === 0, swapUi.join('; '));
+
+  const dropUi = await p.evaluate(() => new Promise(res => {
+    const drop = files => { const dt = new DataTransfer(); files.forEach(f => dt.items.add(f));
+      document.body.dispatchEvent(new DragEvent('drop', { dataTransfer: dt, bubbles: true, cancelable: true })); };
+    const n = state.cards.length;
+    drop([new File([JSON.stringify({ cards: [state.cards[0]] })], 'cards.json', { type: 'application/json' })]);
+    setTimeout(() => {
+      const r = { scanToReview: document.getElementById('dlg').open && document.getElementById('dlgBody').dataset.view === 'import' && state.cards.length === n };
+      document.getElementById('dlg').close();
+      markSaved();
+      drop([new File([JSON.stringify(savePayload())], 'p5x-planner-save.json', { type: 'application/json' })]);
+      setTimeout(() => { r.saveLoaded = /Loaded/.test(document.getElementById('dataMsg').textContent) && state.cards.length === n && !isDirty(); res(r); }, 400);
+    }, 300);
+  }));
+  check('a dropped scan file goes to the import review, a dropped save file loads', dropUi.scanToReview && dropUi.saveLoaded, JSON.stringify(dropUi));
+
+  await p.setViewportSize({ width: 390, height: 844 });
+  const phone = await p.evaluate(() => { showTab('opt'); runOpt(); const w = document.documentElement.scrollWidth; showTab('roster'); return w; });
+  await p.setViewportSize({ width: 1280, height: 720 });
+  check('on a phone-width screen the Optimise tab does not scroll sideways (its tables scroll inside themselves)', phone <= 390, `${phone}px wide`);
+
+  // the Personas tab: one row a released Persona, edits through commit(), bulk marks with undo, phone width,
+  // and the collection through a save file — and a save from before it starts with everything owned
+  await p.setViewportSize({ width: 390, height: 844 });
+  const psPhone = await p.evaluate(() => { showTab('personas'); const w = document.documentElement.scrollWidth; return w; });
+  await p.setViewportSize({ width: 1280, height: 720 });
+  const psUi = await p.evaluate(() => new Promise(res => {
+    const keepP = JSON.stringify(state.personas), keepW = JSON.stringify(state.wonder);
+    showTab('personas');
+    const card = n => document.querySelector(`#psGrid [data-ps="${n}"]`);
+    const r = { rows: document.querySelectorAll('#psGrid [data-ps]').length, names: personaNames().length,
+      unrelListed: WONDER_UNRELEASED.some(n => card(n)), art: !!card('Shiva').querySelector('img[src="art/persona-shiva.webp"]') };
+    markSaved();
+    // the card's own button marks it, with an undo
+    card('Shiva').querySelector('[data-ps-own]').click();
+    r.unowned = !personaRec('Shiva').own && !wonderPersonas().includes('Shiva') && isDirty() && card('Shiva').classList.contains('psOff') && !document.getElementById('dlg').open;
+    undo();
+    r.ownUndone = personaRec('Shiva').own;
+    // the card itself opens the popup; an edit there applies at once and the popup keeps its fields
+    card('Shiva').click();
+    const B = document.getElementById('dlgBody');
+    r.popup = document.getElementById('dlg').open && B.dataset.view === 'persona' && B.dataset.name === 'Shiva';
+    const tal = document.getElementById('psDTal');
+    tal.value = '0'; tal.dispatchEvent(new Event('change', { bubbles: true }));
+    r.tal = personaRec('Shiva').tal;
+    r.sameField = document.getElementById('psDTal') === tal;
+    r.listed = /not at this talent rank|top 45/.test(document.getElementById('psDOut').textContent);
+    r.cardShows = /Talent Base/.test(card('Shiva').textContent);
+    const c0 = document.querySelector('[data-psd-card="0"]');
+    c0.value = 'Rebellion'; c0.dispatchEvent(new Event('change', { bubbles: true }));
+    r.cardSet = personaRec('Shiva').cards.join(',') === 'Rebellion' && /Rebellion/.test(document.getElementById('psDOut').textContent);
+    r.labels = [...B.querySelectorAll('input, select')].every(x => x.labels && x.labels.length);
+    personaSet('Shiva', { cards: [] });
+    document.getElementById('dlg').close();
+    // Enter on a focused card opens it too
+    card('Alice').dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
+    r.keyOpen = document.getElementById('dlg').open && B.dataset.name === 'Alice';
+    document.getElementById('dlg').close();
+    document.getElementById('psQ').value = 'shiva'; document.getElementById('psQ').dispatchEvent(new Event('input'));
+    r.filtered = document.querySelectorAll('#psGrid [data-ps]').length;
+    document.getElementById('psAllOff').click();
+    r.bulkOff = !personaRec('Shiva').own && personaRec('Alice').own;
+    undo();
+    r.undone = personaRec('Shiva').own;
+    document.getElementById('psQ').value = ''; renderPersonas();
+    // through a save file
+    personaSet('Pixie', { own: false, lv: 20 }); personaSet('Alice', { cards: [Object.keys(WONDER_BUFFS.cards)[0]] });
+    const payload = savePayload(), json = JSON.stringify(payload);
+    r.inSave = !!(payload.settings.personas && payload.settings.personas.Pixie && payload.settings.personas.Pixie.own === false);
+    state.personas = null;
+    load(new File([json], 'p5x-planner-save.json', { type: 'application/json' }));
+    setTimeout(() => {
+      r.back = !personaRec('Pixie').own && personaRec('Pixie').lv === 20 && personaRec('Alice').cards.length === 1 && personaRec('Shiva').tal === 0 && !isDirty();
+      showTab('personas');
+      r.redrawn = /not obtained/.test(document.querySelector('#psGrid [data-ps="Pixie"]').textContent);
+      // a save from before the section: every released Persona owned, the old setup's cards on their Persona
+      const old = JSON.parse(json);
+      delete old.settings.personas;
+      old.settings.wonder = { personas: [{ name: 'Alice', cards: ['Rebellion', 'not a card'] }], weapon: '', refine: 1 };
+      load(new File([JSON.stringify(old)], 'old-save.json', { type: 'application/json' }));
+      setTimeout(() => {
+        r.oldAll = personaNames().every(n => personaRec(n).own);
+        r.oldCards = personaRec('Alice').cards.join(',');
+        r.oldSetup = wonderEmpty(wonderSetup());
+        state.personas = JSON.parse(keepP); state.wonder = JSON.parse(keepW); commit(); markSaved(); showTab('roster');
+        res(r);
+      }, 400);
+    }, 400);
+  }));
+  check('the Personas tab shows a card for every Persona out on Global; a card opens its popup (click or Enter), whose edits apply at once and keep their fields; the card\'s button and the bulk marks undo; it filters',
+    psUi.rows === psUi.names && !psUi.unrelListed && psUi.art && psUi.unowned && psUi.ownUndone && psUi.popup && psUi.tal === 0 && psUi.sameField && psUi.listed && psUi.cardShows &&
+    psUi.cardSet && psUi.labels && psUi.keyOpen && psUi.filtered === 1 && psUi.bulkOff && psUi.undone, JSON.stringify(psUi));
+  check('the Persona collection goes through a save file, and a save from before it starts with every released Persona owned and the old setup\'s skill cards on their Persona (the setup itself starts empty)',
+    psUi.inSave && psUi.back && psUi.redrawn && psUi.oldAll && psUi.oldCards === 'Rebellion' && psUi.oldSetup === true, JSON.stringify(psUi));
+  check('on a phone-width screen the Personas tab does not scroll sideways', psPhone <= 390, `${psPhone}px wide`);
+  // a Persona's level is capped by its grade (lufel's I-IX), not its stars: grades I-VIII are the user's in-game
+  // reading (Nov 2026; IV is 60), grade IX (Janosik alone on Global) reads rank VIII and 99 on his screen (10 Nov 2026);
+  // a save holding more is clamped on load; the popup says so
+  const psCap = await p.evaluate(() => {
+    const r = { b: WONDER_PERSONA['Belphegor'].g, j: WONDER_PERSONA['Janosik'].g, graded: Object.values(WONDER_PERSONA).every(d => d.g >= 1 && d.g <= 9),
+      def4: personaDefault('Belphegor').lv, def9: personaDefault('Janosik').lv, known9: personaLvKnown('Janosik'),
+      caps: [1, 2, 3, 4, 5, 6, 7, 8].map(g => PERSONA_LV[g] && PERSONA_LV[g].max).join(','), rising: [1, 2, 3, 4, 5, 6, 7, 8].every(g => g === 1 || PERSONA_LV[g].max > PERSONA_LV[g - 1].max),
+      pixie: personaDefault('Pixie').lv === PERSONA_LV[WONDER_PERSONA['Pixie'].g].max,
+      clamp: personasFrom({ Belphegor: { lv: 80 }, Janosik: { lv: 130 } }), fit: Object.values(PERSONA_LV).every(x => x.def <= x.max) };
+    r.clamp4 = r.clamp.Belphegor.lv; r.clamp9 = r.clamp.Janosik.lv; delete r.clamp;
+    openPersona('Belphegor');
+    r.max = +document.getElementById('psDLv').max; r.said = /up to 60/.test(document.getElementById('dlgBody').textContent) && /grade IV ·/.test(document.getElementById('dlgBody').textContent);
+    openPersona('Janosik');
+    r.j99 = /up to 99/.test(document.getElementById('dlgBody').textContent) && +document.getElementById('psDLv').max === 99;
+    document.getElementById('dlg').close();
+    return r;
+  });
+  check('a Persona\'s level is capped by its grade: every Persona has one (I-IX), grade IV defaults to and stops at 60, Janosik (lufel\'s grade IX) at 99, a loaded level above the cap is clamped',
+    psCap.b === 4 && psCap.j === 9 && psCap.graded && psCap.def4 === 60 && psCap.def9 === 99 && psCap.known9 && psCap.clamp4 === 60 && psCap.clamp9 === 99 && psCap.max === 60 && psCap.said && psCap.j99 && psCap.fit &&
+    psCap.caps === '25,35,45,60,70,85,95,99' && psCap.rising && psCap.pixie, JSON.stringify(psCap));
+  // a Persona's skills (the user, Nov 2026): besides its unique skill and Highlight at most 6 — the innate skills it
+  // has learned, at most 3 skill cards, any skill through fusion; every skill lufel lists can be chosen, priced or
+  // not; all at the Persona's skill level; saved
+  const psFused = await p.evaluate(() => {
+    const keepP = JSON.stringify(state.personas), keepW = JSON.stringify(state.wonder), r = {};
+    const ann = CHARACTERS.find(c => /^Ann /.test(c.n));
+    // a Persona that learns two innate skills, both after level 1
+    const pn = personaNames().find(n => (WONDER_INNATE[n] || []).length === 2 && WONDER_INNATE[n].every(x => (WONDER_PERSONA[n].learn[x] || 1) > 1));
+    const inn = WONDER_INNATE[pn], top = Math.max(...inn.map(x => WONDER_PERSONA[pn].learn[x]));
+    const K = personaSkillNames().filter(c => !inn.includes(c) && c !== 'Rebellion');
+    r.pn = pn;
+    personaSet(pn, { own: true, lv: 1, cards: [], fused: [], drop: [] });
+    r.six = personaRoom(pn) === 6 && personaSet(pn, { fused: K.slice(0, 8) }).length === 2 && personaRec(pn).fused.length === 6;
+    // learning both innate skills takes two slots: the last two fused skills go
+    r.learned = personaSet(pn, { lv: top }).join(',') === K.slice(4, 6).join(',') && personaRoom(pn) === 4;
+    r.pushed = personaSet(pn, { cards: [K[0], K[6], K[7]] }).join(',') === K.slice(2, 4).join(',') &&
+      personaRec(pn).cards.length === 3 && personaRec(pn).fused.join(',') === K[1];
+    // replacing an innate skill frees its slot
+    personaSet(pn, { drop: [inn[0]] });
+    r.dropped = personaRoom(pn) === 5 && !personaInnateHas(pn, personaRec(pn)).includes(inn[0]);
+    personaSet(pn, { cards: [], fused: [], drop: [] });
+    // any skill, priced or not: Apt Pupil and Psy Boost are lufel skills the Teams tab does not price
+    r.unpriced = ['Apt Pupil I', 'Psy Boost I'].every(c => personaSkillNames().includes(c) && !WONDER_BUFFS.cards[c]) &&
+      personaSet(pn, { cards: ['Apt Pupil I'], fused: ['Psy Boost I'] }).length === 0 && personaRec(pn).cards[0] === 'Apt Pupil I' && personaRec(pn).fused[0] === 'Psy Boost I' &&
+      personasFrom({ [pn]: { cards: ['Auto-Mataru'] } })[pn].cards[0] === 'Auto-Mataru IV';
+    // priced alike as a card or fused, at the Persona's skill level (Rebellion: 10.2% top, 9.3% at level 6, its bonus 7.0 → 6.4)
+    const setup = sk => { personaSet(pn, sk); state.wonder = { personas: [{ name: pn }], weapon: '', refine: 1 }; return JSON.stringify(tcWonder(ann, wonderSetup()).vec); };
+    const none = setup({ cards: [], fused: [] }), asCard = setup({ cards: ['Rebellion'], fused: [] }), asFused = setup({ cards: [], fused: ['Rebellion'] });
+    r.priced = asFused !== none && asFused === asCard && wonderSetup().personas[0].fused.join(',') === 'Rebellion';
+    personaSet(pn, { sk: 6 });
+    const L6 = personaSkillLines(pn, 'Rebellion')[0];
+    r.level = L6.v === 9.3 && Math.abs(L6.per.rate * L6.per.cap / 100 - 6.4) < 0.01 && setup({}) !== asFused;
+    personaSet(pn, { sk: personaDefault(pn).sk, cards: [], fused: [] });
+    // the popup: an innate tick per innate skill, three card and six fused boxes open as far as the slots allow
+    openPersona(pn);
+    const B = document.getElementById('dlgBody'), boxes = [...B.querySelectorAll('[data-psd-fused]')], ticks = [...B.querySelectorAll('[data-psd-innate]')];
+    r.boxes = boxes.length === 6 && boxes.filter(x => x.disabled).length === 2 && ticks.length === 2 && ticks.every(x => x.checked) &&
+      [...document.querySelectorAll('#psSkillList option')].some(o => o.value === 'Apt Pupil I') &&
+      [...B.querySelectorAll('[data-psd-card], [data-psd-fused]')].every(x => x.tagName === 'INPUT' && x.list && x.list.id === 'psSkillList');
+    // typed: a name in any case is the skill's own; a name that is no skill is refused and the box goes back
+    boxes[0].value = 'rebellion'; boxes[0].dispatchEvent(new Event('change', { bubbles: true }));
+    r.typed = personaRec(pn).fused.join(',') === 'Rebellion' && boxes[0].value === 'Rebellion';
+    boxes[1].value = 'Not A Skill'; boxes[1].dispatchEvent(new Event('change', { bubbles: true }));
+    r.refused = personaRec(pn).fused.join(',') === 'Rebellion' && boxes[1].value === '' && /No skill is called/.test(document.getElementById('toastMsg').textContent);
+    ticks[0].checked = false; ticks[0].dispatchEvent(new Event('change', { bubbles: true }));
+    r.popupSet = personaRec(pn).fused.join(',') === 'Rebellion' && personaRec(pn).drop.join(',') === inn[0] && boxes.filter(x => x.disabled).length === 1 &&
+      /Fused/.test(document.getElementById('psDOut').textContent) && boxes.concat(ticks).every(x => x.labels && x.labels.length);
+    document.getElementById('dlg').close();
+    // through a save file
+    const sv = personasSaved()[pn];
+    r.saved = JSON.stringify(sv.fused) === '["Rebellion"]' && JSON.stringify(sv.drop) === JSON.stringify([inn[0]]) &&
+      JSON.stringify(personasFrom(personasSaved())[pn]) === JSON.stringify(personaRec(pn));
+    // the Teams tab's card boxes complete from every skill too, and take a typed name the same way
+    state.wonder = { personas: [{ name: pn }], weapon: '', refine: 1 }; renderTmPicker();
+    const tb = document.getElementById('tmWC0_0');
+    r.teamBoxes = tb.tagName === 'INPUT' && tb.list && tb.list.id === 'psSkillList' && !tb.disabled && document.getElementById('tmWC1_0').disabled;
+    tb.value = 'rakunda'; tb.dispatchEvent(new Event('change', { bubbles: true }));
+    const typedT = personaRec(pn).cards.join(',') === 'Rakunda';
+    tb.value = 'nonsense'; tb.dispatchEvent(new Event('change', { bubbles: true }));
+    r.teamTyped = typedT && personaRec(pn).cards.join(',') === 'Rakunda' && tb.value === 'Rakunda';
+    state.personas = JSON.parse(keepP); state.wonder = JSON.parse(keepW); commit(); markSaved();
+    return r;
+  });
+  check('a Persona has at most 6 skills besides its unique skill and Highlight: learned innate skills (one can be replaced), at most 3 skill cards, fused skills; any lufel skill can be chosen; all priced at the Persona\'s skill level; set in the popup and saved',
+    psFused.six && psFused.learned && psFused.pushed && psFused.dropped && psFused.unpriced && psFused.priced && psFused.level &&
+    psFused.boxes && psFused.popupSet && psFused.teamBoxes && psFused.saved, JSON.stringify(psFused));
+  check('the skill boxes (the Persona popup\'s and the Teams tab\'s card boxes) are typeable fields completing from every skill: a name in any case is taken as the skill, one that is no skill is refused and the box goes back',
+    psFused.typed && psFused.refused && psFused.teamTyped, JSON.stringify(psFused));
+  // the Personas tab's sort: rarity, highest first, by default; kept in the save's prefs
+  const psSortUi = await p.evaluate(() => {
+    showTab('personas');
+    const sel = document.getElementById('psSort'), stars = () => [...document.querySelectorAll('#psGrid [data-ps]')].map(c => WONDER_PERSONA[c.dataset.ps].r);
+    const keep = sel.value;
+    const r = { def: sel.options[sel.selectedIndex].defaultSelected && sel.value === 'rarity' };
+    const s = stars();
+    r.highFirst = s[0] === 5 && s.every((x, i) => !i || s[i - 1] >= x);
+    sel.value = 'name'; sel.dispatchEvent(new Event('change'));
+    const names = [...document.querySelectorAll('#psGrid [data-ps]')].map(c => c.dataset.ps);
+    r.byName = names.every((x, i) => !i || names[i - 1].localeCompare(x) <= 0);
+    r.saved = collectPrefs().psSort === 'name' && savePayload().prefs.psSort === 'name';
+    sel.value = 'rarity'; applyPrefs({ psSort: 'rarity-asc' }); renderPersonas();
+    r.restored = sel.value === 'rarity-asc' && stars()[0] === Math.min(...stars());
+    sel.value = keep; renderPersonas(); showTab('roster');
+    return r;
+  });
+  check('the Personas tab sorts by rarity, highest first, by default; another order applies at once and goes into the save\'s prefs and back',
+    psSortUi.def && psSortUi.highFirst && psSortUi.byName && psSortUi.saved && psSortUi.restored, JSON.stringify(psSortUi));
+
+  // Save / load round trip through the real load() path, with an in-page File
+  const roundTrip = await p.evaluate(() => new Promise(res => {
+    const prefsBefore = collectPrefs();
+    document.getElementById('trRar').value = '4';
+    state.teamCrit = 12.5; state.teamBuffs = { atkPct: 80, defdown: 15.5 }; state.den = { ATK: 119, HP: 473 };
+    trVerdictSel = [0, 2]; rosterView = 'list';
+    const payload = savePayload();
+    const json = JSON.stringify(payload);
+    const n = state.cards.length, worn = state.cards.filter(c => c.equipped).length;
+    state.cards = []; state.chars['Ren Amamiya'].owned = false; document.getElementById('trRar').value = '2'; state.teamCrit = 0; state.teamBuffs = {}; state.den = {};
+    trVerdictSel = []; rosterView = 'cards';
+    load(new File([json], 'p5x-planner-save.json', { type: 'application/json' }));
+    setTimeout(() => {
+      res({ n, worn, after: state.cards.length, wornAfter: state.cards.filter(c => c.equipped).length, owned: state.chars['Ren Amamiya'].owned,
+        trRar: document.getElementById('trRar').value, msg: document.getElementById('dataMsg').textContent, ids: new Set(state.cards.map(c => c.id)).size, saveShape: Object.keys(payload).join(','),
+        teamCrit: state.teamCrit, teamCritField: document.getElementById('rsTeamCrit').value,
+        teamBuffs: JSON.stringify(state.teamBuffs), teamBuffField: document.querySelector('.teamIn[data-k="defdown"]').value,
+        den: JSON.stringify(state.den), denField: document.querySelector('.denIn[data-stat="ATK"]').value,
+        verdicts: trVerdictSel.join(','), view: rosterView, listShown: !document.getElementById('rsListPanel').classList.contains('hide') });
+      document.getElementById('trRar').value = prefsBefore.trRar;
+      state.teamCrit = 0; document.getElementById('rsTeamCrit').value = 0; state.teamBuffs = {}; state.den = {}; syncTeamCritField();
+      trVerdictSel = []; rosterView = 'cards'; renderRoster();
+    }, 400);
+  }));
+  check('a save file round-trips through load(): cards, equips, ownership, the team crit rate and buffs, the Thieves Den and view prefs (verdict chips, roster view) all come back',
+    roundTrip.after === roundTrip.n && roundTrip.wornAfter === roundTrip.worn && roundTrip.owned === true && roundTrip.trRar === '4' && /Loaded/.test(roundTrip.msg) && roundTrip.ids === roundTrip.after &&
+    roundTrip.teamCrit === 12.5 && roundTrip.teamCritField === '12.5' && roundTrip.teamBuffs === JSON.stringify({ atkPct: 80, defdown: 15.5 }) && roundTrip.teamBuffField === '15.5' && roundTrip.den === JSON.stringify({ ATK: 119, HP: 473 }) && roundTrip.denField === '119' && roundTrip.verdicts === '0,2' && roundTrip.view === 'list' && roundTrip.listShown,
+    JSON.stringify(roundTrip));
+  check('the save payload has the documented shape', roundTrip.saveShape === 'version,savedAt,nextId,cards,characters,settings,prefs');
+  const badLoad = await p.evaluate(() => new Promise(res => {
+    const n = state.cards.length;
+    load(new File(['{not json'], 'x.json', { type: 'application/json' }));
+    setTimeout(() => res({ kept: state.cards.length === n, msg: document.getElementById('dataMsg').textContent }), 300);
+  }));
+  check('an unreadable save file is refused with a message and the inventory is left alone', badLoad.kept && /Could not read/.test(badLoad.msg), badLoad.msg);
+  const skipLoad = await p.evaluate(() => new Promise(res => {
+    const cards = state.cards.slice();
+    const payload = { version: 1, nextId: 5, cards: [{ slot: 'Sun', set: 'Power', rarity: 5, level: 0, main: 'HP', subs: [{ stat: 'ATK%', value: 2 }] }, { slot: 'Sun', set: 'Power', rarity: 5, level: 0, main: 'HP', subs: [{ stat: 'ATK%', value: 2 }, { stat: 'DEF', value: 27 }, { stat: 'HP%', value: 2.1 }] }], characters: {} };
+    load(new File([JSON.stringify(payload)], 'x.json'));
+    state.teamCrit = 7;
+    setTimeout(() => { const r = { n: state.cards.length, msg: document.getElementById('dataMsg').textContent, teamCrit: state.teamCrit }; state.cards = cards; renderInv(); res(r); }, 300);
+  }));
+  check('load() skips an invalid card and says so rather than refusing the file', skipLoad.n === 1 && /1 skipped/.test(skipLoad.msg), skipLoad.msg);
+  check('a save from before the team crit rate existed loads it as 0', skipLoad.teamCrit === 0, String(skipLoad.teamCrit));
+
+  // Tabs: the scanning guide is reached from an in-prose link, not the nav
+  await p.click('nav button[data-tab="data"]');
+  await p.click('#tab-data [data-goto="howto"] >> nth=0'); await p.waitForTimeout(100);
+  check('the in-prose link opens the scanning guide tab', await p.evaluate(() => !document.getElementById('tab-howto').classList.contains('hide') && document.getElementById('tab-data').classList.contains('hide')));
+  // GitHub sync, against a fake of the contents API: one file, versioned by sha, refusing a write
+  // that names the wrong version — the rule the conflict question rests on.
+  const gh = { private: true, file: null, puts: [], n: 0 };
+  await p.route('https://api.github.com/**', async route => {
+    const req = route.request(), u = new URL(req.url()), m = req.method();
+    const json = (status, body) => route.fulfill({ status, contentType: 'application/json',
+      headers: { 'access-control-allow-origin': '*' }, body: JSON.stringify(body) });
+    if (req.headers().authorization !== 'Bearer test-token') return json(401, { message: 'Bad credentials' });
+    if (u.pathname === '/repos/me/save') return json(200, { private: gh.private });
+    if (u.pathname === '/repos/me/save/commits') return json(200, [{ commit: { message: 'Save from phone: 3 cards', committer: { date: '2026-10-23T10:00:00Z' } } }]);
+    if (u.pathname !== '/repos/me/save/contents/p5x-planner-save.json') return json(404, { message: 'Not Found' });
+    if (m === 'GET') return gh.file ? json(200, { type: 'file', sha: gh.file.sha, encoding: 'base64', content: Buffer.from(gh.file.text).toString('base64') }) : json(404, { message: 'Not Found' });
+    const body = JSON.parse(req.postData());
+    if (gh.file && !body.sha) return json(422, { message: 'Invalid request.\n\n"sha" wasn\'t supplied.' });
+    if (gh.file && body.sha !== gh.file.sha) return json(409, { message: 'does not match' });
+    gh.file = { sha: 'v' + (++gh.n), text: Buffer.from(body.content, 'base64').toString('utf8') };
+    gh.puts.push(body.message);
+    return json(gh.n === 1 ? 201 : 200, { content: { sha: gh.file.sha } });
+  });
+  const syncWait = () => p.waitForFunction(() => !document.getElementById('hdrSave').disabled, null, { timeout: 5000 }).catch(() => {});
+  await p.click('nav button[data-tab="data"]');
+  const syncBefore = await p.evaluate(() => ({ cards: state.cards.length, text: JSON.stringify(savePayload()) }));
+  await p.fill('#syncRepo', 'https://github.com/me/save'); await p.fill('#syncToken', 'test-token');
+  await p.uncheck('#syncRemember');
+  gh.private = false;
+  await p.click('#syncConnect'); await syncWait();
+  const pub = await p.evaluate(() => ({ on: syncOn(), msg: document.getElementById('syncMsg').textContent }));
+  check('GitHub sync refuses a public repository', !pub.on && /public/.test(pub.msg), JSON.stringify(pub));
+  gh.private = true;
+  await p.click('#syncConnect'); await syncWait();
+  const conn = await p.evaluate(() => ({ on: syncOn(), repo: sync.repo, n: state.cards.length, msg: document.getElementById('syncMsg').textContent }));
+  check('GitHub sync connects to a private repository (pasting its address is fine) and keeps the inventory', conn.on && conn.repo === 'me/save' && conn.n === syncBefore.cards && /Connected/.test(conn.msg), JSON.stringify(conn));
+  await p.evaluate(() => { state.teamCrit = 3; commit(); });
+  await p.click('#hdrSave'); await syncWait();
+  const first = await p.evaluate(() => ({ dirty: isDirty(), sha: syncSha }));
+  const firstFile = gh.file && JSON.parse(gh.file.text);
+  check('the header Save writes the save to GitHub and clears "unsaved changes"',
+    firstFile && firstFile.cards.length === syncBefore.cards && firstFile.settings.teamCritRate === 3 && !first.dirty && first.sha === 'v1' && /^Save from computer: \d+ cards$/.test(gh.puts[0]),
+    JSON.stringify({ first, puts: gh.puts }));
+  // another device saves; this one, not having loaded that, is asked before replacing it
+  gh.file = { sha: 'other', text: JSON.stringify(Object.assign(JSON.parse(syncBefore.text), { cards: [] })) };
+  await p.evaluate(() => { state.teamCrit = 4; commit(); });
+  await p.click('#hdrSave'); await syncWait();
+  const asked = await p.evaluate(() => ({ toast: document.getElementById('toastMsg').textContent, btn: document.getElementById('toastUndo').textContent, dirty: isDirty() }));
+  check('a save over a newer one from another device is asked first, naming it, and nothing is replaced',
+    /changed somewhere else/.test(asked.toast) && /phone/.test(asked.toast) && asked.btn === 'Save over it' && asked.dirty && gh.file.sha === 'other', JSON.stringify(asked));
+  await p.click('#toastUndo'); await syncWait();
+  check('"Save over it" replaces it', gh.file.sha !== 'other' && JSON.parse(gh.file.text).settings.teamCritRate === 4 && !(await p.evaluate(() => isDirty())));
+  // a later load fetches what is there
+  gh.file = { sha: 'v9', text: syncBefore.text };
+  await p.click('#hdrLoad'); await syncWait();
+  const pulled = await p.evaluate(() => ({ n: state.cards.length, tc: state.teamCrit, sha: syncSha, dirty: isDirty() }));
+  check('the header Load replaces everything with the save on GitHub', pulled.n === syncBefore.cards && pulled.sha === 'v9' && !pulled.dirty, JSON.stringify(pulled));
+  check('the save survives the trip as UTF-8 through base64', await p.evaluate(() => b64ToUtf8(utf8ToB64('Kumi ★ — Ailment Acc. 5.7%')) === 'Kumi ★ — Ailment Acc. 5.7%'));
+  await p.click('#syncDisconnect');
+  check('Disconnect hands the header back to files', await p.evaluate(() => !syncOn() && /Download/.test(document.getElementById('hdrSave').title)));
+  await p.unroute('https://api.github.com/**');
+
+  // The Teams tests below were written for lufel's rotations fitted to the team; composing them from
+  // the kits (on by default) has its own section after them, which switches it on again.
+  check('composing rotations from the kits is on by default', await p.evaluate(() => $('#tmRotCompose').checked && !$('#tmRotCompose').disabled));
+  await p.evaluate(() => { $('#tmRotCompose').checked = false; });
+
+  /* The fight's defaults (Nov 2026): Auto boss and enemies follow the damage dealer — lufel's area-boss
+     example (DEF 821) with 4 more foes for an area damage dealer, the single-boss example (DEF 1280)
+     alone for anyone else — and the boss is weak to the damage dealer's element (Kasumi: Bless), not another (Ice). A save's prefs holding the old defaults
+     (Vishnu, by its resistances, 1 enemy) are read as untouched; any other choice is kept. */
+  const tmAuto = await p.evaluate(() => {
+    const at = n => { tcMemo.key = ''; tcMemoFor(charDef(n)); return [tcBossNow().id, tcFoes(), TC_BOSS.def, tcBossLabel()]; };
+    const out = { sel: ['#tmBoss', '#tmWeak', '#tmFoes'].map(id => $(id).value), ann: at('Ann Takamaki'), kasumi: at('Kasumi Yoshizawa'), ice: [tcWeakFor('Ice'), tcWeakFor('Bless')] };
+    // the memo turns over between damage dealers whose Auto fight differs, so TC_BOSS follows
+    tcMemo.key = '';
+    tcSim(charDef('Ann Takamaki'), [null, null, null], false); out.simAnn = TC_BOSS.def;
+    tcSim(charDef('Kasumi Yoshizawa'), [null, null, null], false); out.simKasumi = TC_BOSS.def;
+    const keepP = collectPrefs();
+    applyPrefs(Object.assign({}, keepP, { tmBoss: '8', tmWeak: 'boss', tmFoes: '1' }));
+    out.oldDefaults = ['#tmBoss', '#tmWeak', '#tmFoes'].map(id => $(id).value);
+    applyPrefs(Object.assign({}, keepP, { tmBoss: '10', tmWeak: 'boss', tmFoes: '1' }));
+    out.chosen = ['#tmBoss', '#tmWeak', '#tmFoes'].map(id => $(id).value);
+    applyPrefs(keepP);
+    out.back = ['#tmBoss', '#tmWeak', '#tmFoes'].map(id => $(id).value);
+    return out;
+  });
+  check('the fight defaults to Auto: an area damage dealer fights lufel\'s area-boss example with 4 more foes, anyone else the single boss alone, the boss weak to the damage dealer\'s element only',
+    JSON.stringify(tmAuto.sel) === '["auto","all","auto"]' && tmAuto.ann[0] === 221 && tmAuto.ann[1] === 5 && tmAuto.ann[2] === 821 &&
+    tmAuto.kasumi[0] === 220 && tmAuto.kasumi[1] === 1 && tmAuto.kasumi[2] === 1280 && /area-boss example/.test(tmAuto.ann[3]) &&
+    tmAuto.ice.join() === 'normal,weak' && tmAuto.simAnn === 821 && tmAuto.simKasumi === 1280, JSON.stringify(tmAuto));
+  check('a save holding the old fight defaults opens on the new ones; a fight the user chose is kept',
+    JSON.stringify(tmAuto.oldDefaults) === '["auto","all","auto"]' && JSON.stringify(tmAuto.chosen) === '["10","boss","1"]' &&
+    JSON.stringify(tmAuto.back) === '["auto","all","auto"]', JSON.stringify(tmAuto));
+  // The Teams tests below were written against the fight these defaults replaced (Vishnu, weakness by
+  // its resistances, one enemy); they test the mechanics, so they keep that fight.
+  await p.evaluate(() => { $('#tmBoss').value = '8'; $('#tmWeak').value = 'boss'; $('#tmFoes').value = '1'; tcMemo.key = ''; });
+
+  // ---- Teams tab: lufel's parties filled from what is owned, rotations, Fuuka's backup ----
+  const tmData = await p.evaluate(() => {
+    const bad = [];
+    const known = n => n === 'Wonder' || !!charDef(n);
+    const hangul = /[ㄱ-힝]/;
+    for (const [owner, T] of Object.entries(TEAMS)) {
+      if (!charDef(owner)) bad.push('owner ' + owner);
+      for (const pt of T.parties || []) {
+        if (!pt.f.includes(owner) && pt.e !== owner && pt.b !== owner) bad.push(owner + ': a party without its own character');
+        pt.f.forEach(n => { if (n && !known(n)) bad.push(owner + ': ' + n); });
+        if (pt.e && charDef(pt.e).arch !== 'Navigator') bad.push(owner + ': Elucidator seat holds ' + pt.e);
+        if (pt.f.some(n => n && charDef(n) && charDef(n).arch === 'Navigator')) bad.push(owner + ': an Elucidator in a thief seat');
+        if (pt.b && pt.e !== 'Fuuka Yamagishi') bad.push(owner + ': a backup without Fuuka');
+      }
+      (T.partners || []).forEach(x => { if (!known(x.n)) bad.push(owner + ' partner ' + x.n); if (hangul.test(x.why || '')) bad.push(owner + ' partner text'); });
+      (T.rot || []).forEach(r => { if (!r.seq.length || hangul.test(r.label + r.seq.join(''))) bad.push(owner + ' rotation ' + r.label); });
+      (T.notes || []).forEach(x => { if (hangul.test(x)) bad.push(owner + ' note'); });
+    }
+    return { bad, n: Object.keys(TEAMS).length, fuukaBackups: (TEAMS['Fuuka Yamagishi'].partners || []).length };
+  });
+  check('TEAMS (tools/gen-teams.js) names only roster characters, seats Elucidators only as Elucidators, a backup only beside Fuuka, all in English',
+    tmData.bad.length === 0 && tmData.n > 60 && tmData.fuukaBackups > 3, JSON.stringify(tmData).slice(0, 600));
+
+  const tmKeep = await p.evaluate(() => ({ chars: JSON.stringify(state.chars), busy: [...tmBusy], pick: JSON.stringify(tmPick) }));
+  await p.evaluate(() => {
+    CHARACTERS.forEach(c => { state.chars[c.n] = { owned: false, benched: false, targets: null, loadout: null }; });
+    ['Yusuke Kitagawa', 'Justine & Caroline', 'Miyu Sahara [Wavecatcher]', 'Fuuka Yamagishi', 'Minami Miyashita [Beachflower]']
+      .forEach(n => { state.chars[n].owned = true; });
+    tmBusy = new Set(); tmPick = {};
+    $('#tmBasis').value = 'lufel';   // these checks are about lufel's lists; the calculated basis has its own below
+    tmRunSig = null; tmShownDps = null; $('#tmOut').innerHTML = '';
+    commit(); showTab('teams');
+  });
+  await p.selectOption('#tmChar', 'Yusuke Kitagawa');
+  // the tab and its settings never calculate on their own: only the Calculate button does
+  const tmIdle = await p.evaluate(() => ({ out: $('#tmOut').innerHTML, status: $('#tmStatus').innerText }));
+  check('Teams calculates nothing on a visit or a settings change, and says to press Calculate',
+    tmIdle.out === '' && /press Calculate/i.test(tmIdle.status), JSON.stringify(tmIdle));
+  await p.click('#tmCalc');
+  await p.waitForFunction(() => !$('#tmCalc').disabled && $('#tmOut').innerHTML !== '');
+  const tm1 = await p.evaluate(() => {
+    const t = tmTeams('Yusuke Kitagawa').team;
+    return { seats: t.seats.map(s => [s.role, s.name, s.orig]), text: $('#tmOut').innerText };
+  });
+  const seat = (t, role) => (t.seats.find(s => s[0] === role) || [])[1];
+  check('Teams keeps lufel\'s own party where it is owned: Fuuka as Elucidator, and her backup seat stays empty when no backup lufel names is available',
+    seat(tm1, 'Elucidator') === 'Fuuka Yamagishi' && tm1.seats.some(s => s[0] === 'Backup (Oracle Shift)' && s[1] == null && s[2] === 'Koromaru') &&
+    /Oracle Shift/.test(tm1.text) && /none of the characters lufel recommends as Fuuka's backup/i.test(tm1.text), JSON.stringify(tm1.seats));
+
+  await p.evaluate(() => { state.chars['Mio Natsukawa'].owned = true; commit(); });
+  const tmStaleNow = await p.evaluate(() => ({ status: $('#tmStatus').innerText, text: $('#tmOut').innerText }));
+  check('a change to the save after a Calculate keeps the team shown and marks it out of date, with a Calculate button',
+    /before your latest changes/.test(tmStaleNow.status) && !!(await p.$('#tmStatus [data-tm-calc]')) && !/replaces Koromaru/.test(tmStaleNow.text), JSON.stringify(tmStaleNow.status));
+  await p.click('#tmStatus [data-tm-calc]');
+  await p.waitForFunction(() => !$('#tmCalc').disabled && !$('#tmStatus .stale-run'));
+  const tm2 = await p.evaluate(() => {
+    const t = tmTeams('Yusuke Kitagawa').team;
+    const b = t.seats.find(s => s.seat === 'b');
+    return { name: b && b.name, why: b && b.pickWhy, text: $('#tmOut').innerText };
+  });
+  check('an unowned backup is replaced by one lufel recommends for Fuuka, with lufel\'s reason, once the ownership change is calculated',
+    tm2.name === 'Mio Natsukawa' && (tm2.why || []).some(w => /Fuuka's backup/.test(w)) && /replaces Koromaru/.test(tm2.text), JSON.stringify(tm2));
+
+  // "Busy elsewhere", clicked in the table: the thief is replaced and listed as busy
+  await p.click('#tmOut [data-tm-busy="Justine & Caroline"]');
+  const tm3 = await p.evaluate(() => ({ seats: tmTeams('Yusuke Kitagawa').team.seats.map(s => s.name), busy: $('#tmBusy').innerText, text: $('#tmOut').innerText }));
+  check('"Busy elsewhere" rebuilds the team without them and says whom they replace',
+    !tm3.seats.includes('Justine & Caroline') && /Justine & Caroline/.test(tm3.busy) && /replaces Justine & Caroline/.test(tm3.text), JSON.stringify(tm3.seats));
+  const tmPrefs = await p.evaluate(() => { const pr = collectPrefs(); tmBusy = new Set(); applyPrefs(pr); return [...tmBusy]; });
+  check('the busy list is kept in the prefs', tmPrefs.length === 1 && tmPrefs[0] === 'Justine & Caroline', JSON.stringify(tmPrefs));
+  await p.click('#tmBusy [data-tm-unbusy="*"]');
+
+  // Wonder's Speed: the user's entry, an account setting saved beside the team crit rate
+  const wsBefore = await p.evaluate(() => ({ spd: tmSpeed('Wonder'), order: $('#tmOut .tmOrder').innerText }));
+  await p.evaluate(() => markSaved());
+  await p.fill('#tmWonderSpd', '250');
+  await p.dispatchEvent('#tmWonderSpd', 'change');
+  await p.evaluate(() => renderTeams());
+  // Battle rotation: a column per member in the order they act, a row per round
+  const bt = await p.evaluate(() => {
+    const el = $('#tmOut .tmBattle');
+    if (!el) return null;
+    const cols = [...el.querySelectorAll('th.tbWho')].map(x => ({ n: x.querySelector('.nm').title, kind: [...x.classList].find(c => c.startsWith('kind-')) }));
+    return { cols, rows: el.querySelectorAll('tbody tr').length, F: tcFight(), filled: [...el.querySelectorAll('tbody tr')].every(tr => tr.querySelectorAll('td').length === cols.length) };
+  });
+  check('Battle rotation: a column per member in the order they act (the Elucidator first, then by Speed — Wonder at 250 leads the thieves), a row per round',
+    !!bt && bt.rows === bt.F && bt.filled && bt.cols[0].kind === 'kind-elu' && bt.cols[1].n === 'Wonder' && bt.cols.some(c => c.kind === 'kind-dps'), JSON.stringify(bt));
+  const ws = await p.evaluate(() => ({
+    first: $('#tmOut .tmOrder .tmStep').innerText, dirty: isDirty(), saved: savePayload().settings.wonderSpeed,
+    restored: (() => { const t = JSON.stringify(savePayload()); state.wonderSpd = 0; applySave(t, ''); return wonderSpeed(); })()
+  }));
+  await p.evaluate(() => { hideToast(); showTab('teams'); $('#tmChar').value = 'Yusuke Kitagawa'; renderTeams(); });
+  check('Wonder\'s Speed is unset until entered; entered, it places him in the turn order, counts as unsaved, and goes through the save file',
+    wsBefore.spd === null && /Wonder Speed not set/.test(wsBefore.order) && /^Wonder 250/.test(ws.first) && ws.dirty && ws.saved === 250 && ws.restored === 250,
+    JSON.stringify({ wsBefore, ws }));
+  // with a Persona in slot 1 the box shows the Speed worked out from it (100 on every Persona's screen, or a Speed typed
+  // on its popup, plus its Agility Master or Ironclad Resolve) and cannot be typed in; the typed one stays saved and
+  // comes back with no lead
+  const wsCalc = await p.evaluate(() => {
+    const keepW = state.wonder, keepRec = JSON.stringify(personaRec('Kohryu'));
+    const box = () => ({ v: $('#tmWonderSpd').value, dis: $('#tmWonderSpd').disabled, note: $('#tmWonderSpdNote').textContent, spd: tmSpeed('Wonder') });
+    state.wonder = wonderFrom({ personas: [{ name: 'Kohryu' }], weapon: '', refine: 1 });
+    personaSet('Kohryu', { owned: true, st: { hp: 836, atk: 295, def: 197, spd: 120, lv: 99 } }); commit(); tmRefresh();
+    const typed = box();
+    personaSet('Kohryu', { st: { hp: 836, atk: 295, def: 197, lv: 99 } }); commit(); tmRefresh();
+    const on = box();
+    state.wonder = wonderFrom({ personas: [], weapon: '', refine: 1 }); commit(); tmRefresh();
+    const off = box();
+    state.personas.Kohryu = JSON.parse(keepRec); state.wonder = keepW; commit(); tmRefresh();
+    return { typed, on, off };
+  });
+  check('Wonder\'s Speed box shows the Speed worked out from his lead Persona (a Speed typed on its popup, else 100), read-only, and the typed one with no lead',
+    wsCalc.typed.dis && wsCalc.typed.spd === 120 &&
+    wsCalc.on.dis && wsCalc.on.v === '100' && wsCalc.on.spd === 100 && /worked out from Kohryu/.test(wsCalc.on.note) &&
+    !wsCalc.off.dis && wsCalc.off.v === '250' && wsCalc.off.spd === 250 && /put a Persona in slot 1/.test(wsCalc.off.note), JSON.stringify(wsCalc));
+  await p.evaluate(() => { state.wonderSpd = 0; commit(); });
+
+  // another damage dealer picked above starts Wonder's setup over (Personas, weapon, refinement), undoably;
+  // his Speed stays
+  const wrBefore = await p.evaluate(() => {
+    state.wonder = wonderFrom({ personas: [{ name: wonderPersonas()[0] }], weapon: Object.keys(WONDER_BUFFS.weapons)[0], refine: 3 });
+    state.wonderSpd = 222; commit(); tmRefresh();
+    return JSON.stringify(wonderSetup());
+  });
+  await p.selectOption('#tmChar', 'Miyu Sahara [Wavecatcher]');
+  const wr = await p.evaluate(() => ({ empty: wonderEmpty(wonderSetup()), refine: wonderSetup().refine, spd: state.wonderSpd,
+    box: $('#tmWP0').value, weapon: $('#tmWWeapon').value, toast: $('#toast') ? $('#toast').innerText : '' }));
+  const wrUndo = await p.evaluate(() => { undo(); return JSON.stringify(wonderSetup()); });
+  check('changing the damage dealer clears Wonder\'s Personas, weapon and refinement (his Speed stays), says so, and Undo brings them back',
+    JSON.parse(wrBefore).personas[0].name && wr.empty && wr.refine === 1 && wr.spd === 222 && wr.box === '' && wr.weapon === '' &&
+    /Wonder's setup was cleared/.test(wr.toast) && wrUndo === wrBefore, JSON.stringify({ wrBefore, wr, wrUndo }));
+  await p.evaluate(() => { hideToast(); state.wonder = {}; state.wonderSpd = 0; commit(); $('#tmChar').value = 'Yusuke Kitagawa'; renderTeams(); });
+
+  // a replacement chosen from the table's list sticks, and the reset brings back the recommended team
+  const altName = await p.evaluate(() => { const b = $('#tmOut [data-tm-use]'); return b && b.dataset.name; });
+  if (altName) {
+    // its seat's Replacements are folded: open that list, as a click on its summary would
+    await p.evaluate(() => { $('#tmOut [data-tm-use]').closest('details').open = true; });
+    // a DOM click: after a load Playwright's own scroll parks the button under the sticky header
+    await p.dispatchEvent('#tmOut [data-tm-use]', 'click');
+  }
+  const tm4 = await p.evaluate(() => ({ text: $('#tmOut').innerText, seats: tmTeams('Yusuke Kitagawa').team.seats.map(s => s.name) }));
+  check('"Use" seats the chosen replacement, marked as your choice', !!altName && tm4.seats.includes(altName) && /your choice/.test(tm4.text), altName + ' ' + JSON.stringify(tm4.seats));
+  await p.dispatchEvent('#tmOut [data-tm-reset]', 'click');
+  check('"Back to the recommended team" undoes it', await p.evaluate(n => !tmTeams('Yusuke Kitagawa').team.seats.some(s => s.chosen) && !$('#tmOut [data-tm-reset]'), altName));
+
+  // rotations: the Setup's Awareness picks lufel's level; a rotation written for a teammate needs that teammate
+  const tmRot = await p.evaluate(() => {
+    const k = 'Kotone Shiomi';
+    state.chars[k].loadout = Object.assign({}, DEFAULT_LOADOUT, { awareness: 3 });
+    const without = tmRotPick(k, new Set([k]));
+    const withMiku = tmRotPick(k, new Set([k, 'Hatsune Miku']));
+    state.chars[k].loadout = null;
+    const low = tmRotPick('Ann Takamaki [Starlight]', new Set());
+    return {
+      lvl: without.lvl, noMiku: without.pick.every(r => !/Miku/.test(r.label)) && without.pick.length > 0,
+      mikuOnly: withMiku.pick.length > 0 && withMiku.pick.every(r => /Miku/.test(r.label) && r.aw === 2),
+      lowLvl: low && low.lvl, lowBelow: low && low.below
+    };
+  });
+  check('a rotation is lufel\'s at the highest Awareness the Setup reaches, and one written for Miku is chosen only with Miku in the team',
+    tmRot.lvl === 2 && tmRot.noMiku && tmRot.mikuOnly && tmRot.lowLvl === 0 && tmRot.lowBelow === false, JSON.stringify(tmRot));
+  check('the tokens of a rotation are spelled out on hover', await p.evaluate(() =>
+    tmTokenText('HL+3') === 'Highlight, then Skill 3' && tmTokenText('1↺+2') === 'Skill 1 (automatic), then Skill 2' && /not ready/.test(tmTokenText('-'))));
+
+  // ---- the render's caches (Nov 2026): memoised step parsers hand out copies, Wonder's suggestion is remembered ----
+  const memos = await p.evaluate(() => {
+    // tcSimRun deletes 'HL'/'TH' from the Set it gets; a shared memoised Set changed the second-ranked team
+    const a = tcTurnSkills('HL+3'); a.delete('HL');
+    const u = tcSkillUses('1+2'); u[0] = 9;
+    const t = tcAilToks('HL+3'); t.delete('HL');
+    const copy = tcTurnSkills('HL+3').has('HL') && tcSkillUses('1+2')[0] === 1 && tcAilToks('HL+3').has('HL') && tcKindCount('HL+3', 'HL') === 1;
+    const ann = charDef('Ann Takamaki');
+    tcMemo.key = '';
+    const s1 = tcWonderBest(ann, []), s2 = tcWonderBest(ann, []);
+    tcMemo.key = '';
+    const s3 = tcWonderBest(ann, []);
+    return { copy, same: s1 === s2, fresh: s3 !== s1 && JSON.stringify(s3) === JSON.stringify(s1),
+      fields: ['mateM', 'burn0', 'wb'].every(k => tcMemoNew('x')[k] instanceof Map) };
+  });
+  check('the memoised step parsers hand each caller its own copy', memos.copy);
+  check("Wonder's suggested setup is remembered within a render and recomputed, the same, once the memo turns over", memos.same && memos.fresh);
+  check('the render memo carries the mate-hit, Burn-share and Wonder-suggestion caches', memos.fields);
+
+  // ---- the calculated basis: team damage from the kits (TEAM_BUFFS) ----
+  const tc = await p.evaluate(() => {
+    const set = n => new Set(tcTurnSkills(n));
+    const eq = (a, b) => a.size === b.length && b.every(x => a.has(x));
+    // lufel's worked example (damage-calc): DEF 400, +158.3%, 10% Pierce, 80% DEF down; without Windswept's 0.88
+    const keep = Object.assign({}, TC_BOSS);
+    Object.assign(TC_BOSS, { def: 400, coef: 1.583 });
+    const def = tcDefence(10, 80);
+    Object.assign(TC_BOSS, keep);
+    const ann = charDef('Ann Takamaki'), yus = charDef('Yusuke Kitagawa');
+    const atk = { atkPct: 30 };
+    const bad = [];
+    for (const [n, list] of Object.entries(TEAM_BUFFS)) {
+      if (!charDef(n)) bad.push('unknown ' + n);
+      list.forEach(e => { if ((!TC_FROM_K[e.k] && !(e.elu > 0 && e.k == null)) || !['party', 'ally', 'enemy'].includes(e.to) || !e.why) bad.push(n + ' ' + e.k); });
+    }
+    return {
+      turns: eq(set('2×4+1'), ['2', '1']) && eq(set('1111'), ['1']) && eq(set('HL(2)+3'), ['HL', '3']) && eq(set('W+3+TH↺'), ['3', 'TH']) && eq(set('-'), []),
+      cover: [tcCover(['1', '3', '1', '3'], '3', 2), tcCover(['1', '2', '3', '1', '2', '3'], '3', 1), tcCover(['1', '2', '3', '1', '2', '3'], '3', 3), tcCover(['1', '2'], '3', 2)],
+      def,
+      empty: tcMultiplier(ann, []),
+      annAtk: tcMultiplier(ann, [atk]), yusAtk: tcMultiplier(yus, [atk]), yusDmg: tcMultiplier(yus, [{ dm: 20 }]),
+      defdown: tcMultiplier(ann, [{ defdown: 40 }]) > tcMultiplier(ann, [{ defdown: 20 }]),
+      turns: tcMultiplier(ann, [{ turns: 2 }]),
+      n: Object.keys(TEAM_BUFFS).length, bad
+    };
+  });
+  check('the team calculator reads rotations, uptimes and lufel\'s defence formula as written, and a team adds nothing it does not supply',
+    tc.turns && tc.cover[0] === 1 && Math.abs(tc.cover[1] - 1 / 3) < 1e-9 && tc.cover[2] === 1 && tc.cover[3] === null &&
+    Math.abs(tc.def - 0.6966) < 0.001 && Math.abs(tc.empty - 1) < 1e-9 && tc.annAtk > 1.05 && Math.abs(tc.yusAtk - 1) < 1e-9 && tc.yusDmg > 1.1 && tc.defdown && Math.abs(tc.turns - 8 / 6) < 1e-9,
+    JSON.stringify(tc));
+  check('TEAM_BUFFS names roster characters and only priceable effects, each with its reason', tc.n >= 20 && tc.bad.length === 0, JSON.stringify(tc.bad));
+
+  /* Mitsuru (Nov 2026): Snowpierced Waltz's 3% of the Elucidator's stats, a teammate's own timed self-buffs on their own
+     hits only, and Assist's Charged Mark, once a battle */
+  const mc = await p.evaluate(() => {
+    const ann = charDef('Ann Takamaki'), mi = 'Mitsuru Kirijo', fu = 'Fuuka Yamagishi', my = charDef('Makoto Yuki');
+    tcMemo.key = '';
+    // the share: one line per stat at 3% of the team's Elucidator's totals; without a team a marker the quick screen prices
+    const team = tcTeamSet(ann.n, [mi, null, fu]);
+    const withT = tcMember(ann, mi, team, null, false), noT = tcMember(ann, mi, null, null, false), fv = tcMember(ann, fu, null, null, false).vec;
+    const shareLines = withT.lines.filter(l => /Snowpierced Waltz.*% of Fuuka/.test(l.why));
+    const atkLine = shareLines.find(l => l.k === 'atk');
+    const zero = Object.assign({}, noT.vec, { eluPct: 0 });
+    const quick = { on: tcMultiplier(ann, [noT.vec, fv]), off: tcMultiplier(ann, [zero, fv]), noElu: tcMultiplier(ann, [noT.vec]) - tcMultiplier(ann, [zero]) };
+    const keepB = TEAM_BUFFS[mi];
+    const fight = on => { TEAM_BUFFS[mi] = on ? keepB : keepB.filter(e => !e.elu); tcMemo.key = ''; const r = tcSim(ann, [mi, null, fu], false); return r.total; };
+    const fOn = fight(true), fOff = fight(false);
+    TEAM_BUFFS[mi] = keepB; tcMemo.key = '';
+    // a teammate's own timed self-buff: on their own hits, never on the damage dealer's
+    const keepK = KIT_STAT_BUFFS[mi];
+    const selfRun = on => {
+      KIT_STAT_BUFFS[mi] = on ? keepK.concat([{ s: 'Crit Multiplier', pct: true, v: 100, on: '3', dur: 2, fight: true, why: 'test: a timed self-buff' }]) : keepK;
+      tcMemo.key = '';
+      const r = tcSim(ann, [mi, null, null], false), own = (r.own || {})[mi] || 0;
+      return { own, dps: r.total - Object.values(r.own || {}).reduce((s, v) => s + v, 0) };
+    };
+    const sOff = selfRun(false), sOn = selfRun(true);
+    KIT_STAT_BUFFS[mi] = keepK; tcMemo.key = '';
+    // support skills (TC_SUPPORT): on top of the turn's move, once a battle; Charged Mark fills the others' gauges
+    const R = tcKitRot(mi, 0, false);
+    const legal1 = tcRotWalk(mi, ['Assist+2+1', '1', '3+TH', '1', '3+TH', '1'], 0, R) < 0, legal2 = tcRotWalk(mi, ['Assist+2+1', '1', 'Assist+1', '1'], 0, R) < 0;
+    const aigisNo = tcRotWalk('Aigis', ['Assist+1'], 0) >= 0;
+    const offered = ['Mitsuru Kirijo', 'Akihiko Sanada', 'Makoto Yuki', 'Junpei Iori', 'Ann Takamaki'].map(n => { const C = tcComposeSetup(n, tmRotPick(n, new Set([n]))); return !!(C && C.support); });
+    const keepT = TEAMS[mi];
+    const assist = (dps, on, gauge) => {
+      TEAMS[mi] = Object.assign({}, keepT, { rot: keepT.rot.map(r => Object.assign({}, r, { seq: [(on ? 'Assist+' : '') + r.seq[0]].concat(r.seq.slice(1)) })) });
+      const keepC = Object.assign({}, TC_CM); if (!gauge) Object.assign(TC_CM, { th: 0, hl: 0 });
+      tcMemo.key = '';
+      const r = tcSim(dps, [mi, null, null], false);
+      Object.assign(TC_CM, keepC); TEAMS[mi] = keepT; tcMemo.key = '';
+      return r;
+    };
+    const aMy = assist(my, true, true), aMy0 = assist(my, true, false), aNo = assist(my, false, true);
+    // Akihiko's and Makoto Yuki's: a 1-turn buff on the damage dealer, cast on top of their first turn
+    const buffer = (n, on) => {
+      const keep = TEAMS[n];
+      TEAMS[n] = Object.assign({}, keep, { rot: keep.rot.map(r => Object.assign({}, r, { seq: [(on ? 'Assist+' : '') + r.seq[0]].concat(r.seq.slice(1)) })) });
+      tcMemo.key = '';
+      const r = tcSim(ann, [n, null, null], false);
+      TEAMS[n] = keep; tcMemo.key = '';
+      return r.total - ((r.own || {})[n] || 0);
+    };
+    const bufs = ['Akihiko Sanada', 'Makoto Yuki'].map(n => [buffer(n, false), buffer(n, true)]);
+    // (a stat the Elucidator has none of gives no line)
+    const nonzero = TC_ELU_STATS.filter(([, s]) => tcStat(fu, s) > 0).length;
+    return { shareN: shareLines.length, nonzero, atkV: atkLine ? atkLine.v : null, fuAtk: tcStat(fu, 'ATK'), marker: noT.vec.eluPct, eluBase: !!fv.eluBase, quick, fOn, fOff, sOff, sOn,
+      tok: tcTurnSkills('Assist+1').has('assist') && tcTurnSkills('Assist+1').has('1'), legal1, legal2, aigisNo, offered, bufs, cm: aMy.cmark, cm0: aMy0.cmark, noCm: aNo.cmark, tMy: aMy.total, tMy0: aMy0.total };
+  });
+  check('Snowpierced Waltz gives the party 3% of the team\'s Elucidator\'s stats (one line per stat with a team, priced from her stats on the quick screen without one)',
+    mc.shareN >= 1 && mc.shareN === mc.nonzero && Math.abs(mc.atkV - 0.03 * mc.fuAtk) < 1e-6 && mc.marker > 0 && mc.eluBase && mc.quick.on > mc.quick.off && Math.abs(mc.quick.noElu) < 1e-12 && mc.fOn > mc.fOff, JSON.stringify(mc));
+  check('a teammate\'s own timed self-buff (KIT_STAT_BUFFS with `on`) raises their own hits in the fight and never the damage dealer\'s',
+    mc.sOn.own > mc.sOff.own * 1.001 && Math.abs(mc.sOn.dps - mc.sOff.dps) < 1e-9, JSON.stringify([mc.sOff, mc.sOn]));
+  check('support skills go on top of a turn\'s move once a battle (Aigis\'s stays as lufel writes it; the composer offers only those that do something for damage); Mitsuru\'s Charged Mark fills the other thieves\' Theurgy or Highlight gauge on their first attack, Akihiko\'s and Makoto Yuki\'s buff the damage dealer',
+    mc.tok && mc.legal1 && !mc.legal2 && mc.aigisNo && JSON.stringify(mc.offered) === '[true,true,true,false,false]' && mc.bufs.every(([a, b]) => b > a * 1.0001) && mc.cm && mc.cm.round === 1 && mc.cm.got >= 1 && mc.noCm === null && mc.tMy !== mc.tMy0, JSON.stringify(mc));
+
+  // ---- Highlights, Theurgies, turn order and the fight (Nov 2026) ----
+  const th = await p.evaluate(() => {
+    const out = {};
+    const setF = f => { $('#tmFight').value = String(f); tcMemo.key = ''; };
+    setF(12);
+    out.count = [tcKindCount('HL×2+3', 'HL'), tcKindCount('2HL+3', 'HL'), tcKindCount('3+HL+HL', 'HL'), tcKindCount('HL(2)+3', 'HL'), tcKindCount('W+3+TH↺', 'TH'), tcKindCount('1+3', 'HL')];
+    out.uses = [tcSkillUses('2×4+1'), tcSkillUses('1111'), tcSkillUses('HL+1+3'), tcSkillUses('2HL+3')].map(x => x.join(''));
+    const six = ['1', '3', '1', '3', '1', '3'], withHl = ['1', 'HL+3', '1', '3', '1', '3'];
+    // the quick screen's cadence: a Highlight every 5 turns (84% of gauge a round shared four ways)
+    const ov = tcSeqHL(six, 'Haruna Nishimori');
+    out.overlay = { len: ov.length, at: ov.map((s, i) => /HL/.test(s) ? i + 1 : 0).filter(Boolean), kept: tcSeqHL(withHl, 'Haruna Nishimori') === withHl, elu: tcSeqHL(six, 'Fuuka Yamagishi') === six };
+    out.cool = [tcBreaksCooldown(['3', '3', '1'], 'Ayaka Sakai'), tcBreaksCooldown(['3', '1', '3', '1'], 'Ayaka Sakai'), tcBreaksCooldown(['3', '1'], 'Kotone Shiomi')];
+    const ann = charDef('Ann Takamaki');
+    const keepT = TEAMS['Ryuji Sakamoto'], keepB = TEAM_BUFFS['Ryuji Sakamoto'], keepSpeed = tmSpeed;
+    TEAMS['Ryuji Sakamoto'] = { rot: [{ aw: 0, label: 'Test', seq: six }] };
+    TEAM_BUFFS['Ryuji Sakamoto'] = [
+      { k: 'dmg', v: 20, to: 'party', src: 'HL', on: 'HL', dur: 2, why: 'test: a 2-turn Highlight buff' },
+      { k: 'atk%', v: 30, to: 'ally', src: 'passive', on: 'dpsHL', dur: 2, why: 'test: on the damage dealer\'s Highlight' },
+      { k: 'cm', v: 30, to: 'party', src: 'passive', on: 'anyHL', dur: 2, why: 'test: on any ally\'s Highlight' }];
+    tcMemo.key = '';
+    out.screen = tcMember(ann, 'Ryuji Sakamoto', null, null, false).lines.map(l => [l.k, +l.up.toFixed(4), !!l.offRot]);
+    // the damage dealer's own Highlight, from lufel's skill numbers: Ann's 3-1 rotation against her Highlight
+    const H = tcEvalFor(ann).hl, S0 = SKILL_DMG['Ann Takamaki'];
+    out.ann = { q: H.q, qExp: S0.d[3] / ((S0.d[0] + S0.d[2]) / 2), r0: H.r0, share: H.share };
+    out.m = {
+      hlDm: tcMultiplier(ann, [{ hlDm: 50 }]), dm: tcMultiplier(ann, [{ dm: 50 }]), hlx: tcMultiplier(ann, [{ hlx: 0.25 }]),
+      gauge: tcMultiplier(ann, [{ hlGauge: 50 }]), cd: tcMultiplier(ann, [{ hlCdRate: 0.25 }]),
+      xturns: tcMultiplier(ann, [{ xturns: 1 / 6 }]), xDmAlone: tcMultiplier(ann, [{ xDm: 45 }]), xBoth: tcMultiplier(ann, [{ xturns: 1 / 6, xDm: 45 }])
+    };
+    // the fight: the damage dealer alone gets a Highlight in rounds 2, 6, 10 (cooldown 4 actions, gauge empty at the start)
+    out.base = [12, 6].map(f => { setF(f); return tcSim(ann, ['Ryuji Sakamoto', null, null], false).base.hl['Ann Takamaki']; });
+    setF(12);
+    // turn order: a 1-turn debuff from a teammate who acts before the damage dealer meets this round's hit; after it, it expires first
+    TEAM_BUFFS['Ryuji Sakamoto'] = [{ k: 'defdown', v: 40, to: 'enemy', src: '1', on: '1', dur: 1, why: 'test: a 1-turn DEF down' }];
+    TEAMS['Ryuji Sakamoto'] = { rot: [{ aw: 0, label: 'Test', seq: ['1'] }] };
+    tmSpeed = n => n === 'Ryuji Sakamoto' ? 200 : n === 'Ann Takamaki' ? 100 : 50;
+    tcMemo.key = '';
+    const fast = tcSim(ann, ['Ryuji Sakamoto', null, null], false);
+    tmSpeed = n => n === 'Ryuji Sakamoto' ? 50 : n === 'Ann Takamaki' ? 100 : 40;
+    tcMemo.key = '';
+    const slow = tcSim(ann, ['Ryuji Sakamoto', null, null], false);
+    out.order = { fast: fast.mult, slow: slow.mult, fastUp: fast.cover.get('Ryuji Sakamoto') && fast.cover.get('Ryuji Sakamoto').get(0), slowUp: slow.cover.get('Ryuji Sakamoto') ? slow.cover.get('Ryuji Sakamoto').get(0) || 0 : 0 };
+    tmSpeed = keepSpeed;
+    TEAMS['Ryuji Sakamoto'] = keepT; TEAM_BUFFS['Ryuji Sakamoto'] = keepB; tcMemo.key = '';
+    // the shared gauge: four thieves charge 84% a round, so a 12-round fight holds at most 10 Highlights in all
+    const team = tcSim(ann, ['Minami Miyashita [Beachflower]', 'Kotone Shiomi', 'Fuuka Yamagishi'], false);
+    out.shared = Object.values(team.hl).reduce((a, b) => a + b, 0) - (team.hl['Kotone Shiomi'] && tmAw('Kotone Shiomi') >= 1 ? 1 : 0);
+    // the gauge's spending orders: with one or two Highlight users every order is tried, so no order beats the chosen one
+    {
+      tcMemoFor(ann);
+      const P = tcSimPrep(ann, ['Minami Miyashita [Beachflower]', 'Kotone Shiomi', 'Fuuka Yamagishi'], false, false, {});
+      const users = P.thieves.filter(a => a.n && !a.isDps && a.kind === 'HL' && ((a.events || []).some(ev => [].concat(ev.e.on || []).includes('HL')) || (P.ownT && tcHlHits(a)))).map(a => a.n);
+      const perms = a => a.length <= 1 ? [a] : a.flatMap((x, i) => perms(a.slice(0, i).concat(a.slice(i + 1))).map(p => [x, ...p]));
+      const best = tcSimBest(P), all = perms([ann.n, ...users]);
+      let top = 0; all.forEach(o => [false, true].forEach(h => { top = Math.max(top, tcSimRun(P, o, h).total); }));
+      out.orders = { users: users.length, chosen: best.total, top, tried: all.length, spend: best.spend };
+    }
+    // Catchy Hook fires the damage dealer's Highlight outside its cooldown and the gauge
+    const hook = tcSim(ann, ['Ayaka Sakai', null, null], false);
+    out.hook = { with: hook.hl['Ann Takamaki'], base: hook.base.hl['Ann Takamaki'] };
+    // Summer Ayaka's Concerto of Time: one ally Highlight free each of her turns, cooldown 3
+    const keepSA = state.chars['Ayaka Sakai [Summer]'].owned;
+    const conc = tcSim(ann, ['Ayaka Sakai [Summer]', null, null], false);
+    out.concerto = { ann: conc.hl['Ann Takamaki'], base: conc.base.hl['Ann Takamaki'] };
+    // Theurgy: Yukari's A1 starts her at 70, so a 3-round fight has two where Awareness 0 has one
+    const yuk = charDef('Yukari Takeba'), keepY = state.chars[yuk.n].loadout;
+    setF(3);
+    state.chars[yuk.n].loadout = Object.assign({}, DEFAULT_LOADOUT, { awareness: 0 }); tcMemo.key = '';
+    const y0 = tcSim(yuk, [null, null, null], false).base.hl[yuk.n];
+    state.chars[yuk.n].loadout = Object.assign({}, DEFAULT_LOADOUT, { awareness: 1 }); tcMemo.key = '';
+    const y1 = tcSim(yuk, [null, null, null], false).base.hl[yuk.n];
+    state.chars[yuk.n].loadout = keepY; setF(12);
+    out.theurgy = [y0, y1];
+    // Kotone Shiomi's Echoing Strings (A1): entering Fortune fires her Highlight without gauge
+    const ks = 'Kotone Shiomi', keepK = state.chars[ks].loadout;
+    const kc = aw => { state.chars[ks].loadout = Object.assign({}, DEFAULT_LOADOUT, { awareness: aw }); tcMemo.key = ''; return tcSim(ann, [ks, null, null], false).hl[ks]; };
+    out.fortune = [kc(0), kc(1)];
+    state.chars[ks].loadout = keepK; tcMemo.key = '';
+    /* Kotone Shiomi's Lunar Phaseshift (TC_COPY): her Skill 3 copies the buffs a teammate has on the damage
+       dealer at 30% (37.5% from A2) for 1 turn — not their debuffs on the foe, not a `noCopy` line — and
+       the teammate's share counts it; the quick screen copies too; never onto a damage dealer who is not a
+       Sweeper or Assassin (Arcana Link) */
+    {
+      const ryu = 'Ryuji Sakamoto', keepRB = TEAM_BUFFS[ryu], keepRT = TEAMS[ryu], keepKT = TEAMS[ks], keepKB = TEAM_BUFFS[ks], keepWo = state.wonder, keepSp = tmSpeed;
+      TEAM_BUFFS[ryu] = [
+        { k: 'atk%', v: 40, to: 'ally', src: '1', on: '1', dur: 3, why: 'test: ally ATK' },
+        { k: 'defdown', v: 30, to: 'enemy', src: '1', on: '1', dur: 3, why: 'test: a debuff' },
+        { k: 'cm', v: 50, to: 'party', src: '1', on: '1', dur: 3, noCopy: true, why: 'test: not copyable' },
+        { k: 'dmg', v: 20, to: 'party', src: 'passive', why: 'test: always on' }];
+      TEAMS[ryu] = { rot: [{ aw: 0, label: 'Test', seq: ['1'] }] };
+      TEAM_BUFFS[ks] = [];
+      TEAMS[ks] = { rot: [{ aw: 0, label: 'Test', seq: ['3', '1', '1'] }] };
+      state.wonder = {};
+      tmSpeed = n => n === ryu ? 200 : n === ks ? 150 : n === 'Ann Takamaki' ? 100 : 50;
+      const run = (aw, on) => {
+        state.chars[ks].loadout = Object.assign({}, DEFAULT_LOADOUT, { awareness: aw }); TC_COPY.n = on ? ks : '-'; tcMemo.key = '';
+        const S = tcSim(ann, [ryu, ks, null], false), L = tcLineupAt(ann, [ryu, ks, null]);
+        const vr = tcMember(ann, ryu, null, null, false).vec, vk = tcMember(ann, ks, null, null, false).vec;
+        return { mult: S.mult, copy: S.copy, ryuPart: L.parts[0], quick: tcMultiplier(ann, [vr, vk]), copyBy: vk.copyBy || null };
+      };
+      const c0 = run(0, true), c2 = run(2, true), off = run(0, false);
+      // a Healer damage dealer holds no Arcana Link
+      TC_COPY.n = ks; tcMemo.key = '';
+      const heal = tcSimPrep(charDef('Yukari Takeba'), [ryu, ks, null], false).copy;
+      TEAM_BUFFS[ryu] = keepRB; TEAMS[ryu] = keepRT; TEAMS[ks] = keepKT; TEAM_BUFFS[ks] = keepKB; state.wonder = keepWo; tmSpeed = keepSp;
+      state.chars[ks].loadout = keepK; tcMemo.key = '';
+      out.copy = { c0, c2, off, heal };
+    }
+    // a member's part and Wonder's are read against the headline fight with its own rotations (tcSimAs):
+    // with no Wonder setup his part is exactly 1, and a "without" fight never re-fits
+    {
+      const keepWo = state.wonder; state.wonder = {}; tcMemo.key = '';
+      const names = ['Ryuji Sakamoto', 'Kotone Shiomi', 'Fuuka Yamagishi'];
+      const L = tcLineupAt(ann, names), S = tcSim(ann, names, tmFitOn() ? 'full' : false);
+      const again = tcSimAs(ann, names, S).total;
+      out.partsAs = { wonder: L.wonder.part, parts: L.parts, fit: tmFitOn(), same: Math.abs(again / S.total - 1) };
+      // the Battle rotation panel's log is that very fight replayed: the same total, the Elucidator at each round's
+      // start, every thief once a round in the order the fight played them
+      const FL = tcFightLog(S), r1 = FL.log.filter(e => e.r === 1 && !e.pass && (e.k === 'act' || e.k === 'elu')).map(e => e.who);
+      out.battleLog = { ok: FL.ok, r1, order: S.order, perRound: [...Array(tcFight())].map((_, i) => FL.log.filter(e => e.r === i + 1 && !e.pass && e.k === 'act' && !e.extra).length),
+        elu: FL.log.filter(e => e.k === 'elu').length, F: tcFight() };
+      state.wonder = keepWo; tcMemo.key = '';
+    }
+    // a damage dealer's Resonance, set off by teammates' actions (Wavecatcher Miyu's Catch a Wave)
+    const miyu = charDef('Miyu Sahara [Wavecatcher]');
+    const mr = tcSim(miyu, [null, null, null], false).base;
+    out.res = (mr.parts.res || 0) / mr.total;
+    // Da Capo: extra actions over the fight
+    const manaka = F => { setF(F); return tcMember(ann, 'Manaka Nagao', null, null, false).vec.xturns; };
+    out.dacapo = [manaka(12), manaka(6)];
+    setF(12);
+    /* Summer Ichigo's Ram (TC_RAM): Heart's Desire makes the damage dealer the Helmsman, who rams at the end of
+       their turn and steps down (from A6 keeps the helm); the Boat is the crew's max HP plus Wonder's at their
+       mean; a Seal needs another Psy (Skill 1) or [Summer] (Skill 2) member; the HP part does not grow with ATK;
+       the quick screen sees it */
+    {
+      const ich = 'Ichigo Shikano [Summer]', ryu = 'Ryuji Sakamoto';
+      const keepIT = TEAMS[ich], keepIL = state.chars[ich].loadout, keepRB = TEAM_BUFFS[ryu], keepSp = tmSpeed;
+      TEAMS[ich] = { rot: [{ aw: 0, label: 'Test', seq: ['1', '3'] }] };
+      tmSpeed = n => n === ich ? 200 : n === 'Ann Takamaki' ? 100 : 50;
+      const run = (aw, atk) => {
+        state.chars[ich].loadout = Object.assign({}, DEFAULT_LOADOUT, { awareness: aw });
+        TEAM_BUFFS[ryu] = atk ? [{ k: 'atk%', v: 100, to: 'party', src: 'passive', why: 'test: party ATK' }] : [];
+        tcMemo.key = '';
+        return tcSim(ann, [ich, ryu, null], false);
+      };
+      const a6 = run(6, false), a0atk = run(0, true), a0 = run(0, false);
+      const R = tcRamFor(ann, [ich, ryu, null]);
+      const hpA = tcStat('Ann Takamaki', 'HP'), hpI = tcStat(ich, 'HP'), hpR = tcStat(ryu, 'HP');
+      const vi = tcMember(ann, ich, null, null, false).vec;
+      out.ram = {
+        rams: [a0.rams, a6.rams], none: tcSim(ann, [ryu, null, null], false).rams,
+        boat: R.boat / ((hpA + hpI + hpR) * 4 / 3), seal: [R.sealOn[1], R.sealOn[2], tcRamFor(charDef('Haru Okumura'), [ich, null, null]).sealOn[1]],
+        dm: R.dm, ramGrow: a0atk.parts.ram / a0.parts.ram, skillGrow: a0atk.parts.skill / a0.parts.skill,
+        quick: [tcMultiplier(ann, [vi]), tcMultiplier(ann, [Object.assign({}, vi, { ram: null })])], fight: tcSim(ann, [ich, null, null], false).mult
+      };
+      TEAMS[ich] = keepIT; state.chars[ich].loadout = keepIL; TEAM_BUFFS[ryu] = keepRB; tmSpeed = keepSp; tcMemo.key = '';
+    }
+    /* The twins' Skill Amplification (Two Masks as One, Strategist masks): the damage dealer's skill hits and the
+       skill buffs the other allies cast while it is up are that much stronger; a passive and a Highlight are not;
+       the quick screen sees it */
+    {
+      const jc = 'Justine & Caroline', ryu = 'Ryuji Sakamoto';
+      const keep = { jb: TEAM_BUFFS[jc], jt: TEAMS[jc], rb: TEAM_BUFFS[ryu], rt: TEAMS[ryu], sp: tmSpeed };
+      const amp = keep.jb.find(e => e.k === 'skillAmp');
+      TEAMS[jc] = { rot: [{ aw: 0, label: 'Test', seq: ['3'] }] };
+      TEAMS[ryu] = { rot: [{ aw: 0, label: 'Test', seq: ['1'] }] };
+      tmSpeed = n => n === jc ? 300 : n === ryu ? 200 : n === 'Ann Takamaki' ? 100 : 50;
+      tcMateOff = true;   // the amplification alone, without the twins' and Ryuji's own hits
+      const run = (on, src) => {
+        TEAM_BUFFS[jc] = on ? [amp] : [];
+        TEAM_BUFFS[ryu] = [{ k: 'atk%', v: 40, to: 'party', src, on: src === '1' ? '1' : undefined, dur: 3, why: 'test: ATK' }];
+        tcMemo.key = '';
+        const S = tcSim(ann, [jc, ryu, null], false);
+        return { skill: S.parts.skill, hl: S.parts.hl || 0, quick: tcMultiplier(ann, [tcMember(ann, jc, null, null, false).vec, tcMember(ann, ryu, null, null, false).vec]) };
+      };
+      const s1 = [run(false, '1'), run(true, '1')], ps = [run(false, 'passive'), run(true, 'passive')];
+      Object.assign(TEAM_BUFFS, { [jc]: keep.jb, [ryu]: keep.rb }); Object.assign(TEAMS, { [jc]: keep.jt, [ryu]: keep.rt }); tmSpeed = keep.sp; tcMateOff = false; tcMemo.key = '';
+      out.skillAmp = { has: !!amp, skill: s1[1].skill / s1[0].skill, passive: ps[1].skill / ps[0].skill, hl: ps[0].hl ? ps[1].hl / ps[0].hl : 1, quick: ps[1].quick / ps[0].quick };
+    }
+    /* Yumi's Cocktails (TC_CK): Mixers from allies' damaging hits by element, Tailor-Made from one element and
+       Standard or Basic from a mix; Invigorating Blend spends them all, Tempting Build its best one; her Skill 3
+       lines raise the damage dealer's damage; no Cocktails without her */
+    {
+      const yu = 'Yumi Shiina', ryu = 'Ryuji Sakamoto';
+      const keep = { yt: TEAMS[yu], yl: state.chars[yu].loadout, rt: TEAMS[ryu], at: TEAMS['Ann Takamaki'], yb: TEAM_BUFFS[yu] };
+      state.chars[yu].loadout = Object.assign({}, DEFAULT_LOADOUT, { awareness: 0 });
+      TEAMS[ryu] = { rot: [{ aw: 0, label: 'Test', seq: ['1'] }] };
+      TEAMS['Ann Takamaki'] = Object.assign({}, keep.at, { rot: [{ aw: 0, label: 'Test', seq: ['1'] }] });
+      const run = (seq, mates, lines) => {
+        TEAMS[yu] = { rot: [{ aw: 0, label: 'Test', seq }] };
+        TEAM_BUFFS[yu] = lines || keep.yb;
+        tcMemo.key = '';
+        return tcSim(ann, mates.concat([yu]), false);
+      };
+      const s3 = ['3', '-', '-', '-'];
+      const mono = run(s3, [null, null]), mixed = run(s3, [ryu, null]), s1 = run(['1'], [null, null]);
+      const off = run(s3, [null, null], keep.yb.filter(e => e.ck !== 'all' && e.ck !== 'std2'));
+      out.ck = { mono: mono.cocktails, mixed: mixed.cocktails, s1: s1.cocktails, gain: mono.total / off.total, none: tcSim(ann, [null, null, 'Fuuka Yamagishi'], false).cocktails };
+      Object.assign(TEAMS, { [yu]: keep.yt, [ryu]: keep.rt, 'Ann Takamaki': keep.at }); TEAM_BUFFS[yu] = keep.yb; state.chars[yu].loadout = keep.yl; tcMemo.key = '';
+    }
+    /* Tempest Riko's SP (TC_RK): Blossoming Season spends all of it, its tiers at 1% strength per 2 SP and only
+       from their thresholds; her turns refill it at SP Recovery; A2 refunds 50 and raises the max to 250 */
+    {
+      const st = (aw, rec, sp) => ({ aw, max: aw >= 2 ? 250 : 200, sp, rec, casts: 0, spent: 0, low: 0 });
+      const full = tcRkStep(st(0, 1, 200), '3');
+      const a = st(0, 1, 200); tcRkStep(a, '3'); const after3 = a.sp; tcRkStep(a, '2'); const low = tcRkStep(a, '3');
+      const quarter = tcRkStep(st(0, 4.801, 0), '3');
+      const b = st(2, 1, 250), a2 = tcRkStep(b, '3');
+      const ri = 'Riko Tanemura [Tempest]', keep = { rt: TEAMS[ri], rb: TEAM_BUFFS[ri], at: TEAMS['Ann Takamaki'] };
+      TEAMS['Ann Takamaki'] = Object.assign({}, keep.at, { rot: [{ aw: 0, label: 'Test', seq: ['1'] }] });
+      TEAMS[ri] = { rot: [{ aw: 0, label: 'Test', seq: ['3', '2'] }] };
+      const run = lines => { TEAM_BUFFS[ri] = lines; tcMemo.key = ''; return tcSim(ann, [ri, null], false); };
+      const on = run(keep.rb), off = run(keep.rb.filter(e => !e.spT));
+      out.rk = { full, after3, low, lowCount: a.low, quarter, a2, a2sp: b.sp, sp: on.rikoSp, gain: on.total / off.total,
+        none: tcSim(ann, [null, null], false).rikoSp };
+      Object.assign(TEAMS, { [ri]: keep.rt, 'Ann Takamaki': keep.at }); TEAM_BUFFS[ri] = keep.rb; tcMemo.key = '';
+    }
+    // Ryuji's Fearless Charge (A2): Pierce 35 on his skill hits, nothing below A2
+    {
+      const ryu = 'Ryuji Sakamoto', R = charDef(ryu), keep = { lo: state.chars[ryu].loadout, kb: DPS_KIT_BONUS[ryu] };
+      const at = (aw, lines) => { state.chars[ryu].loadout = Object.assign({}, DEFAULT_LOADOUT, { awareness: aw }); DPS_KIT_BONUS[ryu] = lines; tcMemo.key = ''; return tcSim(R, [null, null], false).total; };
+      const off = keep.kb.filter(b => b.k !== 'cpierce');
+      out.ryuPie = { a0: at(0, keep.kb) / at(0, off), a2: at(2, keep.kb) / at(2, off) };
+      state.chars[ryu].loadout = keep.lo; DPS_KIT_BONUS[ryu] = keep.kb; tcMemo.key = '';
+    }
+    // Radiance Motoha's Twilight Radiance stats (DPS_KIT_BONUS `k`): ATK per Light and crit damage on her Highlight only
+    {
+      const mo = 'Motoha Arai [Radiance]', M = charDef(mo), keep = { lo: state.chars[mo].loadout, kb: DPS_KIT_BONUS[mo] };
+      const at = (aw, lines) => { state.chars[mo].loadout = Object.assign({}, DEFAULT_LOADOUT, { awareness: aw }); DPS_KIT_BONUS[mo] = lines; tcMemo.key = ''; const s = tcSim(M, [null, null], false); return { total: s.total, parts: s.base ? s.base.parts : s.parts }; };
+      const off = keep.kb.filter(b => !b.k);
+      const a0 = at(0, keep.kb), a0off = at(0, off), a4 = at(4, keep.kb), a4off = at(4, off);
+      out.motohaHl = { a0: a0.total / a0off.total, a4: a4.total / a4off.total, skill: a0.parts && a0off.parts ? (a0.parts.skill || 0) / (a0off.parts.skill || 1) : null };
+      state.chars[mo].loadout = keep.lo; DPS_KIT_BONUS[mo] = keep.kb; tcMemo.key = '';
+    }
+    // Miku's own Skill Amplification (TC_SELF_AMP): each line's value with it over without it
+    {
+      const mk = 'Hatsune Miku', keep = { lo: state.chars[mk].loadout, amp: TC_SELF_AMP[mk] };
+      const vals = (aw, weapon) => {
+        state.chars[mk].loadout = Object.assign({}, DEFAULT_LOADOUT, { awareness: aw, weapon, refine: 1 }); tcMemo.key = '';
+        const o = {}; tcMemberCalc(ann, mk, null).lines.forEach(l => { o[l.why.slice(0, 70)] = (o[l.why.slice(0, 70)] || 0) + l.v; }); return o;
+      };
+      const ratio = (aw, weapon) => { const on = vals(aw, weapon); delete TC_SELF_AMP[mk]; const off = vals(aw, weapon); TC_SELF_AMP[mk] = keep.amp;
+        const r = {}; Object.keys(off).forEach(k => { r[k] = on[k] / off[k]; }); return r; };
+      const pick = (r, re) => { const k = Object.keys(r).find(x => re.test(x)); return k ? r[k] : null; };
+      out.mikuAmp = [[0, '5'], [1, '5'], [1, '4']].map(([aw, w]) => { const r = ratio(aw, w);
+        return { aw, w, beat: pick(r, /^Feel the Beat \(Skill 1\)/), show: pick(r, /^Showstopper \(Skill 3\): party crit/), turns: pick(r, /^Showstopper \(Skill 3\): Virtual Concert stops/), weapon: pick(r, /^Light Up Your World \(5-star weapon\): party crit damage up, u/) }; });
+      state.chars[mk].loadout = keep.lo; tcMemo.key = '';
+    }
+    // the boss's HP falls evenly over the fight; a damage dealer's bonus can read it (DPS_KIT_BONUS `hp`)
+    {
+      const F = tcFight(), km = 'Kotone Montagne', K = charDef(km), keepKb = DPS_KIT_BONUS[km];
+      const run = lines => { DPS_KIT_BONUS[km] = lines; tcMemo.key = ''; return tcSim(K, [null, null], false).total; };
+      out.bossHp = { F, hp: [1, 2, 3, F].map(r => Math.round(tcBossHp(r) * 1000) / 1000),
+        above70: [1, 2, 3].map(r => tcHpF({ above: 70 }, r)), below50: [3, 4].map(r => tcHpF({ below: 50 }, r)),
+        missing: tcHpF({ missing: true }, F), fullAt20: tcHpF({ missing: true, fullAt: 20 }, F),
+        gain: run(keepKb) / run(keepKb.filter(b => !b.hp)) };
+      DPS_KIT_BONUS[km] = keepKb; tcMemo.key = '';
+    }
+    // the kit-audit conditions (Nov 2026): Ren's Will of Rebellion count, a debuffed foe, a Wind teammate
+    {
+      const ren = 'Ren Amamiya', R = charDef(ren), keep = { r: TEAMS[ren], lo: state.chars[ren].loadout };
+      state.chars[ren].loadout = Object.assign({}, DEFAULT_LOADOUT, { awareness: 0 });
+      TEAMS[ren] = Object.assign({}, keep.r, { rot: [{ aw: 0, label: 'Test', seq: ['1', '1', '1+3'] }] }); tcMemo.key = '';
+      const w = tcSim(R, [null, null], false).will;
+      const keepKb = DPS_KIT_BONUS[ren];
+      DPS_KIT_BONUS[ren] = keepKb.filter(b => !b.perWill); tcMemo.key = ''; const noRes = tcSim(R, [null, null], false).total;
+      DPS_KIT_BONUS[ren] = keepKb; tcMemo.key = ''; const res = tcSim(R, [null, null], false).total;
+      TEAMS[ren] = keep.r; state.chars[ren].loadout = keep.lo; tcMemo.key = '';
+      const fk = charDef('Kotone Montagne [Frostgale]'), wind = CHARACTERS.find(c => c.e === 'Wind' && c.n !== fk.n && c.arch !== 'Navigator'),
+        other = CHARACTERS.find(c => c.e !== 'Wind' && c.arch !== 'Navigator' && c.n !== fk.n);
+      const has = names => tcKitBonusFor(fk, names).some(b => b.mateElem);
+      out.audit = { will: w, resistance: res / noRes, windMate: has([wind.n, null]), noWind: has([other.n, null]), none: has(null) };
+    }
+    // Ann's Passion (TC_LV): Trifire gives 1 a cast (one foe), so La Vie en Rose comes on her 5th action at A0;
+    // A6's 60% tally brings it sooner, and its end sets off Marriage of Flames (A2)
+    {
+      const keep = { a: TEAMS[ann.n], lo: state.chars[ann.n].loadout };
+      const run = aw => { state.chars[ann.n].loadout = Object.assign({}, DEFAULT_LOADOUT, { awareness: aw }); TEAMS[ann.n] = Object.assign({}, keep.a, { rot: [{ aw: 0, label: 'Test', seq: ['2'] }] }); tcMemo.key = ''; const s = tcSim(ann, [null, null], false); return { lv: s.laVie, fu: (s.parts || {}).fu || 0 }; };
+      out.laVie = { a0: run(0), a2: run(2), a6: run(6) };
+      TEAMS[ann.n] = keep.a; state.chars[ann.n].loadout = keep.lo; tcMemo.key = '';
+    }
+    // Kotone Shiomi's Lunar Bond (TC_LB): +1 per skill the Arcana Link ally casts and per Lyre's Melody on them
+    {
+      const ko = 'Kotone Shiomi', keep = { a: TEAMS[ann.n], k: TEAMS[ko], lo: state.chars[ko].loadout };
+      const rot = seq => ({ rot: [{ aw: 0, label: 'Test', seq }] });
+      const run = (aw, kseq) => { state.chars[ko].loadout = Object.assign({}, DEFAULT_LOADOUT, { awareness: aw }); TEAMS[ann.n] = Object.assign({}, keep.a, rot(['1'])); TEAMS[ko] = Object.assign({}, keep.k, rot(kseq)); tcMemo.key = ''; return tcSim(ann, [ko, null], false).lunarBond; };
+      out.lunarBond = { a0: run(0, ['1']), a1: run(1, ['1']), noMelody: run(0, ['2']), none: (() => { tcMemo.key = ''; return tcSim(ann, [null, null], false).lunarBond; })() };
+      // her Powerful Bond (TC_PB): one a Lyre's Melody, gone 3 rounds after the last, at most 3; Fortune once (twice at A6)
+      const pb = (aw, kseq) => { state.chars[ko].loadout = Object.assign({}, DEFAULT_LOADOUT, { awareness: aw }); TEAMS[ann.n] = Object.assign({}, keep.a, rot(['1'])); TEAMS[ko] = Object.assign({}, keep.k, rot(kseq)); tcMemo.key = ''; return tcSim(ann, [ko, null], false).powerfulBond; };
+      // lufel's own rows for her rotations (operation.js `lunar_bond` / `powerful_bond`), the damage dealer casting a skill each turn
+      const rows = (aw, kseq) => { state.chars[ko].loadout = Object.assign({}, DEFAULT_LOADOUT, { awareness: aw }); TEAMS[ann.n] = Object.assign({}, keep.a, rot(['2'])); TEAMS[ko] = Object.assign({}, keep.k, rot(kseq)); tcMemo.key = ''; const r = tcSim(ann, [ko, null], false); return r.lunarBond.rows.slice(0, 6).join(',') + '|' + r.powerfulBond.rows.slice(0, 6).join(','); };
+      out.lufelRows = { a0burst: rows(0, ['1', '1+1+3', 'Fatigue', 'Fatigue', '1', '3']), a0late: rows(0, ['1', '1', '1', '1', '1+3+2', 'Fatigue']), a1burst: rows(1, ['1', '1+1+3', 'Fatigue', 'Fatigue', '1', '3']), a1late: rows(1, ['1', '1', '1', '1', '1+3+2', 'Fatigue']) };
+      // Miku's Tracks: a song gains its Track only if she does not hold it; Showstopper spends all three
+      const mk = 'Hatsune Miku', keepM = TEAMS[mk], keepAnn = TEAMS[ann.n];
+      const tracks = seq => { TEAMS[ann.n] = Object.assign({}, keep.a, rot(['1'])); TEAMS[mk] = Object.assign({}, keepM, rot(seq)); tcMemo.key = ''; return tcSim(ann, [null, null, mk], false).mikuTracks; };
+      out.miku = { F: tcFight(), cycle: tracks(['2 Fire', '1 Heaven', '2 Spring', '3', '2 Fire', '1 Heaven']), same: tracks(['2 Fire']), toks: ['2+3', '3+3', '1', '2 Fire', 'ⓘA+2', '1+1+3'].map(st => [...tcTurnSkills(st)].sort().join(',')) };
+      TEAMS[mk] = keepM; TEAMS[ann.n] = keepAnn;
+      // kit counters played for one damage dealer (Nov 2026): Mitsuru's Frostbound, Tropical Motoha's Summer Hype, Haru's
+      // Rounds at each shot, Makoto Yuki's teammate buffs, the twins' True Desire
+      const kitRun = (n, seq, mates, lo) => { const c = charDef(n), kr = TEAMS[n], kl = state.chars[n].loadout; if (seq) TEAMS[n] = Object.assign({}, kr, rot(seq)); if (lo) state.chars[n].loadout = Object.assign({}, DEFAULT_LOADOUT, lo); tcMemo.key = ''; const k = tcSim(c, mates || [null, null], false).kit; TEAMS[n] = kr; state.chars[n].loadout = kl; tcMemo.key = ''; return k; };
+      const tw = 'Justine & Caroline', twLo = state.chars[tw].loadout, twAt = aw => { state.chars[tw].loadout = Object.assign({}, DEFAULT_LOADOUT, { awareness: aw }); tcMemo.key = ''; const k = tcSim(ann, [tw, null], false).kit.trueDesire; state.chars[tw].loadout = twLo; tcMemo.key = ''; return k; };
+      out.kitCounters = { F: tcFight(), fb: kitRun('Mitsuru Kirijo').fbPeak, hypeNone: kitRun('Motoha Arai [Tropical]', ['1']).hypeTurns, hypeAll: kitRun('Motoha Arai [Tropical]', ['3', '1']).hypeTurns,
+        shots2: kitRun('Haru Okumura', ['1', '3', 'Gunshot']).shots, shots1: kitRun('Haru Okumura', ['1', 'Gunshot']).shots,
+        buffedAlone: kitRun('Makoto Yuki').buffed, buffedKotone: kitRun('Makoto Yuki', null, ['Kotone Shiomi', null]).buffed,
+        tdA1: twAt(1), tdA6: twAt(6), pc: damageFactors([], ann, target(ann), Object.assign({}, DEFAULT_LOADOUT, { bare: true })).pc };
+      // the twins' Desire Level: their lines entered at 100 scale with it
+      const jc = 'Justine & Caroline', jcd = charDef(jc), D = tcDesire(jc), l1 = TEAM_BUFFS[jc].find(e => e.desire === 1), lh = TEAM_BUFFS[jc].find(e => e.desire === 0.5);
+      const plain = e => tcLineValue(Object.assign({}, e, { desire: undefined }), jcd, charLoadout(jc));
+      out.desire = { D, one: tcLineValue(l1, jcd, charLoadout(jc)) / plain(l1), half: tcLineValue(lh, jcd, charLoadout(jc)) / plain(lh), other: tcDesire('Ann Takamaki') };
+      // a line read off the receiving ally's stat (`per.of: 'target'`): Seaside Tomoko's Hale Summer Days ATK
+      const st = 'Tomoko Noge [Seaside]', stl = TEAM_BUFFS[st].find(e => e.per && e.per.of === 'target'), tv = tg => tcLineValue(stl, charDef(st), charLoadout(st), tg);
+      out.targetPer = { none: tv(), runa: tv('Runa Dogenzaka'), runaAA: tcStat('Runa Dogenzaka', 'Ailment Accuracy'), ann: tv(ann.n), annAA: tcStat(ann.n, 'Ailment Accuracy') };
+      /* teammates' and Wonder's own hits: Mitsuru's skills count for her; a line cast on the damage dealer alone (to: 'ally')
+         does not reach her hits, a party line does; Wonder hits only once his ATK is entered; the quick screen sees them */
+      {
+        const mi = 'Mitsuru Kirijo', keepMB = TEAM_BUFFS[mi], keepWS = state.wonderStats;
+        const mit = list => { TEAM_BUFFS[mi] = list; tcMemo.key = ''; return tcSim(ann, [mi, null, null], false); };
+        const atk = to => [{ k: 'atk%', v: 100, to, src: 'passive', why: 'test: ATK' }];
+        const none = mit([]), ally = mit(atk('ally')), party = mit(atk('party'));
+        tcMateOff = true; const off = mit([]); tcMateOff = false;
+        const jan = { personas: [{ name: 'Janosik', cards: ['', '', ''] }, { name: '', cards: ['', '', ''] }, { name: '', cards: ['', '', ''] }], weapon: '', refine: 1 };
+        state.wonderStats = {}; tcMemo.key = '';
+        const wNo = tcSim(ann, [mi, null, null], false, false, jan);
+        state.wonderStats = { atk: 3000 }; tcMemo.key = '';
+        const wYes = tcSim(ann, [mi, null, null], false, false, jan), wPlan = tcWonder(ann, jan).dmg;
+        // "Rank teams by" the damage dealer's damage: their own hits are still worked out, but not counted
+        $('#tmRank').value = 'dps'; tcMemo.key = '';
+        const dpsOnly = mit([]);
+        $('#tmRank').value = 'team'; tcMemo.key = '';
+        TEAM_BUFFS[mi] = keepMB; state.wonderStats = keepWS; tcMemo.key = '';
+        out.ownHits = { mit: (none.own || {})[mi] || 0, ally: (ally.own || {})[mi] || 0, party: (party.own || {})[mi] || 0, off: Object.keys(off.own || {}).length, offTotal: off.total, total: none.total,
+          wNo: (wNo.own || {}).Wonder || 0, wYes: (wYes.own || {}).Wonder || 0, tatra: JSON.stringify((WONDER_DMG.personas.Janosik || {}).u), plan: JSON.stringify(wPlan && wPlan.hl),
+          quick: tcMember(ann, mi, null, null, false).vec.own,
+          // the quick screen lifts her own hits by what reaches the party (tcOwnLift): a party ATK line, not one on the damage dealer alone
+          lift: (() => { const vm = tcMember(ann, mi, null, null, false).vec; return { of: vm.ownOf, party: !!vm.party, d: tcMultiplier(ann, [vm, { atkPct: 100, party: { atkPct: 100 } }]) - tcMultiplier(ann, [vm, { atkPct: 100 }]) }; })(),
+          rankDps: { own: (dpsOnly.own || {})[mi] || 0, inTotal: dpsOnly.ownInTotal, mult: dpsOnly.mult, teamMult: none.mult, pref: 'tmRank' in collectPrefs() }, stats: [JSON.stringify(wonderStatsFrom({ atk: '3000', cr: 'x', cm: 50 })), wonderStats() === null || !!wonderStats()] };
+      }
+      /* Wonder's stats worked out from his setup (wonderCalc): the user's four readings of his character screen
+         (6 Nov 2026, docs/DATA-SOURCES.md), Starry Compass R6 with each Persona's and the dagger's stats as read */
+      {
+        const keep = { p: JSON.stringify(state.personas), w: JSON.stringify(state.weapons), s: JSON.stringify(state.wonderSchema) };
+        const P = { Kohryu: [99, 836, 295, 197, 100], Janosik: [99, 1152, 320, 213], Belphegor: [60, 500, 138, 121], 'Ippon-Datara': [1, 155, 34, 28], Mandrake: [1, 155, 34, 28] };
+        Object.entries(P).forEach(([n, [lv, hp, atk, def, spd]]) => personaSet(n, { own: true, lv, cards: [], fused: [], drop: [], st: statRecFrom({ hp, atk, def, spd, lv }, PERSONA_STAT_KEYS) }));
+        personaSet('Kohryu', { tal: personaTop('Kohryu'), drop: ['Psycho Blast', 'Spell Master IV'], cards: ['Apt Pupil III', 'HP Boost IV', 'Marakukaja'], fused: ['Energy Drop'] });
+        weaponSet('Starry Compass', { own: true, refine: 7, st: { hp: 2051, atk: 654, def: 356 } });
+        state.wonderSchema = wonderSchemaFrom({ hp: 1200, hpPct: 20, atk: 300, atkPct: 20, def: 300, defPct: 30, cr: 20, cm: 40, aa: 80, ego: 84 });
+        const at = (a, b, c) => { const c2 = wonderCalc({ personas: [a, b, c].map(name => ({ name, cards: personaCards(name), fused: personaFused(name) })), weapon: 'Starry Compass', refine: 7 });
+          return { ok: c2.ok, atk: c2.atk, def: c2.def, hp: c2.hp, cr: c2.cr, cm: c2.cm, dm: c2.dm, aa: c2.aa, spd: c2.spd }; };
+        out.wonderCalc = { A1: at('Kohryu', 'Janosik', 'Belphegor'), A2: at('Kohryu', 'Ippon-Datara', 'Mandrake'), A3: at('Kohryu', 'Janosik', 'Mandrake'), A4: at('Belphegor', 'Kohryu', 'Janosik'),
+          missing: (() => { const s = state.wonderSchema; state.wonderSchema = {}; const m = wonderCalc({ personas: [{ name: 'Kohryu' }, { name: '' }, { name: '' }], weapon: '', refine: 1 }).missing; state.wonderSchema = s; return m; })(),
+          // the fight reads them for the setup it prices, and his Speed from the slot-1 Persona
+          stats: wonderStats({ personas: [{ name: 'Kohryu', cards: personaCards('Kohryu'), fused: personaFused('Kohryu') }, { name: 'Janosik', cards: [], fused: [] }, { name: 'Belphegor', cards: [], fused: [] }], weapon: 'Starry Compass', refine: 7 }),
+          agility: (WONDER_SKILLS['Agility Master II'] || {}).st,
+          /* a Persona's stats at its level and overclocks, worked out from Game8's level 1 (personaCalcStats): the user's
+             readings of eleven Persona screens (10 Nov 2026, docs/DATA-SOURCES.md); Janosik, who also ranks up, is left out */
+          rule: [['Fuu-Ki', 40, 0, 264, 96, 48], ['Fuu-Ki', 40, 1, 291, 106, 53], ['Belphegor', 60, 2, 500, 138, 121], ['Black Frost', 80, 0, 657, 241, 121],
+            ['Black Frost', 1, 0, 229, 84, 42], ['Kohryu', 99, 3, 836, 295, 197], ['Scathach', 70, 2, 389, 137, 91], ['Okuninushi', 65, 1, 580, 205, 137],
+            ['Skadi', 70, 0, 451, 160, 106], ['Norn', 85, 3, 976, 270, 122], ['Lilith', 95, 3, 815, 288, 192], ['Alice', 99, 3, 893, 328, 165]]
+            .map(([n, lv, oc, hp, atk, def]) => { const c = personaCalcStats(n, { lv, oc }); return c ? Math.abs((c.hp + 4 * c.atk + 6 * c.def) / (hp + 4 * atk + 6 * def) - 1) : 1; }),
+          janosik: personaCalcStats('Janosik', { lv: 99, oc: 3 }),
+          caps: [personaLvCap('Black Frost', 0), personaLvCap('Fuu-Ki', 0), personaLvCap('Okuninushi', 1), personaLvCap('Kohryu', 3), personaLvCap('Janosik', 3)], saved: JSON.stringify(personasSaved().Kohryu.st) + JSON.stringify(weaponsSaved()['Starry Compass'].st) };
+        state.personas = JSON.parse(keep.p); state.weapons = JSON.parse(keep.w); state.wonderSchema = JSON.parse(keep.s); tcMemo.key = '';
+      }
+      out.powerfulBond = { every: pb(0, ['1']), sparse: pb(0, ['1', '2', '2']), none: pb(0, ['2']), a1: pb(1, ['2']), burst: pb(0, ['1+1+3']), burst6: pb(6, ['1+1+3']) };
+      /* teammates' own kit damage (tcMateKit / tcMateBonus) and party buffs as each holder has them (echoes): a slower
+         teammate's hit reads a 1-turn party buff a faster teammate cast before the damage dealer acted; a teammate's
+         follow-up on allies' skills and their own skill bonus add to their own hits; a component reading a damage
+         dealer's own state machine (Lovesick) is left out */
+      {
+        const mi = 'Mitsuru Kirijo', ryu = 'Ryuji Sakamoto';
+        const keep = { mb: TEAM_BUFFS[mi], rb: TEAM_BUFFS[ryu], mk: DPS_KIT[mi], mbo: DPS_KIT_BONUS[mi], rt: TEAMS[ryu], sp: tmSpeed };
+        const reset = () => { Object.keys(kitMixCache).forEach(k => delete kitMixCache[k]); Object.keys(damageBaseCache).forEach(k => delete damageBaseCache[k]); tcMemo.key = ''; };
+        TEAM_BUFFS[mi] = []; DPS_KIT[mi] = []; DPS_KIT_BONUS[mi] = [];
+        TEAMS[ryu] = { rot: [{ aw: 0, label: 'Test', seq: ['1'] }] };
+        tmSpeed = n => n === ryu ? 200 : n === ann.n ? 100 : n === mi ? 50 : 150;
+        const own = () => { reset(); return (tcSim(ann, [ryu, mi, null], false).own || {})[mi] || 0; };
+        TEAM_BUFFS[ryu] = []; const plain = own();
+        TEAM_BUFFS[ryu] = [{ k: 'atk%', v: 100, to: 'party', src: '1', on: '1', dur: 1, why: 'test: a 1-turn party ATK buff cast before the damage dealer acts' }]; const echoed = own();
+        TEAM_BUFFS[ryu] = [{ k: 'atk%', v: 100, to: 'ally', src: '1', on: '1', dur: 1, why: 'test: on the damage dealer alone' }]; const allyOnly = own();
+        TEAM_BUFFS[ryu] = [];
+        DPS_KIT[mi] = [{ kind: 'fu', v: 100, on: 'allySkill', why: 'test: a follow-up on each ally skill' }]; const fu = own();
+        DPS_KIT[mi] = [{ kind: 'fu', v: 100, on: 'allySkill', ls: [0, 10], why: 'test: reads Lovesick, a damage dealer\'s own state' }]; const skipped = own();
+        DPS_KIT[mi] = [];
+        DPS_KIT_BONUS[mi] = [{ to: 'skill', v: 100, why: 'test: +100% on her skills' }]; const bonus = own();
+        TEAM_BUFFS[mi] = keep.mb; TEAM_BUFFS[ryu] = keep.rb; DPS_KIT[mi] = keep.mk; DPS_KIT_BONUS[mi] = keep.mbo; TEAMS[ryu] = keep.rt; tmSpeed = keep.sp; reset();
+        out.mateKit = { plain, echoed, allyOnly, fu, skipped, bonus };
+      }
+      Object.assign(TEAMS, { [ann.n]: keep.a, [ko]: keep.k }); state.chars[ko].loadout = keep.lo; tcMemo.key = '';
+    }
+    // Ichigo's Lovesick (TC_LS): stacks from her skills, capped, ticking on the enemy's turn and on her Highlight
+    {
+      const ich = 'Ichigo Shikano', I = charDef(ich), keep = { r: TEAMS[ich], lo: state.chars[ich].loadout, v: TC_LS.v };
+      state.chars[ich].loadout = Object.assign({}, DEFAULT_LOADOUT, { awareness: 0 });
+      const run = seq => { TEAMS[ich] = Object.assign({}, keep.r, { rot: [{ aw: 0, label: 'Test', seq }] }); tcMemo.key = ''; return tcSim(I, [null, null], false); };
+      const two = run(['2']), three = run(['3']);
+      TC_LS.v = 0; const off = run(['2']); TC_LS.v = keep.v;
+      // My Beloved Prince on the stacks there: none with no stacks, and its bonus hit only from 10
+      const early = run(['2', '2', '3']); TC_LS.s3At = 0; const always = run(['2', '2', '3']); TC_LS.s3At = 10;
+      // Chains of Love: +1 on her first Vorpal Butterfly (and each Highlight), none from Obsessive Rose alone
+      const vb = run(['1', '2']);
+      // Lovesick ignores her own Pierce: with more of it her skills deal more in absolute terms, the ticks the same
+      const unit = () => { const E = tcEvalFor(I, true); return E.f0 * E.c0; };
+      const u0 = unit(), keepTS = tcStat;
+      tcStat = (n, s) => n === ich && s === 'Resistance Pierce' ? 60 : keepTS(n, s); tcMemo.key = '';
+      const pierced = run(['2']), u1 = unit();
+      tcStat = keepTS; tcMemo.key = '';
+      out.lovesick = { two: two.lovesick, three: three.lovesick, gain: two.total / off.total, F: tcFight(),
+        hitNone: (three.parts || {}).hit || 0, earlyVsAlways: early.total / always.total, vb: vb.lovesick,
+        ownPierce: { dot: pierced.parts.dot * u1 / (two.parts.dot * u0), skill: pierced.parts.skill * u1 / (two.parts.skill * u0), units: u1 / u0 } };
+      TEAMS[ich] = keep.r; state.chars[ich].loadout = keep.lo; tcMemo.key = '';
+    }
+    // the damage dealer's own HP (TC_HP): Ryuji's Pirate Tactics spends it, Leo's barrier too, and Rebound reads it
+    {
+      const ryu = 'Ryuji Sakamoto', leo = 'Leo Kamiyama', R = charDef(ryu), keep = { r: TEAMS[ryu], l: TEAMS[leo], lo: state.chars[ryu].loadout };
+      state.chars[ryu].loadout = Object.assign({}, DEFAULT_LOADOUT, { awareness: 0 });
+      const rot = seq => ({ rot: [{ aw: 0, label: 'Test', seq }] });
+      const hp = (rseq, mates) => { TEAMS[ryu] = Object.assign({}, keep.r, rot(rseq)); TEAMS[leo] = Object.assign({}, keep.l, rot(['2'])); tcMemo.key = ''; return tcSim(R, mates, false).selfHp; };
+      // the kits' own costs alone first (the boss's damage, `lowFrom`, off), then with it
+      const low = TC_HP[ryu].lowFrom; TC_HP[ryu].lowFrom = 0;
+      out.selfHp = { f: [tcSelfHpF({ below: 75 }, 0.7), tcSelfHpF({ above: 50 }, 0.4), tcSelfHpF({ missing: true, fullAt: 20 }, 0.6), tcSelfHpF({ belowBoss: true }, 0.5, 0.6), tcSelfHpF({ rebound: true }, 1, 1, true)],
+        skill1: hp(['1', '2'], [null, null]), plain: hp(['2'], [null, null]), leo: hp(['2'], [leo, null]) };
+      TC_HP[ryu].lowFrom = low;
+      out.selfHp.low = Object.assign(hp(['2'], [null, null]), { F: tcFight() });
+      Object.assign(TEAMS, { [ryu]: keep.r, [leo]: keep.l }); state.chars[ryu].loadout = keep.lo; tcMemo.key = '';
+    }
+    // Makoto Niijima's Nuclear Finisher: ATK on a foe with any elemental ailment (KIT_STAT_BUFFS needAil 'any')
+    {
+      const mn = 'Makoto Niijima', M = charDef(mn), keepK = KIT_STAT_BUFFS[mn], keepLo = state.chars[mn].loadout;
+      state.chars[mn].loadout = Object.assign({}, DEFAULT_LOADOUT, { weapon: '5', refine: 1 });
+      const nf = keepK.find(b => b.needAil === 'any');
+      const run = lines => { KIT_STAT_BUFFS[mn] = lines; tcMemo.key = ''; Object.keys(kitMixCache).forEach(k => delete kitMixCache[k]); Object.keys(damageBaseCache).forEach(k => delete damageBaseCache[k]); return tcSim(M, [null, null], false).total; };
+      out.nuclearFinisher = { stat: kitStatBuffs(M, charLoadout(mn)).some(b => b === nf || (b.needAil === 'any' && b.v === 30)), gain: run(keepK) / run(keepK.filter(b => b !== nf)) };
+      KIT_STAT_BUFFS[mn] = keepK; state.chars[mn].loadout = keepLo; tcMemo.key = '';
+      Object.keys(kitMixCache).forEach(k => delete kitMixCache[k]); Object.keys(damageBaseCache).forEach(k => delete damageBaseCache[k]);
+    }
+    // Kotone Shiomi's weapon Skill Amplification from Lunar Bond 5 (round 3 at A0, round 1 from A1)
+    {
+      const ko = 'Kotone Shiomi', s1 = TEAM_BUFFS[ko].find(e => String(e.src) === '1'), hl = TEAM_BUFFS[ko].find(e => e.src === 'HL');
+      const lo = (w, aw) => Object.assign({}, DEFAULT_LOADOUT, { weapon: w, refine: 1, awareness: aw });
+      out.kotoneAmp ={ r2: tcSelfAmp(ko, s1, lo('5', 0), 0, 2), r3: tcSelfAmp(ko, s1, lo('5', 0), 0, 3), a1: tcSelfAmp(ko, s1, lo('5', 1), 1, 1),
+        w4: tcSelfAmp(ko, s1, lo('4', 0), 0, 5), hl: tcSelfAmp(ko, hl, lo('5', 0), 0, 5), mean: tcSelfAmp(ko, s1, lo('5', 0), 0), F: tcFight() };
+      const keepLo = state.chars[ko].loadout;
+      state.chars[ko].loadout = lo('5', 0); tcMemo.key = '';
+      const evs = tcMember(ann, ko, null, null, false).sim.events;
+      out.kotoneAmp.ev = evs.some(ev => String(ev.e.src) === '1' && ev.ampAt) && !evs.some(ev => ev.e.src === 'HL' && ev.ampAt);
+      state.chars[ko].loadout = keepLo; tcMemo.key = '';
+    }
+    // the search's lead fights at least as well, fully fitted, as the best listed team of every Elucidator
+    if (tmFitOn()) {
+      tcMemo.key = '';
+      const found = tcSearch(ann, 8), seen = new Set(), per = [];
+      found.forEach(t => { if (!seen.has(t.names[2])) { seen.add(t.names[2]); per.push(t); } });
+      const full = t => tcSim(ann, t.names, 'full').mult;
+      out.searchLead = { lead: full(found[0]), elus: per.map(t => ({ e: t.names[2], m: full(t) })) };
+    }
+    // Wonder's Highlight: from his Persona whose Highlight does most
+    const real = Object.assign({}, WONDER_BUFFS), keepW = state.wonder;
+    Object.assign(WONDER_BUFFS, { personas: { P: [{ k: 'dmg', v: 30, to: 'party', src: 'HL', dur: 2, why: 'p' }], Q: [{ k: 'dmg', v: 10, to: 'party', src: 'HL', dur: 2, why: 'q' }] }, cards: {}, weapons: {} });
+    const slot = n => ({ name: n, cards: ['', '', ''] });
+    const w = tcWonder(ann, { personas: [slot('Q'), slot('P'), slot('')], weapon: '', refine: 1 });
+    Object.assign(WONDER_BUFFS, real); state.wonder = keepW; tcMemo.key = '';
+    out.wonder = { lines: w.lines.map(l => l.v), idle: w.idle.length, events: w.sim.events.length };
+    // Fuuka's Strengths and Weaknesses (A2): the backup also fires their Highlight on the swap
+    const keepF = state.chars['Fuuka Yamagishi'].loadout;
+    const bk = aw => { state.chars['Fuuka Yamagishi'].loadout = Object.assign({}, DEFAULT_LOADOUT, { awareness: aw }); tcMemo.key = '';
+      return tcMember(ann, 'Leo Kamiyama', null, { swaps: 2 }, false).lines.filter(l => /Strengths and Weaknesses/.test(l.why)).length; };
+    out.backup = [bk(0), bk(2)];
+    // Oracle Shift in the fight: her first lufel rotation ('-', 1, 3, 1, 2+3, 1, its opening wait once) and
+    // 3 starting stacks reach 4 on rounds 2, 6 and 10; at A6 (cost 3, +2 per Divine Prayer, 5 to start) more
+    // often; from A2 the backup's Highlight comes with the swap (once every 3 rounds)
+    const lineup = [null, null, 'Fuuka Yamagishi', 'Leo Kamiyama'];
+    const shiftAt = aw => { state.chars['Fuuka Yamagishi'].loadout = Object.assign({}, DEFAULT_LOADOUT, { awareness: aw }); tcMemo.key = '';
+      const S = tcSim(ann, lineup, false);
+      return { shifts: S.shifts, leoHl: S.hl['Leo Kamiyama'] || 0, mult: S.mult, without: tcSim(ann, lineup.slice(0, 3), false).mult,
+        courtesy: tcMember(ann, 'Fuuka Yamagishi', tcTeamSet(ann.n, lineup), null, false).lines.filter(l => /Courtesy/.test(l.why)).length,
+        seat: JSON.stringify(tcLineup(ann, lineup).members[3].shifts) === JSON.stringify(tcSim(ann, lineup, tmFitOn()).shifts) };
+    };
+    out.oracle = [shiftAt(0), shiftAt(2), shiftAt(6)];
+    // her opening wait: lufel's option acting on turn 1 only with Mitsuru, who shortens it; the swap plan by
+    // Awareness and with the shorter wait; the wait happens once when a rotation is cycled
+    state.chars['Fuuka Yamagishi'].loadout = Object.assign({}, DEFAULT_LOADOUT); tcMemo.key = '';
+    {
+    const fpick = team => tmRotPick('Fuuka Yamagishi', new Set(team)).pick.map(o => o.seq[0]).sort().join(',');
+    out.fuukaWait = { alone: fpick([ann.n, 'Fuuka Yamagishi']), mitsuru: fpick([ann.n, 'Mitsuru Kirijo', 'Fuuka Yamagishi']),
+      asBackup: tcPrepCut(Object.assign(new Set([ann.n, 'Fuuka Yamagishi', 'Mitsuru Kirijo']), { backup: 'Mitsuru Kirijo' })),
+      plan: [0, 1, 6].map(aw => tcFuukaPlan(aw, 1).join(',')), cut: tcFuukaPlan(1, 0).join(','),
+      unroll: tcUnroll('Fuuka Yamagishi', ['-', '1', '3', '1', '2+3', '1'], 12, 0).join(' ') };
+    // the backup's start-of-battle effects at its first swap: Yukari's A1 Theurgy charge fires her Theurgy at
+    // once (Fuuka at A0, so not Strengths and Weaknesses); Koromaru's Assist comes on from the first swap
+    const yka = 'Yukari Takeba', keepY = state.chars[yka];
+    const yk = aw => { state.chars[yka] = Object.assign({}, keepY, { loadout: Object.assign({}, DEFAULT_LOADOUT, { awareness: aw }) }); tcMemo.key = '';
+      return tcSim(ann, [null, null, 'Fuuka Yamagishi', yka], false).hl[yka] || 0; };
+    out.firstSwap = { yukari: [yk(0), yk(1)] };
+    if (keepY) state.chars[yka] = keepY; else delete state.chars[yka];
+    tcMemo.key = '';
+    const kb = tcSim(ann, [null, null, 'Fuuka Yamagishi', 'Koromaru'], false);
+    out.firstSwap.koro = kb.prep.fuuka.backup.startEvs.map(e => e.k + ' ' + e.v);
+    out.firstSwap.quick = tcMember(ann, 'Koromaru', null, { swaps: TC_SWAPS() }, false).lines.filter(l => /Assist Skill/.test(l.why)).map(l => Math.round(l.up * 1000) / 1000);
+    out.firstSwap.party = tcMember(ann, 'Koromaru', null, null, false).sim.consts.defdown;
+    // Kumi's permanent Highlight DEF down comes with her first Highlight, not before it
+    out.kumiHl = tcMember(ann, 'Kumi Katayama', null, null, false).sim.events.some(ev => ev.k === 'defdown' && [].concat(ev.e.on).includes('HL') && ev.dur === 99);
+    // Fuuka's backup chosen by the fight among the screen's best few
+    const cands = ['Leo Kamiyama', 'Kumi Katayama', 'Runa Dogenzaka'];
+    const vals = cands.map(c => tcSim(ann, [null, null, 'Fuuka Yamagishi', c], false).mult);
+    out.fightBackup = { pick: tcFightBackup(ann, [null, null, 'Fuuka Yamagishi', 'Leo Kamiyama'], cands, false)[3], best: cands[vals.indexOf(Math.max(...vals))],
+      other: tcFightBackup(ann, [null, null, 'Hatsune Miku'], cands, false).length };
+    // the backup's one action is the skill the fight does best with, not the one whose damage buffs sum highest
+    {
+      tcMemo.key = '';
+      const lineup = [null, null, 'Fuuka Yamagishi', yka];
+      const S = tcSim(ann, lineup, true), P0 = tcSimPrep(ann, lineup, true, false, {});
+      const ref = tcSimBest(P0);
+      const at = sk => tcSimRun(Object.assign({}, P0, { fuuka: Object.assign({}, P0.fuuka, { backup: Object.assign({}, P0.fuuka.backup, { skill: sk }) }) }), ref.spend, ref.hold).total;
+      const vals = ['1', '2', '3'].map(at), pick = S.prep.fuuka.backup.skill;
+      out.bkSkill = { pick, sum: P0.fuuka.backup.skill, vals, best: Math.max(...vals), pickV: at(pick) };
+    }
+    /* Oracle Shift's copy (Steadfast Supporter): while swapped in, the backup carries the status effects others put on
+       the damage dealer (Kotone Shiomi's Arcana Link lines), never the damage dealer's own; and Self-Worth (A6) lets
+       Strengths and Weaknesses' amp stack twice, so back-to-back swaps hold +20% */
+    {
+      const F = 'Fuuka Yamagishi', keepF = state.chars[F];
+      const setAw = aw => { state.chars[F] = Object.assign({}, state.chars[F] || {}, { loadout: Object.assign({}, DEFAULT_LOADOUT, { awareness: aw }) }); tcMemo.key = ''; };
+      setAw(0);
+      const own = (L, on) => { const was = tcBkCopyOn; tcBkCopyOn = on; tcMemo.key = ''; const S = tcSim(ann, L, false); tcBkCopyOn = was; return { own: S.own['Kumi Katayama'] || 0, mult: S.mult, shifts: S.shifts.length }; };
+      const withK = ['Kotone Shiomi', null, F, 'Kumi Katayama'], noK = [null, null, F, 'Kumi Katayama'];
+      out.bkCopy = { on: own(withK, true), off: own(withK, false), aloneOn: own(noK, true), aloneOff: own(noK, false) };
+      setAw(6);
+      const line = TEAM_BUFFS[F].find(e => e.perCast === 'fuukaAmp'), keepL = Object.assign({}, line);
+      const lineup = [null, null, F, 'Leo Kamiyama'];
+      tcMemo.key = ''; const S2 = tcSim(ann, lineup, false);
+      Object.assign(line, { stacks: 1 }); tcMemo.key = ''; const S1 = tcSim(ann, lineup, false);
+      Object.assign(line, keepL); tcMemo.key = '';
+      const finals = aw => { setAw(aw); return tcMember(ann, F, null, null, false).lines.filter(l => l.k === 'final').map(l => ({ v: l.v, up: l.up })); };
+      out.selfWorth = { shifts: S2.shifts, two: S2.mult, one: S1.mult, a3: finals(3), a6: finals(6) };
+      if (keepF) state.chars[F] = keepF; else delete state.chars[F];
+      tcMemo.key = '';
+    }
+    // Mitsuru's Iceblade: on the triggering ally's ATK (Global text), and from her A1 on every ally skill attack
+    {
+      const MI = charDef('Mitsuru Kirijo'), keepM = state.chars[MI.n], mate = 'Kumi Katayama';
+      const atA = aw => { state.chars[MI.n] = Object.assign({}, keepM || { owned: false }, { loadout: Object.assign({}, DEFAULT_LOADOUT, { awareness: aw }) }); tcMemo.key = ''; };
+      const fu = () => { tcMemo.key = ''; return tcSim(MI, [mate, null, null], false).parts.fu || 0; };
+      atA(0);
+      const kit0 = tcKitFor(MI).filter(c => c.byAtk).map(c => c.after), fu0 = fu();
+      const keepP = window.tcPanelAtk;
+      // every trigger (Kumi, Wonder) at twice its ATK; Wonder's unknown ATK stands in as Mitsuru's
+      window.tcPanelAtk = a => a && a.n === MI.n ? keepP(a) : 2 * (keepP(a) || keepP({ n: MI.n }));
+      const fu0x2 = fu();
+      window.tcPanelAtk = keepP;
+      atA(1);
+      const kit1 = tcKitFor(MI).filter(c => c.byAtk).map(c => c.after), fu1 = fu();
+      if (keepM) state.chars[MI.n] = keepM; else delete state.chars[MI.n];
+      tcMemo.key = '';
+      out.iceblade = { kit0, kit1, fu0, fu0x2, fu1 };
+    }
+    // Mio's Entropy: every Ice Technical lowers DEF, on a Shocked or Frozen foe as on a Burning one (YUI Shocks)
+    {
+      const MIO = 'Mio Natsukawa', keepMio = state.chars[MIO], yui = charDef('YUI');
+      state.chars[MIO] = Object.assign({}, keepMio || { owned: false }, { loadout: Object.assign({}, DEFAULT_LOADOUT, { weapon: '5' }) });
+      const ent = TEAM_BUFFS[MIO].find(e => /^Entropy/.test(e.why)), keepNeed = ent.needAil;
+      const run = () => { tcMemo.key = ''; return tcSim(yui, [MIO, null, null], false).total; };
+      const any = run();
+      ent.needAil = ['Burn']; const burnOnly = run();
+      ent.needAil = keepNeed;
+      if (keepMio) state.chars[MIO] = keepMio; else delete state.chars[MIO];
+      tcMemo.key = '';
+      out.entropy = { need: keepNeed, any, burnOnly };
+    }
+    // Ann's Rosethorn: Fire damage per Burning foe, Falling Sun Burning the other foes at its chance; one foe, one stack at most
+    {
+      const keepAnn = state.chars[ann.n], foeSel = $('#tmFoes'), keepFoes = foeSel.value;
+      state.chars[ann.n] = Object.assign({}, keepAnn || { owned: false }, { loadout: Object.assign({}, DEFAULT_LOADOUT, { weapon: '5', refine: 4 }) });
+      const rose = DPS_KIT_BONUS[ann.n].find(b => b.perBurnFoe), keepRose = DPS_KIT_BONUS[ann.n].slice();
+      const play = (foes, withRose) => {
+        foeSel.value = String(foes);
+        DPS_KIT_BONUS[ann.n] = withRose ? keepRose : keepRose.filter(b => b !== rose);
+        tcMemo.key = ''; tcMemoFor(ann);
+        const P = tcSimPrep(ann, [null, null, null], false, true);
+        P.thieves = P.thieves.map(a => a.isDps ? Object.assign({}, a, { seq: ['3'] }) : a);
+        const r = tcSimBest(P);
+        return { total: r.total * tcEvalFor(ann, true).f0, burnFoes: r.burnFoes };
+      };
+      const five = play(5, true), fiveNo = play(5, false), one = play(1, true);
+      DPS_KIT_BONUS[ann.n] = keepRose; foeSel.value = keepFoes;
+      if (keepAnn) state.chars[ann.n] = keepAnn; else delete state.chars[ann.n];
+      tcMemo.key = '';
+      out.rosethorn = { five: five.burnFoes, one: one.burnFoes, gain: five.total / fiveNo.total };
+    }
+    // a Persona line that grows with Wonder's stats reads them (Apsaras's Rebellion: 10.2% + 1.8% per 10% of his crit rate,
+    // at most 38.9%), and takes its cap only when they are not known
+    {
+      const keepWS = state.wonderStats, setupA = { personas: [{ name: 'Apsaras', cards: ['', '', ''] }, { name: '', cards: ['', '', ''] }, { name: '', cards: ['', '', ''] }], weapon: '', refine: 1 };
+      const reb = () => { tcMemo.key = ''; const l = tcWonder(ann, setupA).lines.find(x => /Apsaras: Rebellion/.test(x.why)); return l ? l.v : null; };
+      // at skill level 8, the level these numbers are printed at (the default is 7)
+      const keepSk = personaRec('Apsaras').sk; personaSet('Apsaras', { sk: 8 });
+      state.wonderStats = null; const capV = reb();
+      state.wonderStats = { atk: 2000, cr: 10, cm: 150 }; const at10 = reb();
+      state.wonderStats = { atk: 2000, cr: 60, cm: 150 }; const at60 = reb();
+      state.wonderStats = keepWS; personaSet('Apsaras', { sk: keepSk }); tcMemo.key = '';
+      out.wonderPer = { capV, at10, at60, ok: !wonderCalc(setupA).ok };
+    }
+    }
+    state.chars['Fuuka Yamagishi'].loadout = keepF; tcMemo.key = '';
+    // skill numbers at the tier the Setup reaches
+    const keepAnn = state.chars[ann.n].loadout;
+    state.chars[ann.n].loadout = Object.assign({}, DEFAULT_LOADOUT, { awareness: 0 });
+    const t0 = tcSkillD(ann.n)[0];
+    state.chars[ann.n].loadout = Object.assign({}, DEFAULT_LOADOUT, { awareness: 6, mind: true });
+    const t3 = tcSkillD(ann.n)[0];
+    state.chars[ann.n].loadout = keepAnn; tcMemo.key = '';
+    out.tiers = { t0, t3, base: SKILL_DMG[ann.n].d[0] };
+    // a Highlight cannot crit (except the kits whose text says it can): a crit buff leaves Ann's Highlight damage alone
+    const keepT2 = TEAMS['Ryuji Sakamoto'], keepB2 = TEAM_BUFFS['Ryuji Sakamoto'];
+    TEAMS['Ryuji Sakamoto'] = { rot: [{ aw: 0, label: 'Test', seq: ['1'] }] };
+    TEAM_BUFFS['Ryuji Sakamoto'] = [{ k: 'cm', v: 100, to: 'party', src: 'passive', why: 'test: crit damage, always on' }];
+    tcMemo.key = '';
+    const cs = tcSim(ann, ['Ryuji Sakamoto', null, null], false);
+    out.hlCrit = { hl: cs.parts.hl / cs.base.parts.hl, skill: cs.parts.skill / cs.base.parts.skill, flags: Object.keys(SKILL_DMG).filter(n => SKILL_DMG[n].hlCrit).sort() };
+    TEAMS['Ryuji Sakamoto'] = keepT2; TEAM_BUFFS['Ryuji Sakamoto'] = keepB2; tcMemo.key = '';
+    // the gauge: 21% for an action that hits, 17% for one that does not
+    out.hits = [tcStepHits('Ann Takamaki', '1'), tcStepHits('Ayaka Sakai', '2'), tcStepHits('Haru Okumura', 'Gunshot'), tcStepHits('Wonder', '-'), tcStepHits('Wonder', 'w0')];
+    // Wonder casts turn by turn: a 2-turn card he casts every other turn, attacks between
+    const real2 = Object.assign({}, WONDER_BUFFS), keepW2 = state.wonder;
+    Object.assign(WONDER_BUFFS, { personas: { P: [] }, cards: { A: [{ k: 'atk%', v: 30, to: 'party', src: 'card', dur: 2, why: 'a' }] }, weapons: {} });
+    const ws = tcWonder(ann, { personas: [{ name: 'P', cards: ['A', '', ''] }, { name: '', cards: ['', '', ''] }, { name: '', cards: ['', '', ''] }], weapon: '', refine: 1 });
+    Object.assign(WONDER_BUFFS, real2); state.wonder = keepW2; tcMemo.key = '';
+    out.wsched = { seq: ws.sim.cast.seq.join(' '), events: ws.sim.cast.events.length, constAtk: ws.sim.consts.atkPct };
+    // the fixtures below price one teammate line at a time: the teammates' own hits are off until the Technicals' end
+    tcMateOff = true; tcMemo.key = '';
+    // the damage dealer's own rotation is fitted in the fight: a faster teammate debuffs the boss every
+    // other round, so Ann's much stronger Skill 3 moves onto those rounds
+    const keepS = SKILL_DMG[ann.n], keepAT = TEAMS[ann.n], keepRT = TEAMS['Ryuji Sakamoto'], keepRB = TEAM_BUFFS['Ryuji Sakamoto'], keepSp = tmSpeed;
+    SKILL_DMG[ann.n] = { hl: 'HL', cd: 4, d: [50, 0, 200, 195.2] };
+    TEAMS[ann.n] = { rot: [{ aw: 0, label: 'Test', seq: ['1', '3', '1', '3', '1', '3'] }] };
+    TEAMS['Ryuji Sakamoto'] = { rot: [{ aw: 0, label: 'Test', seq: ['1', '2'] }] };
+    TEAM_BUFFS['Ryuji Sakamoto'] = [{ k: 'dmg', v: 100, to: 'enemy', src: '1', on: '1', dur: 1, why: 'test: a 1-turn debuff' }];
+    tmSpeed = n => n === 'Ryuji Sakamoto' ? 200 : n === ann.n ? 100 : 50;
+    tcMemo.key = '';
+    const on = tcSim(ann, ['Ryuji Sakamoto', null, null], true), offF = tcSim(ann, ['Ryuji Sakamoto', null, null], false);
+    out.dpsFit = { seq: on.dpsRot && on.dpsRot.seq.join(' '), gain: on.dpsRot && on.dpsRot.gain, changed: on.dpsRot && on.dpsRot.changed,
+      off: offF.dpsRot, better: on.total > offF.total, counts: on.dpsRot && ['1', '3'].map(t => on.dpsRot.seq.filter(x => x === t).length) };
+    // a teammate's rotation is fitted in the fight too: Ann's is pinned (one plain skill, bursts between),
+    // and Ryuji's lufel rotation puts his 1-turn debuff on the wrong rounds; the quick model sees the same
+    // uptime either way, the fight moves it onto Ann's Skill 3 rounds
+    TEAMS[ann.n] = { rot: [{ aw: 0, label: 'Test', seq: ['3', '1+1', '3', '1+1', '3', '1+1'] }] };
+    TEAMS['Ryuji Sakamoto'] = { rot: [{ aw: 0, label: 'Test', seq: ['2', '1', '2', '1', '2', '1'] }] };
+    tcMemo.key = '';
+    const quick = tcMember(ann, 'Ryuji Sakamoto', tcTeamSet(ann.n, ['Ryuji Sakamoto', null, null]), null, true).rot;
+    const full = tcSim(ann, ['Ryuji Sakamoto', null, null], 'full'), cheap = tcSim(ann, ['Ryuji Sakamoto', null, null], true);
+    out.mateFit = { quick: quick ? quick.seq.join(' ') : 'as written', full: full.fits['Ryuji Sakamoto'] && full.fits['Ryuji Sakamoto'].seq.join(' '),
+      gain: full.fits['Ryuji Sakamoto'] && full.fits['Ryuji Sakamoto'].gain, better: full.mult > cheap.mult * 1.001 };
+    SKILL_DMG[ann.n] = keepS; TEAMS[ann.n] = keepAT; TEAMS['Ryuji Sakamoto'] = keepRT; TEAM_BUFFS['Ryuji Sakamoto'] = keepRB; tmSpeed = keepSp; tcMemo.key = '';
+    out.skillBad = Object.entries(SKILL_DMG).filter(([n, s]) => !charDef(n) || !['HL', 'TH'].includes(s.hl) || !Array.isArray(s.d) || s.d.length !== 4 || s.d.some(x => !(x >= 0)) || (s.hl === 'TH' && !(s.th > 0))).map(([n]) => n);
+    out.skillN = Object.keys(SKILL_DMG).length;
+    // 'wave': fired by Wavecatcher Miyu's Surf engine (TC_SURF), her character only
+    const ON = /^(self|self:[123]|tok:.+|selfHL|ally|allySkill|allyAtk|allyHL|anyHL|turnEnd|turnStart|round|wave|lvEnd)$/;
+    out.kitBad = [];
+    Object.entries(DPS_KIT).forEach(([n, list]) => { if (!charDef(n)) out.kitBad.push(n); list.forEach((c, i) => { if (!['res', 'fu', 'dot', 'hit'].includes(c.kind) || !ON.test(c.on) || !c.why || (c.v == null && !c.ladder)) out.kitBad.push(n + ' #' + i); }); });
+    out.kitN = Object.keys(DPS_KIT).length;
+    out.prefs = 'tmFight' in collectPrefs() && !$('#tmHlEvery');
+    // ---- the boss, weakness, more foes, round gates, timed own buffs, gauge sources (Nov 2026) ----
+    const keepR = TEAMS['Ryuji Sakamoto'], keepRB2 = TEAM_BUFFS['Ryuji Sakamoto'];
+    const setSel = (id, v) => { $(id).value = String(v); tcMemo.key = ''; };
+    const ryu = (list, seq) => { TEAMS['Ryuji Sakamoto'] = { rot: [{ aw: 0, label: 'Test', seq: seq || ['1'] }] }; TEAM_BUFFS['Ryuji Sakamoto'] = list; tcMemo.key = ''; return tcSim(ann, ['Ryuji Sakamoto', null, null], false); };
+    const vishnu = BOSSES.find(b => b.id === 8);
+    out.boss = { n: BOSSES.length, vishnu: vishnu && [vishnu.def, vishnu.coef, vishnu.res.Fire, vishnu.res.Ice], sel: $('#tmBoss').value, prefs: ['tmBoss', 'tmWeak', 'tmFoes'].every(k => k in collectPrefs()) };
+    out.weakFor = [tcWeakFor('Fire'), tcWeakFor('Ice'), tcWeakFor('Wind')];
+    // a weakness-damage buff counts only when the hits land on a weakness
+    const wk = [{ k: 'weak', v: 50, to: 'party', src: 'passive', why: 'test: weakness damage' }];
+    out.weak = ['boss', 'all', 'none'].map(m => { setSel('#tmWeak', m); return ryu(wk).mult; });
+    setSel('#tmWeak', 'boss');
+    // three foes: Ann's area skills hit all of them; a debuff on one foe helps a third as much there
+    const dd = why => [{ k: 'defdown', v: 40, to: 'enemy', src: '1', on: '1', dur: 2, why }];
+    setSel('#tmFoes', 3);
+    out.foes = { one: ryu(dd('test: the target\'s DEF down')).mult, all: ryu(dd('test: all foes\' DEF down')).mult, oneFoe: [tcOneFoe({ why: 'the target' }), tcOneFoe({ why: 'all foes' }), tcOneFoe({ why: 'x', foes: 'one' })] };
+    setSel('#tmFoes', 1);
+    out.foes.single = [ryu(dd('test: the target\'s DEF down')).mult, ryu(dd('test: all foes\' DEF down')).mult];
+    // round gates: from round 7 a buff is nothing in a 6-round fight; a ramp is its share of stacks
+    const g = tcGate({ fromAw: [[0, 4], [1, 3]] }, 0), g1 = tcGate({ fromAw: [[0, 4], [1, 3]] }, 1), gr = tcGate({ rampAt: [2, 4, 6] }, 0), gu = tcGate({ until: 2 }, 0);
+    out.gate = { g: [g(3), g(4)], g1: g1(3), ramp: [gr(1), gr(3), gr(6)], until: [gu(2), gu(3)], none: tcGate({ up: 0.5 }, 0) };
+    const late = [{ k: 'dmg', v: 100, to: 'party', src: 'aw', from: 7, why: 'test: on from round 7' }];
+    setF(6); out.gateFight = [ryu(late).mult];
+    setF(12); out.gateFight.push(ryu(late).mult, tcMember(ann, 'Ryuji Sakamoto', null, null, false).lines[0].up);
+    // the damage dealer's own timed buff: out of the fight's baseline, on only when the rotation casts its skill
+    const mak = charDef('Makoto Niijima');
+    out.timed = { nt: tcEvalFor(mak, true).f0 < tcEvalFor(mak).f0, kit: kitStatBuffs(mak, Object.assign({}, charLoadout(mak.n), { noTimed: true })).some(b => b.on), events: tcTimedKit(mak).map(e => e.e.on + '/' + e.dur) };
+    // (only her timed KIT_STAT_BUFFS are taken off, which tcSimPrep puts first: her own TEAM_BUFFS events, Skill 1's Radiation among them, stay)
+    const runSeq = (seq, events) => { const P = tcSimPrep(mak, [null, null, null], false, true); P.dps.seq = seq; if (!events) P.dps.events = P.dps.events.slice(tcTimedKit(mak).length); return tcSimRun(P, [mak.n], false).total; };
+    out.timed.cast = runSeq(['2', '1'], true) > runSeq(['2', '1'], false);
+    out.timed.noCast = Math.abs(runSeq(['1', '1'], true) - runSeq(['1', '1'], false)) < 1e-9;
+    // gauge: a fill-to on every teammate action gives the damage dealer more Highlights; Prosperity starts at 25
+    // (a one-round fight with Ryuji acting first: alone, Ann's gauge is short of a Highlight; filled, it is not)
+    const keepSp2 = tmSpeed; tmSpeed = n => n === 'Ryuji Sakamoto' ? 200 : n === ann.n ? 100 : 50; setF(1);
+    const fill = ryu([{ k: 'hlGaugeTo', v: 100, to: 'party', src: '1', on: '1', dur: 1, why: 'test: gauge filled' }]);
+    out.fill = { with: fill.hl[ann.n] || 0, base: fill.base.hl[ann.n] || 0 };
+    tmSpeed = keepSp2; setF(12);
+    out.gaugeLines = ['Ayaka Sakai', 'Aran Hirano'].map(n => TEAM_BUFFS[n].some(e => (e.k === 'hlGaugeTo' || e.k === 'hlGauge') && e.aw === 4));
+    const keepC = state.cards, src = keepC.filter(c => c.slot !== 'Space').slice(0, 4);
+    state.cards = keepC.map(c => c.equipped === ann.n ? Object.assign({}, c, { equipped: null }) : c).concat(src.map(c => Object.assign({}, c, { id: 'pros' + c.id, set: 'Prosperity', equipped: ann.n })));
+    tcMemo.key = '';
+    out.prosperity = tcSimPrep(ann, [null, null, null], false, true).gauge0;
+    state.cards = keepC;
+    // an always-on debuff on one foe stays on the main target when there are more foes
+    const ddc = why => [{ k: 'defdown', v: 40, to: 'enemy', src: 'passive', why }];
+    setSel('#tmFoes', 3);
+    out.oneConst = [ryu(ddc('test: the target\'s DEF down')).mult, ryu(ddc('test: all foes\' DEF down')).mult];
+    /* a party buff that counts only against one marked foe (`foes: 'one'`, Janosik's Hunting IV): with three foes
+       it helps Ann's area hits less than the same buff on every hit, cast or always on; with one foe the same.
+       A party buff's text naming "a foe" is never read as one-foe on its own. */
+    const pb = (one, cast) => [Object.assign({ k: 'atk%', v: 40, to: 'party', src: cast ? '1' : 'passive', why: 'test: allies attacking a Marked foe' }, cast ? { on: '1', dur: 2 } : {}, one ? { foes: 'one' } : {})];
+    out.partyOne = { f3: [ryu(pb(true, true)).mult, ryu(pb(false, true)).mult, ryu(pb(true, false)).mult, ryu(pb(false, false)).mult] };
+    setSel('#tmFoes', 1);
+    out.partyOne.f1 = [ryu(pb(true, true)).mult, ryu(pb(false, true)).mult];
+    out.partyOne.text = tcMainOnly(pb(false, false)[0]);
+    // Wonder's casts carry it into the fight: every Janosik line is main-target only (his DEF cuts were on all foes)
+    const janW = tcWonder(ann, { personas: [{ name: 'Janosik', cards: ['', '', ''] }, { name: '', cards: ['', '', ''] }, { name: '', cards: ['', '', ''] }], weapon: '', refine: 1 });
+    const janEv = (janW.sim.cast.events || []).concat(janW.sim.events || []);
+    out.partyOne.jan = { n: janEv.length, one: janEv.every(ev => tcMainOnly(ev.e)), data: WONDER_BUFFS.personas.Janosik.every(tcMainOnly) };
+    /* effects that do not stack (`excl`): both cast on every turn, only the larger counts on a foe; with three
+       foes the all-foe one still reaches the foes the one-foe one misses */
+    const exA = { k: 'defdown', v: 40, to: 'enemy', foes: 'one', src: '2', on: '1', dur: 2, why: 'test: one foe' };
+    const exB = { k: 'defdown', v: 30, to: 'enemy', foes: 'all', src: '1', on: '1', dur: 2, why: 'test: all foes' };
+    const exX = e => Object.assign({}, e, { excl: 'def' });
+    out.excl = { drop: [], quick: null };
+    [1, 3].forEach(f => { setSel('#tmFoes', f); out.excl['f' + f] = { a: ryu([exA]).mult, excl: ryu([exX(exA), exX(exB)]).mult, stack: ryu([exA, exB]).mult }; });
+    setSel('#tmFoes', 1);
+    const bx = (xs, v) => ({ b: { excl: 'R|def|defdown', xs }, v });
+    const l1 = [bx('1', 26.4), bx('1', 26.4), bx('2', 68.3)], l2 = [bx('1', 26.4), bx('1', 26.4), bx('2', 50)];
+    out.excl.drop = [[...tcExclDrop(l1)].map(b => b.xs).join(','), [...tcExclDrop(l2)].map(b => b.xs).join(',')];
+    const us = [{ e: { excl: 'def', src: '2' }, k: 'defdown', v: 40, up: 0.75 }, { e: { excl: 'def', src: '1' }, k: 'defdown', v: 30, up: 0.5 }];
+    tcExclQuick(us); out.excl.quick = us.map(u => u.up);
+    const runaL = TEAM_BUFFS['Runa Dogenzaka'].filter(e => e.k === 'defdown' && e.excl);
+    out.excl.runa = runaL.map(e => e.src + ':' + (tcOneFoe(e) ? 'one' : 'all')).join(',');
+    // Almighty (noWeak) takes no weakness bonus: a weakness-damage buff leaves that hit alone
+    const keepDK = DPS_KIT[ann.n];
+    setSel('#tmWeak', 'all');
+    const almRun = noWeak => { DPS_KIT[ann.n] = [{ kind: 'hit', v: 100, on: 'self', noWeak, why: 't' }]; return ryu([{ k: 'weak', v: 50, to: 'party', src: 'passive', why: 'test: weakness damage' }]); };
+    const aw1 = almRun(true), aw0 = almRun(false);
+    out.alm = { almighty: aw1.parts.hit / aw1.base.parts.hit, normal: aw0.parts.hit / aw0.base.parts.hit, skills: ['Goro Akechi', 'Ren Amamiya [Starlight]'].map(n => (SKILL_DMG[n].alm || []).join('')) };
+    DPS_KIT[ann.n] = keepDK; setSel('#tmWeak', 'boss');
+    // gen-skill-damage.js FIXES: hits on the same foe at a reduced share, alternative casts, a tick that is not the cast
+    const sd = (n, i) => SKILL_DMG[n].d[i];
+    out.skillFix = { shun: sd('Shun Kano [Pioneer]', 0), morgana: sd('Morgana [Starlight]', 2), mio: sd('Mio Natsukawa', 2), kiyoshi: sd('Kiyoshi Kurotani', 1), yui: sd('YUI', 1),
+      yuiBonus: (DPS_KIT_BONUS.YUI || []).filter(b => b.to === 'skill:2').map(b => b.v).join(','),
+      flame: (DPS_KIT['Kiyoshi Kurotani'] || []).filter(c => c.kind === 'dot' && c.on === 'round' && c.after === '2').length };
+    // a buff for 4+-hit skills reaches only those; a skill that counts as continuous damage takes DoT buffs
+    const keepH = DPS_HITS[ann.n], keepCA = DPS_COUNTS_AS[ann.n];
+    const hitRun = (hits, list, as) => { DPS_HITS[ann.n] = hits; DPS_COUNTS_AS[ann.n] = as; return ryu(list); };
+    const mh = [{ k: 'atk%', v: 50, to: 'party', src: 'passive', minHits: 4, why: 'test: 4+ hits only' }];
+    const dotB = k => [{ k, v: 50, to: 'party', src: 'passive', why: 'test: continuous damage' }];
+    const r1 = hitRun([1, 1, 1, 1], mh), r4 = hitRun([4, 4, 4, 4], mh);
+    const d0 = hitRun([1, 1, 1, 1], dotB('dotDm')), d1 = hitRun([1, 1, 1, 1], dotB('dotDm'), [{ as: 'dot', skills: ['1', '2', '3'], why: 't' }]);
+    const f1 = hitRun([1, 1, 1, 1], dotB('dotFinal'), [{ as: 'dot', skills: ['1', '2', '3'], why: 't' }]);
+    out.hitsAs = { fewHits: r1.parts.skill / r1.base.parts.skill, manyHits: r4.parts.skill / r4.base.parts.skill,
+      dotNo: d0.parts.skill / d0.base.parts.skill, dotYes: d1.parts.skill / d1.base.parts.skill, dotFinal: f1.parts.skill / f1.base.parts.skill };
+    DPS_HITS[ann.n] = keepH; DPS_COUNTS_AS[ann.n] = keepCA; tcMemo.key = '';
+    // a passive that works in reserve counts whatever Persona is in use; one that does not, only while in use
+    WONDER_BUFFS.personas.TestR = [{ k: 'atk%', v: 10, to: 'party', src: 'passive', reserve: true, why: 't' }];
+    WONDER_BUFFS.personas.TestN = [{ k: 'atk%', v: 10, to: 'party', src: 'passive', why: 't' }];
+    const sl = n => ({ name: n, cards: ['', '', ''] });
+    const upOfP = n => { const w = tcWonder(ann, { personas: [sl('Gabriel'), sl(n), sl('')], weapon: '', refine: 1 }); const l = w.lines.find(x => x.why.startsWith(n)); return l ? l.up : 0; };
+    out.reserve = [upOfP('TestR'), upOfP('TestN')];
+    // the seat says "in reserve" for a Persona that takes none of his turns and still adds something
+    const offOf = n => { const w = tcWonder(ann, { personas: [sl('Gabriel'), sl(n), sl('')], weapon: '', refine: 1 }); return { use: w.inUse[1], off: w.offTurn[1] }; };
+    out.offTurn = { r: offOf('TestR'), n: offOf('TestN') };
+    delete WONDER_BUFFS.personas.TestR; delete WONDER_BUFFS.personas.TestN;
+    // elemental ailments on the boss: a teammate's skill inflicts them, a line reads the count
+    const keepAilX = TC_AILMENTS['Ryuji Sakamoto'], keepAilA = TC_AILMENTS[ann.n], keepKbA = DPS_KIT_BONUS[ann.n];
+    // her own Fireburn reads a Burning foe, and the test's ailments are random kinds: kept out of this check
+    TC_AILMENTS[ann.n] = []; DPS_KIT_BONUS[ann.n] = [];
+    const perAilX = [{ k: 'dmg', v: 20, to: 'party', src: 'passive', perAil: 3, why: 'test: per ailment' }];
+    TC_AILMENTS['Ryuji Sakamoto'] = [];
+    const a0X = ryu(perAilX);
+    TC_AILMENTS['Ryuji Sakamoto'] = [{ on: '1', n: 2, type: 'any', dur: 1, why: 't' }];
+    const a2X = ryu(perAilX), m2X = ryu([{ k: 'dmg', v: 20, to: 'party', src: 'passive', ailMin: 2, why: 't' }]), m3X = ryu([{ k: 'dmg', v: 20, to: 'party', src: 'passive', ailMin: 3, why: 't' }]), noneXX = ryu([]);
+    /* Technicals: a line needing a Burning foe counts only once someone Burns it; Technical Precision scales
+       Iceburn-type lines by 1 + TP/2000 and Fireburn-type bonuses by 1 + TP/1000 (lufel's guide) */
+    TC_AILMENTS['Ryuji Sakamoto'] = [];
+    const needX = (v, tech) => ({ k: 'dmg', v, to: 'enemy', src: '1', on: '1', dur: 2, needAil: 'Burn', tech, why: 'test: on a Burning foe' });
+    const tpX = { k: 'tp', v: 1000, to: 'enemy', src: '1', on: '1', dur: 2, why: 'test: Technical Precision' };
+    const tNoBurn = ryu([needX(40)]).mult;
+    TC_AILMENTS['Ryuji Sakamoto'] = [{ on: '1', n: 1, type: 'Burn', dur: 3, why: 't' }];
+    const tBurn = ryu([needX(40)]).mult, tBare = ryu([]).mult, tTaken = ryu([needX(40, 'taken'), tpX]).mult, tPlain60 = ryu([needX(60)]).mult;
+    DPS_KIT_BONUS[ann.n] = [{ to: 'skill', v: 20, needAil: 'Burn', tech: 'fire', why: 't' }];
+    const fb = ryu([tpX]), fbSkill = fb.parts.skill / fb.base.parts.skill;
+    DPS_KIT_BONUS[ann.n] = [{ to: 'skill', v: 40, needAil: 'Burn', why: 't' }];
+    const fb40 = ryu([]), fb40Skill = fb40.parts.skill / fb40.base.parts.skill;
+    // Fireburn as a multiplier of its own (`amp`): ×1.2, ×1.4 at 1000 points
+    DPS_KIT_BONUS[ann.n] = [{ to: 'skill', v: 20, needAil: 'Burn', tech: 'fire', amp: true, why: 't' }];
+    const fa = ryu([tpX]), faSkill = fa.parts.skill / fa.base.parts.skill;
+    DPS_KIT_BONUS[ann.n] = [{ to: 'skill', v: 40, needAil: 'Burn', amp: true, why: 't' }];
+    const fa40 = ryu([]), fa40Skill = fa40.parts.skill / fa40.base.parts.skill;
+    TC_AILMENTS['Ryuji Sakamoto'] = keepAilX; TC_AILMENTS[ann.n] = keepAilA; DPS_KIT_BONUS[ann.n] = keepKbA; tcMemo.key = '';
+    // the quick screen: Mio's Technical lines wait for a Burning foe, which a member's `burn` share supplies (her weapon's
+    // Entropy read as Burn-only here: it also reads her own Freeze, which would blur what a Burn adds)
+    const entX = TEAM_BUFFS['Mio Natsukawa'].find(e => /^Entropy/.test(e.why)), keepEntNeed = entX.needAil;
+    entX.needAil = 'Burn'; tcMemo.key = '';
+    const rinX = charDef('Yaoling Li [Firecracker]'), vMio = tcMember(rinX, 'Mio Natsukawa', null, null).vec, burnOnly = { burn: 1 };
+    entX.needAil = keepEntNeed; tcMemo.key = '';
+    /* Rin below Awareness 2 Burns only with Skill 2, which lufel's rotations never cast: the fit may put it on (TC_ROT_ADD),
+       her Prosperity in Red counts in the fight only on a Burning foe, and Mio's rotation is fitted to meet the Burn */
+    const keepRinLo = state.chars[rinX.n].loadout;
+    const rinAt = aw => { state.chars[rinX.n].loadout = Object.assign({}, charLoadout(rinX.n), { awareness: aw }); tcMemo.key = ''; tcMemoFor(); };
+    const twos = aw => { rinAt(aw); const r = tmRotPick(rinX.n, new Set([rinX.n])); return tcRotVariants(r, rinX.n).map(v => v.seq.filter(t => t === '2').length); };
+    const tw0 = twos(0), tw2 = twos(2);
+    rinAt(0);
+    const prosp = { stats: kitStatBuffs(rinX, null).some(b => b.needAil === 'Burn' && b.v === 36), baseline: kitStatBuffs(rinX, Object.assign({}, charLoadout(rinX.n), { noTimed: true })).some(b => b.v === 36 && b.s === 'Damage Multiplier'),
+      ailSelf: tcSimPrep(rinX, [null, null, null], false, true).ailSelf.some(c => c.k === 'dm' && c.v === 36 && c.needAil === 'Burn') };
+    const mioFit = tcSim(rinX, ['Mio Natsukawa', null, null], true);
+    const keepMioB = TEAM_BUFFS['Mio Natsukawa'];
+    TEAM_BUFFS['Mio Natsukawa'] = keepMioB.filter(e => !e.needAil); tcMemo.key = ''; tcMemoFor();
+    const mioNoBurn = tcSim(rinX, ['Mio Natsukawa', null, null], true);
+    TEAM_BUFFS['Mio Natsukawa'] = keepMioB; state.chars[rinX.n].loadout = keepRinLo; tcMemo.key = '';
+    out.rinA0 = { tw0: Math.max(...tw0), tw2: Math.max(...tw2), any0: tw0.some(n => n > 0), prosp, rin: mioFit.dpsRot ? mioFit.dpsRot.seq.join(' ') : 'lufel', mio: (mioFit.fits || {})['Mio Natsukawa'] ? 'fitted' : 'none', with: mioFit.mult, without: mioNoBurn.mult };
+    const needs = [].concat(...Object.values(TEAM_BUFFS).map(l => l.filter(e => e.needAil).map(e => e.needAil)), ...Object.values(DPS_KIT_BONUS).map(l => l.filter(b => b.needAil).map(b => b.needAil)));
+    out.tech = { noBurn: tNoBurn, burn: tBurn, bare: tBare, taken: tTaken, plain60: tPlain60, fb: fbSkill, fb40: fb40Skill, fa: faSkill, fa40: fa40Skill,
+      fireAmp: Object.entries(DPS_KIT_BONUS).flatMap(([n, l]) => l.filter(b => b.tech === 'fire').map(b => n + ':' + !!b.amp)),
+      guide: [68.1 * (1 + tcTechScale('taken', 1000)), 68.1 * (1 + tcTechScale('taken', 1343)), 20 * (1 + tcTechScale('fire', 1000))],
+      mioNeed: vMio.need.map(n => n.k + (n.tech ? ':' + n.tech : '')).join(','),
+      screen: { mio: tcMultiplier(rinX, [vMio]), burn: tcMultiplier(rinX, [burnOnly]), both: tcMultiplier(rinX, [vMio, burnOnly]) },
+      scaldAlone: tcBurnSupply('Mio Natsukawa', ['1', '3']), koromaru: tcBurnSupply('Koromaru', ['1']),
+      users: [...TC_TECH_USERS].filter(n => !charDef(n)), badNeed: needs.filter(a => !(Array.isArray(a) ? a.length && a.every(x => TC_AIL_TYPES.includes(x)) : TC_AIL_TYPES.includes(a))), nNeed: needs.length };
+    tcMateOff = false; tcMemo.key = '';
+    const qAloneXX = tcSimRun(tcSimPrep(mak, [null, null, null], false, true), [mak.n], false), qVinoX = tcSim(mak, ['Chizuko Nagao', null, null], false);
+    out.ail = { none: a0X.mult, with: a2X.mult, mean: a2X.ailMean, min2: m2X.mult, min3: m3X.mult, bare: noneXX.mult, queenAlone: qAloneXX.ailMean, queenVino: qVinoX.ailMean,
+      chief: (TC_AIL_SELF[mak.n] || []).some(c => c.k === 'atkPct' && c.v === 15), sources: Object.keys(TC_AILMENTS).length,
+      bad: Object.entries(TC_AILMENTS).filter(([n, l]) => !charDef(n) || l.some(x => !x.why || !x.on || !(x.type === 'any' || TC_AIL_TYPES.includes(x.type) || x.type === 'Radiation' || Array.isArray(x.type)))).map(([n]) => n) };
+    // Wonder acts just before the damage dealer until his Speed is entered
+    const wSpdX = () => { tcMemo.key = ''; const P = tcSimPrep(ann, ['Ryuji Sakamoto', null, null], false, false); const w = P.thieves.find(a => a.n === 'Wonder'); return [w.speed - P.dps.speed, P.thieves.indexOf(w) < P.thieves.indexOf(P.dps)]; };
+    const keepWSX = state.wonderSpd;
+    state.wonderSpd = 0; out.wonderSpd = { unset: wSpdX() };
+    state.wonderSpd = 1; out.wonderSpd.slow = wSpdX();
+    state.wonderSpd = keepWSX; tcMemo.key = '';
+    // his casts go on the damage dealer's heavy turns: Sraosha's on Kasumi's Highlight turns (3 and 6)
+    const kasX = charDef('Kasumi Yoshizawa'), oneX = k => ({ personas: [{ name: k, cards: ['', '', ''] }, { name: '', cards: ['', '', ''] }, { name: '', cards: ['', '', ''] }], weapon: '', refine: 1 });
+    out.sraosha = { seq: tcWonder(kasX, oneX('Sraosha')).sim.cast.seq.join(','), kasRot: (TEAMS[kasX.n].rot[0] || {}).seq.join(','),
+      stacks: tcWonder(kasX, oneX('Sraosha')).lines.filter(l => l.k === 'dm' && /God/.test(l.why)).map(l => l.v).join(',') };
+    // Sahimochi-no-Kami: Resonance's own multiplier, and Serrated stacks only for a damage dealer whose Resonance fires
+    const keepDK2X = DPS_KIT[ann.n];
+    DPS_KIT[ann.n] = [{ kind: 'res', v: 100, on: 'self', why: 't' }];
+    const rfX = ryu([{ k: 'resFinal', v: 50, to: 'party', src: 'passive', why: 't' }]);
+    DPS_KIT[ann.n] = keepDK2X; tcMemo.key = '';
+    const miyuX = charDef('Miyu Sahara [Wavecatcher]');
+    const serrX = d => tcWonder(d, oneX('Sahimochi-no-Kami')).lines.some(l => /Serrated/.test(l.why));
+    out.sahimochi = { resFinal: rfX.parts.res / rfX.base.parts.res, key: (WONDER_BUFFS.personas['Sahimochi-no-Kami'] || []).some(e => e.k === 'resFinal'), miyu: serrX(miyuX), ann: serrX(ann) };
+    // Pazuzu keeps the foe Cursed, which Toshiya's The Other Prison reads
+    const tosX = charDef('Toshiya Sumi'), cbX = tcKitBonusFor(tosX);
+    const cvX = l => l.filter(b => b.curse).reduce((x, b) => x + b.val, 0);
+    out.pazuzu = { lines: (WONDER_BUFFS.personas.Pazuzu || []).map(e => e.k).join(','), offered: wonderPersonas().includes('Pazuzu'), base: cvX(cbX), with: cvX(tcCurseBonus(cbX, 84)), full: cvX(tcCurseBonus(cbX, 100)) };
+    TEAMS['Ryuji Sakamoto'] = keepR; TEAM_BUFFS['Ryuji Sakamoto'] = keepRB2; tcMemo.key = '';
+    // Shoki's Improv states, chosen like the twins' masks
+    const sho = id => tcMemberCalc(ann, 'Shoki Ikenami', null, null, false, id).lines.filter(l => /Improvise \(Skill 3\) in/.test(l.why)).map(l => l.k).join(',');
+    out.shoki = { ids: TC_PAIRS['Shoki Ikenami'].map(o => o.id).join(','), E: sho('E'), T: sho('T'), B: sho('B'), C: sho('C'),
+      // Chilling Intensity's ATK needs a damage dealer whose kit activates Technicals (Ann's does, Ryuji's not)
+      Cnon: tcMemberCalc(charDef('Ryuji Sakamoto'), 'Shoki Ikenami', null, null, false, 'C').lines.filter(l => /Chilling Intensity/.test(l.why)).map(l => l.k).join(',') };
+    // the damage dealer's own damage bonuses: on the hits they name, in their window, added or multiplied
+    const keepKB = DPS_KIT_BONUS[ann.n], keepAR = TEAMS[ann.n], keepAS = SKILL_DMG[ann.n];
+    SKILL_DMG[ann.n] = { hl: 'HL', cd: 4, d: [100, 100, 100, 200] };
+    TEAMS[ann.n] = { rot: [{ aw: 0, label: 'Test', seq: ['1', '3', '1', '3', '1', '3'] }] };
+    const solo = list => { DPS_KIT_BONUS[ann.n] = list; tcMemo.key = ''; const P = tcSimPrep(ann, [null, null, null], false, true); return tcSimRun(P, [ann.n], false).parts; };
+    const p0 = solo(undefined), p3 = solo([{ to: 'skill:3', v: 100, why: 't' }]), ph = solo([{ to: 'hl', v: 50, amp: true, why: 't' }]),
+      pw = solo([{ to: 'skill', v: 100, after: 'HL', dur: 1, why: 't' }]), pf = solo([{ to: 'skill:1', v: 10, fewer: 5, why: 't' }]);
+    out.ownBonus = { s3: p3.skill / p0.skill, hl: ph.hl / p0.hl, hlSkill: ph.skill / p0.skill, win: pw.skill / p0.skill, fewer: pf.skill / p0.skill,
+      bad: Object.entries(DPS_KIT_BONUS).filter(([n, l]) => !DPS_KIT[n] && !SKILL_DMG[n] || l.some(b => !b.why || !/^(res|fu|dot|hit|skill|skill:[123]|hl|all)$/.test(b.to) || (b.v == null && !b.ladder) || (b.ladder && !b.weapon))).map(([n]) => n) };
+    // the damage dealer's own party and enemy lines reach them: a buff before their hit, a debuff after it
+    const keepTB = TEAM_BUFFS[ann.n];
+    DPS_KIT_BONUS[ann.n] = undefined;
+    TEAMS[ann.n] = { rot: [{ aw: 0, label: 'Test', seq: ['1'] }] };
+    const selfRun = list => { TEAM_BUFFS[ann.n] = list; tcMemo.key = ''; const P = tcSimPrep(ann, [null, null, null], false, true); return tcSimRun(P, [ann.n], false).parts.skill; };
+    const s0 = selfRun([]);
+    out.selfLines = {
+      party: selfRun([{ k: 'dmg', v: 50, to: 'party', src: '1', on: '1', dur: 1, why: 't' }]) / s0,
+      notOwn: selfRun([{ k: 'dmg', v: 50, to: 'party', src: '1', on: '1', dur: 1, own: false, why: 't' }]) / s0,
+      ally: selfRun([{ k: 'dmg', v: 50, to: 'ally', src: '1', on: '1', dur: 1, why: 't' }]) / s0,
+      foe1: selfRun([{ k: 'dmg', v: 50, to: 'enemy', src: '1', on: '1', dur: 1, why: 't' }]) / s0,
+      foe2: selfRun([{ k: 'dmg', v: 50, to: 'enemy', src: '1', on: '1', dur: 2, why: 't' }]) / s0,
+      def1: selfRun([{ k: 'defdown', v: 50, to: 'enemy', src: '1', on: '1', dur: 1, why: 't' }]) / s0,
+      def2: selfRun([{ k: 'defdown', v: 50, to: 'enemy', src: '1', on: '1', dur: 2, why: 't' }]) / s0,
+      passive: selfRun([{ k: 'dmg', v: 50, to: 'party', src: 'passive', why: 't' }]) / s0
+    };
+    TEAM_BUFFS[ann.n] = keepTB;
+    /* Runa's Cerberus Claws (checked in game, Nov 2026): fight only, set off by a teammate's damaging skill of a Fire, Ice,
+       Electric or Wind kit, never a Physical one; its ailment accuracy reaches her damage as ATK through Peppy Guard Dog. */
+    {
+      const ru = charDef('Runa Dogenzaka'), list = KIT_STAT_BUFFS[ru.n], claws = list.find(b => /Cerberus Claws/.test(b.why));
+      const elecM = CHARACTERS.find(c => c.e === 'Electric' && SKILL_DMG[c.n]), physM = CHARACTERS.find(c => c.e === 'Physical' && SKILL_DMG[c.n] && c.n !== ru.n);
+      const run = (m, withClaws) => { KIT_STAT_BUFFS[ru.n] = withClaws ? list : list.filter(b => b !== claws); tcMemo.key = ''; return tcSim(ru, [m.n, null, null, null], false).parts.skill || 0; };
+      const tk = tcTimedKit(ru).find(e => e.e.on === 'allyElem');
+      out.claws = { stats: kitStatBuffs(ru, null).some(b => b === claws || /Cerberus/.test(b.why || '')), timed: tk ? [tk.k, Math.round(tk.v * 10) / 10] : null,
+        elec: run(elecM, true) / run(elecM, false), phys: run(physM, true) / run(physM, false) };
+      KIT_STAT_BUFFS[ru.n] = list; tcMemo.key = '';
+    }
+    // KIT_STAT_BUFFS `fight` lines stay out of stats; `stack` adds a permanent stack each time
+    const kas = charDef('Kasumi Yoshizawa'), keepKS = KIT_STAT_BUFFS[ann.n];
+    out.fightOnly = { stats: kitStatBuffs(kas).some(b => b.fight), fight: kitStatBuffs(kas, null, { fight: true }).some(b => b.fight) };
+    TEAMS[ann.n] = { rot: [{ aw: 0, label: 'Test', seq: ['1'] }] };
+    const ksRun = e => { KIT_STAT_BUFFS[ann.n] = [Object.assign({ s: 'ATK%', v: 10, pct: true, fight: true, on: '1', why: 't' }, e)]; tcMemo.key = '';
+      const P = tcSimPrep(ann, [null, null, null], false, true); return { skill: tcSimRun(P, [ann.n], false).parts.skill, ev: P.dps.events.filter(x => x.self).map(x => x.dur + '/' + x.stackMax) }; };
+    const k1 = ksRun({ dur: 1 }), k3 = ksRun({ stack: 3 });
+    out.fightOnly.stack = { ev: k3.ev, more: k3.skill > k1.skill * 1.05 };
+    KIT_STAT_BUFFS[ann.n] = keepKS;
+    // the twins' mask pairs: each pair takes only its own lines, and the fight keeps the best pair
+    const JC = 'Justine & Caroline';
+    const lineKs = id => tcMemberCalc(ann, JC, null, null, false, id).lines.map(l => l.k + (l.v != null ? ':' + (+l.v).toFixed(1) : ''));
+    tcMemo.key = '';
+    const jcTeam = [JC, 'Ryuji Sakamoto', null];
+    const forced = TC_PAIRS[JC].map(o => { tcPairCtx = { [JC]: o.id }; const m = tcSim(ann, jcTeam, false).mult; tcPairCtx = null; return m; });
+    const free = tcSim(ann, jcTeam, false);
+    out.pairs = { ids: TC_PAIRS[JC].map(o => o.id).join(','), MA: lineKs('MA'), MS: lineKs('MS'), SL: lineKs('SL'), SA: lineKs('SA'),
+      offered: ['Ann Takamaki', 'Yusuke Kitagawa', 'Junpei Iori'].map(n => tcPairOpts(charDef(n), JC).map(o => o.id).join(',')),
+      best: Math.abs(free.mult - Math.max(...forced)) < 1e-9 && !!TC_PAIRS[JC].find(o => o.id === free.pairs[JC]) && Math.abs(forced[TC_PAIRS[JC].findIndex(o => o.id === free.pairs[JC])] - free.mult) < 1e-9 };
+    // Beachflower Minami's medicines: her ⓘ turns, one medicine per slot, chosen for the team like the twins' masks
+    const MIN = TC_MEDS_OF, miyuM = charDef('Miyu Sahara [Wavecatcher]'), ichM = charDef('Ichigo Shikano');
+    tcMemo.key = '';
+    const medLines = tcMemberCalc(ann, MIN, null, null, false, 'atk.dmg.hl').lines;
+    const minTeam = [MIN, 'Ryuji Sakamoto', null];
+    tcMemo.key = '';
+    const mOpts = tcMedOpts(miyuM);
+    const mForced = mOpts.map(o => { tcPairCtx = { [MIN]: o.id }; const m = tcSim(miyuM, minTeam, false).mult; tcPairCtx = null; return m; });
+    const mFree = tcSim(miyuM, minTeam, false);
+    out.meds = {
+      toks: [...tcTurnSkills('ⓘA+2')].sort().join(',') + '|' + [...tcTurnSkills('1+ⓘC')].sort().join(','),
+      miyu: mOpts.map(o => o.id), ich: tcMedOpts(ichM).map(o => o.id),
+      lines: medLines.filter(l => /^(ATK|Damage|Highlight) medicine \(ⓘ|^Blossoms by the Beach \(passive 2\): ATK \+15% while/.test(l.why)).map(l => l.k + ':' + (+l.v).toFixed(1)),
+      judged: (TEAM_BUFFS[MIN] || []).filter(e => /medicine/i.test(e.why) && e.up != null).length,
+      best: Math.abs(mFree.mult - Math.max(...mForced)) < 1e-9 && mOpts.some(o => o.id === mFree.pairs[MIN]),
+      text: tmTokenText('ⓘA+2', tcMedInfo('res.atk.dmg').meds)
+    };
+    // her Highlight strengthens her next medicine (+9.8% at the base tier, 5% more from A4); Soothing Sunlight's
+    // Blessing stacks come two a Summer Garden and one a Gentle Sea Breeze, each cast's for 2 turns (the user's in-game reading)
+    {
+      const L0 = state.chars[MIN] ? state.chars[MIN].loadout : undefined;
+      if (!state.chars[MIN]) state.chars[MIN] = { owned: false };
+      state.chars[MIN].loadout = Object.assign({}, DEFAULT_LOADOUT, { awareness: 0 });
+      const b0 = tcMedHlBoost();
+      state.chars[MIN].loadout = Object.assign({}, DEFAULT_LOADOUT, { awareness: 4 });
+      // (the tier her Highlight reaches at A4, by its own Awareness node: SKILL_LEVEL_AW)
+      const b4 = tcMedHlBoost(), t4 = tierVal([9.8, 10.8, 10.4, 11.4], charDef(MIN), charLoadout(MIN), 'HL') / 100;
+      state.chars[MIN].loadout = L0;
+      const hlB = window.tcMedHlBoost;
+      const fight = () => { tcMemo.key = ''; tcPairCtx = { [MIN]: 'dmg.atk.hl' }; const S = tcSim(ann, minTeam, false); tcPairCtx = null; return S; };
+      const withB = fight();
+      window.tcMedHlBoost = () => 0; const noB = fight(); window.tcMedHlBoost = hlB; tcMemo.key = '';
+      const sl = TEAM_BUFFS[MIN].find(e => /^Soothing Sunlight .* from Summer Garden/.test(e.why)), sl3 = TEAM_BUFFS[MIN].find(e => /^Soothing Sunlight .* from Gentle Sea Breeze/.test(e.why)), slRef = TEAM_BUFFS[MIN].indexOf(sl);
+      const seat = tcMemberCalc(ann, MIN, null, null, false, 'dmg.atk.hl').lines.find(l => /^Soothing Sunlight .* from Summer Garden/.test(l.why));
+      const cov = [...(withB.cover.get(MIN) || new Map()).values()];
+      out.medHl = { b0, b4, t4, withB: withB.total, noB: noB.total, hl: withB.hl[MIN] || 0,
+        build: !!sl.build && sl.build['2'] === 2 && sl.dur === 2 && sl.perCast === 'blessing' && sl.stacks === 6 && sl3.build === true && sl3.to === 'ally' && sl3.perCast === 'blessing' && sl3.dur === 2, slRef,
+        twice: tcBuildMean(['2'], sl, 6),
+        mean6: tcBuildMean(['3', 'ⓘA+2', '1'], sl, 6), mean12: tcBuildMean(['3', 'ⓘA+2', '1'], sl, 12),
+        seatV: seat ? seat.v : null, seatUp: seat ? seat.up : null, covMax: cov.length ? Math.max(...cov) : null };
+    }
+    // Wonder: a Persona's innate skills count as the card of that name; the suggestion is three Personas
+    // and no cards; one skill from two sources counts once; his six turns name the Persona and the skill
+    const slotW = n => ({ name: n, cards: ['', '', ''] });
+    const kou = tcWonder(ann, { personas: [slotW('Koumokuten'), slotW(''), slotW('')], weapon: '', refine: 1 });
+    const two = tcWonder(ann, { personas: [slotW('Apsaras'), slotW('Succubus'), slotW('')], weapon: '', refine: 1 });
+    // an attack turn names the skill it uses: Vishnu's Wind-damage debuff is nothing to Queen (Nuclear), so his
+    // turns are attacks, with Wind of Nirvana, his strongest hit on one foe (the user read "Attack" as a basic attack)
+    const vis = tcWonder(charDef('Makoto Niijima'), { personas: [slotW('Vishnu'), slotW(''), slotW('')], weapon: '', refine: 1 });
+    tcMemo.key = '';
+    const sug = tcWonderBest(ann, []);
+    out.wonder3 = { innate: (WONDER_INNATE['Koumokuten'] || []).includes('Auto-Mataru III') && kou.lines.some(l => /Auto-Mataru III \(innate\)/.test(l.why)),
+      sugN: sug.personas.filter(p => p.name).length, sugCards: sug.personas.some(p => p.cards.some(Boolean)), adds: (sug.adds || []).length,
+      rebellion: two.lines.filter(l => /Rebellion/.test(l.why)).length, once: two.idle.some(x => /the same buff as/.test(x)),
+      turns: kou.turns.length === 6 && kou.turns.every(t => t.persona === 'Koumokuten'),
+      visAttack: vis.turns.filter(t => t.what === 'attack').map(t => t.skill),
+      listed: wonderPersonas().includes('Kodama') && wonderPersonas().includes('Ose') };
+    // an on-cast passive fires only on casts of the kind it names (`castOn`): one needing a skill on an ally
+    // never fires on an attack turn, and a Persona with an ally skill recasts it on its idle turns instead
+    {
+      const realW = Object.assign({}, WONDER_BUFFS);
+      const pass = to => ({ k: 'cm', v: 30, to: 'ally', src: 'passive', dur: 2, onCast: true, castOn: to, why: 'p' });
+      Object.assign(WONDER_BUFFS, { cards: {}, weapons: {}, personas: {
+        F: [pass('ally'), { k: 'defdown', v: 10, to: 'enemy', src: 'unique', dur: 2, why: 'f' }],
+        A: [pass('ally'), { k: 'cr', v: 10, to: 'ally', src: 'unique', dur: 3, why: 'a' }],
+        G: [pass('foe'), { k: 'cr', v: 10, to: 'ally', src: 'unique', dur: 3, why: 'g' }] } });
+      const one = n => tcWonder(ann, { personas: [slotW(n), slotW(''), slotW('')], weapon: '', refine: 1 });
+      const upOf = w => (w.lines.find(l => l.why.endsWith(': p')) || { up: 0 }).up;
+      const f = one('F'), a = one('A'), g = one('G');
+      Object.assign(WONDER_BUFFS, realW); tcMemo.key = '';
+      out.castOn = { f: upOf(f), fTurns: f.turns.filter(t => t.what === 'attack').length,
+        a: upOf(a), aAgain: a.turns.filter(t => / again$/.test(t.what)).length, aSeq: a.sim.cast.seq.filter(t => t === 'wr').length,
+        g: upOf(g), gTurns: g.turns.filter(t => t.what === 'attack').length };
+    }
+    // Ice Age's Ancient Frost (`allyCast`): on at battle start for 3 turns, renewed only by a skill cast on an ally
+    // alone — not by an attack, nor by a skill on a foe that also buffs allies (Janosik's Tatra Shot)
+    {
+      const realW = Object.assign({}, WONDER_BUFFS);
+      Object.assign(WONDER_BUFFS, { cards: {},
+        weapons: { IA: [{ k: 'dmg', v: 20, to: 'ally', src: 'weapon', dur: 3, allyCast: true, why: 'frost' }] },
+        personas: {
+          M: [{ k: 'defdown', v: 30, to: 'enemy', src: 'unique', dur: 2, why: 'm' }, { k: 'atk%', v: 20, to: 'party', src: 'unique', dur: 2, why: 'm2' }],
+          A: [{ k: 'atk%', v: 20, to: 'party', src: 'unique', dur: 3, why: 'a' }] } });
+      const run = n => {
+        const s = { personas: [slotW(n), slotW(''), slotW('')], weapon: 'IA', refine: 1 };
+        tcMemo.key = '';
+        const w = tcWonder(ann, s), ref = w.lines.findIndex(l => l.why.endsWith(': frost'));
+        const ev = w.sim.cast.events.find(x => x.ref === ref);
+        const S = tcSim(ann, ['Ryuji Sakamoto', null, null], false, false, s);
+        return { up: w.lines[ref].up, on: ev ? [].concat(ev.e.on).join(',') : '', fight: (S.cover.get('Wonder') || new Map()).get(ref) || 0, turns: w.turns.map(t => t.what).join(',') };
+      };
+      const m = run('M'), a = run('A'), none = run('');
+      Object.assign(WONDER_BUFFS, realW); tcMemo.key = '';
+      out.frost = { F: tcFight(), m, a, none };
+    }
+    // the lead (slot 1) is the Persona in use when the battle starts: only it does what a Persona does at the start
+    // of battle (Koumokuten's buff, Janosik's Mark), and Ex Machina's share follows its element
+    {
+      const keepP = JSON.parse(JSON.stringify(state.personas || null));
+      const set = (...ns) => ({ personas: [0, 1, 2].map(i => slotW(ns[i] || '')), weapon: '', refine: 1 });
+      const lines = (w, re) => w.lines.filter(l => re.test(l.why)).length;
+      const startEv = w => w.sim.cast.events.filter(ev => [].concat(ev.e.on).includes('wStart'));
+      tcMemo.key = '';
+      // with no Speed skill, so either lead gives Wonder the same Speed and the same place in the turn order
+      const other = wonderPersonas().find(n => n !== 'Koumokuten' && n !== 'Janosik' && !personaLines(n).some(e => e.lead) &&
+        !wonderAdds({ personas: [{ name: n }], weapon: '' }).add.spd);
+      const kL = tcWonder(ann, set('Koumokuten', other)), kB = tcWonder(ann, set(other, 'Koumokuten'));
+      const jL = tcWonder(ann, set('Janosik', other)), jB = tcWonder(ann, set(other, 'Janosik'));
+      // a battle-start Mark that Tatra Shot also gives is one Mark: it shares the cast's ref
+      const castRefs = new Set(jL.sim.cast.events.filter(ev => !startEv(jL).includes(ev)).map(ev => ev.ref));
+      const fight = s => { tcMemo.key = ''; return tcSim(ann, ['Ryuji Sakamoto', null, null], false, false, s).mult; };
+      const fL = fight(set('Janosik', other)), fB = fight(set(other, 'Janosik'));
+      personaSet('Janosik', { tal: 0 }); tcMemo.key = '';
+      const j0 = tcWonder(ann, set('Janosik', other));
+      // Ex Machina: a Persona of Ann's element in front, or one of another element
+      const same = wonderPersonas().find(n => (WONDER_PERSONA[n] || {}).e === ann.e && !personaLines(n).some(e => e.lead));
+      const diff = wonderPersonas().find(n => (WONDER_PERSONA[n] || {}).e && WONDER_PERSONA[n].e !== ann.e && !personaLines(n).some(e => e.lead));
+      const ex = (a, b) => { const s = set(a, b); s.weapon = 'Ex Machina'; return tcWonder(ann, s).lines.filter(l => l.k === 'dm' && /Ex Machina: other allies/.test(l.why)).length; };
+      state.personas = keepP; tcMemo.key = '';
+      out.lead = { other, same, diff, kL: lines(kL, /Heavenly King's Eyes II/), kB: lines(kB, /Heavenly King's Eyes II/), kBIdle: kB.idle.some(x => /^Koumokuten: .*slot 1/.test(x)),
+        jStart: startEv(jL).length, jBStart: startEv(jB).length, jShared: startEv(jL).filter(ev => castRefs.has(ev.ref)).length, j0Start: startEv(j0).length,
+        jDur: startEv(jL).map(ev => ev.dur).join(','), jOne: startEv(jL).every(ev => ev.e.foes === 'one'), fL, fB, leadL: jL.lead, leadB: jB.lead,
+        exSame: ex(same, diff), exDiff: ex(diff, same), exNone: (() => { const s = set(); s.weapon = 'Ex Machina'; return tcWonder(ann, s).lines.filter(l => /Ex Machina: other allies/.test(l.why)).length; })() };
+      // the suggestion's order: no other of its three Personas in front prices higher
+      const rot = i => { const s = JSON.parse(JSON.stringify(sug)); const [p] = s.personas.splice(i, 1); s.personas.unshift(p); return s; };
+      const qv = s => tcMultiplier(ann, [tcWonder(ann, s).vec]);
+      out.lead.sugOrder = { names: sug.personas.map(p => p.name).join(','), v: qv(sug), alt: [1, 2].filter(i => sug.personas[i].name).map(i => qv(rot(i))) };
+    }
+    // a slot's shortlist keeps the quick screen's best that take none of his turns even when Personas that want
+    // a turn fill its top (Kohryu's reserve passive was crowded out for Wavecatcher Miyu that way)
+    {
+      const rows = [...Array(8)].map((_, i) => ['T' + i, 30 - i, 1, false]).concat([['R', 10, 1, true], ['R2', 9, 1, true], ['R3', 8, 1, true], ['R4', 7, 1, true]]);
+      out.wbIdle = { sh: tcWbShort(rows).join(','), top: TC_WB_SHORT, idle: TC_WB_IDLE };
+    }
+    // a Persona Global does not have yet is never offered, suggested, kept from a save or listed in the dropdown
+    {
+      const un = WONDER_UNRELEASED.slice(), keep = state.wonder;
+      state.wonder = { personas: [{ name: un[0], cards: ['', '', ''] }, { name: 'Succubus', cards: ['', '', ''] }], weapon: '', refine: 1 };
+      const kept = wonderSetup().personas.map(p => p.name);
+      renderTmPicker();
+      const opts = [...document.querySelectorAll('#tmWP0 option')].map(o => o.value);
+      out.unrel = { un, offered: un.filter(n => wonderPersonas().includes(n)), suggested: sug.personas.filter(p => un.includes(p.name)).map(p => p.name),
+        kept, inSelect: un.filter(n => opts.includes(n)), note: $('#tmWUnrel').textContent, priced: un.filter(n => WONDER_BUFFS.personas[n]).length };
+      state.wonder = keep; renderTmPicker();
+    }
+    // the Personas section: owned, level, talent rank and skill level decide what Wonder's Personas do
+    {
+      const keepP = state.personas, keepW = state.wonder, one = n => ({ personas: [{ name: n, cards: personaCards(n) }, { name: '', cards: ['', '', ''] }, { name: '', cards: ['', '', ''] }], weapon: '', refine: 1 });
+      const vals = n => tcWonder(ann, one(n)).lines.map(l => `${l.k}:${l.v}`).sort().join(' ');
+      state.personas = null;
+      const first = { all: personaNames().every(n => personaRec(n).own), noUnrel: !WONDER_UNRELEASED.some(n => n in personasState()), saved: Object.keys(personasSaved()).length === personaNames().length };
+      // talent rank: Janosik's crit lines arrive at Hunting IV and the 12% DEF cut at III; Shiva's DEF cut is 30% below rank II, 45% from it
+      const jTop = vals('Janosik'); personaSet('Janosik', { tal: 0 }); const jBase = vals('Janosik');
+      const sTop = vals('Shiva'); personaSet('Shiva', { tal: 0 }); const sBase = vals('Shiva');
+      // skill level: a unique-skill value lufel prints as a/b/c takes the level's
+      personaSet('Shiva', { tal: personaTop('Shiva'), sk: 6 }); const sSk6 = vals('Shiva');
+      // level: an innate skill counts from the level it is learned at
+      const inn = personaNames().find(n => wonderInnate(n).some(x => (WONDER_PERSONA[n].learn[x] || 1) > 1));
+      const innSk = wonderInnate(inn).find(x => WONDER_PERSONA[inn].learn[x] > 1), at = WONDER_PERSONA[inn].learn[innSk];
+      personaSet(inn, { lv: at }); const innOn = wonderInnateHere(inn).includes(innSk);
+      personaSet(inn, { lv: at - 1 }); const innOff = !wonderInnateHere(inn).includes(innSk);
+      // a skill card is its Persona's: taught to one, it is in the setup's slot and in the save
+      personaSet('Alice', { cards: ['Rebellion', 'Rebellion', 'no such card'] });
+      state.wonder = { personas: [{ name: 'Alice', cards: [] }] };
+      const aliceCards = wonderSetup().personas[0].cards.join(',');
+      // not owned: never offered, never suggested, dropped from the setup; a round trip keeps every field
+      personaSet('Shiva', { own: false }); state.wonder = { personas: [{ name: 'Shiva' }, { name: 'Alice' }] };
+      const setupAfter = wonderSetup().personas.map(p => p.name).join(',');
+      tcMemo.key = ''; const sugP = tcWonderBest(ann, []);
+      const saved = JSON.parse(JSON.stringify(personasSaved())), back = personasFrom(saved);
+      const same = JSON.stringify(back) === JSON.stringify(personasState());
+      delete saved.Alice;
+      const missing = !personasFrom(saved).Alice;
+      out.personas = { first, jTop, jBase, sTop, sBase, sSk6, inn, innSk, at, innOn, innOff, aliceCards, setupAfter, sug: sugP.personas.map(p => p.name), same, missing,
+        offered: wonderPersonas().includes('Shiva') };
+      state.personas = keepP; state.wonder = keepW; tcMemo.key = '';
+    }
+    // Wonder's weapons: obtained and refinement per weapon; the suggestion tries only obtained ones, each at its own
+    // refinement (an R6 Arc Knife used to be weighed at the setup's R0)
+    {
+      const keepWp = state.weapons, keepW = state.wonder, realW = WONDER_BUFFS.weapons, w1 = weaponNames()[1];
+      state.weapons = null; state.wonder = { weapon: w1, refine: 5 };
+      const first = { all: weaponNames().every(weaponOwned), kept: weaponRec(w1).refine === 5,
+        others: weaponNames().filter(n => n !== w1).every(n => weaponRec(n).refine === 1), saved: JSON.stringify(weaponsSaved()[w1]) };
+      weaponSet(w1, { own: false });
+      const savedW = JSON.parse(JSON.stringify(weaponsSaved()));
+      const same = JSON.stringify(weaponsFrom(savedW)) === JSON.stringify(weaponsState());
+      const other = weaponNames().find(n => n !== w1); delete savedW[other];
+      const missing = !weaponsFrom(savedW)[other];
+      state.wonder = { weapon: w1, refine: 5 }; const dropped = wonderSetup().weapon === '';
+      // two made-up weapons: A's +10% ATK beats B at R0 (+4%), B at R6 (+16%) beats A
+      WONDER_BUFFS.weapons = { A: [{ k: 'atk%', v: 10, to: 'party', src: 'weapon', why: 'a' }], B: [{ k: 'atk%', ladder: [4, 6, 8, 10, 12, 14, 16], to: 'party', src: 'weapon', why: 'b' }] };
+      state.weapons = weaponsFrom({ A: {}, B: {} }); state.wonder = {};
+      const pick = () => { tcMemo.key = ''; const S = tcWonderBest(ann, []); return S.weapon + ' ' + S.refine; };
+      const r0 = pick(); weaponSet('B', { refine: 7 }); const r6 = pick(); weaponSet('B', { own: false }); const noB = pick();
+      // the Teams tab's boxes: a weapon picked there takes its refinement from the record, a refinement set there writes it
+      weaponSet('B', { own: true }); weaponSet('A', { refine: 3 }); renderTmPicker();
+      const offered = [...$('#tmWWeapon').options].map(o => o.value).filter(Boolean).join(',');
+      $('#tmWWeapon').value = 'A'; tmWonderChanged(); const takes = wonderSetup().refine;
+      $('#tmWRefine').value = '6'; tmWonderChanged(); const writes = [weaponRec('A').refine, wonderSetup().refine];
+      $('#tmWWeapon').value = 'B'; tmWonderChanged(); const back = wonderSetup().refine;
+      WONDER_BUFFS.weapons = realW; state.weapons = keepWp; state.wonder = keepW; tcMemo.key = ''; renderTmPicker();
+      // their own tab, under "Team building" in the header with Teams and Personas; the cards' tabs under "Revelation cards"
+      const wasTab = TABS.find(t => !$('#tab-' + t).classList.contains('hide'));
+      showTab('weapons');
+      const tab = { shown: !$('#tab-weapons').classList.contains('hide'), rows: $$('#wpTable tbody tr').length === weaponNames().length,
+        notOnPersonas: !$('#tab-personas #wpTable'),
+        groups: $$('nav .navGroup').map(g => g.querySelector('.navLbl').textContent + ':' + $$('button', g).map(b => b.dataset.tab).join(',')).join('|') };
+      showTab(wasTab);
+      out.weapons = { first, same, missing, dropped, r0, r6, noB, offered, takes, writes, back, tab };
+    }
+    // Kira's Bleed: its Almighty part at the cap (60% of ATK a stack) makes damage over time most of his damage
+    const kira = charDef('Kira Kitazato'); tcMemo.key = '';
+    const kp = tcSimRun(tcSimPrep(kira, [null, null, null], false, true), [kira.n], false).parts;
+    out.kira = { dot: (kp.dot || 0) / Object.values(kp).reduce((x, y) => x + y, 0), entry: DPS_KIT[kira.n].some(c => c.kind === 'dot' && c.v === 60 && c.on === 'round' && c.crit === false) };
+    DPS_KIT_BONUS[ann.n] = keepKB; TEAMS[ann.n] = keepAR; SKILL_DMG[ann.n] = keepAS; tcMemo.key = '';
+    // lufel's '1 / 2' turns alternate the two skills (Akechi's Awareness 0 rotation)
+    out.alt = { akechi: TEAMS['Goro Akechi'].rot[0].seq.join(' '), left: Object.values(TEAMS).some(t => (t.rot || []).some(r => r.seq.some(x => /\//.test(x)))) };
+    return out;
+  });
+  const near = (a, b, e) => Math.abs(a - b) < (e || 1e-9);
+  check('a rotation step counts its Highlights and skill uses; the quick screen adds a Highlight every 5 turns where lufel writes none (thieves only); a re-chosen rotation may not break a cooldown',
+    JSON.stringify(th.count) === '[2,2,2,1,1,0]' && JSON.stringify(th.uses) === '["140","400","101","001"]' &&
+    th.overlay.len === 30 && JSON.stringify(th.overlay.at) === '[5,10,15,20,25,30]' && th.overlay.kept && th.overlay.elu &&
+    JSON.stringify(th.cool) === '[true,false,true]', JSON.stringify({ c: th.count, u: th.uses, o: th.overlay, cool: th.cool }));
+  const upOf = (rows, k) => (rows.find(r => r[0] === k) || []);
+  check('in the quick screen a Highlight buff counts at the cadence, and "on the damage dealer\'s / any ally\'s Highlight" at their rates',
+    near(upOf(th.screen, 'dm')[1], 0.4) && near(upOf(th.screen, 'atkPct')[1], 0.4) && near(upOf(th.screen, 'cm')[1], 1), JSON.stringify(th.screen));
+  check('the damage dealer\'s own Highlight is its share of their damage from lufel\'s skill numbers',
+    near(th.ann.q, th.ann.qExp, 1e-6) && near(th.ann.r0, 0.2) && th.ann.share > 0.1 && th.ann.share < 0.6, JSON.stringify(th.ann));
+  check('quick screen: Highlight damage reaches only the Highlight part; an extra Highlight adds one; the shared gauge, not the cooldown, holds Highlights back',
+    th.m.hlDm > 1.001 && th.m.hlDm < th.m.dm && th.m.hlx > 1.01 && th.m.gauge > 1.001 && near(th.m.cd, 1) &&
+    th.m.xturns > 1.05 && near(th.m.xDmAlone, 1) && th.m.xBoth > th.m.xturns, JSON.stringify(th.m));
+  check('the fight: alone, a damage dealer\'s Highlight comes in rounds 2, 6 and 10 (empty gauge, 4-action cooldown); four thieves\' 84% a round caps the team\'s Highlights',
+    JSON.stringify(th.base) === '[3,2]' && th.shared <= 10, JSON.stringify({ base: th.base, shared: th.shared }));
+  check('the gauge\'s spending orders: with one or two Highlight users every order of them and the damage dealer is tried, so none beats the chosen one',
+    th.orders.users >= 1 && th.orders.users <= 2 && th.orders.tried === (th.orders.users === 2 ? 6 : 2) && near(th.orders.chosen, th.orders.top, 1e-9), JSON.stringify(th.orders));
+  check('a member\'s part and Wonder\'s are read against the headline fight with its own rotations: no Wonder setup is a part of exactly 1, and the headline replayed as is prices the same',
+    Math.abs(th.partsAs.wonder - 1) < 1e-12 && th.partsAs.same < 1e-9 && th.partsAs.parts[1] > 1 && th.partsAs.parts[2] > 1 && th.partsAs.parts[0] > 0, JSON.stringify(th.partsAs));
+  {
+    const B = th.battleLog;
+    check('the Battle rotation log is the headline fight replayed (same total): Fuuka at each round\'s start, then each thief once a round in the fight\'s own order',
+      B.ok && B.elu === B.F && B.r1[0] === 'Fuuka Yamagishi' && JSON.stringify(B.r1.slice(1)) === JSON.stringify(B.order) && B.perRound.every(n => n === B.order.length), JSON.stringify(B));
+  }
+  check('the fight plays turn order: a 1-turn debuff from a teammate faster than the damage dealer meets the hit, from a slower one it has expired',
+    th.order.fast > th.order.slow + 0.01 && th.order.fastUp > 0.9 && th.order.slowUp < 0.1, JSON.stringify(th.order));
+  check('Catchy Hook adds Highlights outside the cooldown, and Summer Ayaka\'s Concerto of Time gives the damage dealer one every 3 actions for free',
+    th.hook.with >= th.hook.base + 2 && th.concerto.ann >= th.concerto.base + 1, JSON.stringify({ hook: th.hook, concerto: th.concerto }));
+  check('starting Theurgy gauge counts (Yukari\'s A1: two Theurgies in 3 rounds where Awareness 0 has one), and Kotone Shiomi\'s Fortune fires a free Highlight from A1',
+    JSON.stringify(th.theurgy) === '[1,2]' && th.fortune[1] >= th.fortune[0] + 1, JSON.stringify({ t: th.theurgy, f: th.fortune }));
+  {
+    const { c0, c2, off, heal } = th.copy;
+    const per = c => c.copy && c.copy.by['Ryuji Sakamoto'] ? Object.fromEntries(Object.entries(c.copy.sum).map(([k, v]) => [k, v / c.copy.by['Ryuji Sakamoto']])) : {};
+    const p0 = per(c0), p2 = per(c2);
+    check('Kotone Shiomi\'s Lunar Phaseshift copies a teammate\'s buffs on the damage dealer at 30% (37.5% from A2) for each Skill 3 — not their debuffs, not a noCopy line — and it counts in the fight, the teammate\'s share and the quick screen; never onto a Healer',
+      c0.copy.casts === 4 && c0.copy.by['Ryuji Sakamoto'] === 4 && near(p0.atkPct, 12) && near(p0.dm, 6) && !p0.defdown && !p0.cm && near(p2.atkPct, 15) &&
+      c0.mult > off.mult * 1.005 && c0.ryuPart > off.ryuPart * 1.005 && c0.quick > off.quick * 1.001 && !off.copy &&
+      near(c0.copyBy.rate, 0.3) && near(c0.copyBy.share, 1 / 3) && heal === null,
+      JSON.stringify({ c0, p0, p2, off: { mult: off.mult, ryuPart: off.ryuPart, quick: off.quick }, heal }));
+  }
+  check('a damage dealer\'s own Resonance counts, set off by teammates\' actions (Wavecatcher Miyu)', th.res > 0.05, String(th.res));
+  check('Da Capo is extra actions over the fight; Wonder\'s Highlight is his best Persona\'s, fired from the gauge',
+    near(th.dacapo[0], 2 / 12) && near(th.dacapo[1], 1 / 6) && JSON.stringify(th.wonder) === '{"lines":[30],"idle":1,"events":1}', JSON.stringify({ d: th.dacapo, w: th.wonder }));
+  {
+    const r = th.ram;
+    check('Summer Ichigo\'s Ram: one per Heart\'s Desire below A6 and every Helmsman turn after the first from A6, none without her; the Boat is the crew\'s max HP with Wonder at their mean; a Seal needs another Psy or [Summer] member; +25% per foe fewer than 5; the HP part does not grow with ATK; the quick screen sees it',
+      JSON.stringify(r.rams) === '[6,11]' && r.none === null && near(r.boat, 1) && JSON.stringify(r.seal) === '[false,false,true]' && r.dm === 100 &&
+      r.ramGrow > 1.001 && r.ramGrow < r.skillGrow - 0.05 && r.quick[0] > r.quick[1] * 1.05, JSON.stringify(r));
+  }
+  {
+    const a = th.skillAmp;
+    check('the twins\' Skill Amplification raises the damage dealer\'s skill hits and the skill buffs other allies cast under it, not a passive or a Highlight, and the quick screen sees it',
+      a.has && a.passive > 1.12 && a.passive < 1.18 && a.skill > a.passive + 0.005 && Math.abs(a.hl - 1) < 1e-9 && a.quick > 1.08, JSON.stringify(a));
+  }
+  {
+    const c = th.ck;
+    check('Yumi\'s Cocktails: one element makes Tailor-Made only, a mix makes Standard or Basic; Invigorating Blend spends them all (the first cast holds only the battle-start one), Tempting Build its best for x2.2; her Skill 3 raises the damage; none without her',
+      c.mono.casts >= 3 && c.mono.spent.S + c.mono.spent.B === 0 && c.mono.spent.T > c.mono.casts && c.mono.std2 < c.mono.casts && Math.abs(c.mono.sum - 1.2 * c.mono.spent.T) < 1e-9 &&
+      c.mixed.spent.S + c.mixed.spent.B > 0 && c.s1.one > 0 && Math.abs(c.s1.oneSum / c.s1.one - 2.2) < 1e-9 && c.gain > 1.03 && c.none === null, JSON.stringify(c));
+  }
+  {
+    const r = th.rk, all = (f, x) => [50, 100, 150].every(t => Math.abs(f[t] - x[t]) < 1e-9);
+    check('Tempest Riko\'s Blossoming Season: 200 SP is full strength and spends it all, under 50 SP nothing, 50 SP a turn at 480.1% gives the ATK tier at 25%, A2 is 125% and refunds 50; the fight follows her SP and the tiers raise the damage',
+      all(r.full, { 50: 1, 100: 1, 150: 1 }) && r.after3 === 0 && all(r.low, { 50: 0, 100: 0, 150: 0 }) && r.lowCount === 1 &&
+      Math.abs(r.quarter[50] - 0.25) < 1e-6 && r.quarter[100] === 0 && all(r.a2, { 50: 1.25, 100: 1.25, 150: 1.25 }) && r.a2sp === 50 &&
+      r.sp && r.sp.casts > 0 && r.sp.spent > 0 && r.gain > 1 && r.none === null, JSON.stringify(r));
+  }
+  check('Ryuji\'s Fearless Charge: Pierce 35 on his skills raises his damage from Awareness 2, and does nothing below it',
+    Math.abs(th.ryuPie.a0 - 1) < 1e-9 && th.ryuPie.a2 > 1.1, JSON.stringify(th.ryuPie));
+  check('Radiance Motoha\'s Twilight Radiance: ATK per Light and same-foe crit damage raise her Highlight, more from Awareness 4, and leave her skills alone',
+    th.motohaHl.a0 > 1.05 && th.motohaHl.a4 > th.motohaHl.a0 && (th.motohaHl.skill == null || Math.abs(th.motohaHl.skill - 1) < 1e-9), JSON.stringify(th.motohaHl));
+  {
+    const m = th.mikuAmp, near = (x, y) => x != null && Math.abs(x - y) < 1e-6;
+    check('Miku\'s Skill Amplification: 15% on her skills from Awareness 1, her 5-star weapon\'s 10% (R1) on what she casts in Virtual Concert, and never on a count or her weapon',
+      near(m[0].beat, 1) && near(m[0].show, 1.1) && near(m[1].beat, 1.15) && near(m[1].show, 1.25) && near(m[2].show, 1.15) &&
+      near(m[1].turns, 1) && near(m[0].turns, 1) && near(m[1].weapon, 1), JSON.stringify(m));
+  }
+  {
+    const a = th.audit;
+    check('kit audit: Ren\'s Will of Rebellion reaches 3 on his extra action and is spent (Resistance adds ATK); Frostgale Kotone\'s Wind-teammate bonus needs a Wind thief beside her',
+      a.will && a.will.peak >= 3 && a.will.peak <= 5 && a.will.end < a.will.peak && a.resistance > 1.02 && a.windMate && !a.noWind && !a.none, JSON.stringify(a));
+  }
+  {
+    const v = th.laVie;
+    check('Ann\'s La Vie en Rose follows her Passion: with Trifire alone (1 a cast) on every 5th action at A0, more often with A6\'s extra Passion, and Marriage of Flames fires as it ends from A2',
+      v.a0.lv && v.a0.lv.n === Math.floor(v.a0.lv.acts / 5) && v.a0.fu === 0 && v.a2.lv.n === v.a0.lv.n && v.a2.fu > 0 && v.a6.lv.n > v.a0.lv.n, JSON.stringify(v));
+  }
+  {
+    const b = th.lunarBond;
+    check('Kotone Shiomi\'s Lunar Bond is counted: +1 per skill of the linked damage dealer and per Lyre\'s Melody on them (5 by round 3, 10 by round 5 when both cast every turn), 5 at once from A1, only the damage dealer\'s skills without Lyre\'s Melody, none without Kotone',
+      b.a0 && b.a0.at5 === 3 && b.a0.at10 === 5 && b.a1 && b.a1.at10 != null && b.a1.at10 < b.a0.at10 && b.noMelody && b.noMelody.at10 > b.a0.at10 && b.none === null, JSON.stringify(b));
+    const mi = th.miku, de = th.desire, near6 = (x, y) => Math.abs(x - y) < 1e-6, kc = th.kitCounters;
+    check('kit counters are played: Mitsuru\'s Frostbound reaches its cap, Tropical Motoha is in Summer Hype only after Surf \'n\' Shine, Haru\'s shot holds the Rounds loaded since the last one, Makoto Yuki is buffed only by teammates, the twins\' True Desire only at A6, and a hit carries its crit chance',
+      kc.fb === 5 && kc.hypeNone === 0 && kc.hypeAll === kc.F && kc.shots2.length > 0 && kc.shots2.every(x => x >= 2) && kc.shots1.every(x => x >= 1 && x <= 2) && kc.shots1.includes(1) &&
+      kc.buffedAlone === 0 && kc.buffedKotone > 0 && kc.tdA1 === 0 && kc.tdA6 >= 1 && kc.pc > 0 && kc.pc < 1, JSON.stringify(kc));
+    check('Miku gains a Track only for a song whose Track she does not hold, and Showstopper spends all three; a song turn and an extra-action skill are tokens of their own',
+      mi.cycle === ({ 6: 5, 12: 8 })[mi.F] && mi.same === 1 && mi.toks.join(' | ') === '2,3,x3,y3 | 3,x3 | 1 | 2,2 Fire | 2,iA | 1,3,x1,x3,y3', JSON.stringify(mi));
+    check('the twins\' Desire Level comes from their stats (at most 100 before A6) and their per-100 lines scale with it',
+      de.D >= 25 && de.D <= 100 && near6(de.one, de.D / 100) && near6(de.half, (100 + de.D) / 200) && de.other === 100, JSON.stringify(de));
+    const oh = th.ownHits;
+    check('teammates\' own hits count in the team\'s total: a party ATK line raises them, one cast on the damage dealer alone does not; off, there are none',
+      oh.mit > 0 && near(oh.ally, oh.mit, 1e-9) && oh.party > oh.mit * 1.3 && oh.off === 0 && oh.offTotal < oh.total && oh.quick > 0, JSON.stringify(oh));
+    check('the quick screen lifts a teammate\'s own hits by what reaches the party (a party ATK line), not by a line on the damage dealer alone',
+      oh.lift.of === 'Mitsuru Kirijo' && oh.lift.party && oh.lift.d > 1e-6, JSON.stringify(oh.lift));
+    check('Wonder\'s own hits count only once his ATK is entered (Janosik\'s Tatra Shot and Highlight from lufel\'s English text); a bad entry is dropped',
+      oh.wNo === 0 && oh.wYes > 0 && oh.tatra === '[["Gun",0,1,203.3,221.6,239.9]]' && /Gun/.test(oh.plan) && oh.stats[0] === '{"atk":3000}', JSON.stringify(oh));
+    const wc = th.wonderCalc, panel = { A1: [4439, 2469, 11580, 31.5, 190, 10.8], A2: [3639, 2108, 9789, 31.5, 190, 10.8], A3: [4225, 2348, 11120, 31.5, 190, 10.8], A4: [3971, 2469, 10870, 25, 190, 0] };
+    check('Wonder\'s stats worked out from his setup reproduce the user\'s four readings of his character screen (all three slots add base stats; only slot 1\'s talent and passive skills count)',
+      Object.entries(panel).every(([k, [atk, def, hp, cr, cm, dm]]) => wc[k].ok && Math.abs(wc[k].atk - atk) <= 1 && Math.abs(wc[k].def - def) <= 1 && Math.abs(wc[k].hp - hp) <= 1 &&
+        near(wc[k].cr, cr, 1e-6) && near(wc[k].cm, cm, 1e-6) && near(wc[k].dm, dm, 1e-6)) && wc.A1.spd === 100 && wc.A4.spd === 100 && near(wc.A1.aa, 80, 1e-6), JSON.stringify(wc));
+    check('worked-out stats feed the fight for the setup priced, say what is missing until entered, read Agility Master\'s Speed and DEF from lufel, and are saved',
+      wc.stats && wc.stats.computed && Math.abs(wc.stats.atk - 4439) <= 1 && near(wc.stats.dm, 10.8, 1e-6) && wc.missing.some(m => /Schema/.test(m)) &&
+      JSON.stringify(wc.agility) === '[["spd",9],["def%",-4]]' && wc.saved === '{"hp":836,"atk":295,"def":197,"spd":100,"lv":99}{"hp":2051,"atk":654,"def":356}', JSON.stringify(wc));
+    check('a Persona\'s stats at its level and overclocks are worked out from Game8\'s level-1 stats within 3% of eleven real screens; Janosik is left out; the cap drops 5 a missing overclock',
+      wc.rule.every(e => e <= 0.03) && wc.janosik === null && JSON.stringify(wc.caps) === '[80,40,65,99,99]', JSON.stringify({ rule: wc.rule, j: wc.janosik, caps: wc.caps }));
+    const mk = th.mateKit;
+    check('a party buff counts down per holder: a slower teammate\'s own hit reads a 1-turn party ATK buff cast before the damage dealer acted, not one on the damage dealer alone',
+      mk.plain > 0 && mk.echoed > mk.plain * 1.3 && near(mk.allyOnly, mk.plain, 1e-9), JSON.stringify(mk));
+    check('teammates\' own kit damage counts: a follow-up on allies\' skills and their own skill bonus raise their hits; a component reading a damage dealer\'s own state is left out',
+      mk.fu > mk.plain * 1.2 && near(mk.skipped, mk.plain, 1e-9) && mk.bonus > mk.plain * 1.5, JSON.stringify(mk));
+    check('ranking teams by the damage dealer\'s damage leaves teammates\' own hits out of the number but still reports them; the switch is a saved pref',
+      oh.rankDps.own > 0 && oh.rankDps.inTotal === false && oh.rankDps.mult < oh.rankDps.teamMult && oh.rankDps.pref, JSON.stringify(oh.rankDps));
+    const tp = th.targetPer;
+    check('a line read off the receiving ally\'s stat: Hale Summer Days\' ATK is 25% of the damage dealer\'s ailment accuracy plus the skill\'s own, at most 22.5%',
+      tp.none > 14 && tp.none < 16 && near6(tp.ann, Math.min(22.5, 0.25 * (tp.annAA + tp.none / 0.25))) && near6(tp.runa, 22.5) && tp.runaAA > 32, JSON.stringify(tp));
+    const lr = th.lufelRows;
+    check('Kotone Shiomi\'s Lunar Bond and Powerful Bond follow lufel\'s own rows for her rotations: Lunar Phaseshift adds a Lunar Bond, a Fortune burst keeps Powerful Bond 2 turns longer',
+      lr.a0burst === '2,6,7,8,10,10|1,3,3,3,3,3' && lr.a0late === '2,4,6,8,10,10|1,2,3,3,3,3' && lr.a1burst === '7,10,10,10,10,10|2,3,3,3,3,3' && lr.a1late === '7,9,10,10,10,10|2,3,3,3,3,3', JSON.stringify(lr));
+    const p = th.powerfulBond;
+    check('Kotone Shiomi\'s Powerful Bond: one a Lyre\'s Melody up to 3, back to none 3 rounds after the last, 1 for good from A1; Fortune\'s longer buffs once a battle, twice from A6',
+      p.every.peak === 3 && p.sparse.peak === 1 && p.none.peak === 0 && p.a1.peak === 0 && p.burst.fortune === 1 && p.burst6.fortune === 2 && p.every.fortune === 0, JSON.stringify(p));
+  }
+  check('Ichigo\'s Lovesick: Obsessive Rose stacks it to the cap of 10, it ticks every enemy turn and adds damage; My Beloved Prince alone adds no stacks and nothing ticks',
+    th.lovesick.two && th.lovesick.two.peak === 10 && th.lovesick.two.ticks >= th.lovesick.F && th.lovesick.gain > 1.05 &&
+    th.lovesick.three && th.lovesick.three.peak === 0 && th.lovesick.three.ticks === 0 &&
+    th.lovesick.hitNone === 0 && th.lovesick.earlyVsAlways < 0.999, JSON.stringify(th.lovesick));
+  check('Lovesick ignores Ichigo\'s own Pierce too: with more of it her skills deal more in absolute terms and the ticks the same',
+    th.lovesick.ownPierce.units > 1.01 && th.lovesick.ownPierce.skill > 1.01 && near(th.lovesick.ownPierce.dot, 1, 1e-6), JSON.stringify(th.lovesick.ownPierce));
+  check('Ichigo\'s Chains of Love are counted: her first Vorpal Butterfly gives one (once), each Highlight one; Obsessive Rose alone gives none from skills',
+    th.lovesick.vb && th.lovesick.vb.colAt[0] === 1 && th.lovesick.vb.col === 1 + th.lovesick.vb.colAt.length - 1 &&
+    th.lovesick.two.col === th.lovesick.two.colAt.length && !th.lovesick.two.colAt.includes(1), JSON.stringify({ vb: th.lovesick.vb, two: th.lovesick.two }));
+  {
+    const s = th.selfHp, near = (x, y) => Math.abs(x - y) < 1e-6;
+    check('the damage dealer\'s own HP: Pirate Tactics spends 20% (Rebound once below 75%), a Skill 2 rotation spends nothing, and Leo\'s Justice Barrier brings Rebound on its own',
+      s.f.join() === '1,0,' + s.f[2] + ',1,1' && near(s.f[2], 0.5) && s.skill1 && s.skill1.min < 0.75 && s.skill1.rebounds > 0 &&
+      s.plain && near(s.plain.min, 1) && s.plain.rebounds === 0 && s.leo && s.leo.min < 0.75 && s.leo.rebounds > 0 &&
+      // the user's play: the boss keeps Ryuji below 75% from round 2, so every action from then on is in Rebound
+      s.low && near(s.low.min, 0.7) && s.low.rebounds === s.low.F - 1, JSON.stringify(s));
+  }
+  check('Makoto Niijima\'s Nuclear Finisher: +30% ATK counted in her stats, and in the fight while the boss carries an elemental ailment',
+    th.nuclearFinisher.stat && th.nuclearFinisher.gain > 1.01, JSON.stringify(th.nuclearFinisher));
+  {
+    const b = th.bossHp, near = (x, y) => Math.abs(x - y) < 1e-6;
+    check('the boss\'s HP falls evenly over the fight (mid-round), and HP-gated kit bonuses read it: above 70% in rounds 1-2 of 6, below 50% from round 4, missing HP growing to the end',
+      b.F !== 6 || (near(b.hp[0], 11 / 12) && near(b.hp[1], 0.75) && near(b.hp[3], 1 / 12) && b.above70.join() === '1,1,0' && b.below50.join() === '0,1' &&
+      near(b.missing, 11 / 12) && b.fullAt20 === 1 && b.gain > 1), JSON.stringify(b));
+  }
+  {
+    const k = th.kotoneAmp, near = (x, y) => Math.abs(x - y) < 1e-6;
+    check('Kotone Shiomi\'s 5-star weapon: 10% Skill Amplification on her skills from Lunar Bond 5 (round 3 at A0, round 1 from A1), at its share of the rounds on the quick screen, never on her Highlight',
+      near(k.r2, 1) && near(k.r3, 1.1) && near(k.a1, 1.1) && near(k.w4, 1) && near(k.hl, 1) && near(k.mean, 1 + 0.1 * Math.max(0, k.F - 2) / k.F) && k.ev, JSON.stringify(k));
+  }
+  check('the Teams search\'s lead is at least as strong, fully fitted, as the best listed team of each other Elucidator',
+    th.searchLead && th.searchLead.elus.length > 0 && th.searchLead.elus.every(x => x.m <= th.searchLead.lead + 1e-9), JSON.stringify(th.searchLead));
+  check('Fuuka\'s backup fires their Highlight on the swap from her Awareness 2', th.backup[0] === 0 && th.backup[1] > 0, JSON.stringify(th.backup));
+  check('skill numbers are read at the skill-level tier the Setup reaches',
+    th.tiers.t0 === th.tiers.base && th.tiers.t3 > th.tiers.t0, JSON.stringify(th.tiers));
+  check('a Highlight does not crit unless its kit says it can (J&C, Kasumi, Radiance Motoha): a crit buff raises the skills, not the Highlight',
+    Math.abs(th.hlCrit.hl - 1) < 1e-6 && th.hlCrit.skill > 1.01 &&
+    JSON.stringify(th.hlCrit.flags) === JSON.stringify(['Justine & Caroline', 'Kasumi Yoshizawa', 'Motoha Arai [Radiance]']), JSON.stringify(th.hlCrit));
+  check('the gauge fills 21% for an action that hits and 17% for one that does not (a buff skill, Wonder casting a card)',
+    JSON.stringify(th.hits) === '[true,false,true,true,false]', JSON.stringify(th.hits));
+  check('Wonder casts his skills turn by turn: a 2-turn card every other turn, attacks between, its line a cast in the fight',
+    th.wsched.seq === 'w0 - w0 - w0 -' && th.wsched.events === 1 && th.wsched.constAtk === 0, JSON.stringify(th.wsched));
+  check('the damage dealer\'s own rotation is fitted to the team in the fight: their strongest skill moves onto the rounds a teammate\'s debuff is up, with lufel\'s skill counts; off, it is lufel\'s',
+    th.dpsFit.seq === '3 1 3 1 3 1' && th.dpsFit.gain > 0.001 && th.dpsFit.better && th.dpsFit.off === null &&
+    JSON.stringify(th.dpsFit.counts) === '[3,3]', JSON.stringify(th.dpsFit));
+  check('a teammate\'s rotation is fitted in the fight: the quick model sees no difference, the fight moves a 1-turn debuff onto the damage dealer\'s strong rounds',
+    (th.mateFit.quick === 'as written' || th.mateFit.quick === '2 1 2 1 2 1') && th.mateFit.full === '1 2 1 2 1 2' && th.mateFit.gain > 0.001 && th.mateFit.better,
+    JSON.stringify(th.mateFit));
+  const [o0, o2, o6] = th.oracle;
+  check('the fight plays Oracle Shift: swaps when Fuuka\'s stacks reach the cost (rounds 2, 6, 10 at A0), more often from A6, the backup\'s Highlight with them from A2, Courtesy from the backup\'s stats, and the backup adds damage',
+    JSON.stringify(o0.shifts) === '[2,6,10]' && o0.leoHl === 0 && o2.leoHl >= 2 && o6.shifts.length > o0.shifts.length &&
+    o0.courtesy > 0 && o0.mult > o0.without && o0.seat === true, JSON.stringify(th.oracle));
+  const fw = th.fuukaWait;
+  check('Fuuka waits her first turn (an Elucidator\'s opening preparation) unless Mitsuru is in the party, the wait happens once, and her swaps follow from her stacks (2, 6, 10 at A0; 2, 4, 8, 12 from A1; more at A6; sooner with Mitsuru)',
+    fw.alone === '-' && fw.mitsuru === '-,1' && fw.asBackup === false && JSON.stringify(fw.plan) === '["2,6,10","2,4,8,12","2,3,5,6,9,10"]' && fw.cut === '2,3,7,11' &&
+    fw.unroll === '- 1 3 1 2+3 1 1 3 1 2+3 1 1', JSON.stringify(fw));
+  const fs1 = th.firstSwap;
+  check('Fuuka\'s backup sets off its start-of-battle effects at its first swap: Yukari\'s Awareness 1 Theurgy charge fires her Theurgy, Koromaru\'s Assist is on from then (always on in the party)',
+    fs1.yukari[0] === 0 && fs1.yukari[1] >= 1 && fs1.koro.includes('defdown 30') && fs1.quick.length === 1 && Math.abs(fs1.quick[0] - 11 / 12) < 1e-3 && fs1.party >= 30, JSON.stringify(fs1));
+  check('a Highlight\'s permanent effect (Kumi\'s DEF down) comes with the first Highlight, not from the start', th.kumiHl === true);
+  check('Fuuka\'s backup is chosen by the fight among the quick screen\'s best few; another Elucidator\'s lineup is left alone',
+    th.fightBackup.pick === th.fightBackup.best && th.fightBackup.other === 3, JSON.stringify(th.fightBackup));
+  check('Fuuka\'s backup uses the skill the fight does best with on each swap (each of its three tried), not the one whose damage buffs sum highest',
+    ['1', '2', '3'].includes(th.bkSkill.pick) && th.bkSkill.pickV >= th.bkSkill.best * (1 - 1e-9), JSON.stringify(th.bkSkill));
+  check('Fuuka\'s backup copies what others put on the damage dealer (Kotone Shiomi\'s Arcana Link lines raise Kumi\'s own hits), never the damage dealer\'s own buffs',
+    th.bkCopy.on.shifts > 0 && th.bkCopy.on.own > th.bkCopy.off.own * 1.05 && th.bkCopy.on.mult > th.bkCopy.off.mult &&
+    th.bkCopy.aloneOn.own > 0 && Math.abs(th.bkCopy.aloneOn.own - th.bkCopy.aloneOff.own) < 1e-9 * th.bkCopy.aloneOn.own, JSON.stringify(th.bkCopy));
+  check('Self-Worth (A6): Strengths and Weaknesses\' amp stacks twice on back-to-back swaps; one +10% line below A6, one 2-stack line at A6',
+    th.selfWorth.two > th.selfWorth.one && th.selfWorth.a3.length === 1 && th.selfWorth.a3[0].v === 10 &&
+    th.selfWorth.a6.length === 1 && th.selfWorth.a6[0].v === 20 && th.selfWorth.a6[0].up > 0 && th.selfWorth.a6[0].up <= 1, JSON.stringify(th.selfWorth));
+  check('a Persona line that grows with Wonder\'s stats reads them: Rebellion at 10% crit rate is 10.2 + 1.8, at 60% its cap (17.2), and with no stats known its cap',
+    th.wonderPer.ok && near(th.wonderPer.capV, 17.2, 0.05) && near(th.wonderPer.at10, 12.0, 0.05) && near(th.wonderPer.at60, 17.2, 0.05), JSON.stringify(th.wonderPer));
+  check('Ann\'s Rosethorn adds Fire damage per Burning foe: with five foes Falling Sun Burns the others at its chance (well over one Burning foe on average) and her damage rises; with one foe at most one counts',
+    th.rosethorn.five > 1.5 && th.rosethorn.one <= 1 + 1e-9 && th.rosethorn.gain > 1.05, JSON.stringify(th.rosethorn));
+  check('Mio\'s Entropy lowers DEF on every Ice Technical (a Burning, Frozen or Shocked foe), so beside YUI, who Shocks, it counts where a Burn-only reading gave nothing',
+    JSON.stringify(th.entropy.need) === '["Burn","Freeze","Shock"]' && th.entropy.any > th.entropy.burnOnly * 1.001, JSON.stringify(th.entropy));
+  check('Mitsuru\'s Iceblade is priced on the triggering ally\'s ATK (twice the ATK, twice the Iceblade) and from her Awareness 1 needs no Theurgy window',
+    th.iceblade.kit0.length === 1 && th.iceblade.kit0[0] === 'HL' && th.iceblade.kit1.every(a => a == null) && th.iceblade.fu0 > 0 &&
+    Math.abs(th.iceblade.fu0x2 / th.iceblade.fu0 - 2) < 1e-6 && th.iceblade.fu1 > th.iceblade.fu0, JSON.stringify(th.iceblade));
+
+  // ---- knockdowns: the boss's Down gauge (#tmDown) ----
+  const dn = await p.evaluate(() => {
+    const ann = charDef('Ann Takamaki'), mate = 'Ryuji Sakamoto', lineup = [mate, null, null];
+    const keepB = TEAM_BUFFS[mate], keepC = TC_DOWN_CUT[ann.n];
+    const at = (pts, buffs, cut) => {
+      $('#tmDown').value = String(pts); TEAM_BUFFS[mate] = buffs || keepB;
+      if (cut) TC_DOWN_CUT[ann.n] = cut; else if (keepC) TC_DOWN_CUT[ann.n] = keepC; else delete TC_DOWN_CUT[ann.n];
+      tcMemo.key = '';
+      const s = tcSim(ann, lineup, false);
+      return { mult: s.mult, downs: (s.downs || []).join(','), quick: tcMember(ann, mate, null, null, false).vec.dm };
+    };
+    const onDown = [{ k: 'dmg', v: 50, to: 'enemy', src: 'passive', down: true, why: 'test: foes take +50% while knocked down' }];
+    const onKnock = [{ k: 'atk%', v: 20, to: 'party', src: 'passive', on: 'knock', dur: 99, stackMax: 3, why: 'test: +20% ATK per knockdown, 3 stacks' }];
+    const out = {
+      off: at(0), three: at(3), twelve: at(12),
+      downOff: at(0, onDown), downOn: at(3, onDown), knockOn: at(3, onKnock), knockPlain: at(3),
+      cutPlain: at(9), cut: at(9, null, [{ on: ['1', '2', '3'], n: 5, why: 'test' }]),
+      pref: PREF_SELECTS.includes('tmDown'), key: (() => { $('#tmDown').value = '4'; const k = tcAssumeKey(); $('#tmDown').value = '0'; return k !== tcAssumeKey(); })()
+    };
+    TEAM_BUFFS[mate] = keepB; if (keepC) TC_DOWN_CUT[ann.n] = keepC; else delete TC_DOWN_CUT[ann.n];
+    // a cut that lands on the next hit (Mayumi's Highlight, Riko's Insight): a teammate whose Skill 1 sets one
+    // knocks the boss down sooner; a teammate's turn token fires their line ('Punch')
+    const keepT = TEAMS[mate];
+    TEAMS[mate] = { rot: [{ aw: 0, label: 'Test', seq: ['1'] }] };
+    TC_DOWN_CUT[mate] = [{ on: '1', n: 4, next: true, why: 'test' }];
+    TEAM_BUFFS[mate] = [{ k: 'dmg', v: 1, to: 'enemy', src: '1', on: '1', dur: 1, why: 'test' }];
+    out.nextCut = at(9, TEAM_BUFFS[mate]).downs; delete TC_DOWN_CUT[mate]; out.nextPlain = at(9, TEAM_BUFFS[mate]).downs;
+    TEAMS[mate] = { rot: [{ aw: 0, label: 'Test', seq: ['Punch+1'] }] };
+    out.tokOff = at(0, [{ k: 'dmg', v: 40, to: 'enemy', src: 'aw', on: 'Punch', dur: 1, why: 'test' }]).mult;
+    out.tokNone = at(0, [{ k: 'dmg', v: 40, to: 'enemy', src: 'aw', on: 'Kick', dur: 1, why: 'test' }]).mult;
+    TEAMS[mate] = keepT; TEAM_BUFFS[mate] = keepB;
+    // Kumi's Lightning Legs: a Skill 3 knockdown opens it, and her next Skill 1 or 2 uses it
+    const kumi = charDef('Kumi Katayama'), keepS = TC_DOWN_STATE[kumi.n], keepKT = TEAMS[kumi.n];
+    TEAMS[kumi.n] = { rot: [{ aw: 0, label: 'Test', seq: ['3', '1'] }] };
+    const kAt = () => { $('#tmDown').value = '5'; tcMemo.key = ''; return tcSim(kumi, [null, null, null], false).total; };
+    out.ll = kAt(); delete TC_DOWN_STATE[kumi.n]; out.noLl = kAt(); TC_DOWN_STATE[kumi.n] = keepS; TEAMS[kumi.n] = keepKT;
+    // the tables: every cut and state has its reason and a known form; a stat line against a downed foe is the fight's only
+    const bad = [];
+    Object.entries(TC_DOWN_CUT).forEach(([n, L]) => { if (!CHARACTERS.some(c => c.n === n)) bad.push('cut ' + n); L.forEach(c => { if (!c.why || !(c.n > 0 || c.maxCut > 0) || !c.on) bad.push(n + ': ' + JSON.stringify(c).slice(0, 60)); if (c.state && !Object.values(TC_DOWN_STATE).some(x => x.id === c.state)) bad.push(n + ' state ' + c.state); }); });
+    Object.entries(KIT_STAT_BUFFS).forEach(([n, L]) => L.forEach(b => { if ((b.down || b.on === 'knockSelf' || b.on === 'knock') && !b.fight) bad.push('stat ' + n + ': ' + b.why.slice(0, 40)); }));
+    Object.entries(TEAM_BUFFS).forEach(([n, L]) => L.forEach(e => { if (e.state && !(TC_DOWN_STATE[n] && TC_DOWN_STATE[n].id === e.state)) bad.push('team ' + n + ' state'); }));
+    out.bad = bad;
+    $('#tmDown').value = '0'; tcMemo.key = '';
+    return out;
+  });
+  check('the Down gauge: no knockdown at "can\'t be knocked down", more knockdowns at fewer Down Points, and the boss gets up with its gauge full',
+    dn.off.downs === '' && dn.three.downs.split(',').length > dn.twelve.downs.split(',').filter(Boolean).length && dn.twelve.downs.split(',').filter(Boolean).length > 0 &&
+    Math.abs(dn.off.mult - dn.three.mult) < 1e-9, JSON.stringify(dn));
+  check('a line that needs a knocked-down foe counts only around knockdowns, never in the quick screen; a knockdown-triggered line stacks; a kit\'s own cut knocks down sooner; the setting is a saved pref in the memo key',
+    Math.abs(dn.downOff.mult - dn.off.mult) < 1e-9 && dn.downOn.mult > dn.three.mult + 1e-6 && dn.downOn.quick === 0 &&
+    dn.knockOn.mult > dn.knockPlain.mult + 1e-6 && dn.cut.downs.split(',').length > dn.cutPlain.downs.split(',').filter(Boolean).length && dn.pref && dn.key, JSON.stringify(dn));
+  check('a cut waiting for the next hit knocks down sooner; a teammate\'s turn token ("Punch") fires their line; Kumi\'s Lightning Legs from a Skill 3 knockdown raises her next Skill 1',
+    dn.nextCut.split(',').filter(Boolean).length > dn.nextPlain.split(',').filter(Boolean).length && dn.tokOff > dn.tokNone + 1e-6 && dn.ll > dn.noLl + 1e-6,
+    JSON.stringify({ nextCut: dn.nextCut, nextPlain: dn.nextPlain, tokOff: dn.tokOff, tokNone: dn.tokNone, ll: dn.ll, noLl: dn.noLl }));
+  // Wonder's weapons: every one released on Global can be chosen, and Sennight Inferno's DEF cut waits for a knockdown
+  const ww = await p.evaluate(() => {
+    const ann = charDef('Ann Takamaki'), keep = state.wonder, e3 = { name: '', cards: ['', '', ''] };
+    const at = (weapon, pts) => {
+      state.wonder = { personas: [e3, e3, e3], weapon, refine: 7 };
+      $('#tmDown').value = String(pts); tcMemo.key = '';
+      return { mult: tcSim(ann, [null, null, null], false).mult, quick: tcWonder(ann).vec.defdown };
+    };
+    const out = { none0: at('', 0), si0: at('Sennight Inferno', 0), none3: at('', 3), si3: at('Sennight Inferno', 3) };
+    // Glimmer's Blessing, on the damage dealer: its Bless half only for a Bless one
+    const gl = d => { state.wonder = { personas: [e3, e3, e3], weapon: 'Glimmer', refine: 7 }; return tcWonder(d).lines.length; };
+    out.glAnn = gl(ann); out.glBless = gl(CHARACTERS.find(c => c.e === 'Bless' && SKILL_DMG[c.n]));
+    out.glMult = at('Glimmer', 0).mult;
+    state.wonder = keep; $('#tmDown').value = '0'; tcMemo.key = '';
+    out.names = Object.keys(WONDER_BUFFS.weapons);
+    out.unexplained = out.names.filter(n => !WONDER_BUFFS.weapons[n].length && !(WONDER_SKIPS.weapons[n] || []).length);
+    return out;
+  });
+  const lufelWeapons = ['Whisperer\'s Sting', 'Chaos Hex', 'Event Horizon', 'Starry Compass', 'Arc Knife', 'Ex Machina', 'Purgatory', 'Ice Age', 'Plasma Blade',
+    'Pheromone Sting', 'Abyss Fang', 'Glimmer', 'Cyclotron', 'Eye of Obsequies', 'Cursed Ties', 'All In', 'Sennight Inferno'];
+  check('every Wonder weapon lufel lists as released can be chosen on the Teams tab, and one with nothing priced says why',
+    lufelWeapons.every(n => ww.names.includes(n)) && !ww.names.includes('Midnight Sun') && ww.unexplained.length === 0,
+    JSON.stringify({ missing: lufelWeapons.filter(n => !ww.names.includes(n)), unexplained: ww.unexplained }));
+  check('Sennight Inferno\'s DEF cut counts only on a knockdown: nothing at "can\'t be knocked down", more with Down Points set, never in the quick screen',
+    Math.abs(ww.si0.mult - ww.none0.mult) < 1e-9 && ww.si3.mult > ww.none3.mult + 1e-6 && ww.si3.quick === 0, JSON.stringify(ww));
+  check('Glimmer\'s Blessing counts on the damage dealer, with its Bless damage only for a Bless one',
+    ww.glMult > ww.none0.mult + 1e-6 && ww.glAnn === 1 && ww.glBless === 2, JSON.stringify(ww));
+  check('TC_DOWN_CUT names roster characters, each cut with its reason and an amount, states that exist; a stat line against a downed foe or set off by a knockdown counts in the Teams fight only',
+    dn.bad.length === 0, JSON.stringify(dn.bad));
+  check('SKILL_DMG and DPS_KIT name roster characters in their formats (a Theurgy with its gauge need); the fight length is a saved pref and the old cadence selects are gone',
+    th.skillN >= 50 && th.skillBad.length === 0 && th.kitN >= 25 && th.kitBad.length === 0 && th.prefs, JSON.stringify({ s: th.skillBad, k: th.kitBad, n: th.kitN, p: th.prefs }));
+  check('the fight is against a lufel boss (Vishnu here: DEF 821, +158.4%, weak to Fire, resists Ice), saved with the page settings',
+    th.boss.n >= 30 && JSON.stringify(th.boss.vishnu) === '[821,1.584,"weak","resist"]' && th.boss.sel === '8' && th.boss.prefs &&
+    JSON.stringify(th.weakFor) === '["weak","resist","normal"]', JSON.stringify({ b: th.boss, w: th.weakFor }));
+  check('a weakness-damage buff counts only when the damage dealer\'s hits land on a weakness (Ann on Vishnu: yes; "no weakness": no)',
+    th.weak[0] > 1.05 && near(th.weak[0], th.weak[1], 1e-9) && near(th.weak[2], 1, 1e-6), JSON.stringify(th.weak));
+  check('with three foes a debuff on one foe helps less than one on all of them; with one foe they are the same',
+    th.foes.one < th.foes.all - 1e-6 && near(th.foes.single[0], th.foes.single[1], 1e-9) && JSON.stringify(th.foes.oneFoe) === '[true,false,true]', JSON.stringify(th.foes));
+  check('round gates: on from a round (earlier at a higher Awareness), stacks by round, the first rounds only; the fight and the quick screen read them',
+    JSON.stringify(th.gate) === '{"g":[0,1],"g1":1,"ramp":[0,0.3333333333333333,1],"until":[1,0],"none":null}' &&
+    near(th.gateFight[0], 1, 1e-9) && th.gateFight[1] > 1.05 && near(th.gateFight[2], 0.5, 1e-9), JSON.stringify({ g: th.gate, f: th.gateFight }));
+  check('the damage dealer\'s own timed buff leaves the fight\'s baseline and counts only on the turns the rotation casts its skill',
+    th.timed.nt && !th.timed.kit && JSON.stringify(th.timed.events) === '["2/2","Transform/2"]' && th.timed.cast && th.timed.noCast, JSON.stringify(th.timed));
+  check('gauge sources: a fill-to gives more Highlights; Spotlight and Aran\'s A4 are lines; Prosperity\'s 4-piece starts the gauge at 25',
+    th.fill.with > th.fill.base && th.gaugeLines.every(Boolean) && th.prosperity === 25, JSON.stringify({ f: th.fill, l: th.gaugeLines, p: th.prosperity }));
+  check('a damage dealer\'s own damage bonus reaches only the hits it names: +100% on Skill 3 raises the skill damage by up to half, a Highlight amp leaves skills alone, a window after the Highlight counts only then, and a per-foe-fewer bonus counts the foes',
+    th.ownBonus.s3 > 1.2 && th.ownBonus.s3 < 1.5 + 1e-9 && near(th.ownBonus.hl, 1.5, 1e-6) && near(th.ownBonus.hlSkill, 1, 1e-9) && th.ownBonus.win > 1.01 && th.ownBonus.win < 1.6 && th.ownBonus.fewer > 1.05 && th.ownBonus.bad.length === 0, JSON.stringify(th.ownBonus));
+  check('lufel\'s "1 / 2" rotation turns alternate Skill 1 and Skill 2 instead of always reading Skill 1',
+    th.alt.akechi === '1 3 2 3 1 3 2 3 1 3 2 3' && !th.alt.left, JSON.stringify(th.alt));
+  check('the damage dealer\'s own party buff reaches them before their hit, a line marked own: false or cast on one ally does not, and what their skill makes the foe take counts on that skill\'s own hit (Woof Woof Blaze, measured in game), while their own DEF cut lands after it: a 1-turn one is too late, a 2-turn one meets the next',
+    th.selfLines.party > 1.1 && th.selfLines.passive > 1.1 && near(th.selfLines.notOwn, 1, 1e-9) && near(th.selfLines.ally, 1, 1e-9) && th.selfLines.foe1 > 1.1 && near(th.selfLines.foe1, th.selfLines.foe2, 1e-9) &&
+    near(th.selfLines.def1, 1, 1e-9) && th.selfLines.def2 > 1.05, JSON.stringify(th.selfLines));
+  check('Runa\'s Cerberus Claws is not in her stats; in the fight it is ATK through Peppy Guard Dog (23% ailment accuracy, 13.8% ATK), set off by an Electric teammate\'s skill and never by a Physical one',
+    th.claws && !th.claws.stats && JSON.stringify(th.claws.timed) === '["atkPct",13.8]' && th.claws.elec > 1.01 && near(th.claws.phys, 1, 1e-9), JSON.stringify(th.claws));
+  check('a fight-only stat line (set off by a Highlight or by another ally) stays out of stats and build scores and reaches the fight; a stacking one adds a permanent stack each time',
+    !th.fightOnly.stats && th.fightOnly.fight && JSON.stringify(th.fightOnly.stack.ev) === '["Infinity/3"]' && th.fightOnly.stack.more, JSON.stringify(th.fightOnly));
+  check('the twins\' mask pairs: Strategist keeps its party ATK, Medic gets the party damage passive, Saboteur the DEF down and damage taken and no party ATK, Guardian (tried only for a DEF or HP kit) the party DEF; the fight plays the best pair',
+    th.pairs.ids === 'MA,MS,SL,SA' && th.pairs.offered.join(' | ') === 'MA,MS,SL | MA,MS,SL,SA | MA,MS,SL,SA' && th.pairs.SA.some(x => x.startsWith('defPct:')) && th.pairs.MA.includes('atkPct:30.0') && !th.pairs.MA.includes('dm:24.0') && th.pairs.MS.includes('dm:24.0') && !th.pairs.MS.includes('atkPct:30.0') &&
+    th.pairs.SL.some(x => x.startsWith('defdown:')) && th.pairs.SL.includes('dm:24.0') && !th.pairs.SL.some(x => x.startsWith('atkPct')) && !!th.pairs.best, JSON.stringify(th.pairs));
+  check('Beachflower Minami\'s medicines: her ⓘ turns cast them, each slot holds a different medicine at her medicine effect increase with Blossoms by the Beach\'s +15% ATK, Wavecatcher Miyu gets the Resonance one and Ichigo the damage-over-time one, the fight plays them, and the rotation names them',
+    th.meds.toks === '2,iA|1,iC' && ['atkPct:36.0', 'dm:30.0', 'hlFinal:12.0'].every(x => th.meds.lines.includes(x)) && th.meds.lines.filter(x => x === 'atkPct:15.0').length === 3 &&
+    th.meds.judged === 0 && th.meds.miyu.length === 1 && th.meds.miyu.every(id => id.split('.').length === 3 && new Set(id.split('.')).size === 3 && id.split('.').includes('res')) &&
+    th.meds.ich.length === 1 && th.meds.ich.every(id => id.split('.').includes('dot')) && th.meds.best && /Resonance medicine, then Skill 2/.test(th.meds.text), JSON.stringify(th.meds));
+  check('Beachflower Minami: her Highlight makes her next medicine stronger (+9.8%, +5% more from A4), and Soothing Sunlight\'s stacks come two a Summer Garden and one a Gentle Sea Breeze, each cast\'s running out after 2 turns (two Summer Gardens in a row hold 4), the page reading the share of the 36% held',
+    Math.abs(th.medHl.b0 - 0.098) < 1e-9 && Math.abs(th.medHl.b4 - th.medHl.t4 - 0.05) < 1e-9 && th.medHl.hl > 0 && th.medHl.withB > th.medHl.noB &&
+    th.medHl.build && Math.abs(th.medHl.mean6 - 8 / 36) < 1e-9 && Math.abs(th.medHl.mean12 - 16 / 72) < 1e-9 && Math.abs(th.medHl.twice - 22 / 36) < 1e-9 &&
+    Math.abs(th.medHl.seatV - 36) < 1e-9 && th.medHl.seatUp > 0 && th.medHl.seatUp < 1, JSON.stringify(th.medHl));
+  check('with three foes an always-on debuff on one foe helps less than one on all foes',
+    th.oneConst[0] < th.oneConst[1] - 1e-6, JSON.stringify(th.oneConst));
+  check('a party buff only against one marked foe (foes: \'one\') helps an area damage dealer less with three foes, cast or always on, and the same with one; Wonder\'s Janosik casts carry it',
+    th.partyOne.f3[0] < th.partyOne.f3[1] - 1e-6 && th.partyOne.f3[2] < th.partyOne.f3[3] - 1e-6 &&
+    Math.abs(th.partyOne.f1[0] - th.partyOne.f1[1]) < 1e-9 && th.partyOne.text === false &&
+    th.partyOne.jan.n > 0 && th.partyOne.jan.one && th.partyOne.jan.data, JSON.stringify(th.partyOne));
+  check('effects that do not stack (excl): on one foe only the larger counts; with three foes the all-foe one reaches the others; the quick screen counts the smaller on uncovered turns only; Runa\'s Furrious Bark is one foe and Welcome Hug all foes',
+    Math.abs(th.excl.f1.excl - th.excl.f1.a) < 1e-9 && th.excl.f1.stack > th.excl.f1.excl + 1e-6 &&
+    th.excl.f3.excl > th.excl.f3.a + 1e-6 && th.excl.f3.stack > th.excl.f3.excl + 1e-6 &&
+    th.excl.drop[0] === '1,1' && th.excl.drop[1] === '2' && JSON.stringify(th.excl.quick) === '[0.75,0.25]' &&
+    th.excl.runa === '2:one,1:all,1:all', JSON.stringify(th.excl));
+  check('Almighty damage takes no weakness bonus (a teammate\'s weakness-damage buff leaves it alone); SKILL_DMG marks Akechi\'s and Starlight Ren\'s Almighty skills',
+    Math.abs(th.alm.almighty - 1) < 1e-9 && th.alm.normal > 1.05 && th.alm.skills[0] === '0011' && th.alm.skills[1] === '0010', JSON.stringify(th.alm));
+  check('SKILL_DMG FIXES: Pioneer Shun\'s Skill 1 is one boss\'s 83 (later hits 20%), Starlight Morgana\'s "3" half Waltz and half Crash! (72.7), Mio\'s Skill 3 between her two casts, Kiyoshi\'s Skill 2 without its Sacred Flame tick (a dot instead), YUI\'s Meta Dynamite +25% priced once (as a bonus)',
+    th.skillFix.shun === 83 && th.skillFix.morgana === 72.7 && th.skillFix.mio === 120.8 && th.skillFix.kiyoshi === 20.2 && th.skillFix.yui === 59.6 &&
+    th.skillFix.yuiBonus === '25' && th.skillFix.flame >= 1, JSON.stringify(th.skillFix));
+  check('a 4+-hit buff reaches only skills that hit that often; continuous-damage buffs reach skills that count as continuous damage, the separate multiplier exactly; a reserve passive counts while another Persona is in use',
+    Math.abs(th.hitsAs.fewHits - 1) < 1e-9 && th.hitsAs.manyHits > 1.05 && Math.abs(th.hitsAs.dotNo - 1) < 1e-9 && th.hitsAs.dotYes > 1.05 && Math.abs(th.hitsAs.dotFinal - 1.5) < 1e-6 &&
+    th.reserve[0] > th.reserve[1], JSON.stringify({ h: th.hitsAs, r: th.reserve }));
+  check('Wonder\'s seat marks a Persona whose passive works in reserve as such, and only that one (a 0% share of his turns read as "never used")',
+    th.offTurn.r.off === 'reserve' && th.offTurn.n.off == null, JSON.stringify(th.offTurn));
+  check('elemental ailments: a teammate\'s skill puts them on the boss, a per-ailment line grows with them, an ailMin line needs that many; Queen\'s Chief Strategist reads them, and Chizuko keeps more on the boss than Queen alone',
+    th.ail.with > th.ail.none + 1e-6 && Math.abs(th.ail.none - th.ail.bare) < 1e-9 && th.ail.mean >= 1.5 && th.ail.min2 > th.ail.bare + 1e-6 && Math.abs(th.ail.min3 - th.ail.bare) < 1e-9 &&
+    th.ail.chief && th.ail.queenVino > th.ail.queenAlone && th.ail.sources >= 25 && !th.ail.bad.length, JSON.stringify(th.ail));
+  check('Technicals: a line needing a Burning foe does nothing until a teammate Burns it; Technical Precision raises an Iceburn-type line by 1 + TP/2000 and a Fireburn-type bonus by 1 + TP/1000, matching lufel\'s guide (Cold Flames 68.1% → 102.15% at 1000, 113.9% at 1343; Rin\'s Fireburn 20% → 40%)',
+    near(th.tech.noBurn, 1, 1e-9) && th.tech.burn > 1.05 && near(th.tech.bare, 1, 1e-9) && near(th.tech.taken, th.tech.plain60, 1e-9) && th.tech.fb > 1.05 && near(th.tech.fb, th.tech.fb40, 1e-9) &&
+    near(th.tech.guide[0], 102.15, 1e-9) && Math.abs(th.tech.guide[1] - 113.9) < 0.1 && near(th.tech.guide[2], 40, 1e-9), JSON.stringify(th.tech));
+  check('Mio\'s Scald, Cold Flames and weapon wait for a Burning foe on the quick screen too (a member who Burns brings them in), her Scald only renews a Burn, and every needAil names an elemental ailment; Fireburn is a multiplier of its own (×1.2 grows to exactly ×1.4 at 1000 points, beating the same 40% added into ⓑ) on every kit that has it',
+    th.tech.mioNeed.includes('tp') && th.tech.mioNeed.includes('dm:taken') &&
+    near(th.tech.fa, th.tech.fa40, 1e-9) && th.tech.fa > th.tech.fb + 0.01 && th.tech.fireAmp.length >= 6 && th.tech.fireAmp.every(x => x.endsWith(':true')) && th.tech.screen.both / th.tech.screen.burn > th.tech.screen.mio + 0.05 && th.tech.screen.burn > 1 &&
+    th.tech.scaldAlone === 0 && th.tech.koromaru > 0.9 && !th.tech.users.length && !th.tech.badNeed.length && th.tech.nNeed >= 10, JSON.stringify(th.tech));
+  check('Firecracker Rin below Awareness 2: the fit may cast Skill 2 (her only Burn) on up to 2 of 6 turns, never from Awareness 2; Prosperity in Red stays in her stats but leaves the fight\'s baseline for its Burn-gated line; beside Mio the fight puts the Burn on and fits Mio to it, and her Burn lines are worth a real share',
+    th.rinA0.any0 && th.rinA0.tw0 <= 2 && th.rinA0.tw2 === 0 && th.rinA0.prosp.stats && !th.rinA0.prosp.baseline && th.rinA0.prosp.ailSelf &&
+    th.rinA0.rin.includes('2') && th.rinA0.mio === 'fitted' && th.rinA0.with > th.rinA0.without * 1.1, JSON.stringify(th.rinA0));
+  check('Wonder acts just before the damage dealer while his Speed is unset, and by the entered Speed once set',
+    th.wonderSpd.unset[1] && th.wonderSpd.unset[0] > 0 && th.wonderSpd.unset[0] < 0.1 && !th.wonderSpd.slow[1], JSON.stringify(th.wonderSpd));
+  check('Wonder\'s casts are placed on the damage dealer\'s heavy turns: Sraosha\'s unique on Kasumi\'s Highlight turns 3 and 6, its God\'s Ear stacks full (3) for her',
+    th.sraosha.kasRot.split(',')[2].includes('HL') && th.sraosha.kasRot.split(',')[5].includes('HL') && th.sraosha.seq.split(',')[2] === 'w0' && th.sraosha.seq.split(',')[5] === 'w0' && th.sraosha.stacks === '18', JSON.stringify(th.sraosha));
+  check('Sahimochi-no-Kami: its Resonance amplification multiplies Resonance damage exactly (a separate multiplier), and its Serrated stacks count only for a damage dealer whose Resonance fires',
+    Math.abs(th.sahimochi.resFinal - 1.5) < 1e-6 && th.sahimochi.key && th.sahimochi.miyu && !th.sahimochi.ann, JSON.stringify(th.sahimochi));
+  check('Pazuzu is offered and keeps the foe Cursed: Toshiya\'s Cursed-foe bonus rises with it, to the full bonus when the Curse never lapses',
+    th.pazuzu.lines === 'curse' && th.pazuzu.offered && th.pazuzu.with > th.pazuzu.base && Math.abs(th.pazuzu.full - 50) < 1e-6, JSON.stringify(th.pazuzu));
+  check('Shoki\'s Improv states give the main target crit damage, pierce, damage over time or Technical Precision, one per state; Chilling Intensity\'s ATK only for a kit that activates Technicals',
+    th.shoki.ids === 'E,T,B,C' && th.shoki.E === 'cm' && th.shoki.T === 'pierce' && th.shoki.B === 'dotDm' && th.shoki.C === 'tp,atkPct' && th.shoki.Cnon === 'tp', JSON.stringify(th.shoki));
+  check('Wonder: innate skills count as their card, the suggestion is three Personas with the skill cards each has learned (none by default), a skill from two sources counts once, and his six turns name the Persona',
+    th.wonder3.innate && th.wonder3.sugN === 3 && !th.wonder3.sugCards && th.wonder3.adds === 3 && th.wonder3.once && th.wonder3.turns && th.wonder3.listed, JSON.stringify(th.wonder3));
+  check('Wonder: an attack turn names the skill it uses (Vishnu for Queen: Wind of Nirvana, not a basic attack)',
+    th.wonder3.visAttack.length > 0 && th.wonder3.visAttack.every(s => s === 'Wind of Nirvana'), JSON.stringify(th.wonder3.visAttack));
+  check('Wonder: an on-cast passive fires only on the casts its trigger names — never an ally one on an attack turn; a Persona with an ally skill recasts it on idle turns, which do not hit the boss',
+    th.castOn.f === 0 && th.castOn.fTurns === 3 && th.castOn.a === 1 && th.castOn.aAgain === 4 && th.castOn.aSeq === 4 && th.castOn.g === 1 && th.castOn.gTurns === 4, JSON.stringify(th.castOn));
+  check('Wonder: Ice Age\'s Ancient Frost is on for the first 3 turns and lasts longer only while he casts a skill on an ally alone — an attack or a skill on a foe that buffs allies does not renew it',
+    Math.abs(th.frost.none.up - 3 / th.frost.F) < 1e-9 && Math.abs(th.frost.m.up - 3 / th.frost.F) < 1e-9 && th.frost.m.on === 'wStart' &&
+    th.frost.a.up === 1 && /^wStart,w\d$/.test(th.frost.a.on) && Math.abs(th.frost.m.fight - 3 / th.frost.F) < 1e-9 && th.frost.a.fight > 0.9, JSON.stringify(th.frost));
+  check('Wonder: only his lead Persona (slot 1) does what a Persona does at the start of battle — Koumokuten\'s buff, Janosik\'s Mark (from talent rank I, 2 turns, one foe, the same Mark Tatra Shot refreshes) — and Ex Machina\'s share needs a lead of the damage dealer\'s element',
+    th.lead.other && th.lead.same && th.lead.diff && th.lead.kL === 2 && th.lead.kB === 0 && th.lead.kBIdle &&
+    th.lead.jStart === 5 && th.lead.jBStart === 0 && th.lead.jShared === 5 && th.lead.j0Start === 0 && th.lead.jDur === '2,2,2,2,2' && th.lead.jOne &&
+    th.lead.fL > th.lead.fB && th.lead.leadL === 0 && th.lead.exSame === 1 && th.lead.exDiff === 0 && th.lead.exNone === 0, JSON.stringify(th.lead));
+  check('Wonder: the suggested setup puts in front the Persona that does most there — no other of its three leads to a higher price',
+    th.lead.sugOrder.alt.every(v => v <= th.lead.sugOrder.v + 1e-9), JSON.stringify(th.lead.sugOrder));
+  check('Wonder: the suggestion also fights the Personas that take none of his turns, so a reserve passive is not crowded out of the shortlist by Personas that want a turn',
+    th.wbIdle.sh === 'T0,T1,T2,T3,T4,T5,R,R2,R3', JSON.stringify(th.wbIdle));
+  check('Wonder: a Persona not out on Global yet (lufel\'s GLB schedule) is never offered, suggested or kept from a save, and the setup says which',
+    th.unrel.un.length > 0 && th.unrel.priced > 0 && !th.unrel.offered.length && !th.unrel.suggested.length && !th.unrel.inSelect.length &&
+    th.unrel.kept[0] === '' && th.unrel.kept[1] === 'Succubus' && th.unrel.un.every(n => th.unrel.note.includes(n)), JSON.stringify(th.unrel));
+  {
+    const P = th.personas, has = (s, x) => s.split(' ').includes(x);
+    check('Personas section: the first time every Persona out on Global is owned and saved, none that is not',
+      P.first.all && P.first.noUnrel && P.first.saved, JSON.stringify(P.first));
+    check('Personas section: a talent rank takes lufel\'s value at that rank, and a clause the talent gains later is not there yet (Janosik, Shiva)',
+      has(P.jTop, 'cr:4.5') && has(P.jTop, 'defdown:12') && !has(P.jBase, 'cr:4.5') && !has(P.jBase, 'defdown:12') && has(P.jBase, 'atkPct:20') &&
+      has(P.sTop, 'defdown:45') && has(P.sBase, 'defdown:30') && !has(P.sBase, 'defdown:45'), JSON.stringify(P));
+    check('Personas section: skill level 6 takes the unique skill\'s level-6 values; an innate skill counts from the level it is learned at',
+      P.sSk6 !== P.sTop && P.innOn && P.innOff, JSON.stringify({ sTop: P.sTop, sSk6: P.sSk6, inn: P.inn, innSk: P.innSk, at: P.at }));
+    check('Personas section: a skill card is its Persona\'s (once, priced cards only); a Persona not owned is never offered or suggested and leaves the setup; a saved collection round-trips',
+      P.aliceCards === 'Rebellion,,' && P.setupAfter === ',Alice,' && !P.sug.includes('Shiva') && !P.offered && P.same && P.missing, JSON.stringify(P));
+  }
+  {
+    const W = th.weapons;
+    check("Wonder's weapons: the first time every weapon is obtained at R0 and the setup's weapon keeps its refinement; a saved list round-trips, a weapon with no record is not obtained and leaves the setup",
+      W.first.all && W.first.kept && W.first.others && W.first.saved === '{"refine":5}' && W.same && W.missing && W.dropped, JSON.stringify(W));
+    check("Wonder's weapons: the suggestion tries each obtained weapon at its own refinement (B at R6 beats A, at R0 it does not) and never one not obtained",
+      W.r0 === 'A 1' && W.r6 === 'B 7' && W.noB === 'A 1', JSON.stringify(W));
+    check("Wonder's weapons: the Teams tab offers obtained weapons; a weapon picked there takes its refinement from the list, and a refinement set there writes it",
+      W.offered === 'A,B' && W.takes === 3 && JSON.stringify(W.writes) === '[6,6]' && W.back === 7, JSON.stringify(W));
+    check("Wonder's weapons have their own tab, grouped with Teams and Personas under Team building; Optimise, Inventory, Triage and Upgrades sit under Revelation cards",
+      W.tab.shown && W.tab.rows && W.tab.notOnPersonas && W.tab.groups === 'Revelation cards:opt,inv,triage,upgrades|Team building:teams,personas,weapons', JSON.stringify(W.tab));
+  }
+  check('Kira\'s Bleed counts its Almighty part at the cap (60% of ATK a stack, no crit), so damage over time is most of his damage',
+    th.kira.entry && th.kira.dot > 0.45, JSON.stringify(th.kira));
+
+  // Wonder: one action a turn shared among his active skills; his setup is saved with the account
+  const tw = await p.evaluate(() => {
+    const ann = charDef('Ann Takamaki');
+    const keep = state.wonder;
+    const fake = { personas: {}, cards: {}, weapons: {} };
+    const real = Object.assign({}, WONDER_BUFFS);
+    const out = {};
+    // three 2-turn cards ask for 9 actions in 6: each is up two-thirds of the time
+    const card = (k, v) => [{ k, v, to: 'party', src: 'card', dur: 2, why: 't' }];
+    Object.assign(WONDER_BUFFS, { cards: { A: card('atk%', 30), B: card('dmg', 30), C: card('cr', 30) }, personas: { P: [{ k: 'dmg', v: [10, 20, 30], to: 'party', src: 'passive', why: 'p' }], Q: [{ k: 'cm', v: 40, to: 'party', src: 'passive', why: 'q' }] }, weapons: { W: [{ k: 'defdown', ladder: [1, 2, 3, 4, 5, 6, 7], to: 'enemy', src: 'weapon', why: 'w' }] } });
+    const slot = (name, cards) => ({ name, cards: cards || ['', '', ''] }), none = slot('');
+    const r = tcWonder(ann, { personas: [slot('P', ['A', 'B', 'C']), none, none], weapon: 'W', refine: 3 });
+    // a Persona's passive counts only for the turns it is in use: Q casts A (2 of 6 turns... 3 actions), P takes the idle rest
+    const r2 = tcWonder(ann, { personas: [slot('P'), slot('Q', ['A', '', '']), none], weapon: '', refine: 1 });
+    out.split = r2.lines.map(l => [l.k, +l.up.toFixed(4)]);
+    out.cardless = tcWonder(ann, { personas: [none, { name: '', cards: ['A', '', ''] }, none], weapon: '', refine: 1 }).lines.length;
+    out.ups = r.lines.map(l => [l.k, +l.up.toFixed(4), l.v]);
+    out.busy = r.busy;
+    out.none = tcWonder(ann, { personas: [none, none, none], weapon: '', refine: 1 }).lines.length;
+    Object.assign(WONDER_BUFFS, real);
+    state.wonder = { persona: 'nope', cards: ['x'], weapon: 'y', refine: 99 };
+    out.clean = JSON.stringify(wonderSetup());
+    // a real setup goes through the save file and back
+    const pn = Object.keys(WONDER_BUFFS.personas)[0], cn = Object.keys(WONDER_BUFFS.cards)[0], wn = Object.keys(WONDER_BUFFS.weapons)[0];
+    state.wonder = { persona: pn, cards: [cn, '', ''], weapon: wn, refine: 4 };
+    // a save from before the Personas section: its skill cards move onto their Persona when it loads
+    const old = savePayload();
+    old.settings.wonder = state.wonder; delete old.settings.personas; delete old.settings.wonderWeapons;
+    const saved = JSON.stringify(old), keepPs = state.personas, keepWp = state.weapons;
+    state.wonder = {};
+    applySave(saved, '');
+    const e3 = { name: '', cards: ['', '', ''], fused: [] };
+    // an old one-Persona setup is not restored (the setup starts empty each visit), but its cards go onto the Persona and its
+    // refinement onto the weapon, and a new save holds no setup
+    out.trip = wonderEmpty(wonderSetup()) && JSON.stringify(personaRec(pn).cards) === JSON.stringify([cn]) && weaponRec(wn).refine === 4 &&
+      !('wonder' in savePayload().settings) && !!pn && !!cn && !!wn;
+    void e3;
+    hideToast();
+    state.wonder = keep; state.personas = keepPs; state.weapons = keepWp;
+    return out;
+  });
+  const up = (k) => (tw.ups.find(x => x[0] === k) || [])[1];
+  // three 2-turn cards ask for 9 of his 6 actions: the two worth most are kept up, the third gets none
+  const cardUps = ['atkPct', 'cr'].map(up).concat(tw.ups.filter(x => x[0] === 'dm' && x[2] === 30).map(x => x[1]).slice(0, 1));
+  check('Wonder\'s actions go to his most valuable skills first, a Persona\'s passives count only while it is in use, cards need their Persona, and an unknown or old setup is read right',
+    tw.busy && cardUps.filter(u => u === 1).length === 2 && cardUps.filter(u => u === undefined).length === 1 &&
+    tw.ups.some(x => x[0] === 'defdown' && x[2] === 3 && x[1] === 1) && tw.none === 0 &&
+    tw.clean === JSON.stringify({ personas: [0, 1, 2].map(() => ({ name: '', cards: ['', '', ''], fused: [] })), weapon: '', refine: 7 }) && tw.trip &&
+    JSON.stringify(tw.split.slice().sort()) === JSON.stringify([['atkPct', 1], ['cm', 0.5], ['dm', 0.5]]) && tw.cardless === 0, JSON.stringify(tw));
+
+  await p.evaluate(() => { tmPick = {}; $('#tmBasis').value = 'calc'; $('#tmChar').value = 'Yusuke Kitagawa'; renderTeams(); });
+  const tcPage = await p.evaluate(() => {
+    const r = tcTeams('Yusuke Kitagawa'), s = r.team.seats;
+    const avail = s.filter(x => x.name).every(x => !tmWhyOut(x.name));
+    const roles = s.map(x => x.seat).join('');
+    const fuukaOk = (s[3].name === 'Fuuka Yamagishi') === s.some(x => x.seat === 'b');
+    const sorted = r.list.every((t, i) => !i || t.calc.mult <= r.list[i - 1].calc.mult + 1e-9);
+    return { avail, roles, fuukaOk, sorted, best: r.team.calc.mult, top: r.list[0].calc.mult, text: $('#tmOut').innerText.slice(0, 400), lufel: r.team.calc.lufel };
+  });
+  check('the calculated basis seats the best-valued team of available characters, a backup only beside Fuuka, and prices lufel\'s team for comparison',
+    tcPage.avail && /^fffe(b)?w$/.test(tcPage.roles) && tcPage.fuukaOk && tcPage.sorted && Math.abs(tcPage.best - tcPage.top) < 1e-9 &&
+    /Calculated from the kits/.test(tcPage.text) && !!tcPage.lufel, JSON.stringify(tcPage).slice(0, 700));
+
+  // Wonder's Personas can be marked busy like characters: the one clicked is left out of the
+  // suggestion and of his own setup here, listed with the busy characters, kept in the prefs
+  const wpKeep = await p.evaluate(() => {
+    const keep = JSON.stringify(state.wonder || null);
+    const best = tcTeams('Yusuke Kitagawa').team.seats.find(s => s.wonder).wonder.best;
+    const name = best.personas[0].name;
+    state.wonder = { personas: [{ name, cards: ['', '', ''] }, { name: '', cards: ['', '', ''] }, { name: '', cards: ['', '', ''] }], weapon: '', refine: 1 };
+    commit(); renderTeams();
+    return { keep, name };
+  });
+  await p.click(`#tmOut [data-tm-busy-p="${wpKeep.name}"]`, { timeout: 120000 });
+  const wpBusy = await p.evaluate(n => {
+    const w = tcTeams('Yusuke Kitagawa').team.seats.find(s => s.wonder).wonder;
+    const pr = collectPrefs(); tmBusyP = new Set(); applyPrefs(pr);
+    return { sug: w.best.personas.map(x => x.name), lines: tcWonder(charDef('Yusuke Kitagawa')).lines.length, chip: $('#tmBusy').innerText,
+      seat: $('#tmOut').innerText, prefs: [...tmBusyP], opt: [...$('#tmWP1').options].some(o => o.value === n && /busy elsewhere/.test(o.text)) };
+  }, wpKeep.name);
+  check('a Persona marked busy on Wonder\'s seat is left out of the suggestion and of his setup here, listed as busy, and kept in the prefs',
+    !wpBusy.sug.includes(wpKeep.name) && wpBusy.sug.filter(Boolean).length === 3 && wpBusy.lines === 0 && wpBusy.chip.includes(wpKeep.name) &&
+    /busy in another team, so it and its skill cards are not counted here/.test(wpBusy.seat) && wpBusy.opt &&
+    wpBusy.prefs.length === 1 && wpBusy.prefs[0] === wpKeep.name, JSON.stringify(wpBusy).slice(0, 500));
+  // (this recalculation runs about 30 s on the test inventory, measured Nov 2026, so the click gets more than the default 30 s)
+  await p.click(`#tmBusy [data-tm-unbusy-p="${wpKeep.name}"]`, { timeout: 120000 });
+  const wpFree = await p.evaluate(() => ({ busy: tmBusyP.size, lines: tcWonder(charDef('Yusuke Kitagawa')).lines.length }));
+  check('making a busy Persona available again counts it again', wpFree.busy === 0 && wpFree.lines > 0, JSON.stringify(wpFree));
+  await p.evaluate(k => { state.wonder = JSON.parse(k); commit(); renderTeams(); }, wpKeep.keep);
+
+  // the suggested weapon is the best he owns for the suggested Personas, by the fight the page shows: every owned
+  // weapon is fought there (only the quick screen's best three were, with lufel's rotations as written, which kept
+  // Glimmer over Arc Knife and Starry Compass for Queen on the real save)
+  const wpWeapon = await p.evaluate(() => {
+    const d = 'Yusuke Kitagawa', D = charDef(d);
+    const res = tcTeams(d), names = res.team.calc.key.slice(5).split('|').map(x => x || null);
+    const best = res.team.seats.find(s => s.wonder).wonder.best;
+    const rows = tcHot(() => wonderWeapons().map(k => {
+      const S = JSON.parse(JSON.stringify(best)); S.weapon = k; S.refine = weaponRec(k).refine;
+      return [k, tcSim(D, names, tmFitOn(), false, S).mult];
+    }), D);
+    const top = Math.max(...rows.map(r => r[1]));
+    return { weapon: best.weapon, n: rows.length, mine: (rows.find(r => r[0] === best.weapon) || [])[1], top, beat: rows.filter(r => r[1] > top - 1e-9).map(r => r[0]) };
+  });
+  check('Wonder\'s suggested weapon is the best he owns for the suggested Personas at the page\'s fit, every owned weapon tried',
+    wpWeapon.n > 3 && wpWeapon.mine != null && wpWeapon.mine > wpWeapon.top - 1e-9, JSON.stringify(wpWeapon));
+
+  // nothing under Wonder's setup: he adds nothing and nothing is counted for him; his best setup is only suggested, and
+  // counts once Use it puts it under his setup. Opening the Teams tab empties an entered setup, undoably, and a setup
+  // is not part of the save, so neither marks unsaved changes
+  const wa = await p.evaluate(() => {
+    const d = 'Yusuke Kitagawa', keep = JSON.stringify(state.wonder || null);
+    tmPick = {}; state.wonder = wonderFrom({}); commit(); markSaved();
+    const e = tcTeams(d), we = e.team.seats.find(s => s.wonder);
+    $('#tmBasis').value = 'calc'; $('#tmChar').value = d; renderTeams();
+    const seatText = $('#tmOut').innerText, useBtn = !!$('#tmOut [data-tm-wonder]');
+    state.wonder = JSON.parse(JSON.stringify(we.wonder.best)); commit();
+    const dirty = isDirty();
+    const h = tcTeams(d).team.seats.find(s => s.wonder);
+    const before = JSON.stringify(wonderSetup());
+    showTab('roster'); showTab('teams');
+    const opened = { empty: wonderEmpty(wonderSetup()), toast: $('#toast') ? $('#toast').innerText : '' };
+    undo();
+    const back = JSON.stringify(wonderSetup()) === before;
+    hideToast(); showTab('roster');
+    state.wonder = JSON.parse(keep) || {}; commit();
+    return { emptyPart: we.part, lines: (we.lines || []).length, set: !wonderEmpty(we.wonder.setup), hasBest: !wonderEmpty(we.wonder.best),
+      noAssumed: !('assumed' in we.wonder), shown: /Nothing set, so he adds nothing/.test(seatText), useBtn, dirty,
+      usedPart: h.part, opened, back };
+  });
+  check('with nothing under Wonder\'s setup he adds nothing and his best setup is only suggested, counted once entered; opening the Teams tab empties his setup undoably, and it is not saved',
+    wa.emptyPart === 1 && wa.lines === 0 && !wa.set && wa.hasBest && wa.noAssumed && wa.shown && wa.useBtn && !wa.dirty && wa.usedPart > 1 &&
+    wa.opened.empty && /Wonder's setup was cleared: the Teams tab was opened/.test(wa.opened.toast) && wa.back, JSON.stringify(wa));
+
+  // the page: a per-factor summary line per member with the kit lines folded under it, the next
+  // teams and lufel's priced against the shown one, synergies named once, rotation options folded
+  const tcView = await p.evaluate(() => {
+    const out = $('#tmOut');
+    const sums = [...out.querySelectorAll('.tmSeat:not(.fixed) .tcSum')].map(x => x.innerText);
+    // the damage dealer's own seat: what their damage in the fight was made of, in shares
+    const own = (out.querySelector('.tmSeat.fixed .tcSum') || {}).innerText || '';
+    const note = (out.querySelector('.tmHlNote') || {}).innerText || '';
+    const seatRows = [...out.querySelectorAll('.tmSeats .tmSeat')].slice(1);
+    const folded = seatRows.filter(tr => tr.querySelector('.tcSum')).every(tr => /Where it comes from \(\d+ lines?\)/.test(tr.innerText));
+    const rel = [...out.querySelectorAll('.tmParty')].map(x => x.innerText);
+    const rotOpen = [...out.querySelectorAll('.tmMember')].map(m => [...m.querySelectorAll('.tmRot')].filter(g => !g.closest('details')).length);
+    // a sentence both pages carry (Fuuka's about Kumi, Kumi's about Fuuka) is one synergy
+    const items = tmSynergyItems(new Set(['Fuuka Yamagishi', 'Kumi Katayama', 'Yusuke Kitagawa']), 'Kumi Katayama');
+    return { sums, own, note, folded, rel, rotOpen, items, lufelRel: /comes to ×[\d.]+ \([+−]\d+\.\d%\)/.test(out.innerText) };
+  });
+  check('each calculated member reads a per-factor summary first, with the kit lines folded under it',
+    tcView.sums.length >= 2 && tcView.sums.every(s => /(ATK|damage|crit|Pierce|DEF) [+−]\d/.test(s)) && tcView.folded, JSON.stringify(tcView.sums).slice(0, 300));
+  check('the damage dealer\'s seat shows what their own damage in the fight was made of, and the headline says how the fight went',
+    /skills \d+%/.test(tcView.own) && /\d+-round fight/.test(tcView.note) && /Highlights and Theurgies used/.test(tcView.note), JSON.stringify({ own: tcView.own, note: tcView.note }).slice(0, 400));
+  check('the next teams and lufel\'s team are shown against the chosen one, in percent',
+    tcView.rel.length > 0 && tcView.rel.every(r => /\([+−]\d+\.\d%\)/.test(r)) && tcView.lufelRel, JSON.stringify(tcView.rel).slice(0, 300) + ' ' + tcView.lufelRel);
+  check('a member\'s rotation shows one option open and folds the others', tcView.rotOpen.length > 0 && tcView.rotOpen.every(n => n <= 1), JSON.stringify(tcView.rotOpen));
+  check('a synergy both pages carry the same sentence for is listed once, keeping the Awareness note',
+    tcView.items.length === 1 && /needs Awareness 6/.test(tcView.items[0]), JSON.stringify(tcView.items));
+
+  // ---- fitting a rotation to the team (tcRotFit): lufel's skeleton, plain turns re-chosen ----
+  const tcFit = await p.evaluate(() => {
+    const plain = /^[1-3]$/;
+    const dpsOf = e => CHARACTERS.find(c => c.e === e && TM_DPS.includes(c.arch));
+    const fire = dpsOf('Fire'), elec = dpsOf('Electric'), ice = dpsOf('Ice');
+    $('#tmRotFit').checked = true;
+    // Koromaru writes one rotation per element: the fit takes the damage dealer's
+    const koro = [fire, elec, ice].map(d => {
+      const m = tcMember(d, 'Koromaru', tcTeamSet(d.n, ['Koromaru', null, null]), null, true);
+      return { e: d.e, seq: m.rot ? m.rot.seq.join(' ') : null, off: m.lines.filter(l => l.offRot).length, shared: m.lines.filter(l => /Skills 1-3/.test(l.why)).map(l => l.up) };
+    });
+    // invariants over every priced member for one damage dealer: structural turns kept, plain
+    // counts within lufel's per-turn frequencies, never worse than lufel's first option
+    const bad = [];
+    const d = charDef('Yusuke Kitagawa');
+    let fitted = 0;
+    for (const n of Object.keys(TEAM_BUFFS)) {
+      if (n === d.n || !(TEAMS[n] || {}).rot) continue;
+      const team = tcTeamSet(d.n, [n, null, null]);
+      const m = tcMember(d, n, team, null, true), r = tmRotPick(n, team);
+      if (!m.rot) continue;
+      fitted++;
+      const F = m.rot, base = r.pick[F.base.index];
+      if (F.seq.length !== base.seq.length) bad.push(n + ' length');
+      base.seq.forEach((t, i) => { if (!plain.test(t) && F.seq[i] !== t) bad.push(n + ' structural turn ' + (i + 1)); });
+      F.changed.forEach(i => { if (F.seq[i] === base.seq[i] || !plain.test(F.seq[i])) bad.push(n + ' change ' + (i + 1)); });
+      const toks = [...new Set(r.pick.flatMap(b => b.seq.filter(t => plain.test(t))))];
+      for (const t of toks) {
+        const f = F.seq.filter(x => x === t).length / F.seq.length;
+        const fs = r.pick.map(b => b.seq.filter(x => x === t).length / b.seq.length);
+        if (f < Math.min(...fs) - 1e-9 - 1 / F.seq.length || f > Math.max(...fs) + 1e-9 + 1 / F.seq.length) bad.push(n + ' frequency of ' + t);
+      }
+      if (F.seq.some(t => plain.test(t) && !toks.includes(t))) bad.push(n + ' a skill lufel never writes');
+      if (F.gain < -1e-9) bad.push(n + ' worse than lufel');
+      if (F.same && F.gain !== 0) bad.push(n + ' same but gains');
+    }
+    // a rotation that wastes a 2-turn buff by casting it on consecutive turns is re-ordered
+    const keepT = TEAMS['Ryuji Sakamoto'], keepB = TEAM_BUFFS['Ryuji Sakamoto'];
+    TEAMS['Ryuji Sakamoto'] = { rot: [{ aw: 0, label: 'Test', seq: ['3', '3', '1', '1', '3', '1'] }] };
+    TEAM_BUFFS['Ryuji Sakamoto'] = [{ k: 'dmg', v: 20, to: 'enemy', src: '3', on: '3', dur: 2, why: 'test: a 2-turn debuff from Skill 3' }];
+    tcMemo.key = '';
+    const team = tcTeamSet(d.n, ['Ryuji Sakamoto', null, null]);
+    const on = tcMember(d, 'Ryuji Sakamoto', team, null, true), off = tcMember(d, 'Ryuji Sakamoto', team, null, false);
+    const re = { seq: on.rot && on.rot.seq.join(' '), gain: on.rot && on.rot.gain, changed: on.rot && on.rot.changed,
+      upOn: on.lines[0].up, upOff: off.lines[0].up, offRot: off.rot, counts: on.rot && ['1', '3'].map(t => on.rot.seq.filter(x => x === t).length) };
+    // the lineup prices the fitted rotation, and the pref switches it off
+    const withFit = tcLineup(d, ['Ryuji Sakamoto', null, null]).mult;
+    $('#tmRotFit').checked = false;
+    const noFit = tcLineup(d, ['Ryuji Sakamoto', null, null]).mult;
+    const noRot = tcLineup(d, ['Ryuji Sakamoto', null, null]).members[0].rot;
+    $('#tmRotFit').checked = true;
+    const prefOn = collectPrefs().tmRotFit;
+    applyPrefs({ tmRotFit: false }); const prefOff = $('#tmRotFit').checked;
+    $('#tmRotFit').checked = true;
+    TEAMS['Ryuji Sakamoto'] = keepT; TEAM_BUFFS['Ryuji Sakamoto'] = keepB; tcMemo.key = '';
+    return { koro, bad, fitted, re, withFit, noFit, noRot, prefOn, prefOff };
+  });
+  check('Koromaru\'s rotation follows the damage dealer\'s element, and his shared damage line counts whichever skill it is',
+    tcFit.koro[0].seq === 'TH+1 1 TH+1 1 TH+1 1' && tcFit.koro[1].seq === 'TH+2 2 TH+2 2 TH+2 2' && tcFit.koro[2].seq === 'TH+3 3 TH+3 3 TH+3 3' &&
+    tcFit.koro.every(k => k.shared.length === 1 && k.shared[0] === 1), JSON.stringify(tcFit.koro));
+  check('a fitted rotation keeps lufel\'s structural turns, stays within lufel\'s skill frequencies, introduces no skill lufel never writes, and is never worse than lufel\'s first option',
+    tcFit.bad.length === 0 && tcFit.fitted >= 5, JSON.stringify(tcFit.bad).slice(0, 400) + ' fitted ' + tcFit.fitted);
+  check('a 2-turn buff cast on consecutive turns is re-ordered to lapse first, with the same skill counts; the lineup prices it, and the pref turns it off',
+    tcFit.re.seq === '3 1 3 1 3 1' && tcFit.re.gain > 0 && tcFit.re.changed.length === 2 && Math.abs(tcFit.re.upOn - 1) < 1e-9 && Math.abs(tcFit.re.upOff - 5 / 6) < 1e-9 &&
+    tcFit.re.offRot === null && JSON.stringify(tcFit.re.counts) === '[3,3]' && tcFit.withFit > tcFit.noFit && tcFit.noRot === null && tcFit.prefOn === true && tcFit.prefOff === false,
+    JSON.stringify(tcFit.re) + ' ' + tcFit.withFit + ' ' + tcFit.noFit + ' ' + tcFit.prefOn + ' ' + tcFit.prefOff);
+  // the page: a changed turn is highlighted and the panel says what was fitted; off, lufel's as written
+  const tcFitPage = await p.evaluate(() => {
+    const d = 'Yusuke Kitagawa';
+    const keepT = TEAMS['Ryuji Sakamoto'], keepB = TEAM_BUFFS['Ryuji Sakamoto'], keepOwned = state.chars['Ryuji Sakamoto'].owned;
+    TEAMS['Ryuji Sakamoto'] = { rot: [{ aw: 0, label: 'Test', seq: ['3', '3', '1', '1', '3', '1'] }] };
+    TEAM_BUFFS['Ryuji Sakamoto'] = [{ k: 'dmg', v: 20, to: 'enemy', src: '3', on: '3', dur: 2, why: 'test: a 2-turn debuff from Skill 3' }];
+    state.chars['Ryuji Sakamoto'].owned = true;
+    tcMemo.key = ''; tmPick = {};
+    const elu = tcTeams(d).team.seats.find(s => s.seat === 'e').name;
+    tmPick[d] = { key: 'calc:Ryuji Sakamoto||' + elu, seats: {} };
+    $('#tmBasis').value = 'calc'; $('#tmChar').value = d; $('#tmRotFit').checked = true;
+    renderTeams();
+    const panel = () => [...$$('#tmOut .panel')].find(x => /^rotation$/i.test((x.querySelector('h2') || {}).innerText || ''));
+    // the turns highlighted on Ryuji's card (the Elucidator's own fit may highlight hers)
+    const hot = () => { const m = [...panel().querySelectorAll('.tmMember')].find(x => /Ryuji Sakamoto/.test(x.innerText)); return m ? m.querySelectorAll('.tmRot .t.fit').length : -1; };
+    const on = { hot: hot(), text: panel().innerText };
+    $('#tmRotFit').checked = false; renderTeams();
+    const off = { hot: hot(), text: panel().innerText };
+    $('#tmRotFit').checked = true; tmPick = {};
+    TEAMS['Ryuji Sakamoto'] = keepT; TEAM_BUFFS['Ryuji Sakamoto'] = keepB; state.chars['Ryuji Sakamoto'].owned = keepOwned; tcMemo.key = '';
+    renderTeams();
+    return { on, off };
+  });
+  check('the Rotation panel highlights the changed turns and names the gain; with the fit off it shows lufel\'s as written',
+    tcFitPage.on.hot === 2 && /Fitted to this team/.test(tcFitPage.on.text) && /\+\d+\.\d% team damage/.test(tcFitPage.on.text) && /turns 2, 3 re-chosen/.test(tcFitPage.on.text) &&
+    tcFitPage.off.hot === 0 && !/Fitted to this team/.test(tcFitPage.off.text) && /as written/.test(tcFitPage.off.text),
+    JSON.stringify({ on: tcFitPage.on.hot, off: tcFitPage.off.hot, t: tcFitPage.on.text.slice(0, 300) }));
+
+  // the memo: what a render remembers is keyed on the save, so a change made without commit()
+  // (as these tests make them) is still seen, and a plain repeat is served from memory
+  const tcMemoT = await p.evaluate(() => {
+    const d = charDef('Ann Takamaki'), atk = { atkPct: 50 };   // an ATK kit: an ATK buff reaches her ⓐ
+    const a = tcMultiplier(d, [atk]);
+    const keepLo = state.chars[d.n].loadout;   // Awareness 6 adds 15% ATK to her base, so the same buff is worth a different ratio
+    state.chars[d.n].loadout = Object.assign({}, DEFAULT_LOADOUT, { weapon: '4', awareness: 6 });
+    const b = tcMultiplier(d, [atk]);
+    state.chars[d.n].loadout = keepLo;
+    const c = tcMultiplier(d, [atk]);
+    const t0 = performance.now(); tcTeams(d.n); const fresh = performance.now() - t0;
+    const t1 = performance.now(); tcTeams(d.n); const again = performance.now() - t1;
+    return { a, b, c, fresh, again, hot: tcMemo.hot };
+  });
+  check('the team memo follows the save: a card changed without commit() re-prices, a repeat is served from memory',
+    Math.abs(tcMemoT.a - tcMemoT.c) < 1e-12 && tcMemoT.a !== tcMemoT.b && tcMemoT.again < tcMemoT.fresh && !tcMemoT.hot, JSON.stringify(tcMemoT));
+
+  // marking a member busy: with no choice the whole team is searched again; a chosen team keeps
+  // the user's other picks and refills the emptied seat, never leaving it empty
+  const tcBusy = await p.evaluate(() => {
+    const d = 'Yusuke Kitagawa', seatNames = r => r.team.seats.filter(s => !s.fixed && s.seat !== 'w').map(s => s.name);
+    tmPick = {}; tmBusy = new Set();
+    const before = seatNames(tcTeams(d));
+    tmBusy.add(before[0]);                       // a thief
+    const after = seatNames(tcTeams(d));
+    tmBusy = new Set();
+    const chosen = tcTeams(d).list[1].calc;      // the runner-up, chosen by the user
+    tmPick[d] = { key: chosen.key, seats: {} };
+    tmBusy.add(chosen.names[0]);
+    const kept = seatNames(tcTeams(d));
+    tmBusy = new Set(); tmPick = {};
+    return { before, after, chosen: chosen.names, kept };
+  });
+  check('marking a member busy re-runs the search, and a chosen team refills the busy seat around the rest',
+    !tcBusy.after.includes(tcBusy.before[0]) && tcBusy.after.slice(0, 3).every(Boolean) &&
+    !!tcBusy.kept[0] && tcBusy.kept[0] !== tcBusy.chosen[0] && tcBusy.kept[1] === tcBusy.chosen[1] && tcBusy.kept[2] === tcBusy.chosen[2],
+    JSON.stringify(tcBusy));
+
+  // ---- rotations composed from the kits (KIT_ROT, tcCompose) ----
+  const kr = await p.evaluate(() => {
+    const out = { missing: [], noWhy: [], illegal: [], badPiece: [], badAw: [] };
+    // every piece of a turn the fight reads: lufel's own pieces, plain skill digits, and Highlights
+    const pieces = new Set();
+    Object.values(TEAMS).forEach(T => (T.rot || []).forEach(o => o.seq.forEach(t => t.split('+').forEach(x => pieces.add(x.trim())))));
+    // (and a support skill the fight reads by name: Mitsuru's Assist, TC_CM)
+    const readable = x => pieces.has(x) || /^[1-3]+↺?$/.test(x) || /^[1-3]×\d+$/.test(x) || /^\d*HL(×\d+)?$/.test(x) || (x === 'Assist' && tcTurnSkills(x).has('assist'));
+    for (const c of CHARACTERS) {
+      const K = KIT_ROT[c.n];
+      if (!K) { out.missing.push(c.n); continue; }
+      if (!K.why) out.noWhy.push(c.n);
+      Object.keys(K.aw || {}).forEach(l => { if (!(+l >= 1 && +l <= 6)) out.badAw.push(c.n + ' ' + l); });
+      const allMoves = new Set(Object.keys(K.moves || {}));
+      Object.values(K.aw || {}).forEach(o => Object.keys(o.moves || {}).forEach(m => allMoves.add(m)));
+      allMoves.forEach(m => m.split('+').forEach(x => { if (!readable(x.trim())) out.badPiece.push(c.n + ': ' + m); }));
+      for (const o of (TEAMS[c.n] || {}).rot || []) {
+        const info = {}, aw = o.aw == null ? 0 : o.aw;
+        // an option that skips an Elucidator's opening wait is written for a team with Mitsuru, who shortens it
+        if (tcRotWalk(c.n, o.seq, aw, undefined, info) >= 0 && tcRotWalk(c.n, o.seq, aw, tcKitRot(c.n, aw, undefined, new Set([TC_PREP_CUT]))) >= 0)
+          out.illegal.push(`${c.n} ${o.label} turn ${info.at + 1}: ${info.why}`);
+      }
+    }
+    // the engine on a made-up kit: need/spend, gain to a cap, next, uses, a group cooldown, an Awareness block
+    KIT_ROT.__test = { why: 'test', res: { st: [0, 3] }, moves: { '1': { gain: { st: 2 } }, '3': { need: { st: 3 }, spend: { st: 3 } },
+      '1+1+3': { next: ['Fatigue'], uses: 1 }, 'Fatigue': {}, 'Transform+1': { cool: 2, group: 't' }, 'Transform+2': { group: 't', cool: 2 } },
+      aw: { 2: { res: { st: [3, 3] } } } };
+    const w = (seq, aw) => tcRotWalk('__test', seq, aw || 0);
+    out.engine = [w(['1', '1', '3']), w(['1', '3']), w(['3'], 2), w(['1+1+3', '1']), w(['1+1+3', 'Fatigue', '1+1+3']),
+      w(['Transform+1', '1', 'Transform+2']), w(['Transform+1', '1', '1', 'Transform+2']), w(['1', '1', '1', '3', '3'])];
+    delete KIT_ROT.__test;
+    // a move written for a Mindscape Core needs a completed Mindscape, and so does lufel's option for it
+    const haru = 'Haru Okumura', keepLo = state.chars[haru] && state.chars[haru].loadout;
+    const mindMoves = done => { state.chars[haru].loadout = Object.assign({}, DEFAULT_LOADOUT, done ? { mindSkill: true, mind1: 5, mind2: 5 } : {});
+      return { move: !!tcComposeSetup(haru, tmRotPick(haru, new Set([haru]))).R.moves['3+Gunshot'], core: tmRotPick(haru, new Set([haru])).pick.some(o => /Mindscape Core/.test(o.label)) }; };
+    out.mind = { off: mindMoves(false), on: mindMoves(true) };
+    state.chars[haru].loadout = keepLo;
+    // Surf's lines hold while Surf is on below A6 and for good from it; Catch a Wave is fired by the Surf engine
+    const miyu = 'Miyu Sahara [Wavecatcher]', keepM = state.chars[miyu] && state.chars[miyu].loadout;
+    const surf = aw => { state.chars[miyu].loadout = Object.assign({}, DEFAULT_LOADOUT, { awareness: aw });
+      const D = charDef(miyu), c = tcKitFor(D).filter(x => /Catch a Wave/.test(x.why));
+      return { kit: c.map(x => x.on), ride: kitStatBuffs(D, null, { fight: true }).filter(b => /Ride it Out/.test(b.why)).map(b => b.on || 'always') }; };
+    out.surf = { a0: surf(0), a6: surf(6) };
+    /* In the fight Jellyfish Splash keeps Surf (only Aerial Tide or Paddle Out again ends it), so Paddle Out then
+       Splash on every turn holds it all fight and fires more catches than Paddle Out / Aerial Tide; and lufel's
+       option written for another team seeds the search */
+    state.chars[miyu].loadout = Object.assign({}, DEFAULT_LOADOUT);
+    const keepRot = TEAMS[miyu].rot, MD = charDef(miyu);
+    const play = seq => { TEAMS[miyu].rot = [{ aw: 0, label: 'Test', seq }]; tcMemo.key = ''; tcMemoFor();
+      const P = tcSimPrep(MD, [null, null, null], false, true); return tcSimRun(P, [miyu], false).surf; };
+    const Fn = tcFight();
+    out.surfFight = { splash: play(['3'].concat(Array(Fn - 1).fill('1'))), tide: play(['3', '2']), mixed: play(['3', '2', '1']), fight: Fn };
+    TEAMS[miyu].rot = keepRot; tcMemo.key = '';
+    out.surfSeed = (tcComposeSetup(miyu, tmRotPick(miyu, new Set([miyu]))).others || []).map(x => x.slice(0, 6).join(','));
+    state.chars[miyu].loadout = keepM;
+    // an idle turn is never offered to the search
+    out.idle = CHARACTERS.filter(c => KIT_ROT[c.n] && tcComposeSetup(c.n, tmRotPick(c.n, new Set([c.n]))) && tcComposeSetup(c.n, tmRotPick(c.n, new Set([c.n]))).moves.some(m => m === '-' || m === '·')).map(c => c.n);
+    // the SP limit: lufel's options set the pace, and a rotation of dearer skills breaks it
+    const sp = tcSpRule('Ann Takamaki', [{ seq: ['3', '1', '3', '1', '3', '1'] }], 14, null);
+    out.sp = { rate: sp.rate, lufelOk: tcSpOk(Array(14).fill(0).map((x, i) => i % 2 ? '1' : '3'), sp), allThree: tcSpOk(Array(14).fill('3'), sp) };
+    return out;
+  });
+  check('every character has kit rotation rules with a reason, every move is made of pieces the fight reads, and Awareness blocks are 1-6',
+    !kr.missing.length && !kr.noWhy.length && !kr.badPiece.length && !kr.badAw.length, JSON.stringify([kr.missing, kr.noWhy, kr.badPiece.slice(0, 5), kr.badAw]));
+  check('every lufel rotation is legal under its kit\'s rules at its own Awareness', !kr.illegal.length, kr.illegal.slice(0, 5).join(' | '));
+  check('the rules engine: stacks gained to a cap and spent, a battle-start value from an Awareness, a forced Fatigue, uses per battle, a shared cooldown',
+    JSON.stringify(kr.engine) === JSON.stringify([-1, 1, -1, 1, 2, 2, -1, 4]), JSON.stringify(kr.engine));
+  check('a move and a lufel option written for a Mindscape Core need a completed Mindscape',
+    !kr.mind.off.move && !kr.mind.off.core && kr.mind.on.move && kr.mind.on.core, JSON.stringify(kr.mind));
+  check('Wavecatcher Miyu\'s Surf lines hold while Surf is on below Awareness 6 and for good from it; Catch a Wave is the Surf engine\'s',
+    kr.surf.a0.kit.length === 1 && kr.surf.a6.kit.length === 1 && kr.surf.a0.kit[0] === 'wave' && kr.surf.a6.kit[0] === 'wave' &&
+    kr.surf.a0.ride[0] === 'surf' && kr.surf.a6.ride[0] === 'always', JSON.stringify(kr.surf));
+  /* Which fires more catches depends on her SP Recovery (Aerial Tide's reset keeps them cheap), so only the
+     mechanics are pinned: one Paddle Out held through Splash catches past the 3 ally turns a single
+     Paddle Out / Aerial Tide window holds */
+  check('Wavecatcher Miyu: Jellyfish Splash keeps Surf, Aerial Tide ends it, and a held Surf keeps catching',
+    kr.surfFight.splash.inSurf === kr.surfFight.splash.acts && kr.surfFight.tide.inSurf === kr.surfFight.tide.acts &&
+    kr.surfFight.mixed.inSurf === kr.surfFight.mixed.acts - Math.floor(kr.surfFight.fight / 3) &&
+    kr.surfFight.splash.catches > 3, JSON.stringify(kr.surfFight));
+  check('the composer also starts from lufel\'s options at the same Awareness written for another team',
+    kr.surfSeed.includes('3,1,1,1,1,2'), JSON.stringify(kr.surfSeed));
+  check('the composer never offers an idle turn', !kr.idle.length, kr.idle.join(', '));
+  check('the SP limit: lufel\'s pace is allowed, a rotation of dearer skills every turn is not',
+    kr.sp.rate === (22 + 20) / 2 && kr.sp.lufelOk && !kr.sp.allThree, JSON.stringify(kr.sp));
+
+  /* Tropical Motoha and the heals she receives (TC_HEALS): the fight counts them and turns her "when healed"
+     lines on, her Tropical Heart follows the team's heals, and the quick screen sees a healer too */
+  const mh = await p.evaluate(() => {
+    const mo = 'Motoha Arai [Tropical]', D = charDef(mo), keep = state.chars[mo] && state.chars[mo].loadout;
+    if (!state.chars[mo]) state.chars[mo] = { owned: true };
+    state.chars[mo].loadout = Object.assign({}, DEFAULT_LOADOUT, { awareness: 0 });
+    tcMemo.key = ''; tcMemoFor(D);
+    const fight = (names, strip) => {
+      const k = KIT_STAT_BUFFS[mo];
+      if (strip) KIT_STAT_BUFFS[mo] = k.filter(b => !/^healed/.test(b.on || ''));
+      try {
+        const P = tcSimPrep(D, names, false, !names.some(Boolean));
+        P.dps.seq = ['3', '1'];
+        return tcSimRun(P, [mo], false);
+      } finally { KIT_STAT_BUFFS[mo] = k; }
+    };
+    const alone = fight([null, null, null]), lufel = fight(['Lufel', null, null]), lufelOff = fight(['Lufel', null, null], true);
+    const out = { alone: alone.heals, lufel: lufel.heals, gain: lufel.total / lufelOff.total };
+    // the cooldown is one turn and is never banked; a Heart (5 heals) lets a cast skip it
+    const walk = (seq, team) => tcRotWalk(mo, seq, 0, tcKitRot(mo, 0, undefined, team));
+    const solo = new Set([mo]), healers = tcTeamSet(mo, ['Minami Miyashita', 'Lufel', 'Yumi Shiina']);
+    out.rule = { twice: walk(['3', '3'], solo), banked: walk(['1', '1', '1', '3', '3'], solo), alternate: walk(['3', '1', '3', '1', '3'], solo),
+      healed: walk(['3', '1', '3', '3', '1', '3', '3'], healers), rate: { solo: tcTeamHeals(mo, solo), healers: tcTeamHeals(mo, healers) },
+      lufelSolo: tmRotPick(mo, solo).pick.length, lufelHealers: tmRotPick(mo, healers).pick.map(r => r.seq.join('')) };
+    // the quick screen: a healer adds what her healed lines are worth
+    const vec = tcMember(D, 'Lufel', new Set([mo, 'Lufel']), null, false).vec;
+    out.quick = { heal: vec.heal, with: tcMultiplier(D, [vec]), without: tcMultiplier(D, [Object.assign({}, vec, { heal: null })]) };
+    state.chars[mo].loadout = keep; tcMemo.key = '';
+    return out;
+  });
+  check('Tropical Motoha: the fight counts the heals she receives — her own alone, a healer\'s on top — and they turn on her "when healed" damage',
+    mh.alone && mh.lufel && mh.lufel.n > mh.alone.n && (mh.lufel.by.Lufel || 0) > 0 && mh.gain > 1.01, JSON.stringify(mh).slice(0, 400));
+  check('Tropical Motoha: Surf \'n\' Shine waits a turn after a cast and the wait is never banked; enough heals for a Heart let it skip the wait',
+    mh.rule.twice === 1 && mh.rule.banked === 4 && mh.rule.alternate === -1 && mh.rule.healed === -1 &&
+    mh.rule.rate.healers > 2 && mh.rule.rate.solo < 0.5 && mh.rule.lufelSolo === 2, JSON.stringify(mh.rule));
+  check('Tropical Motoha: the quick screen prices a healer\'s heals', mh.quick.heal && mh.quick.with > mh.quick.without, JSON.stringify(mh.quick));
+
+  const kc = await p.evaluate(() => {
+    $('#tmRotFit').checked = true; $('#tmRotCompose').checked = true; tmSyncCompose();
+    tcMemo.key = '';
+    const out = { bad: [], fits: [] };
+    const teams = [['Ann Takamaki', ['Kotone Shiomi', 'Mio Natsukawa', 'Fuuka Yamagishi', 'Kumi Katayama']],
+      ['Ann Takamaki [Starlight]', ['Ryuji Sakamoto', 'Kotone Shiomi', 'Hatsune Miku']],
+      ['Makoto Yuki', ['Yukari Takeba', 'Mitsuru Kirijo', 'Fuuka Yamagishi', 'Leo Kamiyama']]];
+    for (const [dn, names] of teams) {
+      const D = charDef(dn);
+      const full = tcSim(D, names, 'full');
+      const asW = tcSim(D, names, false);
+      // composing never prices the team below lufel's as written (lufel's options are among its starts)
+      if (!(full.total >= asW.total * (1 - 1e-6))) out.bad.push(dn + ' composed below lufel: ' + full.total + ' < ' + asW.total);
+      const inTeam = tcTeamSet(dn, names);
+      for (const [n, F] of Object.entries(full.fits || {})) {
+        if (!F.composed) { out.bad.push(n + ' not composed'); continue; }
+        const r = tmRotPick(n, inTeam), C = tcComposeSetup(n, r);
+        const info = {};
+        if (tcRotWalk(n, F.seq, C.aw, C.R, info) >= 0) out.bad.push(`${n} illegal at ${info.at + 1}: ${info.why}`);
+        if (!tcSpOk(F.seq, C.sp)) out.bad.push(n + ' breaks the SP limit');
+        if (F.seq.length !== tcComposeLen()) out.bad.push(n + ' length ' + F.seq.length);
+        out.fits.push(n + ': ' + F.seq.join(' '));
+      }
+    }
+    // off, the old fit; the pref is saved, and greyed while fitting is off
+    const prefOn = collectPrefs().tmRotCompose;
+    $('#tmRotFit').checked = false; tmSyncCompose();
+    const greyed = $('#tmRotCompose').disabled, offNow = tmComposeOn();
+    $('#tmRotFit').checked = true; tmSyncCompose();
+    return Object.assign(out, { prefOn, greyed, offNow });
+  });
+  check('composed rotations are legal under the kit rules and the SP limit, as long as the fight, and never price a team below lufel\'s as written',
+    !kc.bad.length && kc.fits.length >= 3, JSON.stringify(kc.bad.slice(0, 5)) + ' ' + kc.fits.length);
+  check('composing is a saved pref, off (and greyed) while fitting is off', kc.prefOn === true && kc.greyed && !kc.offNow, JSON.stringify(kc));
+  const kcPage = await p.evaluate(() => {
+    const d = 'Ann Takamaki';
+    tmPick = {}; tmPick[d] = { key: 'calc:Kotone Shiomi|Mio Natsukawa|Fuuka Yamagishi|Kumi Katayama', seats: {} };
+    $('#tmBasis').value = 'calc'; $('#tmChar').value = d;
+    renderTeams();
+    const panel = [...$$('#tmOut .panel')].find(x => /^rotation$/i.test((x.querySelector('h2') || {}).innerText || ''));
+    const text = panel ? panel.innerText : '';
+    tmPick = {};
+    return { composed: /Composed for this team|Already the best the kit allows/.test(text), turns: panel ? panel.querySelectorAll('.tmRot .t').length : 0 };
+  });
+  check('the Rotation panel names a composed rotation', kcPage.composed && kcPage.turns > 0, JSON.stringify(kcPage));
+  await p.evaluate(() => { $('#tmRotCompose').checked = false; });
+
+  // "Include a medic": a medic in a thief seat, kept through replacements and busy marks
+  const md = await p.evaluate(() => {
+    const own = ns => { CHARACTERS.forEach(c => { const cs = state.chars[c.n]; if (cs) { cs.owned = ns.includes(c.n); cs.benched = false; } }); tcMemo.key = ''; };
+    const roster = ['Ann Takamaki', 'Kotone Shiomi', 'Mio Natsukawa', 'Mayumi Hashimoto', 'Yukari Takeba', 'Tomoko Noge [Seaside]', 'Hatsune Miku', 'Yumi Shiina'];
+    own(roster);
+    tmBusy = new Set(); tmPick = {};
+    $('#tmBasis').value = 'calc'; tmSyncCompose(); $('#tmRotFit').checked = false;
+    const d = 'Ann Takamaki', thiefSeats = T => T.team.seats.filter(s => s.seat === 'f' && !s.fixed);
+    $('#tmMedic').checked = false;
+    const off = tcTeams(d);
+    $('#tmMedic').checked = true;
+    const on = tcTeams(d);
+    const medicSeat = thiefSeats(on).find(s => s.role === 'Medic');
+    const out = {
+      offMedic: off.team.calc.medic,
+      onNames: thiefSeats(on).map(s => s.name),
+      onHasMedic: tcHasMedic(thiefSeats(on).map(s => s.name)),
+      everyListed: on.list.every(l => tcHasMedic(l.calc.names)),
+      altsMedics: medicSeat ? (medicSeat.alts || []).every(a => tcIsMedic(a.n)) && (medicSeat.alts || []).length > 0 : false,
+      note: on.team.calc.medic
+    };
+    if (!medicSeat) { $('#tmMedic').checked = false; $('#tmRotFit').checked = true; return out; }
+    // the medic marked busy: the other medic takes the seat
+    tmBusy = new Set([medicSeat.name]);
+    out.busyNames = thiefSeats(tcTeams(d)).map(s => s.name);
+    out.busyMedic = out.busyNames.some(tcIsMedic) && !out.busyNames.includes(medicSeat.name);
+    tmBusy = new Set();
+    // a team chosen without a medic gives way once the box is on
+    tmPick[d] = { key: 'calc:Kotone Shiomi|Mio Natsukawa|Hatsune Miku', seats: {} };
+    out.choiceGivesWay = thiefSeats(tcTeams(d)).some(s => tcIsMedic(s.name));
+    tmPick = {};
+    // no medic owned: built without one, and said so
+    own(roster.filter(n => !tcIsMedic(n)));
+    out.none = tcTeams(d).team.calc.medic;
+    // a medic as the damage dealer needs no other
+    own(roster);
+    out.self = tcTeams('Yukari Takeba').team.calc.medic;
+    // the page: the seat reads "Medic", the headline names the medic
+    $('#tmChar').value = d; renderTeams();
+    out.roles = [...$$('#tmOut .tmSeat .role')].map(e => e.textContent);
+    out.noteText = ($('#tmOut .tmMedicNote') || {}).textContent || '';
+    out.pref = collectPrefs().tmMedic;
+    $('#tmBasis').value = 'lufel'; tmSyncCompose(); out.greyed = $('#tmMedic').disabled;
+    $('#tmBasis').value = 'calc'; tmSyncCompose();
+    $('#tmMedic').checked = false; $('#tmRotFit').checked = true;
+    return out;
+  });
+  check('"Include a medic" puts a medic in a thief seat and every listed team, and is off by default',
+    md.offMedic === null && md.onHasMedic && md.everyListed && md.note && md.note.names.length >= 1, JSON.stringify(md));
+  check('the medic seat offers only medics as replacements, and a busy medic is replaced by another medic',
+    md.altsMedics && md.busyMedic, JSON.stringify({ alts: md.altsMedics, busy: md.busyNames }));
+  check('a team chosen without a medic gives way once the box is on', md.choiceGivesWay);
+  check('with no medic owned the team is built without one and says so; a medic damage dealer needs no other',
+    md.none && md.none.none === true && md.self && md.self.self === true, JSON.stringify({ none: md.none, self: md.self }));
+  check('the page names the medic seat and the medic, the box is a saved pref, greyed on the lufel basis',
+    (md.roles || []).includes('Medic') && /With a medic/.test(md.noteText || '') && md.pref === true && md.greyed, JSON.stringify({ roles: md.roles, note: md.noteText, pref: md.pref, greyed: md.greyed }));
+
+  // the twins: a medic in their Medic masks, and Kasumi's second Glow from their automatic Two Masks as One
+  const jc = await p.evaluate(() => {
+    const JC = 'Justine & Caroline', K = 'Kasumi Yoshizawa';
+    const own = ns => { CHARACTERS.forEach(c => { const cs = state.chars[c.n]; if (cs) { cs.owned = ns.includes(c.n); cs.benched = false; } }); tcMemo.key = ''; };
+    const jcAw = aw => { state.chars[JC].loadout = Object.assign({}, charLoadout(JC), { awareness: aw }); tcMemo.key = ''; };
+    own([K, JC, 'Kotone Shiomi', 'Mayumi Hashimoto', 'Hatsune Miku']);
+    tmBusy = new Set(); tmPick = {};
+    $('#tmBasis').value = 'calc'; tmSyncCompose(); $('#tmRotFit').checked = false;
+    const out = {};
+    // with no Healer owned, the twins are the medic, in their Medic masks
+    jcAw(0);
+    $('#tmMedic').checked = true;
+    const T = tcTeams(K), seat = T.team.seats.find(s => s.name === JC && s.seat === 'f');
+    out.medicSeat = seat ? { role: seat.role, pair: seat.pair } : null;
+    out.everyListed = T.list.every(l => l.calc.names.slice(0, 2).includes(JC));
+    out.note = T.team.calc.medic;
+    // beside a Healer they wear whichever masks do most
+    out.besideHealer = tcMedicPairs(K, [JC, 'Yukari Takeba', 'Hatsune Miku']);
+    out.alone = tcMedicPairs(K, [JC, 'Kotone Shiomi', 'Hatsune Miku']);
+    $('#tmMedic').checked = false;
+    out.offPairs = tcMedicPairs(K, [JC, 'Kotone Shiomi', 'Hatsune Miku']);
+    // Kasumi's second Glow: listed only with the twins at Awareness 1+, and priced only when the fight plays it
+    const D = charDef(K), names = [JC, 'Kotone Shiomi', 'Hatsune Miku'];
+    const mateLines = ns => tcKitFor(D, ns).filter(c => c.mate).length + tcKitBonusFor(D, ns).filter(b => b.mate).length;
+    const keepKit = DPS_KIT[K], keepBonus = DPS_KIT_BONUS[K];
+    const fight = noMate => {
+      if (noMate) { DPS_KIT[K] = keepKit.filter(c => !c.mate); DPS_KIT_BONUS[K] = keepBonus.filter(b => !b.mate); }
+      tcMemo.key = '';
+      try { return tcHot(() => { const s = tcSim(D, names, false); return { total: s.total, fu: (s.parts || {}).fu || 0 }; }); }
+      finally { DPS_KIT[K] = keepKit; DPS_KIT_BONUS[K] = keepBonus; }
+    };
+    out.linesA0 = mateLines(names);
+    out.a0 = [fight(false), fight(true)];
+    jcAw(1);
+    out.linesA1 = mateLines(names);
+    out.linesNoTeam = mateLines(undefined);
+    out.linesOtherTeam = mateLines(['Mayumi Hashimoto', 'Kotone Shiomi', 'Hatsune Miku']);
+    out.a1 = [fight(false), fight(true)];
+    jcAw(0);
+    $('#tmRotFit').checked = true;
+    return out;
+  });
+  check('"Include a medic" counts the twins as a medic in their Medic masks when no Healer is owned, and labels the seat',
+    jc.medicSeat && jc.medicSeat.role === 'Medic' && jc.medicSeat.pair === 'MS' && jc.everyListed && jc.note && (jc.note.names || []).includes('Justine & Caroline'), JSON.stringify(jc));
+  check('the twins are held to their Medic masks only as the team\'s only medic, and only with the box on',
+    jc.besideHealer === null && jc.alone && jc.alone['Justine & Caroline'] === 'MS' && jc.offPairs === null, JSON.stringify({ b: jc.besideHealer, a: jc.alone, off: jc.offPairs }));
+  check('Kasumi\'s second Glow is in her kit only with the twins in a thief seat at Awareness 1 or above',
+    jc.linesA0 === 0 && jc.linesA1 > 0 && jc.linesNoTeam === 0 && jc.linesOtherTeam === 0, JSON.stringify({ a0: jc.linesA0, a1: jc.linesA1, none: jc.linesNoTeam, other: jc.linesOtherTeam }));
+  check('the twins\' automatic Two Masks as One sets off a second Glow in the fight at their Awareness 1, nothing at 0',
+    jc.a1[0].total > jc.a1[1].total && jc.a1[0].fu > jc.a1[1].fu && Math.abs(jc.a0[0].total - jc.a0[1].total) < 1e-9, JSON.stringify({ a0: jc.a0, a1: jc.a1 }));
+
+  // "an ally's skill" lines: once per damaging skill (the twins' two-skill turn twice), none for a buff-only
+  // turn; "an ally's damage" lines on basic attacks too; an element-gated one only for that element
+  const ally = await p.evaluate(() => {
+    const JC = 'Justine & Caroline', out = {};
+    const buffOnly = Object.keys(SKILL_DMG).map(n => [n, SKILL_DMG[n].d.slice(0, 3).findIndex(v => !(v > 0))]).find(([, i]) => i >= 0);
+    out.helpers = {
+      twins: tcDmgSkills(JC, '3↺+1'), plain: tcDmgSkills(JC, '1'),
+      buffOnly: buffOnly ? tcDmgSkills(buffOnly[0], String(buffOnly[1] + 1)) : null,
+      wonderAtk: tcAtkCount('Wonder', '-'), wonderCast: tcAtkCount('Wonder', 'w0'), blank: tcAtkCount(null, '-'),
+      melee: tcAtkCount('Yaoling Li [Firecracker]', '3+Melee'), skill: tcAtkCount('Ann Takamaki', '1')
+    };
+    const D = charDef('YUI'), keep = DPS_KIT.YUI;
+    const probe = (entry, names, noWonder) => {
+      DPS_KIT.YUI = [Object.assign({ kind: 'fu', v: 100, why: 'test' }, entry)];
+      tcMemo.key = '';
+      try { return tcHot(() => (tcSim(D, names, false, !!noWonder).parts || {}).fu || 0); } finally { DPS_KIT.YUI = keep; tcMemo.key = ''; }
+    };
+    const blank = [null, null, null];
+    out.blankSkill = probe({ on: 'allySkill' }, blank);
+    out.blankSkillNoW = probe({ on: 'allySkill' }, blank, true);
+    out.blankAtk = probe({ on: 'allyAtk' }, blank);
+    out.windWithTwins = probe({ on: 'allySkill', allyElem: ['Wind'] }, [JC, null, null]);
+    // a Wind teammate whose rotation beside YUI deals skill damage
+    const wind = CHARACTERS.filter(c => c.e === 'Wind' && c.arch !== 'Navigator' && SKILL_DMG[c.n]).map(c => c.n)
+      .find(n => ((tmRotPick(n, tcTeamSet('YUI', [n, null, null])).pick[0] || {}).seq || []).some(st => tcDmgSkills(n, st) > 0));
+    out.wind = wind;
+    out.windWithMate = wind ? probe({ on: 'allySkill', allyElem: ['Wind'] }, [wind, null, null]) : 0;
+    out.anyWithTwins = probe({ on: 'allySkill' }, [JC, null, null]);
+    return out;
+  });
+  const ah = ally.helpers;
+  check('a teammate\'s turn sets off "an ally\'s skill" once per damaging skill: the twins\' "3↺+1" twice, a buff-only skill never; basic attacks are counted apart',
+    ah.twins === 2 && ah.plain === 1 && ah.buffOnly === 0 && ah.wonderAtk === 1 && ah.wonderCast === 0 && ah.blank === 1 && ah.melee === 1 && ah.skill === 0, JSON.stringify(ah));
+  /* Blank teammates set off "an ally's damage" (their turns are basic attacks: two of them, every round) but not "an ally's
+     skill"; Wonder's attack turns are Persona skills (KR 페르소나 스킬 in YUI's and Mitsuru's text), so with blank teammates
+     "an ally's skill" fires on his turns only, one a round (Nov 2026; until then his attacks counted as basic attacks) */
+  check('in the fight, blank teammates set off "an ally\'s damage" but not "an ally\'s skill" (Wonder\'s attacks are skills), and a Wind-only line needs a Wind teammate',
+    ally.blankSkill > 0 && ally.blankAtk > 1.5 * ally.blankSkill && ally.windWithTwins === 0 && ally.windWithMate > 0 && ally.anyWithTwins > ally.blankSkill, JSON.stringify(ally));
+
+  // ---- the Nov 2026 audit of the Teams calculation: each fix pinned (see CLAUDE.md "The audit of Nov 2026") ----
+  const au = await p.evaluate(() => {
+    const out = {};
+    // the foes follow the damage dealer (Auto): an earlier section left the control at 1
+    const keepFoes = $('#tmFoes').value; $('#tmFoes').value = 'auto'; tcMemo.key = '';
+    // a build line lands as many stacks as the turn casts its skill: "1+1+3" is two Lyre's Melody stacks, not one
+    const bl = { on: '1', build: true };
+    out.build = [tcBuildGain(bl, tcTurnSkills('1+1+3'), tcSkillUses('1+1+3')), tcBuildGain(bl, tcTurnSkills('1+1+3')), tcBuildGain(bl, tcTurnSkills('3'), tcSkillUses('3'))];
+    // a decayed multi-hit area skill: Yusuke's Bone-Chilling Cold is one 92.9 hit per foe at 5 foes, the folded 185.8 on one
+    const sp5 = tcHitSplit('Yusuke Kitagawa', 1, 5), sp2 = tcHitSplit('Yusuke Kitagawa', 1, 2);
+    out.split = { five: sp5, two: sp2, one: tcHitSplit('Yusuke Kitagawa', 1, 1), plain: tcHitSplit('Ann Takamaki', 0, 5), mult5: tcFoeMult('Yusuke Kitagawa', 1, 5), mult5plain: tcFoeMult('Ann Takamaki', 0, 5) };
+    // Makoto Yuki as a teammate below A6 casts one Theurgy: the fight chooses Cadenza (buffs) or Ardhanari (the hit), never both
+    const yui = charDef('YUI'), keepMY = state.chars['Makoto Yuki'].loadout;
+    state.chars['Makoto Yuki'].loadout = Object.assign({}, DEFAULT_LOADOUT, { awareness: 0 }); tcMemo.key = '';
+    const names = ['Makoto Yuki', null, null];
+    const both = tcSim(yui, names, false);
+    const forced = id => { const keep = tcPairCtx; tcPairCtx = { 'Makoto Yuki': id }; try { return tcHot(() => tcSimBest(tcSimPrep(yui, names, false, false, {})), yui); } finally { tcPairCtx = keep; tcMemo.key = ''; } };
+    const C = forced('C'), A = forced('A');
+    out.th = { opts: tcPairOpts(yui, 'Makoto Yuki').map(o => o.id), chosen: both.pairs['Makoto Yuki'], ownC: (C.own || {})['Makoto Yuki'] || 0, ownA: (A.own || {})['Makoto Yuki'] || 0, totalC: C.total, totalA: A.total, best: both.total,
+      asDps: tcPairOpts(charDef('Makoto Yuki'), 'Makoto Yuki').length };
+    state.chars['Makoto Yuki'].loadout = Object.assign({}, DEFAULT_LOADOUT, { awareness: 6 }); tcMemo.key = '';
+    out.th.a6opts = tcPairOpts(yui, 'Makoto Yuki').length;
+    out.th.a6lines = tcMemberCalc(yui, 'Makoto Yuki', null, null, false, undefined).lines.filter(l => /Cadenza/.test(l.why)).length;
+    state.chars['Makoto Yuki'].loadout = keepMY; tcMemo.key = '';
+    // a teammate's own hits do not read their own `own: false` party line off the board again (Runa's Faithful Dog)
+    const ann = charDef('Ann Takamaki'), runa = ['Runa Dogenzaka', null, null];
+    const ownR = () => tcHot(() => (tcSimBest(tcSimPrep(ann, runa, false, false, {})).own || {})['Runa Dogenzaka'] || 0, ann);
+    const r1 = ownR();
+    const keepRB = TEAM_BUFFS['Runa Dogenzaka'];
+    TEAM_BUFFS['Runa Dogenzaka'] = keepRB.filter(e => !(e.own === false && !e.on)); tcMemo.key = '';
+    const r2 = ownR();
+    TEAM_BUFFS['Runa Dogenzaka'] = keepRB; tcMemo.key = '';
+    out.ownFalse = { withLine: r1, without: r2 };
+    // a teammate keeps its always-on `need*` stat lines (Ichigo's Chains of Love ATK) but not its timed self-buffs
+    const ichi = charDef('Ichigo Shikano');
+    out.mateNeed = { mate: tcEvalFor(ichi, 'mate').f0, dps: tcEvalFor(ichi, true).f0, full: tcEvalFor(ichi).f0 };
+    // Starry Compass's Guidance: a one-hit damage dealer with buff-casting teammates cannot hold 5 stacks past the first rounds, an area one can
+    out.guid = { ryuji: tcGuidUp(charDef('Ryuji Sakamoto'), 5), ann: tcGuidUp(ann, 5), ann15: tcGuidUp(ann, 15) };
+    // the quick screen reads Resonance and damage-over-time lines on the share of the damage dealer's damage that is such hits
+    const miyu = charDef('Miyu Sahara [Wavecatcher]');
+    out.quickRes = { miyu: tcMultiplier(miyu, [{ resDm: 50 }]), ryuji: tcMultiplier(charDef('Ryuji Sakamoto'), [{ resDm: 50 }]), dm: tcMultiplier(miyu, [{ dm: 50 }]) };
+    // a one-foe debuff reaches only the main target's share of an area damage dealer's damage on the quick screen
+    const v1 = tcMemberCalc(ann, 'Runa Dogenzaka', null, null, false, undefined).vec;
+    out.oneFoe = { one: Object.keys(v1.one || {}).length, mix: tcPartMix(ann) };
+    // Tempest Riko's Blossom stacks follow the receiving ally's hits a turn; a line with `hits.min` needs that many
+    const riko = charLoadout('Riko Tanemura [Tempest]');
+    const line = { k: 'atk', v: 30, hits: { turns: 3, cap: 10, scale: true } }, minLine = { k: 'cm', v: 5, hits: { turns: 3, cap: 10, min: 10 } };
+    out.hits = { ann: tcLineValue(line, { n: 'Riko Tanemura [Tempest]' }, riko, ann), ryuji: tcLineValue(line, { n: 'Riko Tanemura [Tempest]' }, riko, charDef('Ryuji Sakamoto')), hptAnn: tcHitsPerTurn(ann), hptRyuji: tcHitsPerTurn(charDef('Ryuji Sakamoto')),
+      minRyuji: tcLineValue(minLine, { n: 'Riko Tanemura [Tempest]' }, riko, charDef('Ryuji Sakamoto')) };
+    // a `per` line with a negative `plus` reads the stat over a floor and never below 0 (Riko's Speed over 100)
+    const plain = charLoadout('Riko Tanemura');
+    out.plus = { v: tcLineValue({ k: 'defdown', v: 0, per: { s: 'Speed', rate: 49, cap: 60, plus: -100 } }, { n: 'Riko Tanemura' }, plain, ann), spd: tcStat('Riko Tanemura', 'Speed') };
+    $('#tmFoes').value = keepFoes; tcMemo.key = '';
+    return out;
+  });
+  check('a build line lands a stack per cast: "1+1+3" is two Lyre\'s Melody stacks (one by the token set alone), "3" none',
+    au.build[0] === 2 && au.build[1] === 1 && au.build[2] === 0, JSON.stringify(au.build));
+  check('a decayed multi-hit area skill is split by foe: Yusuke\'s Skill 2 is half its folded number on each of 5 foes, 0.8 / 0.7 on 2, whole on 1; a plain area skill is untouched',
+    au.split.five && Math.abs(au.split.five.main - 0.5) < 1e-9 && Math.abs(au.split.five.other - 0.5) < 1e-9 && Math.abs(au.split.two.main - 0.8) < 1e-9 && Math.abs(au.split.two.other - 0.7) < 1e-9 &&
+    au.split.one === null && au.split.plain === null && Math.abs(au.split.mult5 - 2.5) < 1e-9 && au.split.mult5plain === 5, JSON.stringify(au.split));
+  check('Makoto Yuki as a teammate below A6 is one Theurgy: Cadenza lands no Ardhanari hit, Ardhanari no Cadenza buffs, the fight keeps the better; at A6 there is no choice and his Cadenza lines stay; as the damage dealer none',
+    au.th.opts.join() === 'C,A' && ['C', 'A'].includes(au.th.chosen) && au.th.ownC > 0 && au.th.ownA > au.th.ownC * 1.1 && au.th.totalA !== au.th.totalC && Math.abs(au.th.best - Math.max(au.th.totalC, au.th.totalA)) < 1e-6 && au.th.a6opts === 0 && au.th.a6lines >= 2 && au.th.asDps === 0, JSON.stringify(au.th));
+  check('a teammate\'s own hits read their own `own: false` always-on party line once (it is in their stats): zeroing Runa\'s Faithful Dog leaves her hits as they were',
+    au.ownFalse.withLine > 0 && Math.abs(au.ownFalse.withLine - au.ownFalse.without) < 1e-6, JSON.stringify(au.ownFalse));
+  check('a teammate\'s baseline keeps its always-on need-lines (Ichigo\'s Chains of Love ATK) and drops its timed self-buffs',
+    au.mateNeed.mate > au.mateNeed.dps && au.mateNeed.mate <= au.mateNeed.full + 1e-9, JSON.stringify(au.mateNeed));
+  check('Starry Compass\'s Guidance drains for a one-hit damage dealer and holds for an area one on the quick screen',
+    au.guid.ryuji < 0.6 && au.guid.ann === 1 && au.guid.ann15 > 0 && au.guid.ann15 < 1, JSON.stringify(au.guid));
+  check('the quick screen prices a Resonance damage line for a Resonance damage dealer and not for one without, and a one-foe debuff on the main target\'s share of an area damage dealer\'s damage',
+    au.quickRes.miyu > 1.02 && Math.abs(au.quickRes.ryuji - 1) < 1e-9 && au.quickRes.dm > au.quickRes.miyu && au.oneFoe.one > 0 && au.oneFoe.mix && au.oneFoe.mix.other > 0.5 && au.oneFoe.mix.other < 1, JSON.stringify({ q: au.quickRes, o: au.oneFoe }));
+  check('a line with `hits` scales with the receiving ally\'s hits a turn, capped, and one with `hits.min` needs that many; a negative `plus` reads a stat over a floor',
+    au.hits.ann > au.hits.ryuji && au.hits.ann <= 300 + 1e-9 && au.hits.hptAnn > au.hits.hptRyuji && au.hits.minRyuji === null && au.plus.v >= 0 && Math.abs(au.plus.v - Math.min(60, Math.max(0, au.plus.spd - 100)) * 0.49) < 1e-6, JSON.stringify(au.hits) + ' ' + JSON.stringify(au.plus));
+
+  await p.evaluate(k => { state.chars = JSON.parse(k.chars); tmBusy = new Set(k.busy); tmPick = JSON.parse(k.pick); commit(); showTab('roster'); }, tmKeep);
+
+  check('no browser storage is touched (Cowork artifact constraint)', await p.evaluate(() => { try { return localStorage.length === 0 && sessionStorage.length === 0; } catch (e) { return true; } }));
+
+  // Outside the page: the generator's hand-tuned table must match src/data.js
+  const drift = weightOverrideDrift();
+  check('WEIGHT_OVERRIDES in the generator matches src/data.js', drift.length === 0, drift.join(' | '));
+  const awDrift = awarenessOverrideDrift();
+  check('GLB_AWARENESS_OVERRIDES in tools/gen-awareness.js matches src/data.js', awDrift.length === 0, awDrift.join(' | '));
+
+  const failures = r.checks.filter(c => !c.pass).concat(ui.filter(c => !c.pass));
+  console.log(JSON.stringify({ charCount: r.charCount, planned: r.planned, plans: r.plans, checks: r.checks.length + ui.length, errs }, null, 2));
+  await b.close();
+  if (failures.length || errs.length) {
+    console.error(`\n${failures.length} check(s) failed, ${errs.length} page error(s).`);
+    failures.forEach(f => console.error(` - ${f.name}${f.detail ? '  [' + f.detail + ']' : ''}`));
+    process.exit(1);
+  }
+  console.log(`\nAll ${r.checks.length + ui.length} checks passed.`);
+})();
