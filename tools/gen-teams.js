@@ -52,6 +52,8 @@ const EXPLICIT = {
   'BUI·Prism': 'YUI [Prism]', 'BUI·Cosmic': 'YUI [Prism]',
   'CHORD·Summer': 'Ayaka Sakai [Summer]', 'BERRY·Summer': 'Ichigo Shikano [Summer]', 'CLOSER·Tropical': 'Motoha Arai [Tropical]',
   'CLOSER·Radiance': 'Motoha Arai [Radiance]', 'MOKO·Seaside': 'Tomoko Noge [Seaside]',
+  // lufel renamed these two by Nov 22 2026 (name_en "Gunslinger Shun", "Tenebre Shoki"); without them a re-run drops their teams
+  'SOY·Gunslinger': 'Shun Kano [Pioneer]', 'LUCE·Tenebre': 'Shoki Ikenami [Notte]',
   'MARIAN·Beachflower': 'Minami Miyashita [Beachflower]',
   'PUPPET·Wavecatcher': 'Miyu Sahara [Wavecatcher]', 'WIND·Tempest': 'Riko Tanemura [Tempest]',
   'RIN·Firecracker': 'Yaoling Li [Firecracker]', 'LUCE·Notte': 'Shoki Ikenami [Notte]',

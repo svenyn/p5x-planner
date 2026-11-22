@@ -603,6 +603,39 @@ details.sect>.inner{margin-top:10px}
 .tmRot.wonder{grid-template-columns:repeat(auto-fill,minmax(120px,1fr))}
 .tmRot.wonder .t b{font-family:inherit;display:block}
 .tmRot .t .who{display:block;color:var(--dim2);font-size:11px;overflow-wrap:anywhere}
+/* Battle rotation (tmBattleHtml): a column per member in the order they act, a row per round; tiles take the
+   rotation grids' colours, a Highlight its own tile under its user, a turn lufel writes otherwise a green ring. */
+.tbWrap{overflow-x:auto;margin:0 -4px;padding-bottom:2px}
+.tbGrid{border-collapse:separate;border-spacing:6px 5px;width:100%;table-layout:fixed;min-width:620px}
+.tbGrid th,.tbGrid td{border-bottom:none}
+.tbGrid th{text-transform:none;letter-spacing:normal}
+/* the round labels stay in view while a phone scrolls the members sideways */
+.tbGrid th.tbRd{width:78px;text-align:left;vertical-align:top;font-weight:400;padding:6px 4px 0 2px;left:0;top:auto;z-index:1;background:var(--panel)}
+.tbGrid thead th.tbRd{z-index:3}
+.tbGrid th.tbRd b{display:block;font-size:13px;color:var(--ink)}
+.tbGrid th.tbRd small{display:block;font-size:10px;color:var(--dim2);text-transform:uppercase;letter-spacing:.05em}
+.tbGrid th.tbRd .tag{margin-top:4px;font-size:10px}
+.tbGauge{display:block;height:4px;border-radius:2px;background:#24242c;margin-top:5px;overflow:hidden;width:60px}
+.tbGauge i{display:block;height:100%;background:linear-gradient(90deg,#7a4fa0,#d0a0f0)}
+.tbGrid tr.encore th.tbRd b{color:#d0a0f0}
+.tbGrid tr.encore td{opacity:.92}
+.tbGrid th.tbWho{vertical-align:bottom;text-align:left;font-weight:400;padding:8px 8px 7px;background:var(--panel2);border:1px solid var(--line);border-top:3px solid var(--el,var(--line));border-radius:9px;position:relative}
+.tbGrid th.tbWho .avatar{display:block;margin-bottom:4px}
+.tbGrid th.tbWho .nm{display:block;font-size:13px;font-weight:700;color:var(--ink);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.tbGrid th.tbWho small{display:block;font-size:10px;color:var(--dim2);line-height:1.35;text-transform:uppercase;letter-spacing:.05em;margin-top:1px}
+.tbGrid th.tbWho .ord{position:absolute;top:7px;right:7px;width:19px;height:19px;line-height:19px;text-align:center;border-radius:50%;background:var(--el,var(--red));color:#0b0b0d;font-size:11px;font-weight:800}
+.tbGrid th.tbWho.kind-elu{border-style:dashed;border-top-style:solid}
+.tbGrid th.tbWho.kind-dps{box-shadow:0 0 0 1px var(--el,var(--line)) inset}
+.tbGrid td{vertical-align:top;padding:0}
+.tbTile{border:1px solid var(--tb,var(--line));background:var(--tc,#1a1a22);border-radius:7px;padding:5px 8px 6px;margin-bottom:4px;line-height:1.25}
+.tbTile:last-child{margin-bottom:0}
+.tbTile b{display:block;font-size:12.5px;font-weight:700;color:var(--tt,var(--ink));overflow-wrap:anywhere}
+.tbTile small{display:block;font-size:10.5px;color:var(--dim);margin-top:1px;overflow-wrap:anywhere}
+.tbTile.k-hl{border-style:dashed}
+.tbTile.k-hl b::before{content:"✦ ";color:#d0a0f0}
+.tbTile.k-idle b,.tbTile.none b{color:var(--dim2);font-weight:400}
+.tbTile.none{background:transparent;border-color:transparent;text-align:center}
+.tbTile.diff{box-shadow:inset 0 0 0 2px var(--ok)}
 /* One card per member in the Rotation and "How this team works" panels. */
 .tmMembers{display:flex;flex-direction:column;gap:8px}
 .tmMember{background:var(--panel2);border:1px solid var(--line);border-left:4px solid var(--el,var(--line));border-radius:9px;padding:11px 14px 11px 13px}

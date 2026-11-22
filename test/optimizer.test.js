@@ -1149,6 +1149,26 @@ function awarenessOverrideDrift() {
         near(tierVal(v, fu, Object.assign({}, DEFAULT_LOADOUT, { ms1: 5, ms2: 0 }), 'passive'), 12.6) &&
         t22.key === 'LV10+2' && near(t22.value, 3502 + 350 * 0.4) && pickTier(tiers, Object.assign({}, DEFAULT_LOADOUT, { ms1: 5, ms2: 5 }), 3).key === 'LV10+5';
     })());
+    fail('each skill reads its higher column from the Awareness node that raises it (Chizuko: Skills 1 and 2 at 3, Skill 3 and Highlight at 5; a line of no known skill keeps the one-level rule)', (() => {
+      const ch = charDef('Chizuko Nagao'), v = [170.8, 188.3, 177.8, 195.3], at = (aw, s) => tierVal(v, ch, Object.assign({}, DEFAULT_LOADOUT, { awareness: aw }), s);
+      return at(2, '1') === 170.8 && at(3, '1') === 177.8 && at(3, '2') === 177.8 && at(3, '3') === 170.8 && at(4, 'HL') === 170.8 &&
+        at(5, '3') === 177.8 && at(5, 'HL') === 177.8 && at(3, 'passive') === 177.8 && at(2, 'passive') === 170.8 &&
+        kitTierIndex(ch, Object.assign({}, DEFAULT_LOADOUT, { awareness: 4 }), '3') === 0 && kitTierIndex(ch, Object.assign({}, DEFAULT_LOADOUT, { awareness: 4 }), '1') === 2;
+    })());
+    fail('SKILL_LEVEL_AW: every character\'s skill-level nodes are at Awareness 3 and 5, each names a level whose Awareness text raises a skill level, and every thief with a Highlight has all four of Skills 1-3 and HL', (() => {
+      const bad = [];
+      for (const c of CHARACTERS) {
+        const m = SKILL_LEVEL_AW[c.n];
+        if (!m) { bad.push(c.n + ': none'); continue; }
+        for (const [k, lv] of Object.entries(m)) {
+          const node = ((CHAR_STATS[c.n] || {}).awareness || [])[lv];
+          if (![3, 5].includes(lv) || !node || !/skill levels? of/i.test(node.d)) bad.push(`${c.n} ${k}@${lv}`);
+        }
+        if (c.arch !== 'Navigator' && SKILL_DMG[c.n] && SKILL_DMG[c.n].hl && !['1', '2', '3', 'HL'].every(k => m[k] != null)) bad.push(c.n + ': missing a skill');
+      }
+      if (bad.length) console.log('    ' + bad.join('; '));
+      return !bad.length;
+    })());
     fail('a weapon ladder is read at the refinement step held', (() => {
       const r1 = charBaseStat(morg, 'Crit Rate', Object.assign({}, DEFAULT_LOADOUT, { refine: 1 })).pct, r7 = charBaseStat(morg, 'Crit Rate', Object.assign({}, DEFAULT_LOADOUT, { refine: 7 })).pct;
       return near(r1, 18) && near(r7, 34.2);
@@ -3068,6 +3088,15 @@ function awarenessOverrideDrift() {
   await p.fill('#tmWonderSpd', '250');
   await p.dispatchEvent('#tmWonderSpd', 'change');
   await p.evaluate(() => renderTeams());
+  // Battle rotation: a column per member in the order they act, a row per round
+  const bt = await p.evaluate(() => {
+    const el = $('#tmOut .tmBattle');
+    if (!el) return null;
+    const cols = [...el.querySelectorAll('th.tbWho')].map(x => ({ n: x.querySelector('.nm').title, kind: [...x.classList].find(c => c.startsWith('kind-')) }));
+    return { cols, rows: el.querySelectorAll('tbody tr').length, F: tcFight(), filled: [...el.querySelectorAll('tbody tr')].every(tr => tr.querySelectorAll('td').length === cols.length) };
+  });
+  check('Battle rotation: a column per member in the order they act (the Elucidator first, then by Speed — Wonder at 250 leads the thieves), a row per round',
+    !!bt && bt.rows === bt.F && bt.filled && bt.cols[0].kind === 'kind-elu' && bt.cols[1].n === 'Wonder' && bt.cols.some(c => c.kind === 'kind-dps'), JSON.stringify(bt));
   const ws = await p.evaluate(() => ({
     first: $('#tmOut .tmOrder .tmStep').innerText, dirty: isDirty(), saved: savePayload().settings.wonderSpeed,
     restored: (() => { const t = JSON.stringify(savePayload()); state.wonderSpd = 0; applySave(t, ''); return wonderSpeed(); })()
@@ -3179,7 +3208,7 @@ function awarenessOverrideDrift() {
     const bad = [];
     for (const [n, list] of Object.entries(TEAM_BUFFS)) {
       if (!charDef(n)) bad.push('unknown ' + n);
-      list.forEach(e => { if (!TC_FROM_K[e.k] || !['party', 'ally', 'enemy'].includes(e.to) || !e.why) bad.push(n + ' ' + e.k); });
+      list.forEach(e => { if ((!TC_FROM_K[e.k] && !(e.elu > 0 && e.k == null)) || !['party', 'ally', 'enemy'].includes(e.to) || !e.why) bad.push(n + ' ' + e.k); });
     }
     return {
       turns: eq(set('2×4+1'), ['2', '1']) && eq(set('1111'), ['1']) && eq(set('HL(2)+3'), ['HL', '3']) && eq(set('W+3+TH↺'), ['3', 'TH']) && eq(set('-'), []),
@@ -3197,6 +3226,69 @@ function awarenessOverrideDrift() {
     Math.abs(tc.def - 0.6966) < 0.001 && Math.abs(tc.empty - 1) < 1e-9 && tc.annAtk > 1.05 && Math.abs(tc.yusAtk - 1) < 1e-9 && tc.yusDmg > 1.1 && tc.defdown && Math.abs(tc.turns - 8 / 6) < 1e-9,
     JSON.stringify(tc));
   check('TEAM_BUFFS names roster characters and only priceable effects, each with its reason', tc.n >= 20 && tc.bad.length === 0, JSON.stringify(tc.bad));
+
+  /* Mitsuru (Nov 2026): Snowpierced Waltz's 3% of the Elucidator's stats, a teammate's own timed self-buffs on their own
+     hits only, and Assist's Charged Mark, once a battle */
+  const mc = await p.evaluate(() => {
+    const ann = charDef('Ann Takamaki'), mi = 'Mitsuru Kirijo', fu = 'Fuuka Yamagishi', my = charDef('Makoto Yuki');
+    tcMemo.key = '';
+    // the share: one line per stat at 3% of the team's Elucidator's totals; without a team a marker the quick screen prices
+    const team = tcTeamSet(ann.n, [mi, null, fu]);
+    const withT = tcMember(ann, mi, team, null, false), noT = tcMember(ann, mi, null, null, false), fv = tcMember(ann, fu, null, null, false).vec;
+    const shareLines = withT.lines.filter(l => /Snowpierced Waltz.*% of Fuuka/.test(l.why));
+    const atkLine = shareLines.find(l => l.k === 'atk');
+    const zero = Object.assign({}, noT.vec, { eluPct: 0 });
+    const quick = { on: tcMultiplier(ann, [noT.vec, fv]), off: tcMultiplier(ann, [zero, fv]), noElu: tcMultiplier(ann, [noT.vec]) - tcMultiplier(ann, [zero]) };
+    const keepB = TEAM_BUFFS[mi];
+    const fight = on => { TEAM_BUFFS[mi] = on ? keepB : keepB.filter(e => !e.elu); tcMemo.key = ''; const r = tcSim(ann, [mi, null, fu], false); return r.total; };
+    const fOn = fight(true), fOff = fight(false);
+    TEAM_BUFFS[mi] = keepB; tcMemo.key = '';
+    // a teammate's own timed self-buff: on their own hits, never on the damage dealer's
+    const keepK = KIT_STAT_BUFFS[mi];
+    const selfRun = on => {
+      KIT_STAT_BUFFS[mi] = on ? keepK.concat([{ s: 'Crit Multiplier', pct: true, v: 100, on: '3', dur: 2, fight: true, why: 'test: a timed self-buff' }]) : keepK;
+      tcMemo.key = '';
+      const r = tcSim(ann, [mi, null, null], false), own = (r.own || {})[mi] || 0;
+      return { own, dps: r.total - Object.values(r.own || {}).reduce((s, v) => s + v, 0) };
+    };
+    const sOff = selfRun(false), sOn = selfRun(true);
+    KIT_STAT_BUFFS[mi] = keepK; tcMemo.key = '';
+    // support skills (TC_SUPPORT): on top of the turn's move, once a battle; Charged Mark fills the others' gauges
+    const R = tcKitRot(mi, 0, false);
+    const legal1 = tcRotWalk(mi, ['Assist+2+1', '1', '3+TH', '1', '3+TH', '1'], 0, R) < 0, legal2 = tcRotWalk(mi, ['Assist+2+1', '1', 'Assist+1', '1'], 0, R) < 0;
+    const aigisNo = tcRotWalk('Aigis', ['Assist+1'], 0) >= 0;
+    const offered = ['Mitsuru Kirijo', 'Akihiko Sanada', 'Makoto Yuki', 'Junpei Iori', 'Ann Takamaki'].map(n => { const C = tcComposeSetup(n, tmRotPick(n, new Set([n]))); return !!(C && C.support); });
+    const keepT = TEAMS[mi];
+    const assist = (dps, on, gauge) => {
+      TEAMS[mi] = Object.assign({}, keepT, { rot: keepT.rot.map(r => Object.assign({}, r, { seq: [(on ? 'Assist+' : '') + r.seq[0]].concat(r.seq.slice(1)) })) });
+      const keepC = Object.assign({}, TC_CM); if (!gauge) Object.assign(TC_CM, { th: 0, hl: 0 });
+      tcMemo.key = '';
+      const r = tcSim(dps, [mi, null, null], false);
+      Object.assign(TC_CM, keepC); TEAMS[mi] = keepT; tcMemo.key = '';
+      return r;
+    };
+    const aMy = assist(my, true, true), aMy0 = assist(my, true, false), aNo = assist(my, false, true);
+    // Akihiko's and Makoto Yuki's: a 1-turn buff on the damage dealer, cast on top of their first turn
+    const buffer = (n, on) => {
+      const keep = TEAMS[n];
+      TEAMS[n] = Object.assign({}, keep, { rot: keep.rot.map(r => Object.assign({}, r, { seq: [(on ? 'Assist+' : '') + r.seq[0]].concat(r.seq.slice(1)) })) });
+      tcMemo.key = '';
+      const r = tcSim(ann, [n, null, null], false);
+      TEAMS[n] = keep; tcMemo.key = '';
+      return r.total - ((r.own || {})[n] || 0);
+    };
+    const bufs = ['Akihiko Sanada', 'Makoto Yuki'].map(n => [buffer(n, false), buffer(n, true)]);
+    // (a stat the Elucidator has none of gives no line)
+    const nonzero = TC_ELU_STATS.filter(([, s]) => tcStat(fu, s) > 0).length;
+    return { shareN: shareLines.length, nonzero, atkV: atkLine ? atkLine.v : null, fuAtk: tcStat(fu, 'ATK'), marker: noT.vec.eluPct, eluBase: !!fv.eluBase, quick, fOn, fOff, sOff, sOn,
+      tok: tcTurnSkills('Assist+1').has('assist') && tcTurnSkills('Assist+1').has('1'), legal1, legal2, aigisNo, offered, bufs, cm: aMy.cmark, cm0: aMy0.cmark, noCm: aNo.cmark, tMy: aMy.total, tMy0: aMy0.total };
+  });
+  check('Snowpierced Waltz gives the party 3% of the team\'s Elucidator\'s stats (one line per stat with a team, priced from her stats on the quick screen without one)',
+    mc.shareN >= 1 && mc.shareN === mc.nonzero && Math.abs(mc.atkV - 0.03 * mc.fuAtk) < 1e-6 && mc.marker > 0 && mc.eluBase && mc.quick.on > mc.quick.off && Math.abs(mc.quick.noElu) < 1e-12 && mc.fOn > mc.fOff, JSON.stringify(mc));
+  check('a teammate\'s own timed self-buff (KIT_STAT_BUFFS with `on`) raises their own hits in the fight and never the damage dealer\'s',
+    mc.sOn.own > mc.sOff.own * 1.001 && Math.abs(mc.sOn.dps - mc.sOff.dps) < 1e-9, JSON.stringify([mc.sOff, mc.sOn]));
+  check('support skills go on top of a turn\'s move once a battle (Aigis\'s stays as lufel writes it; the composer offers only those that do something for damage); Mitsuru\'s Charged Mark fills the other thieves\' Theurgy or Highlight gauge on their first attack, Akihiko\'s and Makoto Yuki\'s buff the damage dealer',
+    mc.tok && mc.legal1 && !mc.legal2 && mc.aigisNo && JSON.stringify(mc.offered) === '[true,true,true,false,false]' && mc.bufs.every(([a, b]) => b > a * 1.0001) && mc.cm && mc.cm.round === 1 && mc.cm.got >= 1 && mc.noCm === null && mc.tMy !== mc.tMy0, JSON.stringify(mc));
 
   // ---- Highlights, Theurgies, turn order and the fight (Nov 2026) ----
   const th = await p.evaluate(() => {
@@ -3314,6 +3406,11 @@ function awarenessOverrideDrift() {
       const L = tcLineupAt(ann, names), S = tcSim(ann, names, tmFitOn() ? 'full' : false);
       const again = tcSimAs(ann, names, S).total;
       out.partsAs = { wonder: L.wonder.part, parts: L.parts, fit: tmFitOn(), same: Math.abs(again / S.total - 1) };
+      // the Battle rotation panel's log is that very fight replayed: the same total, the Elucidator at each round's
+      // start, every thief once a round in the order the fight played them
+      const FL = tcFightLog(S), r1 = FL.log.filter(e => e.r === 1 && !e.pass && (e.k === 'act' || e.k === 'elu')).map(e => e.who);
+      out.battleLog = { ok: FL.ok, r1, order: S.order, perRound: [...Array(tcFight())].map((_, i) => FL.log.filter(e => e.r === i + 1 && !e.pass && e.k === 'act' && !e.extra).length),
+        elu: FL.log.filter(e => e.k === 'elu').length, F: tcFight() };
       state.wonder = keepWo; tcMemo.key = '';
     }
     // a damage dealer's Resonance, set off by teammates' actions (Wavecatcher Miyu's Catch a Wave)
@@ -3656,10 +3753,10 @@ function awarenessOverrideDrift() {
     const w = tcWonder(ann, { personas: [slot('Q'), slot('P'), slot('')], weapon: '', refine: 1 });
     Object.assign(WONDER_BUFFS, real); state.wonder = keepW; tcMemo.key = '';
     out.wonder = { lines: w.lines.map(l => l.v), idle: w.idle.length, events: w.sim.events.length };
-    // Fuuka's Pros and Cons (A2): the backup also fires their Highlight on the swap
+    // Fuuka's Strengths and Weaknesses (A2): the backup also fires their Highlight on the swap
     const keepF = state.chars['Fuuka Yamagishi'].loadout;
     const bk = aw => { state.chars['Fuuka Yamagishi'].loadout = Object.assign({}, DEFAULT_LOADOUT, { awareness: aw }); tcMemo.key = '';
-      return tcMember(ann, 'Leo Kamiyama', null, { swaps: 2 }, false).lines.filter(l => /Pros and Cons/.test(l.why)).length; };
+      return tcMember(ann, 'Leo Kamiyama', null, { swaps: 2 }, false).lines.filter(l => /Strengths and Weaknesses/.test(l.why)).length; };
     out.backup = [bk(0), bk(2)];
     // Oracle Shift in the fight: her first lufel rotation ('-', 1, 3, 1, 2+3, 1, its opening wait once) and
     // 3 starting stacks reach 4 on rounds 2, 6 and 10; at A6 (cost 3, +2 per Divine Prayer, 5 to start) more
@@ -3682,7 +3779,7 @@ function awarenessOverrideDrift() {
       plan: [0, 1, 6].map(aw => tcFuukaPlan(aw, 1).join(',')), cut: tcFuukaPlan(1, 0).join(','),
       unroll: tcUnroll('Fuuka Yamagishi', ['-', '1', '3', '1', '2+3', '1'], 12, 0).join(' ') };
     // the backup's start-of-battle effects at its first swap: Yukari's A1 Theurgy charge fires her Theurgy at
-    // once (Fuuka at A0, so not Pros and Cons); Koromaru's Assist comes on from the first swap
+    // once (Fuuka at A0, so not Strengths and Weaknesses); Koromaru's Assist comes on from the first swap
     const yka = 'Yukari Takeba', keepY = state.chars[yka];
     const yk = aw => { state.chars[yka] = Object.assign({}, keepY, { loadout: Object.assign({}, DEFAULT_LOADOUT, { awareness: aw }) }); tcMemo.key = '';
       return tcSim(ann, [null, null, 'Fuuka Yamagishi', yka], false).hl[yka] || 0; };
@@ -3709,6 +3806,27 @@ function awarenessOverrideDrift() {
       const at = sk => tcSimRun(Object.assign({}, P0, { fuuka: Object.assign({}, P0.fuuka, { backup: Object.assign({}, P0.fuuka.backup, { skill: sk }) }) }), ref.spend, ref.hold).total;
       const vals = ['1', '2', '3'].map(at), pick = S.prep.fuuka.backup.skill;
       out.bkSkill = { pick, sum: P0.fuuka.backup.skill, vals, best: Math.max(...vals), pickV: at(pick) };
+    }
+    /* Oracle Shift's copy (Steadfast Supporter): while swapped in, the backup carries the status effects others put on
+       the damage dealer (Kotone Shiomi's Arcana Link lines), never the damage dealer's own; and Self-Worth (A6) lets
+       Strengths and Weaknesses' amp stack twice, so back-to-back swaps hold +20% */
+    {
+      const F = 'Fuuka Yamagishi', keepF = state.chars[F];
+      const setAw = aw => { state.chars[F] = Object.assign({}, state.chars[F] || {}, { loadout: Object.assign({}, DEFAULT_LOADOUT, { awareness: aw }) }); tcMemo.key = ''; };
+      setAw(0);
+      const own = (L, on) => { const was = tcBkCopyOn; tcBkCopyOn = on; tcMemo.key = ''; const S = tcSim(ann, L, false); tcBkCopyOn = was; return { own: S.own['Kumi Katayama'] || 0, mult: S.mult, shifts: S.shifts.length }; };
+      const withK = ['Kotone Shiomi', null, F, 'Kumi Katayama'], noK = [null, null, F, 'Kumi Katayama'];
+      out.bkCopy = { on: own(withK, true), off: own(withK, false), aloneOn: own(noK, true), aloneOff: own(noK, false) };
+      setAw(6);
+      const line = TEAM_BUFFS[F].find(e => e.perCast === 'fuukaAmp'), keepL = Object.assign({}, line);
+      const lineup = [null, null, F, 'Leo Kamiyama'];
+      tcMemo.key = ''; const S2 = tcSim(ann, lineup, false);
+      Object.assign(line, { stacks: 1 }); tcMemo.key = ''; const S1 = tcSim(ann, lineup, false);
+      Object.assign(line, keepL); tcMemo.key = '';
+      const finals = aw => { setAw(aw); return tcMember(ann, F, null, null, false).lines.filter(l => l.k === 'final').map(l => ({ v: l.v, up: l.up })); };
+      out.selfWorth = { shifts: S2.shifts, two: S2.mult, one: S1.mult, a3: finals(3), a6: finals(6) };
+      if (keepF) state.chars[F] = keepF; else delete state.chars[F];
+      tcMemo.key = '';
     }
     // Mitsuru's Iceblade: on the triggering ally's ATK (Global text), and from her A1 on every ally skill attack
     {
@@ -3859,7 +3977,8 @@ function awarenessOverrideDrift() {
     // the damage dealer's own timed buff: out of the fight's baseline, on only when the rotation casts its skill
     const mak = charDef('Makoto Niijima');
     out.timed = { nt: tcEvalFor(mak, true).f0 < tcEvalFor(mak).f0, kit: kitStatBuffs(mak, Object.assign({}, charLoadout(mak.n), { noTimed: true })).some(b => b.on), events: tcTimedKit(mak).map(e => e.e.on + '/' + e.dur) };
-    const runSeq = (seq, events) => { const P = tcSimPrep(mak, [null, null, null], false, true); P.dps.seq = seq; if (!events) P.dps.events = []; return tcSimRun(P, [mak.n], false).total; };
+    // (only her timed KIT_STAT_BUFFS are taken off, which tcSimPrep puts first: her own TEAM_BUFFS events, Skill 1's Radiation among them, stay)
+    const runSeq = (seq, events) => { const P = tcSimPrep(mak, [null, null, null], false, true); P.dps.seq = seq; if (!events) P.dps.events = P.dps.events.slice(tcTimedKit(mak).length); return tcSimRun(P, [mak.n], false).total; };
     out.timed.cast = runSeq(['2', '1'], true) > runSeq(['2', '1'], false);
     out.timed.noCast = Math.abs(runSeq(['1', '1'], true) - runSeq(['1', '1'], false)) < 1e-9;
     // gauge: a fill-to on every teammate action gives the damage dealer more Highlights; Prosperity starts at 25
@@ -4108,7 +4227,8 @@ function awarenessOverrideDrift() {
       state.chars[MIN].loadout = Object.assign({}, DEFAULT_LOADOUT, { awareness: 0 });
       const b0 = tcMedHlBoost();
       state.chars[MIN].loadout = Object.assign({}, DEFAULT_LOADOUT, { awareness: 4 });
-      const b4 = tcMedHlBoost(), t4 = [9.8, 10.8, 10.4, 11.4][kitTierIndex(charDef(MIN), charLoadout(MIN))] / 100;
+      // (the tier her Highlight reaches at A4, by its own Awareness node: SKILL_LEVEL_AW)
+      const b4 = tcMedHlBoost(), t4 = tierVal([9.8, 10.8, 10.4, 11.4], charDef(MIN), charLoadout(MIN), 'HL') / 100;
       state.chars[MIN].loadout = L0;
       const hlB = window.tcMedHlBoost;
       const fight = () => { tcMemo.key = ''; tcPairCtx = { [MIN]: 'dmg.atk.hl' }; const S = tcSim(ann, minTeam, false); tcPairCtx = null; return S; };
@@ -4321,6 +4441,11 @@ function awarenessOverrideDrift() {
     th.orders.users >= 1 && th.orders.users <= 2 && th.orders.tried === (th.orders.users === 2 ? 6 : 2) && near(th.orders.chosen, th.orders.top, 1e-9), JSON.stringify(th.orders));
   check('a member\'s part and Wonder\'s are read against the headline fight with its own rotations: no Wonder setup is a part of exactly 1, and the headline replayed as is prices the same',
     Math.abs(th.partsAs.wonder - 1) < 1e-12 && th.partsAs.same < 1e-9 && th.partsAs.parts[1] > 1 && th.partsAs.parts[2] > 1 && th.partsAs.parts[0] > 0, JSON.stringify(th.partsAs));
+  {
+    const B = th.battleLog;
+    check('the Battle rotation log is the headline fight replayed (same total): Fuuka at each round\'s start, then each thief once a round in the fight\'s own order',
+      B.ok && B.elu === B.F && B.r1[0] === 'Fuuka Yamagishi' && JSON.stringify(B.r1.slice(1)) === JSON.stringify(B.order) && B.perRound.every(n => n === B.order.length), JSON.stringify(B));
+  }
   check('the fight plays turn order: a 1-turn debuff from a teammate faster than the damage dealer meets the hit, from a slower one it has expired',
     th.order.fast > th.order.slow + 0.01 && th.order.fastUp > 0.9 && th.order.slowUp < 0.1, JSON.stringify(th.order));
   check('Catchy Hook adds Highlights outside the cooldown, and Summer Ayaka\'s Concerto of Time gives the damage dealer one every 3 actions for free',
@@ -4493,6 +4618,12 @@ function awarenessOverrideDrift() {
     th.fightBackup.pick === th.fightBackup.best && th.fightBackup.other === 3, JSON.stringify(th.fightBackup));
   check('Fuuka\'s backup uses the skill the fight does best with on each swap (each of its three tried), not the one whose damage buffs sum highest',
     ['1', '2', '3'].includes(th.bkSkill.pick) && th.bkSkill.pickV >= th.bkSkill.best * (1 - 1e-9), JSON.stringify(th.bkSkill));
+  check('Fuuka\'s backup copies what others put on the damage dealer (Kotone Shiomi\'s Arcana Link lines raise Kumi\'s own hits), never the damage dealer\'s own buffs',
+    th.bkCopy.on.shifts > 0 && th.bkCopy.on.own > th.bkCopy.off.own * 1.05 && th.bkCopy.on.mult > th.bkCopy.off.mult &&
+    th.bkCopy.aloneOn.own > 0 && Math.abs(th.bkCopy.aloneOn.own - th.bkCopy.aloneOff.own) < 1e-9 * th.bkCopy.aloneOn.own, JSON.stringify(th.bkCopy));
+  check('Self-Worth (A6): Strengths and Weaknesses\' amp stacks twice on back-to-back swaps; one +10% line below A6, one 2-stack line at A6',
+    th.selfWorth.two > th.selfWorth.one && th.selfWorth.a3.length === 1 && th.selfWorth.a3[0].v === 10 &&
+    th.selfWorth.a6.length === 1 && th.selfWorth.a6[0].v === 20 && th.selfWorth.a6[0].up > 0 && th.selfWorth.a6[0].up <= 1, JSON.stringify(th.selfWorth));
   check('a Persona line that grows with Wonder\'s stats reads them: Rebellion at 10% crit rate is 10.2 + 1.8, at 60% its cap (17.2), and with no stats known its cap',
     th.wonderPer.ok && near(th.wonderPer.capV, 17.2, 0.05) && near(th.wonderPer.at10, 12.0, 0.05) && near(th.wonderPer.at60, 17.2, 0.05), JSON.stringify(th.wonderPer));
   check('Ann\'s Rosethorn adds Fire damage per Burning foe: with five foes Falling Sun Burns the others at its chance (well over one Burning foe on average) and her damage rises; with one foe at most one counts',
@@ -4787,7 +4918,7 @@ function awarenessOverrideDrift() {
     commit(); renderTeams();
     return { keep, name };
   });
-  await p.click(`#tmOut [data-tm-busy-p="${wpKeep.name}"]`);
+  await p.click(`#tmOut [data-tm-busy-p="${wpKeep.name}"]`, { timeout: 120000 });
   const wpBusy = await p.evaluate(n => {
     const w = tcTeams('Yusuke Kitagawa').team.seats.find(s => s.wonder).wonder;
     const pr = collectPrefs(); tmBusyP = new Set(); applyPrefs(pr);
@@ -4798,7 +4929,8 @@ function awarenessOverrideDrift() {
     !wpBusy.sug.includes(wpKeep.name) && wpBusy.sug.filter(Boolean).length === 3 && wpBusy.lines === 0 && wpBusy.chip.includes(wpKeep.name) &&
     /busy in another team, so it and its skill cards are not counted here/.test(wpBusy.seat) && wpBusy.opt &&
     wpBusy.prefs.length === 1 && wpBusy.prefs[0] === wpKeep.name, JSON.stringify(wpBusy).slice(0, 500));
-  await p.click(`#tmBusy [data-tm-unbusy-p="${wpKeep.name}"]`);
+  // (this recalculation runs about 30 s on the test inventory, measured Nov 2026, so the click gets more than the default 30 s)
+  await p.click(`#tmBusy [data-tm-unbusy-p="${wpKeep.name}"]`, { timeout: 120000 });
   const wpFree = await p.evaluate(() => ({ busy: tmBusyP.size, lines: tcWonder(charDef('Yusuke Kitagawa')).lines.length }));
   check('making a busy Persona available again counts it again', wpFree.busy === 0 && wpFree.lines > 0, JSON.stringify(wpFree));
   await p.evaluate(k => { state.wonder = JSON.parse(k); commit(); renderTeams(); }, wpKeep.keep);
@@ -5011,7 +5143,8 @@ function awarenessOverrideDrift() {
     // every piece of a turn the fight reads: lufel's own pieces, plain skill digits, and Highlights
     const pieces = new Set();
     Object.values(TEAMS).forEach(T => (T.rot || []).forEach(o => o.seq.forEach(t => t.split('+').forEach(x => pieces.add(x.trim())))));
-    const readable = x => pieces.has(x) || /^[1-3]+↺?$/.test(x) || /^[1-3]×\d+$/.test(x) || /^\d*HL(×\d+)?$/.test(x);
+    // (and a support skill the fight reads by name: Mitsuru's Assist, TC_CM)
+    const readable = x => pieces.has(x) || /^[1-3]+↺?$/.test(x) || /^[1-3]×\d+$/.test(x) || /^\d*HL(×\d+)?$/.test(x) || (x === 'Assist' && tcTurnSkills(x).has('assist'));
     for (const c of CHARACTERS) {
       const K = KIT_ROT[c.n];
       if (!K) { out.missing.push(c.n); continue; }

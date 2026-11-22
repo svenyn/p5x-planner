@@ -48,6 +48,7 @@ node tools/gen-skill-damage.js lufel.json    # replace the SKILL_DMG block (dama
 node tools/gen-wonder-damage.js [folder]     # replace the WONDER_DMG block (Wonder's own hits: each Persona's unique skill and
                                              # Highlight, every attack skill, % of ATK at skill levels 6/7/8)
 node tools/gen-mind-paths.js lufel.json      # replace the MIND_SKILL_PATHS block (which skills each Mindscape skill path raises)
+node tools/gen-skill-awareness.js lufel.json # replace the SKILL_LEVEL_AW block (the Awareness level that raises each skill's level)
 node tools/fetch-persona-art.js              # the Personas tab's pictures into dist/art/ (gitignored, like the portraits)
 node tools/gen-persona-base.js [folder]      # replace the PERSONA_BASE block (each Persona's level-1 HP/ATK/DEF, from Game8's
                                              # Persona pages; [folder] caches the pages)
@@ -638,8 +639,18 @@ stacks and modes, permanent and battle-start lines; never one-turn or Highlight-
 HP- or team-conditional ones, skill-specific multipliers, or stat conversions (those are
 already why the source stat is the character's top weight). Adding an entry is a
 per-character judgement about the rotation, not a parse. Skill-level ladders carry all four
-printed values as `tiers`, and `kitTierIndex` picks the one the setup's Awareness and Mindscape
-reach, the same family rule `pickTier` uses for the stat targets. A second
+printed values as `tiers`, and `kitTierIndex`/`tierVal` pick the one the setup's Awareness and Mindscape
+reach. **Each skill switches at its own Awareness node** (`SKILL_LEVEL_AW` in data.js, `skillAwLevel`;
+Nov 2026, the user asked): a thief's Awareness 3 and 5 each raise two skills' levels, together Skills 1-3
+and "Thief Tactics" — the Highlight ("Combat Tactics", the Theurgy, for S.E.E.S.; an Elucidator's nodes
+name only her three skills) — so Chizuko's Skills 1 and 2 read the higher column from A3 and her Skill 3
+and Highlight from A5. Until then every line switched at the one level `pickTier` uses for the stat targets
+(A3, or A5 for `TARGET_TIER_AWARENESS_5`), which is still the rule for a line whose skill is not known
+(`mindSkillKey` gives null: a passive, an Awareness line) and for stat targets. lufel's Korean text puts
+the two nodes at A2/A4 for 32 launch-era characters; the English, Global's, is used. It moves only a
+character at Awareness 3 or 4: on save (66) that is Makoto Niijima alone (A3: her Skill 2 and Highlight
+back to the base column), her damage alone −2.3%, her best team unchanged at −1.4% damage (multiplier
+21.5× to 21.7×), build score 74.95 to 74.93; the Teams search takes no longer. A second
 unconditional stat in the *same sentence* is not a condition, though — the parser once
 dropped Mermaid Dreamer's whole "critical damage … and Resonance critical rate …" line and
 scored Miyu Sahara [Wavecatcher] 36.3% Crit Multiplier under her real panel — so a weapon may
@@ -1391,11 +1402,25 @@ damage-formula section); teams are ranked by it:
   Skill 1 instead of Skill 2. On save (59) no best team changed (Kumi's Skill 1 and Ayaka's Skill 2 were already the
   fight's picks); Tempest Riko's pick moved from Skill 3 to Skill 1 at 0.04% less once fully fitted, as the choice is
   made before the fit. `tcSimAs` replays the headline's pick.
-  Fuuka's swap lines fire (`on: 'shift'`: Pros and Cons' +10% final damage at A2, 2 turns at A6;
+  Fuuka's swap lines fire (`on: 'shift'`: Strengths and Weaknesses' +10% total damage amp at A2; at A6,
+  Self-Worth, 2 turns and up to 2 stacks, each swap a stack on its own timer — `build` with `perCast`, so
+  back-to-back swaps hold +20%; it was counted once until Nov 2026;
   her weapon's crit damage for 3 turns), and from A2 the backup's Highlight or Theurgy fires free
   with the swap, at most once every 3 rounds, setting off every Highlight trigger. The backup's
   action fills the gauge and counts as a teammate acting (an assumption, said on the page). Its
-  passives are off while it waits. Courtesy (her passive 2) adds 4.5% of the backup's ATK, crit,
+  passives are off while it waits. **While in, it carries what the others have put on the damage
+  dealer** (Steadfast Supporter: "copy all status effects from the [Current Character] except those
+  they applied to themselves"; `cp` in `tcSimRun`'s `curX`, test knob `tcBkCopyOn`, Nov 2026): its own
+  hits read the `to: 'ally'` lines and Kotone Shiomi's copies on the damage dealer, never the damage
+  dealer's own buffs. Until then only party buffs reached them. Beside Kotone Shiomi her Arcana Link
+  lines (+50% ATK, +50% crit damage, pierce) more than double a hitting backup's own damage (Kumi,
+  Runa, Mitsuru). On save (66), each owned damage dealer's best team (ranked by the team's damage):
+  Kotone Shiomi / Kumi-backup teams +2% to +14% (Shoki Notte +14.3%, Ren +9.5%, Tropical Motoha
+  +9.0%), the rest unchanged; best team changed for Haru (to Beachflower Minami / Kotone / Fuuka /
+  Kumi, 18.04x to 19.53x), Wavecatcher Miyu (Kumi moved from a thief seat to the backup) and Makoto
+  Yuki (Kumi replaced Beachflower Minami as the backup; 41.16x to 40.82x, the search settling on
+  another near tie). Whether the game counts Kotone's Arcana Link bonuses as effects on the damage
+  dealer (copied) or as her passives (not) is not settled; an in-game reading of a backup's hit would. Courtesy (her passive 2) adds 4.5% of the backup's ATK, crit,
   damage and Pierce to the party, like the Elucidator share. The seat names the swap rounds. The quick
   screen keeps the averaged backup (`tcMember(..., backup)`, `TC_SWAPS` swaps in six turns).
   **Checked against her full text and the real save (1 Nov 2026), and four things were added.**
@@ -1463,6 +1488,22 @@ damage-formula section); teams are ranked by it:
   a one-line summary of what is set (`tmWonderSumText`); his Speed stays in the top row. The turn
   order's step numbers are CSS counters, so a step's text is still "Wonder 250 Speed" (a test reads
   it), and the per-factor pills are inline-block for the same reason.
+- **Battle rotation** (`tmBattleHtml`, Nov 2026; the user asked for the whole team's rotation in the order they
+  act): a table with a column per member, left to right in acting order (the Elucidator at the round's start, the
+  thieves fastest first, Fuuka's backup just before the damage dealer it swaps in for), a row per round (Virtual
+  Concert's encore rounds as rows of their own), between Turn order and Rotation. On the calculated basis it is the
+  headline fight itself: `tcSimBest` keeps the inputs it fought with (`runP`, not enumerable; `tcSim` copies it by
+  hand, since `Object.assign` drops it) and `tcFightLog(S)` replays them with `P.log` on, under the chosen mask
+  pairs, and reports `ok` when the replay's total matches (a test holds it). The log (`lg` in `tcSimRun`) records the
+  Elucidator's step, each thief's turn (`i` is the action index the rotation is read at; Wonder's `wt` is his turn
+  from `tcWonder`'s `turns`), each Highlight or Theurgy with what set it off (`why`: Catchy Hook, Fortune, Oracle
+  Shift, Concerto of Time, `rotation` for a free one lufel writes; none for the gauge), Oracle Shift, Virtual
+  Concert, a knockdown, the enemy's turn. A Highlight sits under its user with "before X acts" or "on X's turn". A
+  turn that differs from lufel's rotation for that member — the closest of lufel's options for this team
+  (`tmRotPick`), played to the fight's length by `tcUnroll`; read against the first, Fuuka beside Mitsuru, who plays
+  lufel's second, was ringed every turn — is ringed with lufel's turn in its tooltip. lufel's "HL"/"TH" inside a
+  turn is left off the turn's tile (`tmNoHl`): the fight uses Highlights from the gauge, and each has its own tile. On
+  lufel's basis it lays lufel's first options side by side in Speed order, with nothing played out.
 - **The page reads a per-factor summary per member first** ("ATK +126% · crit multiplier +112% ·
   Pierce +38%", `tcSumHtml`, each line at its share of turns), with the kit lines folded under
   "Where it comes from"; a skill not in the member's rotation is named, not quoted. The next teams
@@ -1584,8 +1625,8 @@ damage-formula section); teams are ranked by it:
     that buffs them for free.
   - *Gauge*: Spotlight (Ayaka A4) fills the gauge to 60% on her Highlight (`hlGaugeTo`, fight only),
     Aran's A4 Highlight regains 15, and Prosperity's 4-piece starts the gauge at 25 once whoever of
-    the thieves wears it. Mitsuru's Assist is a support-slot skill her lufel rotation never casts,
-    so it stays unpriced.
+    the thieves wears it. Mitsuru's Assist (Charged Mark) is priced since 14 Nov 2026 (see "Mitsuru's last
+    unpriced lines" below).
 - **The damage dealer's own damage bonuses** (`DPS_KIT_BONUS`, Nov 2026, the user asked): "+30%
   Resonance damage", "Highlight +20% per stack", a weapon's "follow-up damage +26-50%", "Skill 3 +10%
   per stack", an enemy's "damage taken" from their own skill. 222 entries for 29 damage dealers, from
@@ -2147,8 +2188,8 @@ damage-formula section); teams are ranked by it:
 - **Elemental ailments on the boss** (Nov 2026; the user: "the ailment thing is very important for Queen,
   this is why her best ally is Vino"). Queen's Chief Strategist (+15% ATK per kind of elemental ailment on
   foes) was priced nowhere, and her Thermonuclear Fury, Highlight and Nuclear Finisher read a judged two.
-  The fight now tracks Burn, Freeze, Shock and Windswept on the main target, and Radiation, which counts
-  only with Chizuko (Vino) in the team (her A0): `TC_AILMENTS` (58 sources for 31 characters, from one
+  The fight now tracks Burn, Freeze, Shock and Windswept on the main target, and Radiation (Queen's Skill 1,
+  Chizuko's A0): `TC_AILMENTS` (58 sources for 31 characters, from one
   research pass over lufel's English and Korean skill, Awareness and weapon text, Nov 2026; Korean used
   where they disagree; durations lufel does not print taken as 2 turns) says what each kit inflicts,
   on which skill or token, how often, for how long. 'any' takes a kind the target lacks; a chance is a
@@ -2165,6 +2206,17 @@ damage-formula section); teams are ranked by it:
   3.3 with Chizuko at her saved Awareness 0 and 3.9 at Awareness 6, where Chizuko joins Queen's best
   team (16.7×); at Awareness 0 Minami and Kotone Shiomi still lead (16.5×). Her Setup there has no
   Awareness set, which is worth checking.
+  **Radiation is a status, whoever inflicts it** (14 Nov 2026; the user read the in-game description:
+  "increase damage taken by 15%, counts as an elemental ailment"). Until then it counted as an ailment only
+  with Chizuko in the team and its +15% came only from her A0 line, so Queen's own Skill 1 Radiation did
+  nothing. Now the fight's ailment count always includes it, the quick screen's ailment supply counts it as a
+  fifth kind (`tcAilSupply`), and Queen's Skill 1 carries the +15% damage taken itself (TEAM_BUFFS, main
+  target, 2 turns, on before her hit like her other damage-taken lines). One status, so that line has
+  `notWith: 'Chizuko Nagao'` (a new TEAM_BUFFS field: left out while that character is on the field, not as
+  Fuuka's backup), since Chizuko's Veteran Technique line already keeps Radiation on any ailing foe. On save
+  (66): Queen's damage alone +13%; her best team went from the twins / Mitsuru / Fuuka / Kumi (23.8×) to
+  Kumi / Mitsuru / Fuuka, backup Ayaka (21.7×, 3% more damage than the old leader; the multiplier is lower
+  because her solo damage rose more).
 - **Technicals and Technical Precision** (Nov 2026; the user: Firecracker Rin's kit is built on them and Mio
   is made for her, yet Mio never appeared in Rin's teams). lufel's guide (`technical-master`, recorded in
   `docs/DATA-SOURCES.md`) gives the rules: a skill that "can activate a Technical" does so on a foe with an
@@ -2449,6 +2501,38 @@ and the quick screen). Each finding was re-read against the text before entry. W
   with 5047 ATK above most allies who trigger it: her teams −0.3% to −2% (YUI 146.9× to 144.5×, Mitsuru 46.6× to
   45.7×), Makoto Niijima's +1.9% (her ATK is higher), and Yusuke's best team swaps Mitsuru for the twins (24.05× to
   24.04×, a near tie).
+- **Mitsuru's last unpriced lines, 14 Nov 2026** (the user asked why her seat listed five things as not priced). Two of
+  the five notes were stale (Iceblade and her "self only" lines were already counted) and Pre-Navigator is played as a
+  turn, not a line; those notes went. Three changes: (1) *Snowpierced Waltz's party share*: Skill 3 gives the party 3% of
+  the Elucidator's stats for 2 turns, a TEAM_BUFFS line `elu: 3` that `tcEluLines` turns into one line per stat at the
+  team's Elucidator's totals (ATK as flat ATK, crit rate, crit damage, damage, Pierce, like her own 20% share); with no
+  team (the quick sweep) it is a marker, `vec.eluPct`, which `tcMultiplier` prices from the lineup's Elucidator's
+  `vec.eluBase`. (2) *A teammate's own timed self-buffs* (KIT_STAT_BUFFS with `on`, `tcTimedKit`) are played on their
+  actor in the fight, for their own hits only: `self` buffs reach their owner's hits (`curX`'s `reach`), count down after
+  the owner's action, and never reach the damage dealer. Until then only the damage dealer's were played, and a
+  teammate's (Mitsuru's Longinus crit damage after her Theurgy) counted nowhere. (3) *Assist* (her support skill,
+  `TC_CM`): Charged Mark on the foe for 2 turns; each other thief's first attacking action on it adds 35 to their Theurgy
+  gauge or 15 to the shared Highlight gauge, played as a support skill (next bullet). Read as judged: her own attacks and
+  an ally's Highlight or Theurgy do not count as the first attack. On save (66), Mitsuru A0 with Longinus R0 (35 owned
+  damage dealers), with (1) and (2) and Assist as it was first entered (taking her turn): she was in 26 best teams, which
+  rose 3-7% (the share about 4 of it; Yusuke's, without her, +1.6% from teammates' timed self-buffs); best teams changed
+  for 5 (Haru, Mayumi, Makoto Yuki, Beachflower Minami, Kumi). Haru's fell 18.53× to 18.04×: his old best (Mayumi / Kumi /
+  Fuuka / Ayaka) still priced 18.53× fully fitted, but Mitsuru's lineups outranked it on the list's fit and it no longer
+  reached the `TC_FULL_TOP` three that get the full fit; a search-depth limit, not a price. Calibration not affected
+  (team pricing only).
+- **Support skills, 14 Nov 2026** (`TC_SUPPORT`; the user: once per battle, on the character's turn, any turn, and used
+  on top of that turn's skill, not instead of it). Only the S.E.E.S. members have one (lufel's `skill_support`). A
+  rotation writes it as a prefix, `Assist+<move>` (token `assist`); `tcRotStep` allows it for a kit in `TC_SUPPORT` once a
+  battle (`S.used.__support`), whatever the move, and the composer (`tcCompose`) tries it on each turn, or drops it, for
+  the three in `TC_SUPPORT_USED`: Mitsuru's Charged Mark (`TC_CM`), Akihiko's (1 ally crit damage +20%, 1 turn) and Makoto
+  Yuki's (1 ally ATK +20%, 1 turn), the last two TEAM_BUFFS lines `on: 'assist'`, `to: 'ally'` (not on themselves as the
+  damage dealer). lufel writes none of them, so only a composed rotation uses one. Left out: Aigis's W (lufel writes it
+  every cycle and whether it is once a battle is not settled, the user unsure, so it stays as lufel writes it), Koromaru's
+  (automatic at battle start, already counted), Junpei's shield and Yukari's cleanse (nothing for damage). On save (66),
+  each owned damage dealer's best team, support skills offered against not: used in 20 of 35 (Mitsuru's Charged Mark in
+  18, mostly on her first or second turn, +1-6%; Makoto Yuki's in 7; Akihiko's in none, as he is in none of them); Makoto
+  Yuki's team +19% (35.3× to 42.1×: Charged Mark in round 4 fills his Theurgy); best teams changed for 6 (Yusuke,
+  Chizuko, Frostgale Kotone, Mio, Makoto Yuki, Kotone Shiomi); the search took about the same time.
 - **Ann's Rosethorn, priced 10 Nov 2026**: her 5-star weapon's Fire damage +25.5-49.5% per Burning foe (at most 76-148%)
   is DPS_KIT_BONUS `perBurnFoe` with `capLadder`, read in the damage dealer's own bonuses (a teammate Ann skips it,
   TC_MATE_BONUS_SKIP). The fight counts Burning foes: the main target's Burn as before, and each other foe's as a chance
