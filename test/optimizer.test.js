@@ -3850,11 +3850,12 @@ function awarenessOverrideDrift() {
     {
       const MIO = 'Mio Natsukawa', keepMio = state.chars[MIO], yui = charDef('YUI');
       state.chars[MIO] = Object.assign({}, keepMio || { owned: false }, { loadout: Object.assign({}, DEFAULT_LOADOUT, { weapon: '5' }) });
-      const ent = TEAM_BUFFS[MIO].find(e => /^Entropy/.test(e.why)), keepNeed = ent.needAil;
+      // (Skill 2's cut and Skill 3's and the Highlight's are two lines since Nov 22 2026: every foe for the area ones)
+      const ents = TEAM_BUFFS[MIO].filter(e => /^Entropy/.test(e.why)), keepNeed = ents[0].needAil;
       const run = () => { tcMemo.key = ''; return tcSim(yui, [MIO, null, null], false).total; };
       const any = run();
-      ent.needAil = ['Burn']; const burnOnly = run();
-      ent.needAil = keepNeed;
+      ents.forEach(e => { e.needAil = ['Burn']; }); const burnOnly = run();
+      ents.forEach(e => { e.needAil = keepNeed; });
       if (keepMio) state.chars[MIO] = keepMio; else delete state.chars[MIO];
       tcMemo.key = '';
       out.entropy = { need: keepNeed, any, burnOnly };
@@ -4024,6 +4025,11 @@ function awarenessOverrideDrift() {
     tcExclQuick(us); out.excl.quick = us.map(u => u.up);
     const runaL = TEAM_BUFFS['Runa Dogenzaka'].filter(e => e.k === 'defdown' && e.excl);
     out.excl.runa = runaL.map(e => e.src + ':' + (tcOneFoe(e) ? 'one' : 'all')).join(',');
+    // Runa's Woof Woof Blaze by what she holds (TC_PRIME): lufel's four rotations, as cycles
+    const prs = (seq, aw) => tcPrimeSeq('Runa Dogenzaka', seq, aw, true).map(t => [...t].sort().join('+') || '-').join(' ');
+    out.prime = { s0: prs(['2', '3'], 0), m0: prs(['1', '3'], 0), s6: prs(['3', '2', '1'], 6), m6: prs(['3', '1', '2'], 6),
+      both0: prs(['2', '1', '3'], 0), other: tcPrimeSeq('Ann Takamaki', ['3'], 0, true),
+      bw: (DPS_KIT['Runa Dogenzaka'] || []).filter(c => c.prime === 'w' && c.aoe).length };
     // Almighty (noWeak) takes no weakness bonus: a weakness-damage buff leaves that hit alone
     const keepDK = DPS_KIT[ann.n];
     setSel('#tmWeak', 'all');
@@ -4086,10 +4092,10 @@ function awarenessOverrideDrift() {
     TC_AILMENTS['Ryuji Sakamoto'] = keepAilX; TC_AILMENTS[ann.n] = keepAilA; DPS_KIT_BONUS[ann.n] = keepKbA; tcMemo.key = '';
     // the quick screen: Mio's Technical lines wait for a Burning foe, which a member's `burn` share supplies (her weapon's
     // Entropy read as Burn-only here: it also reads her own Freeze, which would blur what a Burn adds)
-    const entX = TEAM_BUFFS['Mio Natsukawa'].find(e => /^Entropy/.test(e.why)), keepEntNeed = entX.needAil;
-    entX.needAil = 'Burn'; tcMemo.key = '';
+    const entX = TEAM_BUFFS['Mio Natsukawa'].filter(e => /^Entropy/.test(e.why)), keepEntNeed = entX[0].needAil;
+    entX.forEach(e => { e.needAil = 'Burn'; }); tcMemo.key = '';
     const rinX = charDef('Yaoling Li [Firecracker]'), vMio = tcMember(rinX, 'Mio Natsukawa', null, null).vec, burnOnly = { burn: 1 };
-    entX.needAil = keepEntNeed; tcMemo.key = '';
+    entX.forEach(e => { e.needAil = keepEntNeed; }); tcMemo.key = '';
     /* Rin below Awareness 2 Burns only with Skill 2, which lufel's rotations never cast: the fit may put it on (TC_ROT_ADD),
        her Prosperity in Red counts in the fight only on a Burning foe, and Mio's rotation is fitted to meet the Burn */
     const keepRinLo = state.chars[rinX.n].loadout;
@@ -4766,6 +4772,8 @@ function awarenessOverrideDrift() {
     th.excl.f3.excl > th.excl.f3.a + 1e-6 && th.excl.f3.stack > th.excl.f3.excl + 1e-6 &&
     th.excl.drop[0] === '1,1' && th.excl.drop[1] === '2' && JSON.stringify(th.excl.quick) === '[0.75,0.25]' &&
     th.excl.runa === '2:one,1:all,1:all', JSON.stringify(th.excl));
+  check('Runa\'s Skill 3 fires Furrocious Follow-Up after Skill 2 and Big Welcome after Skill 1, Big Welcome when both are held below A6 and both from A6, whose rotations hold both at every Skill 3',
+    th.prime.s0 === '- 3f' && th.prime.m0 === '- 3w+3wo' && th.prime.s6 === '3f+3w - -' && th.prime.m6 === '3f+3w - -' && th.prime.both0 === '- - 3w+3wo' && th.prime.other === null && th.prime.bw === 1, JSON.stringify(th.prime));
   check('Almighty damage takes no weakness bonus (a teammate\'s weakness-damage buff leaves it alone); SKILL_DMG marks Akechi\'s and Starlight Ren\'s Almighty skills',
     Math.abs(th.alm.almighty - 1) < 1e-9 && th.alm.normal > 1.05 && th.alm.skills[0] === '0011' && th.alm.skills[1] === '0010', JSON.stringify(th.alm));
   check('SKILL_DMG FIXES: Pioneer Shun\'s Skill 1 is one boss\'s 83 (later hits 20%), Starlight Morgana\'s "3" half Waltz and half Crash! (72.7), Mio\'s Skill 3 between her two casts, Kiyoshi\'s Skill 2 without its Sacred Flame tick (a dot instead), YUI\'s Meta Dynamite +25% priced once (as a bonus)',

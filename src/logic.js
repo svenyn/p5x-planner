@@ -1392,8 +1392,8 @@ const KIT_STAT_BUFFS = {
     { s: 'Crit Rate', v: 20, pct: true, aw: 1, why: 'Payappa: +20% crit rate on follow-up attacks, which are her damage' }
   ],
   'Yusuke Kitagawa': [
-    { s: 'Damage Multiplier', v: 7.5, pct: true, stacks: 4, on: '3', dur: 2, why: "Painter's Focus: +7.5% damage per shield gained (2 turns, up to 6); Keen Eye (Skill 3) and the counters it draws keep about 4 up, so in the fight it follows Keen Eye for 2 turns" },
-    { s: 'Resistance Pierce', v: 20, pct: true, on: '3', dur: 2, why: "Artist's Intuition: +20% pierce for a turn each time a skill grants a shield; Keen Eye (Skill 3) does, and covers the turn after it in his 3,2 rotation" }
+    { s: 'Damage Multiplier', v: 7.5, pct: true, stacks: 2, on: ['2', '3'], dur: 2, why: "Painter's Focus: +7.5% damage per shield gained (2 turns, up to 6). Bone-Chilling Cold (Skill 2) and Keen Eye (Skill 3) each give him a 2-turn shield, so lufel's 3 › 2 gains one a turn and holds 2 (Nov 22 2026: it was 4, read from the counters Keen Eye draws, which give no shield); a shielding teammate would add more, not counted" },
+    { s: 'Resistance Pierce', v: 20, pct: true, on: ['2', '3'], dur: 1, why: "Artist's Intuition: +20% pierce for 1 turn each time his own skill grants a shield; Bone-Chilling Cold (Skill 2) and Keen Eye (Skill 3) both do, so every 2 or 3 turn has it (until Nov 22 2026 it was Keen Eye's alone, stretched to 2 turns; the text says 1)" }
   ],
   'Makoto Niijima': [
     { s: 'ATK%', tiers: [48.8, 53.8, 51.8, 56.8], pct: true, on: '2', dur: 2, why: "President's Prowess: +48.8% ATK for 2 turns; used every other turn" },
@@ -1501,7 +1501,8 @@ const KIT_STAT_BUFFS = {
     { s: 'Crit Multiplier', v: 33, pct: true, aw: 2, why: 'Blossoming Dance Floor: +33% crit damage with 3+ Step stacks' },
     { s: 'Damage Multiplier', pct: true, weapon: '4', ladder: [24, 31, 31, 38, 38, 45, 45], why: 'Divine Sword of Sinai: +damage with 2+ Step stacks' },
     { s: 'ATK%', pct: true, weapon: '5', ladder: [21, 27, 27, 33, 33, 39, 39], why: 'Royal Étoile: +ATK for 2 turns whenever a Step stack is gained' },
-    { s: 'ATK%', v: 45, pct: true, fight: true, on: 'anyHL', notSelf: true, dur: 2, upTo: 2, why: 'Steps of Faith (passive): +45% ATK for 2 turns when an ally other than Kasumi uses a Highlight or Theurgy, up to 2 stacks (two inside 2 turns is common with her own Highlight costing no gauge; Nov 2026: it was counted as one)' }
+    { s: 'ATK%', v: 45, pct: true, fight: true, on: 'anyHL', notSelf: true, dur: 2, upTo: 2, why: 'Steps of Faith (passive): +45% ATK for 2 turns when an ally other than Kasumi uses a Highlight or Theurgy, up to 2 stacks (two inside 2 turns is common with her own Highlight costing no gauge; Nov 2026: it was counted as one)' },
+    { s: 'Damage Multiplier', pct: true, weapon: '5', ladder: [8.4, 11.1, 11.1, 13.8, 13.8, 16.5, 16.5], fight: true, on: 'anyHL', notSelf: true, dur: 3, upTo: 2, why: 'Royal Etoile (5-star weapon): each time an ally uses a Highlight or Theurgy, a Glass Slipper stack: her damage +8.4-16.5% for 3 turns, up to 2. Read as the other allies, like Steps of Faith; played in the fight (Nov 22 2026; it was judged at 2 x 0.6)' }
   ],
   'Goro Akechi': [
     { s: 'Crit Rate', v: 16, pct: true, aw: 1, why: 'Detective Profile: +16% crit rate while Deduction and Stratagem are both active, his normal loop' },
@@ -1581,16 +1582,23 @@ const KIT_STAT_BUFFS = {
     { s: 'Crit Multiplier', pct: true, weapon: '5', ladder: [14.7, 19.3, 19.3, 23.9, 23.9, 28.5, 28.5], on: 'TH', dur: 2, fight: true, why: 'Longinus (5-star weapon): after her Theurgy, her own crit damage +14.7-28.5% for 2 turns (the party part is TEAM_BUFFS; this was missing until Nov 2026)' }
   ],
   'Shoki Ikenami [Notte]': [
-    { s: 'Crit Multiplier', tiers: [48.8, 53.8, 51.8, 56.8], pct: true, on: '1', dur: 2, why: "Spada dell'Alba: +48.8% crit damage for 2 turns, used every other turn" },
-    { s: 'Damage Multiplier', tiers: [9.8, 10.8, 10.4, 11.4], pct: true, why: "Giuramento Incrollabile: Night's Contract +9.8% damage, his shield-skill state" },
-    { s: 'ATK%', v: 6, pct: true, stacks: 5, why: "Grace: +6% ATK per Night's Blessing stack, held at 5" },
-    { s: 'Resistance Pierce', v: 15, pct: true, why: 'Nirvana: up to +15% pierce at 40% HP; the kit is played at low HP by design' },
-    { s: 'Crit Rate', v: 5, pct: true, stacks: 3, aw: 1, why: "Shooting Star's Guidance: +5% crit rate per Night's Contract gained, 3 stacks" },
-    { s: 'Damage Multiplier', v: 30, pct: true, aw: 6, why: "Illuminating Passion for Life: Night's Monarch +30% damage while HP is negative" },
-    { s: 'Crit Multiplier', v: 30, pct: true, aw: 6, why: "Illuminating Passion for Life: Night's Monarch +30% crit damage while HP is negative" }
+    // lufel's English kit (Tenebre Shoki), re-read Nov 22 2026: names and A1/A2/A4/A6 lines as Global has them
+    { s: 'Crit Multiplier', tiers: [48.8, 53.8, 51.8, 56.8], pct: true, on: '1', dur: 2, why: 'Blade of Dawn (Skill 1): +48.8-56.8% crit damage for 2 turns, used every other turn' },
+    { s: 'Damage Multiplier', tiers: [9.8, 10.8, 10.4, 11.4], pct: true, why: 'Steadfast Vow (Skill 2): Stellato, damage dealt +9.8-11.4% while held; every turn of his rotations casts the Vow, and Scolpire spends the stacks only to regain them on the next turn (read once, not per stack: neither text says per stack)' },
+    { s: 'ATK%', v: 6, pct: true, stacks: 5, why: 'Evening Starlight (passive): +6% ATK per Nocturnal Blessing stack, held at 5 (Blade of Dawn gives 2, and 3 more below 40% HP, where his Vows keep him)' },
+    { s: 'Resistance Pierce', v: 15, pct: true, why: 'Morning Starlight (passive): up to +15% pierce at 40% HP or lower; the kit is played at low HP by design' },
+    { s: 'Crit Rate', v: 5, pct: true, stacks: 3, aw: 1, why: 'Undying Starlight (A1): each Stellato gained adds +5% crit rate for 2 turns, up to 3 stacks; two or more Vows a turn hold all three' },
+    { s: 'Damage Multiplier', v: 5, pct: true, stacks: 3, aw: 1, why: 'Undying Starlight (A1): each Stellato gained also adds +5% damage dealt for 2 turns, up to 3 stacks (the English text; it was not entered before Nov 22 2026)' },
+    { s: 'ATK%', v: 25, pct: true, aw: 2, on: '2', dur: 2, why: 'Dazzling Stage (A2): Steadfast Vow costs 25% less HP and gives +25% ATK for 2 turns; every turn of his rotations casts it' },
+    { s: 'ATK%', v: 35, pct: true, aw: 4, on: 'HL', dur: 4, fight: true, why: 'Trailblazing Will (A4): his Highlight gives +35% ATK for 4 turns (a Highlight-gated line: the Teams fight counts it, the build score does not)' },
+    { s: 'Damage Multiplier', v: 35, pct: true, aw: 6, why: 'The Masks We Wear (A6): Nightlord, below 0 HP, +35% damage dealt (English; 30% in the Korean text)' },
+    { s: 'Crit Multiplier', v: 35, pct: true, aw: 6, why: 'The Masks We Wear (A6): Nightlord, below 0 HP, +35% crit damage (English; 30% in the Korean text)' },
+    // his 5-star weapon's two conditional lines (Spada della Vita, Global English; Nov 22 2026: neither was counted)
+    { s: 'ATK%', pct: true, weapon: '5', ladder: [42.5, 55, 55, 67.5, 67.5, 80, 80], why: "Spada della Vita (5-star weapon): ATK +42.5-80% once Stellato has been gained; his Skill 2 gives it, and every lufel rotation opens with one" },
+    { s: 'Crit Rate', pct: true, weapon: '5', ladder: [16.4, 21.4, 21.4, 26.4, 26.4, 31.4, 31.4], on: '2', dur: 2, why: "Spada della Vita (5-star weapon): crit rate +16.4-31.4% for 2 turns when he spends HP on a skill, which is his Skill 2" }
   ],
   'Shun Kano [Pioneer]': [
-    { s: 'Crit Multiplier', v: 30, pct: true, aw: 1, why: 'Generous Support: party +30% crit damage while an ally has Sheriff Badge, his every-turn skill' }
+    { s: 'Crit Multiplier', v: 45, pct: true, aw: 1, why: 'Generous Support: party +45% crit damage (English, Nov 22 2026; the Korean text has the older number) while an ally has Sheriff Badge, his every-turn skill' }
   ],
   'Junpei Iori': [
     { s: 'Damage Multiplier', v: 20, pct: true, aw: 0, why: 'Wannabe Hero: party +20% Fire damage at 10 Competitive Heart stacks, reached early' },
@@ -2254,8 +2262,8 @@ const CONVERSIONS = {
   'Kumi Katayama':             [{ from: 'Speed', to: 'ATK', rate: 24, over: 100, cap: 1920, why: 'High-Speed Vector: +24 ATK per Speed above 100, up to 1920' }],
   'Miyu Sahara [Wavecatcher]': [{ from: 'SP Recovery', to: 'ATK%', rate: 98 / 280, cap: 98, why: 'Hang Ten!: ATK up to +98% at 280% SP Recovery' }],
   'Riko Tanemura [Tempest]':   [{ from: 'SP Recovery', to: 'Crit Multiplier', rate: 84 / 450, cap: 84, why: 'Sun-kissed Blooms: crit damage up to +84% at 450% SP Recovery' },
-                                { from: 'SP Recovery', to: 'HP', rate: 4, cap: 1800, why: 'Sun-kissed Blooms: HP up to +1800 at 450% SP Recovery' },
-                                { from: 'Crit Multiplier', to: 'ATK%', rate: 0.08, over: 100, why: 'Vernal Splendor: ATK +8% of crit multiplier above 100% after 5 Blossom stacks' }],
+                                // (Vernal Splendor's ATK went from here on Nov 22 2026: it goes to Blossoming Season's target, "1 other ally")
+                                { from: 'SP Recovery', to: 'HP', rate: 4, cap: 1800, why: 'Sun-kissed Blooms: HP up to +1800 at 450% SP Recovery' }],
   'Motoha Arai [Tropical]':    [{ from: 'HP', to: 'ATK', rate: 0.24, over: 8000, cap: 1920, why: 'Outshine the Sun!: +24 ATK per 100 max HP above 8000, up to 1920' }],
   'Kiyoshi Kurotani':          [{ from: 'HP', to: 'Damage Multiplier', rate: 1 / 300, cap: 30, why: 'Hot to the Touch: Fire damage +1% per 300 max HP, up to 9000 HP' }],
   'Tomoko Noge [Seaside]':     [{ from: 'HP Recovery', to: 'Damage Multiplier', rate: 70 / 42, cap: 70, why: 'Power of Memories: Psy damage up to +70% at 42% HP recovery' },
@@ -8869,8 +8877,7 @@ const TEAM_BUFFS = {
     { k: 'dmg', ladder: [13, 17, 17, 21, 21, 25, 25], to: 'party', src: 'weapon', on: '2', dur: 2, weapon: '5', why: 'Warden\'s Judgement: second stack, the Facade from Selected Skill 2' }
   ],
   'Kotone Montagne [Frostgale]': [
-    { k: 'atk%', v: 8.1, to: 'party', src: 'passive', elem: ['Wind'], stacks: 4, why: 'Technical Scoring (passive 2, Spring mode): party ATK +8.1% for 2 turns each time an ally attacks with Wind, max 5 stacks. Judged: she and a Wind damage dealer both attack every turn, so about 4 stacks are held' },
-    { k: 'atk%', v: 8.1, to: 'party', src: 'passive', elem: ['Physical', 'Gun', 'Fire', 'Electric', 'Psychokinesis', 'Nuclear', 'Bless', 'Curse', 'Almighty'], stacks: 2, why: 'Technical Scoring (passive 2, Spring mode): party ATK +8.1% per Wind attack, 2 turns, max 5. Judged conservatively: with a non-Wind damage dealer only her own attacks build it, about 2 stacks held' },
+    { k: 'atk%', v: 40.5, to: 'party', src: 'passive', on: 'atkWind', dur: 2, build: true, stacks: 5, upQ: 0.6, why: 'Technical Scoring (passive 2, Spring mode): each time an ally attacks with Wind (her included), party ATK +8.1% for 2 turns, up to 5 stacks (40.5% in all). The fight counts a stack per damaging skill a Wind thief uses (Nov 22 2026; it was judged at 4 stacks with a Wind damage dealer and 2 otherwise); the quick screen reads 3' },
     { k: 'defdown', v: 40, to: 'enemy', src: 'aw', on: '3', dur: 1, aw: 2, elem: ['Physical', 'Gun', 'Fire', 'Electric', 'Wind', 'Psychokinesis', 'Nuclear', 'Bless', 'Curse', 'Almighty'], why: 'Swan\'s Gaze (A2, Spring mode): all foes DEF -40% while Spring\'s Edge is active; Ailes au Vent (Skill 3) opens the Edge for 1 turn. Spring mode is assumed for every damage dealer but an Ice one' },
     { k: 'dmg', v: 30, to: 'party', src: 'aw', on: '3', dur: 1, aw: 2, elem: ['Ice'], why: 'Swan\'s Gaze (A2, Winter mode): party Ice damage +30% while Winter\'s Edge is active; Frozen Wings (Skill 3) opens the Edge for 1 turn. Winter mode is assumed with an Ice damage dealer' }
   ],
@@ -8878,15 +8885,18 @@ const TEAM_BUFFS = {
     { k: 'defdown', v: [14.6, 14.6, 15.5, 15.5], per: { s: 'Ailment Accuracy', rate: 31.4, cap: [171, 188.5, 181.6, 199.1] }, to: 'enemy', foes: 'one', src: '2', on: '2', dur: 2, durAw: [6, 3], excl: 'def', why: 'Furrious Bark (Skill 2, 1 foe): DEF down 14.6% + 31.4% of ailment accuracy, max 53.7/59.2/57.0/62.5%, 2 turns, 3 from A6 (Station Square Superstar) (every language puts the cap on the ailment-accuracy part, so 68.3% at most, as lufel\'s defence calculator); does not stack with Welcome Hug\'s' },
     { k: 'defdown', v: 0, per: { s: 'Ailment Accuracy', rate: 15.4, cap: [171.4, 189, 181.8, 199.4] }, to: 'enemy', foes: 'all', src: '1', on: '1', dur: 2, durAw: [6, 3], excl: 'def', why: 'Welcome Hug (Skill 1, all foes): DEF down 15.4% of ailment accuracy, max 26.4/29.1/28.0/30.7%, 2 turns, 3 from A6; does not stack with Furrious Bark\'s, the larger applies' },
     { k: 'defdown', v: [26.4, 26.4, 28, 28], to: 'enemy', foes: 'all', src: '1', on: '1', dur: 2, durAw: [6, 3], excl: 'def', elem: ['Fire', 'Ice', 'Electric', 'Wind'], why: 'Welcome Hug: a foe with it that takes Fire, Ice, Electric or Wind skill damage loses 26.4/26.4/28.0/28.0% more DEF (52.8% in all at level 10, as lufel\'s defence calculator); counted for a damage dealer of those elements, whose own hits set it off' },
-    { k: 'dmg', v: 0, per: { s: 'Ailment Accuracy', rate: 34.3, cap: [170.8, 188.3, 181.3, 198.8] }, to: 'enemy', src: '3', on: '3', dur: 2, cond: 'Furrocious Follow-Up active (Skill 2 before Skill 3, as in the single-target rotation)', why: 'Woof Woof Blaze (Skill 3) via Furrocious Follow-Up: target damage taken +34.3% of ailment accuracy, max 58.6/64.6/62.2/68.2%, 2 turns' },
-    { k: 'resDm', v: [39, 43, 41.4, 45.4], to: 'enemy', foes: 'one', src: '3', on: '3', dur: 2, cond: 'Furrocious Follow-Up active (Skill 2 before Skill 3, as in the single-target rotation)', why: 'Woof Woof Blaze (Skill 3) via Furrocious Follow-Up: the target\'s Resonance damage taken +39.0-45.4% for 2 turns (Nov 2026)' },
+    { k: 'dmg', v: 0, per: { s: 'Ailment Accuracy', rate: 34.3, cap: [170.8, 188.3, 181.3, 198.8] }, to: 'enemy', foes: 'one', src: '3', on: '3f', dur: 2, durAw: [6, 3], excl: 'wdt', exclAs: 'f', why: 'Woof Woof Blaze (Skill 3) as Furrocious Follow-Up (after Furrious Bark, TC_PRIME): the target\'s damage taken +34.3% of ailment accuracy, max 58.6/64.6/62.2/68.2%, 2 turns (3 from A6, Station Square Superstar); does not stack with Big Welcome\'s, the greater applies' },
+    { k: 'resDm', v: [39, 43, 41.4, 45.4], to: 'enemy', foes: 'one', src: '3', on: '3f', dur: 2, durAw: [6, 3], why: 'Woof Woof Blaze (Skill 3) as Furrocious Follow-Up: the target\'s Resonance damage taken +39.0-45.4% for 2 turns (3 from A6)' },
+    { k: 'dmg', v: 0, per: { s: 'Ailment Accuracy', rate: 24, cap: [170.8, 188.3, 181.3, 198.8] }, to: 'enemy', foes: 'all', src: '3', on: '3w', dur: 2, durAw: [6, 3], excl: 'wdt', exclAs: 'w', why: 'Woof Woof Blaze (Skill 3) as Big Welcome (after Welcome Hug, TC_PRIME): every foe\'s damage taken +24% of ailment accuracy, max 41.0/45.2/43.5/47.7%, 2 turns (3 from A6); with both held from A6 the greater of this and Follow-Up\'s applies (A6\'s own words), so the main target keeps Follow-Up\'s and the other foes this one' },
     { k: 'defdown', v: 10.8, to: 'enemy', foes: 'one', src: 'aw', on: '3', dur: 2, why: 'Station Square Mascot (A0): each Woof Woof Blaze has a 60% chance to cut the target\'s DEF by 18% (and healing received by 50%) for 2 turns, at level 70+; entered at its average, 60% of 18. Seen in game on Baal Zebul (Nov 2026) beside her weapon\'s cut, so not exclusive with her other DEF downs' },
-    { k: 'resDm', v: 50, to: 'enemy', foes: 'one', src: 'aw', on: '3', dur: 2, aw: 1, cond: 'Furrocious Follow-Up active', why: 'Legendary Devotion (A1): Woof Woof Blaze with Furrocious Follow-Up raises the target\'s Resonance damage taken a further 50% for 2 turns (the English text; lufel\'s Korean says follow-up damage, 추격)' },
-    { k: 'dmg', v: [20.5, 22.6, 21.8, 23.9], to: 'enemy', src: '3', on: '3', dur: 2, aw: 6, elem: ['Fire', 'Ice', 'Electric', 'Wind'], cond: 'Big Welcome active (Skill 1 before Skill 3); the A0 single-target rotation 2>3 never triggers it, the A6 one does both', why: 'Woof Woof Blaze via Big Welcome: Fire/Ice/Electric/Wind damage taken +20.5-23.9% for 2 turns' },
-    { k: 'dmg', v: 36, to: 'enemy', src: 'aw', on: '3', dur: 2, aw: 6, elem: ['Fire', 'Ice', 'Electric', 'Wind'], cond: 'Big Welcome activated by Skill 3; node is A1 but the single-target rotation only triggers Big Welcome from A6', why: 'A1 Legendary Devotion: after Big Welcome\'s Woof Woof Blaze, Fire/Ice/Electric/Wind damage taken +36% for 2 turns' },
+    { k: 'resDm', v: 50, to: 'enemy', foes: 'one', src: 'aw', on: '3f', dur: 2, aw: 1, why: 'Legendary Devotion (A1): Woof Woof Blaze with Furrocious Follow-Up raises the target\'s Resonance damage taken a further 50% for 2 turns (the English text; lufel\'s Korean says follow-up damage, 추격)' },
+    { k: 'dmg', v: [20.5, 22.6, 21.8, 23.9], to: 'enemy', foes: 'all', src: '3', on: '3w', dur: 2, durAw: [6, 3], elem: ['Fire', 'Ice', 'Electric', 'Wind'], why: 'Woof Woof Blaze as Big Welcome: every foe\'s Fire/Ice/Electric/Wind damage taken +20.5-23.9% for 2 turns (3 from A6). A6\'s "+30%" to it with both held is not entered (points or relative is not said)' },
+    { k: 'dmg', v: 36, to: 'enemy', foes: 'all', src: 'aw', on: '3w', dur: 2, aw: 1, elem: ['Fire', 'Ice', 'Electric', 'Wind'], why: 'Legendary Devotion (A1): Woof Woof Blaze activating Big Welcome raises the Fire/Ice/Electric/Wind damage taken of the foes it hits (all of them) a further 36% for 2 turns' },
     { k: 'cm', v: 36, to: 'enemy', src: 'aw', aw: 2, cond: 'foe carries one of Runa\'s debuffs (her DEF down is up full time)', why: 'A2 Trapped in Shibuya: foes with her debuff take +36% critical damage' },
     { k: 'atk%', v: 33, to: 'party', src: 'passive', elem: ['Fire', 'Ice', 'Electric', 'Wind'], own: false, why: 'Faithful Dog (passive): allies dealing Fire/Ice/Electric/Wind damage get her +33% ATK (1 turn); she debuffs every turn and the DPS refreshes it on each such hit, so treated as always on (not for herself: already counted for her own stats (KIT_STAT_BUFFS))' },
-    { k: 'defdown', ladder: [33.3, 43.3, 43.3, 53.3, 53.3, 63.3, 63.3], to: 'enemy', src: 'weapon', on: '3', dur: 3, weapon: '5', cond: 'Furrocious Follow-Up effect of Skill 3', why: 'Cerberus Claws: Woof Woof Blaze\'s Follow-Up effect lowers target DEF further for 3 turns' }
+    { k: 'defdown', ladder: [33.3, 43.3, 43.3, 53.3, 53.3, 63.3, 63.3], to: 'enemy', foes: 'one', src: 'weapon', on: '3f', dur: 3, weapon: '5', why: 'Cerberus Claws: Woof Woof Blaze activating Furrocious Follow-Up lowers the target\'s DEF a further 33.3-63.3% for 3 turns' },
+    { k: 'defdown', ladder: [16.6, 21.6, 21.6, 26.6, 26.6, 31.6, 31.6], to: 'enemy', foes: 'all', src: 'weapon', on: '3wo', dur: 3, weapon: '5', why: 'Cerberus Claws: Woof Woof Blaze activating Big Welcome lowers the DEF of the foes it hits (all of them) a further 16.6-31.6% for 3 turns; the two do not stack, so with both effects (A6) only the Follow-Up one is entered' },
+    { k: 'dmg', v: 0, per: { s: 'Ailment Accuracy', rate: 31.4, cap: [171, 188.5, 181.5, 199] }, to: 'enemy', foes: 'all', src: 'HL', on: 'HL', dur: 1, elem: ['Fire', 'Ice', 'Electric', 'Wind'], why: 'Enthusiastic Fuse (Highlight): 2 stacks on every foe; an ally\'s Fire, Ice, Electric or Wind skill or Resonance hit spends one and deals +31.4% of Runa\'s ailment accuracy more (up to 53.7-62.5%). Read as the rest of the round her Highlight falls in (the planner has no "next N hits" counter), which is about the next one or two such hits. Her own hits are DPS_KIT_BONUS. Until Nov 22 2026 a skip note' }
   ],
   'Riko Tanemura [Tempest]': [
     { k: 'atk%', v: -18.3, per: { s: 'Crit Multiplier', rate: 18.3, cap: [388, 418, 418, 448] }, to: 'party', foes: 'one', src: '1', on: '1', dur: 2, elem: ['Wind'], why: 'Storm of Petals (Skill 1): Falling Petals mark on the foe gives Wind hits ATK +18.3% of Riko\'s crit multiplier above 100%. Mark on foe, so every ally hitting the boss gains it. A6 adds +1 turn (not encoded)' },
@@ -8903,9 +8913,9 @@ const TEAM_BUFFS = {
        damage +5% of the target's crit multiplier over 100%, at 10 crit damage +5% more. `hits` reads the damage dealer's hits a turn
        (DPS_HITS over their rotation) over the stack's 3 turns (Nov 2026; it was 3 stacks "one skill a turn" and the bonuses a skip). */
     { k: 'atk', v: 30, to: 'ally', src: 'passive', on: '3', dur: 3, hits: { turns: 3, cap: 10, scale: true }, why: 'Vernal Splendor (passive 1): Blossoming Season target gets +30 ATK per skill-damage instance (hit), each stack 3 turns, up to 10' },
-    { k: 'atk%', v: 0, per: { s: 'Crit Multiplier', of: 'target', rate: 8, plus: -100 }, to: 'ally', src: 'passive', on: '3', dur: 3, hits: { turns: 3, cap: 10, min: 5 }, why: 'Vernal Splendor at 5 Blossom: ATK +8% of the target\'s crit multiplier over 100%' },
-    { k: 'cm', v: 0, per: { s: 'Crit Multiplier', of: 'target', rate: 5, plus: -100 }, to: 'ally', src: 'passive', on: '3', dur: 3, hits: { turns: 3, cap: 10, min: 5 }, why: 'Vernal Splendor at 5 Blossom: crit damage +5% of the target\'s crit multiplier over 100%' },
-    { k: 'cm', v: 0, per: { s: 'Crit Multiplier', of: 'target', rate: 5, plus: -100 }, to: 'ally', src: 'passive', on: '3', dur: 3, hits: { turns: 3, cap: 10, min: 10 }, why: 'Vernal Splendor at 10 Blossom: crit damage +5% more of the target\'s crit multiplier over 100%' },
+    { k: 'atk%', v: -8, per: { s: 'Crit Multiplier', rate: 8, cap: [388, 418, 418, 448] }, to: 'ally', src: 'passive', on: '3', dur: 3, hits: { turns: 3, cap: 10, min: 5 }, why: 'Vernal Splendor at 5 Blossom: ATK +8% of the portion of Tempest Riko\'s crit multiplier above 100% (hers, the English and Korean both; until Nov 22 2026 it read the receiving ally\'s), counted up to her skills\' 388-448% cap' },
+    { k: 'cm', v: -5, per: { s: 'Crit Multiplier', rate: 5, cap: [388, 418, 418, 448] }, to: 'ally', src: 'passive', on: '3', dur: 3, hits: { turns: 3, cap: 10, min: 5 }, why: 'Vernal Splendor at 5 Blossom: crit damage +5% of the portion of her crit multiplier above 100%' },
+    { k: 'cm', v: -5, per: { s: 'Crit Multiplier', rate: 5, cap: [388, 418, 418, 448] }, to: 'ally', src: 'passive', on: '3', dur: 3, hits: { turns: 3, cap: 10, min: 10 }, why: 'Vernal Splendor at 10 Blossom: crit damage +5% more of the portion of her crit multiplier above 100%' },
     { k: 'atk', v: -250, per: { s: 'Crit Multiplier', rate: 250, cap: [388, 418, 418, 448] }, to: 'ally', src: 'HL', on: 'HL', dur: 2, why: 'Highlight: one other ally flat ATK +2.5 per 1% of crit multiplier above 100. A4 extends it to all allies but Riko' },
     { k: 'cm', v: [24.4, 26.9, 25.9, 28.4], to: 'ally', src: 'HL', on: 'HL', dur: 2, why: 'Highlight: one other ally crit damage +24.4-28.4%' },
     { k: 'cm', v: 12, to: 'ally', src: 'aw', on: 'HL', dur: 2, aw: 4, why: 'Sea Breeze (A4): Highlight\'s main target gets +12% crit damage more' },
@@ -8913,20 +8923,20 @@ const TEAM_BUFFS = {
   ],
   'Mio Natsukawa': [
     { k: 'defdown', v: [7.8, 8.6, 8.3, 9.1], per: { s: 'Ailment Accuracy', rate: 18.28, cap: [170.7, 188.1, 181.6, 199.1] }, to: 'enemy', src: '1', on: '1', dur: 3, why: 'Sub-Zero Torrent (Skill 1): all foes DEF down 7.8% +1% per 5.47% ailment accuracy, max 31.2/34.4/33.2/36.4%, 3 turns (the printed maximum caps the scaled part; the fixed 7.8% comes on top)' },
-    { k: 'defdown', v: [7.3, 8.1, 7.8, 8.5], per: { s: 'Ailment Accuracy', rate: 17.15, cap: [170.9, 188.3, 181.3, 198.8] }, to: 'enemy', src: '3', on: '3', dur: 2, why: 'Extinguishing Guidance (Skill 3, 2-stack form): DEF down 7.3% +1% per 5.83% ailment accuracy, max 29.3/32.3/31.1/34.1%, 2 turns; the 4-stack Requiem form (max 35.1-40.9%) not assumed (the printed maximum caps the scaled part; the fixed 7.3% comes on top)' },
-    { k: 'dmg', v: 0, per: { s: 'Ailment Accuracy', rate: 17.15, cap: [170.8, 188.3, 181.3, 198.8] }, to: 'enemy', src: 'HL', on: 'HL', dur: 2, why: 'Highlight: all foes damage taken +1% per 5.83% ailment accuracy, max 29.3/32.3/31.1/34.1%, 2 turns (3 at A4, not encoded)' },
+    { k: 'defdown', v: [7.3, 8.1, 7.8, 8.5], per: { s: 'Ailment Accuracy', rate: 17.15, cap: [170.9, 188.3, 181.3, 198.8] }, to: 'enemy', foes: 'all', src: '3', on: '3', dur: 2, why: 'Extinguishing Guidance (Skill 3, 2-stack form): DEF down 7.3% +1% per 5.83% ailment accuracy, max 29.3/32.3/31.1/34.1%, 2 turns; the 4-stack Requiem form (max 35.1-40.9%) not assumed (the printed maximum caps the scaled part; the fixed 7.3% comes on top)' },
+    { k: 'dmg', v: 0, per: { s: 'Ailment Accuracy', rate: 17.15, cap: [170.8, 188.3, 181.3, 198.8] }, to: 'enemy', foes: 'all', src: 'HL', on: 'HL', dur: 2, why: 'Highlight: all foes damage taken +1% per 5.83% ailment accuracy, max 29.3/32.3/31.1/34.1%, 2 turns (3 at A4, not encoded)' },
     { k: 'dmg', v: 6, to: 'enemy', src: 'aw', on: '3', dur: 2, stacks: 2, why: 'A0 Smothering Agony: Skill 3 spends 2 Extinguish stacks, 1 Damnation (+6% damage taken, 2 turns) per stack spent; 2 stacks assumed (max 4, 6 at A6)' },
     /* Requiem Guidance: at 4+ Extinguish stacks Skill 3 spends 4 instead — DEF down 8.8% + 1% per 4.86% ailment accuracy up to
        35.1% (Extinguishing Guidance 7.3% + 1% per 5.83% up to 29.3%), 4 Damnation, Cold Flames 11.7% + 1% per 3.65% up to
        46.8% (9.8% / 5.83% / 39%). Stacks: +1 per action, +1 per Sub-Zero Torrent (+1 more from A1), so lufel's 1 › 3 reaches
        4 on every second Skill 3 at A0 (`nth`) and on every one from A1 (SKILL_DMG's FIXES assume the same). These are the
        steps over the 2-stack lines above. Nov 2026; it was never priced. */
-    { k: 'defdown', v: [1.5, 1.6, 1.5, 1.7], per: { s: 'Ailment Accuracy', rate: 3.43, cap: [170.6, 188.3, 181.3, 198.8] }, to: 'enemy', src: '3', on: '3', dur: 2, nth: [2, 2], awMax: 0, upQ: 0.5, why: 'Requiem Guidance (A0, every second Skill 3): DEF down 8.8-10.2% + 1% per 4.86% ailment accuracy up to 35.1-40.9%, the step over Extinguishing Guidance' },
+    { k: 'defdown', v: [1.5, 1.6, 1.5, 1.7], per: { s: 'Ailment Accuracy', rate: 3.43, cap: [170.6, 188.3, 181.3, 198.8] }, to: 'enemy', foes: 'all', src: '3', on: '3', dur: 2, nth: [2, 2], awMax: 0, upQ: 0.5, why: 'Requiem Guidance (A0, every second Skill 3): DEF down 8.8-10.2% + 1% per 4.86% ailment accuracy up to 35.1-40.9%, the step over Extinguishing Guidance' },
     { k: 'dmg', v: 6, to: 'enemy', src: '3', on: '3', dur: 2, stacks: 2, nth: [2, 2], awMax: 0, upQ: 0.5, why: 'Requiem Guidance (A0, every second Skill 3): 4 Damnation spent, 2 more than Extinguishing Guidance' },
-    { k: 'dmg', v: [1.9, 2.1, 2, 2.2], per: { s: 'Ailment Accuracy', rate: 4.57, cap: [170.8, 188.3, 181.3, 198.9] }, to: 'enemy', src: '3', on: '3', dur: 2, nth: [2, 2], awMax: 0, upQ: 0.5, needAil: 'Burn', tech: 'taken', why: 'Requiem Guidance (A0, every second Skill 3) on a Burning foe: Cold Flames 11.7% + 1% per 3.65% ailment accuracy up to 46.8%, the step over the 2-stack form' },
-    { k: 'defdown', v: [1.5, 1.6, 1.5, 1.7], per: { s: 'Ailment Accuracy', rate: 3.43, cap: [170.6, 188.3, 181.3, 198.8] }, to: 'enemy', src: '3', on: '3', dur: 2, aw: 1, why: 'Requiem Guidance (from A1 every Skill 3): DEF down 8.8-10.2% + 1% per 4.86% ailment accuracy up to 35.1-40.9%, the step over Extinguishing Guidance' },
+    { k: 'dmg', v: [1.9, 2.1, 2, 2.2], per: { s: 'Ailment Accuracy', rate: 4.57, cap: [170.8, 188.3, 181.3, 198.9] }, to: 'enemy', foes: 'all', src: '3', on: '3', dur: 2, nth: [2, 2], awMax: 0, upQ: 0.5, needAil: 'Burn', tech: 'taken', why: 'Requiem Guidance (A0, every second Skill 3) on a Burning foe: Cold Flames 11.7% + 1% per 3.65% ailment accuracy up to 46.8%, the step over the 2-stack form' },
+    { k: 'defdown', v: [1.5, 1.6, 1.5, 1.7], per: { s: 'Ailment Accuracy', rate: 3.43, cap: [170.6, 188.3, 181.3, 198.8] }, to: 'enemy', foes: 'all', src: '3', on: '3', dur: 2, aw: 1, why: 'Requiem Guidance (from A1 every Skill 3): DEF down 8.8-10.2% + 1% per 4.86% ailment accuracy up to 35.1-40.9%, the step over Extinguishing Guidance' },
     { k: 'dmg', v: 6, to: 'enemy', src: '3', on: '3', dur: 2, stacks: 2, aw: 1, why: 'Requiem Guidance (from A1 every Skill 3): 4 Damnation spent, 2 more than Extinguishing Guidance' },
-    { k: 'dmg', v: [1.9, 2.1, 2, 2.2], per: { s: 'Ailment Accuracy', rate: 4.57, cap: [170.8, 188.3, 181.3, 198.9] }, to: 'enemy', src: '3', on: '3', dur: 2, aw: 1, needAil: 'Burn', tech: 'taken', why: 'Requiem Guidance (from A1 every Skill 3) on a Burning foe: Cold Flames up to 46.8%, the step over the 2-stack form' },
+    { k: 'dmg', v: [1.9, 2.1, 2, 2.2], per: { s: 'Ailment Accuracy', rate: 4.57, cap: [170.8, 188.3, 181.3, 198.9] }, to: 'enemy', foes: 'all', src: '3', on: '3', dur: 2, aw: 1, needAil: 'Burn', tech: 'taken', why: 'Requiem Guidance (from A1 every Skill 3) on a Burning foe: Cold Flames up to 46.8%, the step over the 2-stack form' },
     { k: 'dmg', v: 27, to: 'enemy', src: 'passive', needAil: 'Freeze', why: 'Biting Cold (passive 2): "When Natsukawa is present, increase damage taken of foes inflicted with Freeze by 27.0%" - while the boss is Frozen (the fight tracks it: her own Sub-Zero Torrent Freezes at 50% every other turn, Frostgale Kotone\'s Winter and Wavecatcher Miyu\'s Splash too). Nov 2026; it was skipped as "need Freeze"' },
     { k: 'cm', v: 30, to: 'enemy', src: 'aw', on: '3', dur: 2, aw: 1, why: 'A1 Cooling Spray: spending Extinguish stacks raises all foes\' critical damage taken by 30% for 2 turns' },
     { k: 'atk%', v: 20, to: 'party', src: 'aw', on: '3', dur: 2, aw: 2, own: false, why: 'A2 Frozen Gateway: spending Extinguish stacks gives the party ATK +20% for 2 turns (not for herself: already counted for her own stats (KIT_STAT_BUFFS))' },
@@ -8936,7 +8946,8 @@ const TEAM_BUFFS = {
     { k: 'tp', v: [1186, 1308, 1259, 1381], to: 'enemy', src: '1', on: '1', dur: 3, needAil: 'Burn', noRefresh: true, why: 'Scald (Skill 1 on a Burning foe): Burn becomes Scald on all foes for 3 turns (it counts as Burn) and allies attacking them get Technical Precision +1186/1308/1259/1381; cannot be put on again while it lasts' },
     { k: 'dmg', v: [9.8, 10.8, 10.4, 11.4], per: { s: 'Ailment Accuracy', rate: 22.83, cap: [170.8, 188.3, 181.3, 198.9] }, to: 'enemy', src: '3', on: '3', dur: 2, needAil: 'Burn', tech: 'taken', why: 'Cold Flames (Skill 3 on a Burning foe): its Ice Technical is always Iceburn and becomes Cold Flames, all foes damage taken +9.8% +1% per 4.38% ailment accuracy, max 39.0/43.0/41.4/45.4% more, raised by Technical Precision (+5% of itself per 100). Duration not printed: the skill\'s 2 turns. The 4-stack Requiem form (11.7% + up to 46.8%) is not assumed, as for its DEF down' },
     { k: 'dmg', v: 2.5, to: 'enemy', src: 'HL', on: ['2', 'HL'], dur: 2, needAil: 'Burn', tech: 'taken', elem: ['Fire', 'Ice'], why: 'Iceburn (Skill 2 and Highlight Ice Technicals on a Burning foe): 50% chance of Fire/Ice damage taken +5% for 2 turns, entered at its average 2.5%, raised by Technical Precision (+5% of itself per 100)' },
-    { k: 'defdown', ladder: [23.3, 30.3, 30.3, 37.3, 37.3, 44.3, 44.3], to: 'enemy', src: 'weapon', on: ['2', '3', 'HL'], dur: 2, weapon: '5', needAil: ['Burn', 'Freeze', 'Shock'], why: 'Entropy (5-star weapon): each Ice Technical lowers the target\'s DEF 23.3-44.3% more for 2 turns. Her Technicals are Skill 2, Skill 3 and the Highlight, on a foe with an ailment: Iceburn on a Burning one, Deepfreeze on a Frozen one, Short Circuit on a Shocked one (lufel\'s Technical guide); all three are Ice Technicals, so each counts (Nov 2026; until then only a Burning foe did)' }
+    { k: 'defdown', ladder: [23.3, 30.3, 30.3, 37.3, 37.3, 44.3, 44.3], to: 'enemy', foes: 'one', src: 'weapon', on: '2', dur: 2, weapon: '5', needAil: ['Burn', 'Freeze', 'Shock'], excl: 'entropy', exclAs: 'one', why: 'Entropy (5-star weapon): each Ice Technical lowers the target\'s DEF 23.3-44.3% more for 2 turns. Her Technicals are Skill 2, Skill 3 and the Highlight, on a foe with an ailment: Iceburn on a Burning one, Deepfreeze on a Frozen one, Short Circuit on a Shocked one (lufel\'s Technical guide); all three are Ice Technicals, so each counts (Nov 2026; until then only a Burning foe did). Skill 2 hits one foe' },
+    { k: 'defdown', ladder: [23.3, 30.3, 30.3, 37.3, 37.3, 44.3, 44.3], to: 'enemy', foes: 'all', src: 'weapon', on: ['3', 'HL'], dur: 2, weapon: '5', needAil: ['Burn', 'Freeze', 'Shock'], excl: 'entropy', exclAs: 'all', why: 'Entropy on Skill 3 and the Highlight, which hit every foe: a Technical activates on each ailing foe hit, so the cut lands on each of them (Nov 22 2026; it was on the main target only). The fight tracks ailments on the main target, so the other foes are taken to carry one when it does: an overcount where the ailment was single-target' }
   ],
   'Yaoling Li [Firecracker]': [
 
@@ -9014,7 +9025,8 @@ const TEAM_BUFFS = {
     { k: 'atk%', v: [24.4, 26.9, 25.9, 28.4], to: 'party', src: 'TH', on: 'TH', dur: 2, ownAw: 6, pair: ['C'], why: 'Cadenza (Theurgy): party ATK +24.4-28.4% for 2 turns (not for himself: as the damage dealer he casts Ardhanari; Cadenza comes with it from A6)' },
     { k: 'dmg', v: [19.5, 21.5, 20.7, 22.7], to: 'party', src: 'TH', on: 'TH', dur: 2, ownAw: 6, pair: ['C'], why: 'Cadenza (Theurgy): party damage +19.5-22.7% for 2 turns (not for himself: as the damage dealer he casts Ardhanari; Cadenza comes with it from A6)' },
     { k: 'dmg', v: 10, to: 'party', src: 'aw', on: 'TH', dur: 2, aw: 4, ownAw: 6, pair: ['C'], why: 'Thorny Path (A4): Cadenza gives party damage +10% more for 2 turns (not for himself: for himself only from A6, with Cadenza)' },
-    { k: 'atk%', v: 40, to: 'party', src: 'passive', on: 'TH', dur: 2, why: 'On-Site Leader (passive 1): after either Theurgy, party ATK +40% for 2 turns (S.E.E.S. members get 30% more, see skip)' },
+    { k: 'atk%', v: 40, to: 'party', src: 'passive', on: 'TH', dur: 2, why: 'On-Site Leader (passive 1): after either Theurgy, party ATK +40% for 2 turns (S.E.E.S. members get 30% more: the next line)' },
+    { k: 'atk%', v: 30, to: 'party', src: 'passive', on: 'TH', dur: 2, sees: true, own: false, why: 'On-Site Leader (passive 1): "increase Attack of SEES members by 30.0% more" — a damage dealer with a Theurgy (the game\'s own S.E.E.S. test: Fuuka\'s Divine Prayer gives a Theurgy to one with a Theurgy and a Highlight to the rest); his own +30% is KIT_STAT_BUFFS. Until Nov 22 2026 it was a skip note' },
     { k: 'dmg', ladder: [8.8, 11.6, 11.6, 14.4, 14.4, 17.2, 17.2], to: 'party', src: 'weapon', on: '2', dur: 2, weapon: '4', why: 'Translucent Blade (4-star weapon): when Makoto buffs an ally (Nocturne of Battle, Cadenza, On-Site Leader), party damage up for 2 turns' }
   ],
   'Yukari Takeba': [
@@ -9139,8 +9151,8 @@ const TEAM_BUFFS = {
     { elu: 3, to: 'party', src: '3', on: '3', dur: 2, why: 'Snowpierced Waltz (Skill 3): the party gains 3% of the Elucidator\'s stats for 2 turns (Korean: each of the Elucidator\'s stats, 3% of it added to the allies\' matching stat), read like her own 20% share: ATK (as flat ATK), crit rate, crit damage, damage and Pierce' },
     { k: 'dmg', v: [19.5, 21.5, 20.7, 22.7], to: 'enemy', src: 'TH', on: 'TH', dur: 2, why: 'Blizzard Edge (Theurgy): foe takes +19.5% damage while Snowbound, 2 turns' },
     { k: 'dmg', v: 25, to: 'enemy', src: 'aw', on: 'TH', dur: 2, aw: 4, why: 'Behind the Lies (A4): Blizzard Edge\'s target takes a further +25% damage, 2 turns' },
-    { k: 'dmg', v: 4.8, to: 'party', src: 'passive', arch: ['ST DPS', 'AoE DPS'], stacks: 5, cond: 'foe carries Frostbound, which Mitsuru\'s every skill applies', why: 'Freeze Mark (passive): Assassin and Sweeper allies deal +4.8% damage per Frostbound stack on the foe; her rotation holds 5' },
-    { k: 'dmg', v: 4.8, to: 'party', src: 'aw', aw: 6, arch: ['ST DPS', 'AoE DPS'], stacks: 1, cond: 'foe carries Frostbound, which Mitsuru\'s every skill applies', why: 'Burning Spirit (A6): Frostbound cap raised to 6, one more stack of Freeze Mark' },
+    { k: 'dmg', v: 4.8, to: 'party', src: 'passive', arch: ['ST DPS', 'AoE DPS'], stacks: 5, foes: 'one', cond: 'foe carries Frostbound, which Mitsuru\'s every skill applies', why: 'Freeze Mark (passive): Assassin and Sweeper allies deal +4.8% damage per Frostbound stack on the foe; her rotation holds 5. Every skill and Theurgy of hers hits one foe, so only that foe carries Frostbound (foes: one, Nov 22 2026; an area damage dealer had it on all 5)' },
+    { k: 'dmg', v: 4.8, to: 'party', src: 'aw', aw: 6, arch: ['ST DPS', 'AoE DPS'], stacks: 1, foes: 'one', cond: 'foe carries Frostbound, which Mitsuru\'s every skill applies', why: 'Burning Spirit (A6): Frostbound cap raised to 6, one more stack of Freeze Mark' },
     { k: 'cr', v: 10, to: 'enemy', src: 'aw', aw: 1, start: true, why: 'C\'est Magnifique (A1): all foes get permanent Snowbound at battle start and take +10% crit rate while Snowbound' },
     { k: 'cm', v: 50, to: 'enemy', src: 'aw', aw: 2, why: 'Queen of Swordplay (A2): the Imperious Queen target takes +50% crit damage, permanent' },
     { k: 'atk%', ladder: [18.1, 23.5, 23.5, 28.9, 28.9, 34.3, 34.3], to: 'party', src: 'weapon', weapon: '5', why: 'Longinus (5-star weapon): party ATK up for 2 turns whenever Frostbound is inflicted, which every one of her actions does' },
@@ -9167,21 +9179,23 @@ const TEAM_BUFFS = {
 
   ],
   'Shun Kano [Pioneer]': [
-    { k: 'downDm', v: 8, to: 'enemy', src: 'aw', aw: 6, on: 'Special', dur: 1, stackMax: 3, down: true, why: 'Stand with Honor (A6): a Special Ammo shot raises the target\'s downed damage taken +8% for 1 turn (Korean 다운 허약 8%), up to 3 stacks; one per "Special" turn of lufel\'s rotation, and it helps only hits on a knocked-down boss.' },
+    { k: 'downDm', v: 10, to: 'enemy', src: 'aw', aw: 6, on: 'Special', dur: 1, stackMax: 3, down: true, why: 'Stand with Honor (A6): a Special Ammo shot raises the target\'s downed damage taken +10% (English, Nov 22 2026; the Korean text has the older number) for 1 turn (Korean 다운 허약 8%), up to 3 stacks; one per "Special" turn of lufel\'s rotation, and it helps only hits on a knocked-down boss.' },
     { k: 'dmg', v: 24, to: 'enemy', src: 'passive', why: 'Valor (passive 2): his Ranged Attack makes the target take +24% damage for 2 turns; lufel\'s rotation fires one every turn' },
     { k: 'dmg', v: 12, to: 'enemy', src: 'passive', elem: ['Gun'], why: 'Valor (passive 2): his Ranged Attack also makes the target take +12% Gun damage for 2 turns' },
     { k: 'defdown', v: 0, per: { s: 'HP', rate: 0.1, cap: 20000 }, to: 'enemy', src: 'aw', aw: 0, stacks: 2, why: 'Adverse Sacrifice (A0): each Ranged Attack lowers the target\'s DEF for 2 turns, 2 stacks, up to 40% at 20000 max HP (read as the most both stacks reach together); he fires every turn' },
-    { k: 'dmg', v: 0, per: { s: 'HP', rate: 0.0999, cap: [19520, 21520, 20720, 22720] }, to: 'party', src: '2', on: '2', dur: 2, why: 'High Noon Flag (Skill 2): party damage up to 19.5-22.7% with Shun\'s max HP, 2 turns' },
-    { k: 'dmg', v: [4.9, 5.4, 5.2, 5.7], to: 'enemy', src: '1', on: '1', dur: 2, stacks: 6, why: 'Justice Shot (Skill 1): each of its 6 hits raises the target\'s damage taken 4.9-5.7% for 2 turns, "6회 중첩 가능" (KR; JP 最大6スタック; the English omits the cap): all 6 on a lone boss (Nov 2026; it was a skip for want of a printed cap). In lufel\'s A2 and A6 rotations every other turn' },
-    { k: 'dmg', v: 0, per: { s: 'HP', rate: 0.0999, cap: [19520, 21520, 20720, 22720] }, to: 'party', src: '2', on: '2', dur: 2, awMax: 1, foesMin: 2, why: 'High Noon Flag (Skill 2) below A2: "If there are 2 or more foes, additionally increase party\'s damage" - the second bonus in a fight with 2+ foes (the area default has 5; Nov 2026)' },
-    { k: 'dmg', v: 0, per: { s: 'HP', rate: 0.0999, cap: [19520, 21520, 20720, 22720] }, to: 'party', src: 'aw', on: '2', dur: 2, aw: 2, why: 'Bonds between Friends (A2): High Noon Flag\'s second damage bonus no longer needs 2 foes, so it applies in a boss fight too' },
-    { k: 'atk%', v: 45, to: 'party', src: 'aw', on: '2', dur: 2, aw: 2, why: 'Bonds between Friends (A2): High Noon Flag also gives party ATK +45% for 2 turns' },
-    { k: 'atk%', v: 0, per: { s: 'HP', rate: 0.1501, cap: [19520, 21520, 20720, 22720] }, to: 'party', src: '3', on: '3', dur: 2, why: 'Daybreak Shot (Skill 3): party ATK up to 29.3-34.1% with Shun\'s max HP, 2 turns' },
-    { k: 'cm', v: 30, to: 'party', src: 'aw', on: '3', dur: 2, aw: 1, own: false, why: 'Generous Support (A1): while an ally holds Sheriff Badge (Daybreak Shot, 2 turns), party crit damage +30% (not for himself: already counted for his own stats (KIT_STAT_BUFFS))' },
+    { k: 'dmg', v: 0, per: { s: 'HP', rate: 0.125, cap: [19520, 21520, 20720, 22720] }, to: 'party', src: '2', on: '2', dur: 2, why: 'Global English (Nov 22 2026): up to 24.4-28.4% at 19520+ max HP (Korean 19.5%). High Noon Flag (Skill 2): party damage up to 19.5-22.7% with Shun\'s max HP, 2 turns' },
+    { k: 'dmg', v: 0, per: { s: 'HP', rate: 0.03125, cap: [19520, 21520, 20720, 22720] }, to: 'enemy', foes: 'one', src: '1', on: '1', dur: 2, stacks: 5, awMax: 1, why: 'The main target\'s 5 of 6 stacks below A2 (the 6th, below, is on every foe: the hits go to new targets first). Global English (Nov 22 2026): per hit up to 6.1-7.1% of damage taken at 19520+ max HP (Korean a flat 4.9%). Justice Shot (Skill 1): each of its 6 hits raises the target\'s damage taken 4.9-5.7% for 2 turns, "6회 중첩 가능" (KR; JP 最大6スタック; the English omits the cap): all 6 on a lone boss (Nov 2026; it was a skip for want of a printed cap). In lufel\'s A2 and A6 rotations every other turn' },
+    { k: 'dmg', v: 0, per: { s: 'HP', rate: 0.03125, cap: [19520, 21520, 20720, 22720] }, to: 'enemy', foes: 'all', src: '1', on: '1', dur: 2, awMax: 1, why: 'Gunslinger\'s Justice (Skill 1): from the second hit it goes to new targets first, so below A2 every foe takes at least one stack (one more on the main target above); 6.1-7.1% at 19520+ max HP, 2 turns' },
+    { k: 'dmg', v: 0, per: { s: 'HP', rate: 0.03125, cap: [19520, 21520, 20720, 22720] }, to: 'enemy', foes: 'all', src: '1', on: '1', dur: 2, stacks: 6, aw: 2, why: 'Reinforcement (A2): each hit of Gunslinger\'s Justice inflicts 5 more stacks, so every foe it reaches is at the 6-stack cap (36.6-42.6% at 19520+ max HP), 2 turns' },
+    { k: 'dmg', v: 0, per: { s: 'HP', rate: 0.125, cap: [19520, 21520, 20720, 22720] }, to: 'party', src: '2', on: '2', dur: 2, awMax: 1, foesMin: 2, why: 'High Noon Flag (Skill 2) below A2: "If there are 2 or more foes, additionally increase party\'s damage" - the second bonus in a fight with 2+ foes (the area default has 5; Nov 2026)' },
+    { k: 'dmg', v: 0, per: { s: 'HP', rate: 0.125, cap: [19520, 21520, 20720, 22720] }, to: 'party', src: 'aw', on: '2', dur: 2, aw: 2, why: 'Bonds between Friends (A2): High Noon Flag\'s second damage bonus no longer needs 2 foes, so it applies in a boss fight too' },
+    { k: 'atk%', v: 60, to: 'party', src: 'aw', on: '2', dur: 2, aw: 2, why: 'Bonds between Friends (A2): High Noon Flag also gives party ATK +60% for 2 turns (English, Nov 22 2026; the Korean text has the older number)' },
+    { k: 'atk%', v: 0, per: { s: 'HP', rate: 0.1875, cap: [19520, 21520, 20720, 22720] }, to: 'party', src: '3', on: '3', dur: 2, why: 'Global English (Nov 22 2026): up to 36.6-42.6% at 19520+ max HP (Korean 29.3%). Daybreak Shot (Skill 3): party ATK up to 29.3-34.1% with Shun\'s max HP, 2 turns' },
+    { k: 'cm', v: 45, to: 'party', src: 'aw', on: '3', dur: 2, aw: 1, own: false, why: 'Generous Support (A1): while an ally holds Sheriff Badge (Daybreak Shot, 2 turns), party crit damage +45% (English, Nov 22 2026; the Korean text has the older number) (not for himself: already counted for his own stats (KIT_STAT_BUFFS))' },
     { k: 'dmg', v: 0, per: { s: 'HP', rate: 0.1752, cap: [19520, 21520, 20720, 22720] }, to: 'party', src: 'HL', on: 'HL', dur: 4, why: 'Highlight: party damage up to 34.2-39.8% with Shun\'s max HP, 4 turns' },
     { k: 'atk%', v: 25, to: 'party', src: 'aw', on: 'HL', dur: 99, aw: 4, cond: 'after Shun\'s first Highlight', why: 'Super-Generous Support (A4): after his Highlight, party ATK +25% for the rest of the battle (does not stack)' },
-    { k: 'dmg', v: 15, to: 'enemy', src: 'aw', on: 'Special', dur: 1, stacks: 2.5, aw: 6, why: '(on his Special Ammo turns, 2-3 shots each since Nov 2026: 2.5 stacks) Stand with Honor (A6): a Special Ammo shot makes the target take +15% damage for 1 turn (up to 3 stacks); lufel\'s A6 rotation fires Special Ammo on 2 turns of 6, counted at one stack' },
-    { k: 'cm', v: 10, to: 'enemy', src: 'aw', on: 'Special', dur: 1, stacks: 2.5, aw: 6, why: '(on his Special Ammo turns, 2.5 stacks) Stand with Honor (A6): a Special Ammo shot also makes the target take +10% crit damage for 1 turn, on 2 turns of 6, counted at one stack' },
+    { k: 'dmg', v: 25, to: 'enemy', src: 'aw', on: 'Special', dur: 1, stacks: 2.5, aw: 6, why: '(on his Special Ammo turns, 2-3 shots each since Nov 2026: 2.5 stacks) Stand with Honor (A6): a Special Ammo shot makes the target take +25% damage (English, Nov 22 2026; the Korean text has the older number) for 1 turn (up to 3 stacks); lufel\'s A6 rotation fires Special Ammo on 2 turns of 6, counted at one stack' },
+    { k: 'cm', v: 20, to: 'enemy', src: 'aw', on: 'Special', dur: 1, stacks: 2.5, aw: 6, why: '(on his Special Ammo turns, 2.5 stacks) Stand with Honor (A6): a Special Ammo shot also makes the target take +20% crit damage (English, Nov 22 2026; the Korean text has the older number) for 1 turn, on 2 turns of 6, counted at one stack' },
     { k: 'cm', ladder: [18.1, 23.5, 23.5, 28.9, 28.9, 34.3, 34.3], to: 'party', src: 'weapon', on: '3', dur: 2, weapon: '5', why: 'Unicorn Beacon (5-star weapon): when Shun gains a shield (Daybreak Shot), party crit damage up for 2 turns' },
     { k: 'defdown', ladder: [15.8, 20.6, 20.6, 25.4, 25.4, 30.2, 30.2], to: 'enemy', src: 'weapon', weapon: '5', why: 'Unicorn Beacon (5-star weapon): Shun\'s Gun damage lowers the target\'s DEF for 2 turns; his Ranged Attack every turn keeps it up' }
   ],
@@ -9256,7 +9270,7 @@ const TEAM_BUFFS = {
     { k: 'hlDm', v: 25, to: 'enemy', src: 'aw', on: 'HL', dur: 3, aw: 4, why: 'Saint Catherine\'s Wheel Mark (A4): "When foes with Sin are attacked by a HIGHLIGHT, increase Attack for that damage by 25%" for 3 turns - a mark on the foe any ally\'s Highlight reads, priced as Highlight damage (Nov 2026)' },
   ],
   'Aigis': [
-
+    { k: 'atk%', v: 10, to: 'party', src: 'support', on: 'W', dur: 99, sees: true, why: 'Assist Skill (support skill, lufel\'s "W"): "Permanently increase all S.E.E.S. members\' Attack by 10%" — a damage dealer with a Theurgy, from her first W on (lufel writes one each cycle; the effect does not stack, so later ones change nothing). Until Nov 22 2026 a skip note' }
   ],
   'Ren Amamiya [Starlight]': [
     { k: 'downDm', v: 20, to: 'enemy', src: 'aw', on: '2', dur: 2, aw: 6, down: true, why: 'Dance of Heart\'s Desire (A6): a boosted Syncopated Notes raises all foes\' damage taken while downed +20% for 2 turns (Korean 다운 허약); lufel\'s rotation boosts every Skill 2 with Fever Time' },
@@ -9338,7 +9352,7 @@ const TEAM_BUFF_SKIPS = {
   ],
   'Yaoling Li': [
     'Flowers of Naihe (Skill 2): damage taken +2% per 10 Speed on a foe with Forget or another spiritual ailment - skill 2 is not in her lufel rotations and Forget is not reliable',
-    'Up to Chance (passive 2): foe\'s Curse damage taken +30% when she attacks a foe above 50% HP - no duration, likely her own hit only, and HP-gated',
+    'Up to Chance (passive 2): foe\'s Curse damage taken +30% when she attacks a foe above 50% HP - no duration, read as her own hit only (priced for her as the damage dealer, by the boss\'s HP)',
     'Red Spider Lily ends after 2 hits - how many of those land on the DPS depends on the team order and hit counts',
     'A4 Training Results: inflicts Curse ailment - ailment not modelled',
     'Forget (A0, Skill 2, Highlight) - spiritual ailment, not modelled',
@@ -9359,7 +9373,6 @@ const TEAM_BUFF_SKIPS = {
   'Leo Kamiyama': [
     'Turning the Tables (A6): crit damage +25% for 1 turn when skilling an ally under 60% HP - recipient unclear, and Skill 2\'s 30% cost alone does not take a full-HP ally under 60%',
     'Justice Lance (4-star weapon): +20% more ATK per 20% HP the target has lost - unclear whether additive points or a multiplier, and HP state not reliable',
-    'Intense Link (A1): DEF +10% with Power of Friendship - priced since Nov 2026 (it reaches a DEF-scaling damage dealer)'
   ],
   'Motoha Arai': [
     'Electroshark (Skill 3): Technical on Shocked foes, not modelled',
@@ -9385,10 +9398,8 @@ const TEAM_BUFF_SKIPS = {
     'Gavel stacks above 2 per Skill 3 (more Blessing gains at A2+); count not pinned down'
   ],
   'Kiyoshi Kurotani': [
-    'Chosen One extra stacks from Ring of Fire on a Burning target and Crimson Summon per Burning foe (up to 5 stacks, +25% Fire damage) - his skill-2-only rotation does not apply Burn itself (lufel: \'pre-apply the burn\')',
-    'Uplifting Embers (passive 1): Fire and ailment damage to Sacred Flame foes +6% per Chosen One stack - no target named, read as his own damage',
+    'Chosen One\'s party Fire damage (+5% a stack) is entered at judged counts (2 from his skills, 2 more on a Burning foe); his own per-stack bonuses (Baptism by Fire, Uplifting Embers) read the count the fight keeps (TC_CHOSEN). Ring of Fire\'s extra stack on a Burning foe is in that count',
     'Contagious Passion (A6): party Fire damage +30% per 10 Chosen One stacks gained, 2 turns - unclear whether it triggers each 10 gained or grows with the total',
-    'Baptism by Fire (5-star weapon): target damage taken +18-33% for 2 turns when he inflicts Burn - his rotation does not inflict Burn reliably (only A1\'s chance)',
     'Sacred Flame and his Technicals are his own damage, not the team\'s; his Burn is played out in the fight, where it lets a teammate\'s Technicals fire'
   ],
   'Tomoko Noge': [
@@ -9443,12 +9454,11 @@ const TEAM_BUFF_SKIPS = {
   ],
   'Yumi Shiina': [
     'Cocktails (TC_CK): Wonder\'s hits give no Mixer (his element is his Persona\'s), and Mojito\'s (A1) Mixer back is taken as the most common element of the three, where the text says random',
-    'Moonlit Feather (5-star weapon): per Cocktail spent, one RANDOM party buff (ATK +6-11.4%, damage +4-7.6% or crit rate +5-9.5%, 2 turns, x quality) - random pick and Cocktail count not priceable',
+    "Moonlit Feather (5-star weapon): its random buff is counted as a third of each, at the strength of the Cocktail spent (x120% Tailor-Made, x100% Standard, x50% Basic); with more than three spent, the best three's",
     'Elucidator 20% stat share - handled by the calculator'
   ],
   'Ayaka Sakai': [
-    'Hard Rock (A1): battle-start Costar and crit rate +15% to the highest-ATK ally - duration not stated (3-turn Costar or longer), not encoded',
-    'Distortion (Skill 1): bonus hit scaled by the Costar\'s ATK is Ayaka\'s own damage, not a buff to the DPS',
+    'Distortion (Skill 1): bonus hit scaled by the Costar\'s ATK is Ayaka\'s own damage (DPS_KIT, as a teammate), not a buff to the DPS',
     'Rock \'n\' Roller (4-star weapon): ATK +28-52% after Catchy Hook - no target named, read as Ayaka\'s own'
   ],
   'Riko Tanemura': [
@@ -9464,7 +9474,7 @@ const TEAM_BUFF_SKIPS = {
     'Every effect in the kit is her own (Summer Hype / Blowout, healing-triggered damage and crit, HP-to-ATK conversion, Colorful Coast and Sunlight), already in the planner; as a damage dealer she gains from the team\'s heals (TC_HEALS)'
   ],
   'Tomoko Noge [Seaside]': [
-    'Summer Reminiscence (Resonance): its damage, and the foe damage-dealt reduction - Resonance not modelled / defensive',
+    "Summer Reminiscence (Resonance): the foe damage-dealt reduction - defensive (its damage is priced, DPS_KIT)",
     'A4 Highlight bonus hits and A6 Resonance crit rate - her own damage, not a team buff',
     'Bubble Babies: foe ailment resistance down - ailment chance, not damage'
   ],
@@ -9495,7 +9505,7 @@ const TEAM_BUFF_SKIPS = {
   ],
   'Justine & Caroline': [
     'Persona pair: three pairs are entered and the fight plays the one that does most for each team, named on her seat (TC_PAIRS): Strategist (Mischief & Innocence + Absurdity & Nonsense), Medic (Mischief + Service & Admonition) and Saboteur (Service + Luck & Loss). Rotation slot 1 is the first mask, 2 the second, 3 Two Masks as One; lufel writes her rotations for the Strategist pair, and the others are read with the same turns. Sweeper and Assassin buff only her: not entered. Guardian (Service + Absurdity) is a fourth pair since Nov 2026, tried only for a DEF or HP kit: its Two Masks party DEF and the Service Highlight\'s max HP',
-    'Desire Level: computed from their stats since Nov 2026 (TC_DESIRE); A6\'s True Desire and Two Masks as One\'s Desire scaling of their own skill damage are not',
+    "Desire Level: computed from their stats (TC_DESIRE), with A6's +20% and True Desire played; Two Masks as One's Desire scaling of their own skill damage is not",
     'Highlight, Absurdity & Nonsense version: ATK +34.2-39.8% for the highest-ATK ally; Highlights share the gauge, so only the party Mischief version is encoded',
     'A6 Power to Resist Ruin: True Desire is played (every Facade combination\'s party lines on that Two Masks as One, TEAM_BUFFS on: \'td\'); its 8 bonus hits are their own damage, and its ailments and heal are not entered',
     'A0/A6 Wonder skill level increases: not a team damage buff here',
@@ -9513,16 +9523,12 @@ const TEAM_BUFF_SKIPS = {
     'Performance Scoring (passive 1), A0/A1/A4 Vestige effects, Spiral Sequence crit damage, both weapons\' ATK and crit lines - self buffs'
   ],
   'Runa Dogenzaka': [
-    'Big Welcome\'s generic damage taken (24% of ailment accuracy): does not stack with Follow-Up\'s larger one; the greater applies',
     'A6: the main target\'s Resonance damage taken +60% with both effects held - unclear whether points or relative to Furrocious Follow-Up\'s, not entered',
-    'Highlight Enthusiastic Fuse: per-hit consumable damage boost (2 or 4 stacks), not a timed buff',
     'A6: debuff durations +1 turn encoded on the two DEF downs only (the damage-taken lines kept at 2); \'increase FIEW damage taken effect by 30%\' and Resonance +60% unclear whether points or relative',
-    'Cerberus Claws Big Welcome DEF down: does not stack with the Follow-Up one (encoded)',
     'Faithful Dog: the Resonance-damage trigger is not modelled (FIEW elements encoded)'
   ],
   'Riko Tanemura [Tempest]': [
     'Blossoming Season (TC_RK): her SP is followed turn by turn from full at the start; the refill each turn (about 10.4 SP x SP Recovery) is taken from lufel\'s note that casting it every turn needs 480.1% SP Recovery, and SP other allies give her is not counted',
-    'Vernal Splendor 5/10 Blossom stack bonuses (ATK +8% and crit damage +5% of crit multiplier above 100, doubled at A2) - stacks held depend on the DPS\'s hit count',
     'Storm of Petals at A6: Falling Petals lasts 1 turn longer, and an automatic extra Storm of Petals when the main target uses a skill - not expressible per Awareness / automatic cast',
     'A6 Full Blossom: crit damage +2% per 1% of the attacker\'s crit rate above 100% - depends on the DPS\'s crit rate exceeding 100',
     'Windplum Dance: main target\'s skill damage +3.3-6.3% per 50 SP that skill spends - depends on the DPS\'s skill SP cost',
@@ -9533,17 +9539,14 @@ const TEAM_BUFF_SKIPS = {
     'Scald, Cold Flames and Iceburn need a Burning foe (Entropy any ailment her Ice Technicals read: Burn, Freeze or Shock), which Mio does not inflict herself: they count only with someone in the team who does (Firecracker Rin from Awareness 2, Runa, Koromaru, Ann...)',
     'Cold Flames is scaled by the Technical Precision up when the damage dealer hits, not Mio\'s when she casts it (the same Scald and Skill 1 points reach both)',
     'Short Circuit (Ice on a Shocked foe, +2% skill damage) and Deepfreeze (Ice on a Frozen foe, a chance to Icebound) are not priced; Entropy counts every Ice Technical: on a Burning, Frozen or Shocked foe',
-    'Biting Cold (passive) and Highlight Freeze bonus: need Freeze/Icebound, only a 50% chance from Skill 1',
+    "Biting Cold's Icebound part and the Highlight's bonus on a Frozen foe: not priced (Biting Cold's damage taken on a Frozen foe is, while the fight has the boss Frozen)",
     'A4: Highlight damage-taken duration +1 turn not encoded',
     'A6 Firefighter\'s Soul: auto Sub-Zero Torrent needs a Burned foe (teammate); +25% damage taken on repeated Guidance hits on the same foe unclear under the 1>3 rotation',
     'A6 Damnation cap 6 and higher stack counts not assumed (encoded at 2 stacks)',
-    'Requiem Guidance (4-stack Skill 3) larger DEF down: stack count over the rotation not pinned down',
     'Disaster Preparedness shields: not damage'
   ],
   'Yaoling Li [Firecracker]': [
     'Firework Finale (Skill 2): Year-End Flames is a damage-over-time of her own on foes, not a multiplier for allies',
-    'Festival Colors (A2): keeps a permanent limit-breaking Burn stack on every foe - Burn is a state other kits may key on, not a damage multiplier itself',
-    'Orange Blossom Blade (Skill 3): Yanhua Slash can activate Fire Technicals - Technical not modelled',
     'Happy New Year! (passive 2): refreshed when allies activate a Technical, but the ATK it gives is her own',
     'Prosperity in Red (passive 1), Highlight, A1/A4/A6 and both weapons - self buffs'
   ],
@@ -9554,12 +9557,10 @@ const TEAM_BUFF_SKIPS = {
     'Rhythm Count (passive 1), Masquerade (A0), A2/A4/A6 and both weapons\' other lines - self buffs'
   ],
   'Mayumi Hashimoto': [
-    'Velocity extra actions for Mayumi (A0) - extra actions not modelled',
-    'Torque Boost uptimes depend on Speed, Awareness and fight length; the 0.6/0.35 figures are judgement, not rotation-derived',
+    "Velocity: her extra actions are the extra skills lufel writes into a turn (priced, x3/y3); Velocity itself adds none beyond those",
     'A6 Circuit Queen: 40/80 Velocity options (party ATK +25% if the foe is downed, damage to downed +15%, party damage +25% for 1 turn on Power Setup) - which option she spends on is not fixed, and two need Down',
     'Tire Change (A1) Shockwave crit damage +50% - her own hit',
     'Formula Pennant (4-star weapon): damage +18-34.2% on Torque Boost - no target named, read as self',
-    'Nebula Pennant: whether \'total Velocity\' means held or gained over the battle is unclear; 3 stacks is a middle estimate (5 if it means gained)'
   ],
   'Goro Akechi': [
     'A1 Detective Profile: Deduction and Stratagem last 4 turns instead of 2 - the Skill 1 / Skill 2 entries carry the base 2 turns, so from A1 they understate',
@@ -9582,14 +9583,11 @@ const TEAM_BUFF_SKIPS = {
     'Sipario (4-star weapon): allies get 60% of Shoki\'s ailment accuracy gain - ailment chance not priced; Mattatore self only'
   ],
   'Makoto Yuki': [
-    'On-Site Leader (passive 1): S.E.E.S. members get ATK +30% more after a Theurgy - needs specific teammates',
     'Assist (support skill): counted only in a rotation the planner composes (lufel never writes it), once a battle; not on himself',
     'Burn My Dread (A6): either Theurgy also triggers the other one, so Cadenza\'s buffs come with Ardhanari too - the Theurgy entries already cover any Theurgy use',
-    'Pathfinder (A0) pierce with Moon Phase, Scarlet Hades pierce/damage, Deus Xiphos (5-star weapon) - self buffs',
     'Nocturne of Battle is not in lufel\'s Awareness 0 rotation (1-3); it enters with A2\'s automatic cast'
   ],
   'Yukari Takeba': [
-    'Erosion uptime: lufel\'s A1 rotations never use Skill 1, so Erosion must come from her Theurgy (not in the rotation tokens) or transfer on kills - the Skill 1 ATK entry is counted from Skill 1 only and likely understates',
     'A6 Spring Day\'s Meeting: +30% critical damage when an ally uses a Theurgy - the recipient is unclear (the doubled Arrow of Life gauge is counted)',
     'Tailwind\'s Breath: party damage taken reduction - defensive'
   ],
@@ -9608,7 +9606,7 @@ const TEAM_BUFF_SKIPS = {
   ],
   'Minami Miyashita [Beachflower]': [
     'Medicines (TC_MEDS): the DEF medicine (no damage line reads DEF) and the One More / All-Out Attack medicine (neither is played out) add only Blossoms by the Beach\'s +15% ATK; the next-medicine increase from her Highlight (+9.8-11.4%, +5% more at A4) is counted in the fight only, not on the quick screen',
-    'Soothing Sunlight: Blessing stacks are taken as permanent (no duration printed); Blessing other kits give (Shoki\'s Followspot) is not added to hers',
+    "Soothing Sunlight: Blessing other kits give (Shoki's Followspot) is not added to hers",
     'Flower Basket Pharmacy (A0): medicine without spending a turn - action economy not modelled',
     'Tea Time Delight (4-star weapon): raises Minami\'s own crit multiplier (feeds her scaling), not a team buff',
     'Summer Garden: removes 1 debuff - cleanse not modelled'
@@ -9635,12 +9633,9 @@ const TEAM_BUFF_SKIPS = {
     'Veggie Satellite, Mixed Vegetables, A1/A2/A4, Veggie Knights, Go! and both weapons - self buffs'
   ],
   'Kotone Shiomi': [
-    'Lunar Phaseshift copying (priced in the fight): which "special buffs cannot be copied" the game does not say, so every stat buff the target has on the damage dealer is copied; Skill Effect Amplification (J&C) is not modelled anywhere, so it is not copied either; she casts it on her copy target, so its Leader\'s Guidance stack and Lunar Bond go to that ally rather than the damage dealer (not counted against it)',
-    'Fortune state (Go for Broke, once per battle; twice at A6): extends durations by 1-2 turns, A2 adds 1 more - not modelled (its free Highlight from A1 is counted, on the burst turn of her rotation)',
+    "Lunar Phaseshift copying (priced in the fight): which \"special buffs cannot be copied\" the game does not say, so every stat buff the target has on the damage dealer is copied, the twins' Skill Amplification included; she casts it on her copy target, so its Leader's Guidance stack and Lunar Bond go to that ally rather than the damage dealer (not counted against it)",
     'Vetri Vel Muruga: its Skill Amplification is priced on her skill buffs (TC_SELF_AMP), not on Lunar Phaseshift\'s copy rate',
     'Moment of Truth: +1% final damage per additional Strategist on the team - depends on team composition',
-    'Lunar Bond and Powerful Bond uptimes assume the DPS is the Arcana Link ally for the whole fight; rotation \'Fatigue\' turns may drop Lyre\'s Melody stacks below 3',
-    'A1: permanent Powerful Bond stack and Lunar Bond set to 5 on grant - makes the encoded stack effects more reliable, not separately encoded'
   ],
   'Mitsuru Kirijo': [
     'Assist (support skill, Charged Mark): counted only in a rotation the planner composes (lufel never writes it), on her one use a battle; an ally\'s Highlight or Theurgy is not counted as their first attack on the mark, nor her own attack'
@@ -9651,13 +9646,10 @@ const TEAM_BUFF_SKIPS = {
     'Steadfast Supporter: the backup\'s skill cooldowns falling after each combat turn - the backup takes one action a swap, its skill chosen by the fight'
   ],
   'Shoki Ikenami [Notte]': [
-    'Every effect is self-only (Spada dell\'Alba crit damage, Night\'s Contract, Grace, Nirvana pierce, Night\'s Monarch, Highlight, both weapons) - already in the planner',
-    'Night\'s Blessing counts as Blessing, so allies\' Blessing effects reach him; he grants nothing to allies'
+    "Every effect is self-only and in his own lines, re-entered from lufel's English kit (Tenebre Shoki) on Nov 22 2026. Undying Starlight's +30% ATK for 2 turns after his once-a-battle revive (A1) is not entered",
+    'Nocturnal Blessing counts as Blessing, so allies\' Blessing effects reach him; he grants nothing to allies'
   ],
   'Shun Kano [Pioneer]': [
-    'Justice Shot (Skill 1): each hit stacks damage taken up to 4.9-5.7%, and A2 adds 5 more stacks per hit - no stack cap is printed, so the total cannot be pinned down',
-    'High Noon Flag (Skill 2) at A0-A1: the second damage bonus needs 2 or more foes - multi-foe fights only',
-    'Stand with Honor (A6): Special Ammo up to 3 stacks and the fixed 3333% max HP shot - only one stack counted (a Suppressive Fire turn can fire up to 3; lufel writes one)',
     'Sheriff Badge: Null Down and HP-cost cover - defensive',
     'Daybreak Shot shields, Sentry (passive 1) and both weapons\' shield / max HP lines - defensive',
     'Chef\'s Scorching Soul (A3) / Chivalry\'s Burning Heart (A5): skill level ups - covered by the tiers'
@@ -9704,7 +9696,6 @@ const TEAM_BUFF_SKIPS = {
     'Final Reckoning (4-star weapon): ATK and Curse damage for Aran himself'
   ],
   'Aigis': [
-    'Assist Skill (support skill): permanent +10% ATK, but only for S.E.E.S. members - needs specific teammates',
     'A0: ignores foes\' Shields and adds 20% of shield damage - Aigis\'s own damage only',
     'Orgia Mode: Aigis acts after allies\' actions - her own extra actions, not a team buff'
   ],
@@ -10306,17 +10297,54 @@ const tcGateMean = (g, F) => { let s = 0; for (let r = 1; r <= F; r++) s += g(r)
 /* The share of turns an effect applied by `on` and lasting `dur` turns is up, over the rotation
    repeated: the second pass is measured, so a buff cast late in the cycle covers the next one's
    opening turns. null when the rotation never uses that skill. */
-function tcCover(seq, on, dur) {
+function tcCover(seq, on, dur, name) {
   const n = seq.length;
   // one buff any of several skills apply or refresh ("on": ["1", "2"]) is up once, not once per skill
   const ons = [].concat(on);
-  const casts = st => { const k = tcTurnSkills(st); return ons.some(o => k.has(o)); };
-  if (!n || !seq.some(casts)) return null;
+  // Runa's Skill 3 versions ('3w', '3wo', '3f') depend on the turns before it (TC_PRIME), read over the cycle
+  const pr = name ? tcPrimeSeq(name, seq, tmAw(name), true) : null;
+  const castAt = i => { const k = tcTurnSkills(seq[i % n]); return ons.some(o => k.has(o) || (pr && pr[i % n].has(o))); };
+  if (!n || !seq.some((st, i) => castAt(i))) return null;
   const up = new Set();
-  for (let i = 0; i < 2 * n; i++) if (casts(seq[i % n])) for (let j = i; j < i + Math.max(1, dur); j++) up.add(j);
+  for (let i = 0; i < 2 * n; i++) if (castAt(i)) for (let j = i; j < i + Math.max(1, dur); j++) up.add(j);
   let c = 0;
   for (let j = n; j < 2 * n; j++) if (up.has(j)) c++;
   return c / n;
+}
+/* Runa's Woof Woof Blaze (Skill 3) is two skills (Nov 2026): after Welcome Hug (Skill 1) she holds Big Welcome and
+   it deals 109.8% to all foes with all-foe damage taken; after Furrious Bark (Skill 2) Furrocious Follow-Up, 219.6% to
+   one foe with that foe's damage and Resonance damage taken. Each is held "for 2 turns" and Skill 3 spends both; with
+   both held Big Welcome fires, or from A6 (Station Square Superstar, which also grants both at the start of battle)
+   both do. Held through her next two turns: lufel's A6 rotations (3 > 2 > 1 single-target, 3 > 1 > 2 multi) put the
+   last-cast prime before Skill 3 the wrong way round for either reading but this one, where both are held. The fight
+   reads her state turn by turn; the quick screen walks the rotation as a cycle. Tokens: '3w' Big Welcome fired, '3wo'
+   Big Welcome alone, '3f' Follow-Up fired. A Skill 3 with neither held (not legal) is read as Follow-Up, as before. */
+const TC_PRIME = { n: 'Runa Dogenzaka', grant: ['w', 'f', null], hold: 2, startAw: 6, bothAw: 6, wRatio: 0.5 };
+function tcPrimeTurn(s, step, aw) {
+  if (s.pw == null) { const st = (aw || 0) >= TC_PRIME.startAw ? TC_PRIME.hold : 0; s.pw = st; s.pf = st; }
+  const u = tcSkillUses(step);
+  let fired = '';
+  if (u[2]) { fired = s.pw > 0 && s.pf > 0 ? ((aw || 0) >= TC_PRIME.bothAw ? 'wf' : 'w') : s.pw > 0 ? 'w' : 'f'; s.pw = 0; s.pf = 0; }
+  s.pw = Math.max(0, s.pw - 1); s.pf = Math.max(0, s.pf - 1);
+  if (u[0]) s.pw = TC_PRIME.hold;
+  if (u[1]) s.pf = TC_PRIME.hold;
+  return fired;
+}
+const tcPrimeToks = f => new Set(!f ? [] : f === 'w' ? ['3w', '3wo'] : f === 'f' ? ['3f'] : ['3w', '3f']);
+// the Skill 3 version each step of a rotation fires (a Set of tokens per step); `cyclic`: the rotation repeated, read
+// on its second pass; null for anyone else
+const tcPrimeMemo = new Map();
+function tcPrimeSeq(name, seq, aw, cyclic) {
+  if (name !== TC_PRIME.n || !seq || !seq.length) return null;
+  const key = (aw || 0) + '|' + (cyclic ? 'c' : '') + '|' + seq.join('›');
+  let v = tcPrimeMemo.get(key);
+  if (!v) {
+    const s = {};
+    let out = seq.map(st => tcPrimeToks(tcPrimeTurn(s, st, aw)));
+    if (cyclic) out = seq.map(st => tcPrimeToks(tcPrimeTurn(s, st, aw)));
+    v = out; tcPrimeMemo.set(key, v);
+  }
+  return v;
 }
 /* A line gained by the stack on each cast and kept to the end (`build`, up to `stacks`): `build` is true for one
    stack a cast, or the stacks each skill gives ({ '2': 2, '3': 1 }). The stacks one turn's skills (a Set) add: */
@@ -10598,7 +10626,7 @@ let tcEchoOn = true;
 let tcBkCopyOn = true;
 const TC_MATE_KIT_ON = new Set(['self', 'turnStart', 'turnEnd', 'round', 'selfHL', 'ally', 'allySkill', 'allyAtk', 'allyHL', 'anyHL']);
 const TC_MATE_KIT_SKIP = ['ls', 'hype', 'trHas', 'byTok', 'mate', 'curse'];
-const TC_MATE_BONUS_SKIP = ['perBurnFoe', 'state', 'ls', 'col', 'perCol', 'lv', 'perLvSpent', 'perWill', 'ta', 'perTA', 'trCount', 'trGain', 'noO', 'selfHp', 'curse', 'tech', 'trHas', 'mate', 'mateElem', 'perHeat', 'awBelow'];
+const TC_MATE_BONUS_SKIP = ['perChosen', 'sun', 'allyHl', 'perBurnFoe', 'state', 'ls', 'col', 'perCol', 'lv', 'perLvSpent', 'perWill', 'ta', 'perTA', 'trCount', 'trGain', 'noO', 'selfHp', 'curse', 'tech', 'trHas', 'mate', 'mateElem', 'perHeat', 'awBelow'];
 function tcMateKit(n, names) {
   const C = n && n !== 'Wonder' ? charDef(n) : null;
   if (!C || tcMateOff) return [];
@@ -10625,7 +10653,13 @@ function tcMateTurnCoef(n, seq, withHl) {
   const S = SKILL_DMG[n] ? tcSkillD(n) : null, aoe = (SKILL_DMG[n] || {}).aoe || [0, 0, 0, 0];
   if (!S || !seq || !seq.length) return 0;
   let per = 0;
-  seq.forEach(step => tcSkillUses(step).forEach((c, i) => { if (i < 3) per += c * S[i] * (aoe[i] ? tcFoeMult(n, i, tcFoes()) : 1); }));
+  // Runa's Skill 3 is Big Welcome (half the coefficient, every foe) or Follow-Up, by the turns before it (TC_PRIME)
+  const pr = tcPrimeSeq(n, seq, tmAw(n), true);
+  seq.forEach((step, j) => tcSkillUses(step).forEach((c, i) => {
+    if (i >= 3) return;
+    if (pr && i === 2 && pr[j].size) { per += c * S[2] * ((pr[j].has('3f') ? 1 : 0) + (pr[j].has('3w') ? TC_PRIME.wRatio * tcFoes() : 0)); return; }
+    per += c * S[i] * (aoe[i] ? tcFoeMult(n, i, tcFoes()) : 1);
+  }));
   per /= seq.length;
   if (withHl && S[3] > 0) per += S[3] * (aoe[3] ? tcFoeMult(n, 3, tcFoes()) : 1) / (tcHlKind(n) === 'TH' ? tcThEvery(n) : tcHlEvery());
   return per;
@@ -10794,7 +10828,7 @@ function tcRotCands(r, dep, name) {
   tcRotVariants(r, name).forEach(({ seq, bi, changed }) => {
     // covers read with the member's Highlight cadence added (tcSeqHL); the candidate itself stays lufel's shape
     const hseq = tcSeqHL(seq, name);
-    const covers = dep.map(u => { const c = tcCover(hseq, u.e.on, u.dur); return c == null ? 0 : c; });
+    const covers = dep.map(u => { const c = tcCover(hseq, u.e.on, u.dur, name); return c == null ? 0 : c; });
     const key = covers.map(c => c.toFixed(6)).join(',');
     const prev = seen.get(key);
     // one entry per distinct coverage: the one closest to lufel's first option, then the earliest option
@@ -11389,16 +11423,15 @@ const KIT_ROT = (() => {
     },
 
     'Runa Dogenzaka': {
-      why: 'prime = Big Welcome (from Welcome Hug, Skill 1) or Furrocious Follow-Up (from Furrious Bark, Skill 2), each for 2 turns: set to 2, one off at each of her turns, so it lasts to her next turn. Woof Woof Blaze (Skill 3) needs either and removes both. Station Square Superstar (A6): both at the start of battle for 2 turns.',
-      res: { prime: [0, 2] },
+      why: 'prime = Big Welcome (from Welcome Hug, Skill 1) or Furrocious Follow-Up (from Furrious Bark, Skill 2), each for 2 turns, held through her next two turns (lufel\'s A6 rotations only make sense that way, see TC_PRIME): set to 3, one off at the start of each of her turns. Woof Woof Blaze (Skill 3) needs either and removes both. Station Square Superstar (A6): both at the start of battle for 2 turns. Which effect a Skill 3 fires is the fight\'s (TC_PRIME).',
+      res: { prime: [0, 3] },
       turn: { prime: -1 },
       moves: {
-        '1': { set: { prime: 2 } },
-        '2': { set: { prime: 2 } },
+        '1': { set: { prime: 3 } },
+        '2': { set: { prime: 3 } },
         '3': { need: { prime: 1 }, set: { prime: 0 } }
       },
-      aw: { 6: { res: { prime: [2, 2] } } },
-      caveats: ['Skill 3 is priced as Furrocious Follow-Up (219.6, single target), the effect after Skill 2; after Skill 1 the game fires Big Welcome (109.8, all foes) instead, so a composed Skill 1 then Skill 3 is overpriced on a single boss before A6.']
+      aw: { 6: { res: { prime: [3, 3] } } }
     },
 
     'Ichigo Shikano [Summer]': {
@@ -12189,7 +12222,7 @@ function tcRotCompose(dps, name, inTeam, r, fixed, dep) {
   ctx.push(tcWonder(dps).vec);
   const price = seq => {
     const hs = tcSeqHL(seq, name), v = Object.assign({}, fixed);
-    dep.forEach(u => { const c = tcCover(hs, u.e.on, u.dur); v[u.k] += u.v * (c == null ? 0 : c); });
+    dep.forEach(u => { const c = tcCover(hs, u.e.on, u.dur, name); v[u.k] += u.v * (c == null ? 0 : c); });
     return tcMultiplier(dps, ctx.concat([v]));
   };
   /* The search proper runs once per member and damage dealer, with the member's own lines alone (no
@@ -12200,7 +12233,7 @@ function tcRotCompose(dps, name, inTeam, r, fixed, dep) {
   if (!cands) {
     const alone = seq => {
       const hs = tcSeqHL(seq, name), v = Object.assign({}, fixed);
-      dep.forEach(u => { const c = tcCover(hs, u.e.on, u.dur); v[u.k] += u.v * (c == null ? 0 : c); });
+      dep.forEach(u => { const c = tcCover(hs, u.e.on, u.dur, name); v[u.k] += u.v * (c == null ? 0 : c); });
       return tcMultiplier(dps, [v]);
     };
     const a = tcCompose(name, r, alone, null, 2);
@@ -12440,7 +12473,8 @@ function tcRamFor(D, names) {
    casts with 2+ Standard or better, Skill 1's factor — measured over the fight on the real save (2 Nov 2026, her
    best team with each of 16 damage dealers, 6 rounds): 2.65 / 0.95 / 2.16 at A0, 5.16 / 1 / 2.35 at A6. */
 const TC_CK = { n: 'Yumi Shiina', q: { T: 120, S: 100, B: 50 }, qA6: { T: 135, S: 120, B: 75 },
-  quick: { all: 2.65, std2: 0.95, one: 2.15, share: 0.85, one1: 0.33 }, quickA6: { all: 5.15, std2: 1, one: 2.35, share: 1, one1: 0.33 } };
+  // share and one1 with Moonlit Feather's strength by Cocktail (Nov 22 2026): estimated from the same mix, not re-measured
+  quick: { all: 2.65, std2: 0.95, one: 2.15, share: 0.9, one1: 0.37 }, quickA6: { all: 5.15, std2: 1, one: 2.35, share: 1.2, one1: 0.4 } };
 const tcCkQuick = (f, aw) => (aw >= 6 ? TC_CK.quickA6 : TC_CK.quick)[f] || 1;
 function tcCkFor(D, names) {
   if (!names || names[2] !== TC_CK.n) return null;
@@ -12503,7 +12537,7 @@ function tcExclQuick(usable) {
   usable.forEach(u => {
     if (!u.e.excl) return;
     const key = u.e.excl + '|' + u.k, g = groups.get(key) || new Map(); groups.set(key, g);
-    const s = g.get(u.e.src) || { v: 0, up: 0, us: [] }; g.set(u.e.src, s);
+    const xs = u.e.exclAs || u.e.src, s = g.get(xs) || { v: 0, up: 0, us: [] }; g.set(xs, s);
     s.v += u.v; s.up = Math.max(s.up, u.up); s.us.push(u);
   });
   groups.forEach(g => {
@@ -12605,6 +12639,8 @@ function tcMemberCalc(dps, name, inTeam, backup, fit, pair) {
     // Kotone Shiomi's Powerful Bond tiers (TC_PB) need Arcana Link, which only a Sweeper or Assassin holds
     if (e.pb && name === TC_LB.n && !TC_LB.arch.includes(dps.arch)) continue;
     if (e.only && e.only !== dkind) continue;   // a Highlight-only line for a Theurgy user, or the reverse
+    // "S.E.E.S. members" (`sees`): a damage dealer with a Theurgy, the game's own split (Fuuka's Divine Prayer)
+    if (e.sees && dkind !== 'TH') continue;
     if (e.techUser && !TC_TECH_USERS.has(dps.n)) continue;   // "when activating a Technical": a kit that does
     // `notWith`: an effect another character on the field already supplies (Radiation beside Chizuko), counted once
     if (e.notWith && inTeam && [...inTeam].some(n => n === e.notWith && n !== inTeam.backup)) continue;
@@ -12648,7 +12684,7 @@ function tcMemberCalc(dps, name, inTeam, backup, fit, pair) {
     // stacks gained one a cast and kept (`build`: Soothing Sunlight): the share of the full stack held over the fight
     else if (e.build) up = tcBuildMean(tcSeqHL(seq.length ? seq : ['-'], name), e, F);
     // with no lufel rotation at all, the cadence's Highlights still count (on an otherwise idle turn)
-    else { up = tcCover(tcSeqHL(seq.length ? seq : ['-'], name), e.on, dur); rotDep = !!seq.length; }
+    else { up = tcCover(tcSeqHL(seq.length ? seq : ['-'], name), e.on, dur, name); rotDep = !!seq.length; }
     const offRot = up == null;
     if (offRot) up = 0;
     // a line on for part of the fight only (built up over the opening rounds, or for its first rounds)
@@ -12671,7 +12707,7 @@ function tcMemberCalc(dps, name, inTeam, backup, fit, pair) {
       // Tempest Riko's Blossoming Season tiers at the strength the fitted rotation's SP gives (TC_RK)
       usable.forEach(u => { if (u.e.spT) u.v *= tcRkQuick(fitted.seq, u.e.spT) / tcRkQuick(seq, u.e.spT); });
       seq = fitted.seq;
-      dep.forEach(u => { const up = tcCover(tcSeqHL(seq, name), u.e.on, u.dur); u.offRot = up == null; u.up = up == null ? 0 : up; });
+      dep.forEach(u => { const up = tcCover(tcSeqHL(seq, name), u.e.on, u.dur, name); u.offRot = up == null; u.up = up == null ? 0 : up; });
     }
   }
   if (backup) {
@@ -12740,7 +12776,7 @@ function tcMemberCalc(dps, name, inTeam, backup, fit, pair) {
   // copied as the fight has them up, their gated ones at the round's share)
   // `constsAlly`: the part of `consts` from lines on the damage dealer alone (to: 'ally'), which a teammate's or Wonder's
   // own hits do not get; `al` marks the same on the gated, ailment and knocked-down lines
-  const consts = Object.assign({}, shareVec), events = [], gated = [], constsOne = {}, constsMin = [], ally = {}, downConsts = [], constsAlly = {}, constsOwn = {};
+  const consts = Object.assign({}, shareVec), events = [], gated = [], constsOne = {}, constsMin = [], ally = {}, downConsts = [], constsAlly = {}, constsOwn = {}, constsLim = [];
   usable.forEach((u, i) => {
     // a round-gated line (a battle-start window, a ramp) is a field member's: Fuuka's backup is not on the field for it
     if (backup && u.gate) return;
@@ -12753,16 +12789,18 @@ function tcMemberCalc(dps, name, inTeam, backup, fit, pair) {
       events.push({ e: u.e, k: u.k, v: (u.e.build ? u.v / (u.e.stacks || 1) : u.v) / (u.e.ck ? tcCkQuick(u.e.ck, aw) : 1) / (u.e.spT ? tcRkQuick(seq, u.e.spT) : 1) / sa, dur: u.e.dur === 'next' ? 'next' : u.dur, ref: shareN + i, gate: u.gate,
         stackMax: u.e.stackMax || (u.e.build ? u.e.stacks || 1 : 0), full: u.e.build ? u.v : 0, ampAt: sa !== 1 ? (r, lb) => tcSelfAmp(name, u.e, lo, aw, r, lb) : null });
     // always on, but only while the boss is knocked down
-    else if (!backup && u.down) downConsts.push({ k: u.k, v: u.v * (u.e.up != null ? u.e.up : 1), one: tcMainOnly(u.e), al: u.e.to === 'ally' });
+    else if (!backup && u.down) downConsts.push({ k: u.k, v: u.v * (u.e.up != null ? u.e.up : 1), one: tcMainOnly(u.e), al: u.e.to === 'ally', lim: tcLimOf(u.e) });
     // the fight switches a gated line on round by round; any judged uptime it also carries stays
-    else if (!backup && (u.e.minHits || u.e.ailMin || u.e.perAil || u.e.ailOfElem || u.e.needAil)) constsMin.push({ k: u.k, v: u.v * u.up, minHits: u.e.minHits || 0, ailMin: u.e.ailMin || 0, perAil: u.e.perAil || 0, ailOfElem: !!u.e.ailOfElem, needAil: u.e.needAil || null, one: tcMainOnly(u.e), al: u.e.to === 'ally' });
-    else if (!backup && u.gate) gated.push({ k: u.k, v: u.v * (u.e.up != null ? u.e.up : 1), gate: u.gate, lb: u.e.lb, ls: u.e.ls, col: u.e.col, one: tcMainOnly(u.e), ally: copySrc && tcCopyable(u.e, u.k), al: u.e.to === 'ally' });
+    else if (!backup && (u.e.minHits || u.e.ailMin || u.e.perAil || u.e.ailOfElem || u.e.needAil)) constsMin.push({ k: u.k, v: u.v * u.up, minHits: u.e.minHits || 0, ailMin: u.e.ailMin || 0, perAil: u.e.perAil || 0, ailOfElem: !!u.e.ailOfElem, needAil: u.e.needAil || null, one: tcMainOnly(u.e), al: u.e.to === 'ally', lim: tcLimOf(u.e) });
+    else if (!backup && u.gate) gated.push({ k: u.k, v: u.v * (u.e.up != null ? u.e.up : 1), gate: u.gate, lb: u.e.lb, ls: u.e.ls, col: u.e.col, one: tcMainOnly(u.e), ally: copySrc && tcCopyable(u.e, u.k), al: u.e.to === 'ally', lim: tcLimOf(u.e) });
     else {
       if (copySrc && tcCopyable(u.e, u.k)) ally[u.k] = (ally[u.k] || 0) + u.v * u.up;
       consts[u.k] += u.v * u.up * (backup ? tcAilQuick(u.e) * u.cov : 1);
       if (u.e.to === 'ally') constsAlly[u.k] = (constsAlly[u.k] || 0) + u.v * u.up * (backup ? tcAilQuick(u.e) * u.cov : 1);
       // their own `own: false` lines, which their own hits as a teammate must not read again (tcSimPrep's X0ownOf)
       if (u.e.own === false) constsOwn[u.k] = (constsOwn[u.k] || 0) + u.v * u.up * (backup ? tcAilQuick(u.e) * u.cov : 1);
+      // a party line limited to an element, a role or S.E.E.S. (tcLimOf): a teammate outside it takes it back off their own hits
+      if (u.e.to !== 'ally' && tcLimOf(u.e)) constsLim.push({ k: u.k, v: u.v * u.up * (backup ? tcAilQuick(u.e) * u.cov : 1), lim: tcLimOf(u.e), ownFalse: u.e.own === false });
       // an always-on debuff on one foe: on the main target only when the fight has more foes
       if (tcMainOnly(u.e)) constsOne[u.k] = (constsOne[u.k] || 0) + u.v * u.up;
     }
@@ -12796,7 +12834,7 @@ function tcMemberCalc(dps, name, inTeam, backup, fit, pair) {
   if (!backup && !self) { vec.own = tcMateOwnQuick(dps, name, seq); vec.ownOf = name; }
   const base = seq.length ? seq : ['-'];
   const hlAdded = !backup && tcSeqHL(base, name) !== base;
-  return { vec, lines, known: !!TEAM_BUFFS[name], rot: fitted, hlEvery: hlAdded ? tcEvery(name) : 0, sim: { consts, events, seq, gated, constsOne, constsMin, ally, start, downConsts, constsAlly, constsOwn } };
+  return { vec, lines, known: !!TEAM_BUFFS[name], rot: fitted, hlEvery: hlAdded ? tcEvery(name) : 0, sim: { consts, events, seq, gated, constsOne, constsMin, ally, start, downConsts, constsAlly, constsOwn, constsLim } };
 }
 
 /* ---- Wonder: three Personas, each with its own three skill cards, and a weapon (the user's
@@ -14055,8 +14093,8 @@ const DPS_KIT = {
     { kind: 'hit', v: [79.9, 88, 84.8, 92.9], on: 'self:3', aw: 6, why: 'A6 Everlasting Summer: Surf \'n\' Shine\'s skill multiplier +50%, i.e. half of 159.7% more on every cast.' }
   ],
   'Tomoko Noge [Seaside]': [
-    { kind: 'res', v: [43.2, 43.2, 45.6, 45.6], on: 'ally', chance: 0.5, why: 'Summer Reminiscence (A0 Resonance): after an ally acts, if the foe has 3+ Sparks, 19% ATK Psy damage per 3 Sparks spent; x1.5 with one foe; Have a Cold Drink\'s passive raises the multiplier 51.7/51.7/60/60% (read as relative: 19 x 1.517 x 1.5 = 43.2). Judged: Skill 3\'s debuff and Skill 2\'s buffed ally each add up to 5 Sparks per 2-turn window, and she alternates them, so about 8-10 Sparks per 2 rounds = 1.3-1.7 Resonances a round; over 3 ally actions a round that is chance 0.5' },
-    { kind: 'res', ladder: [5.3, 6.8, 6.8, 8.4, 8.4, 10, 10], on: 'ally', chance: 0.5, weapon: '5', why: 'Bubble Babies (5-star weapon): Summer Reminiscence skill damage multiplier +18.5-35% (added to the Skill 1 passive\'s increase: 19 x ladder% x 1.5), same triggers as the Resonance' }
+    { kind: 'res', v: [28.8, 28.8, 30.4, 30.4], on: 'ally', chance: 0.5, aoe: true, byFoes: [1.5, 1.2, 1], why: 'Summer Reminiscence (A0 Resonance): after an ally acts, if the foes have 3+ Sparks, 19% ATK Psy damage to all foes per 3 Sparks spent, at 150/120/100% with 1/2/3+ foes; Have a Cold Drink\'s passive raises the multiplier 51.7/51.7/60/60% (read as relative: 19 x 1.517 = 28.8). Until Nov 22 2026 it was read at one foe (x1.5, the main target only) whatever the fight\'s count'},
+    { kind: 'res', ladder: [3.5, 4.5, 4.5, 5.6, 5.6, 6.7, 6.7], on: 'ally', chance: 0.5, weapon: '5', aoe: true, byFoes: [1.5, 1.2, 1], why: 'Bubble Babies (5-star weapon): Summer Reminiscence skill damage multiplier +18.5-35% (added to the Skill 1 passive\'s increase: 19 x ladder%), same triggers, foes and foe-count scaling as the Resonance' }
   ],
   'Kira Kitazato': [
     { kind: 'hit', v: [62.5, 68.7, 66.4, 72.5], on: 'self:1', after: 'Transform', dur: 1, why: 'Midnight Surgery (Ripper Skill 1, 251.7%) instead of Moonlit Scalpel (189.2%) on a \'Transform+1\' turn. \'Transform\' is Nightfall; Ripper lasts to the end of that turn.' },
@@ -14101,10 +14139,14 @@ const DPS_KIT = {
     { kind: 'fu', v: 20, on: 'allyHL', allyElem: ['Wind'], after: '3', dur: 2, cond: 'the ally deals Wind damage', why: 'Same follow-up from an ally Highlight or Theurgy.' },
     { kind: 'res', v: [36.4, 40.1, 38.6, 42.3], on: 'allySkill', allyElem: ['Wind'], after: '3', dur: 2, cond: 'the ally deals Wind damage', why: 'Each such ally action also gives 1 Vestige stack, worth 36.4% in the Edge\'s Resonance.' },
     { kind: 'res', v: [36.4, 40.1, 38.6, 42.3], on: 'allyHL', allyElem: ['Wind'], after: '3', dur: 2, cond: 'the ally deals Wind damage', why: 'Vestige stack from an ally Wind Highlight or Theurgy.' },
-    { kind: 'res', v: [36.4, 40.1, 38.6, 42.3], on: 'self:3', stacks: 7, aw: 6, why: 'A6 Dance of Love: after the Resonance the Edge lasts 1 more turn, regains up to 2 spent stacks, and resonates again: (2 regained + 4) plus 1 from the Skill 1 lufel\'s A6 rotation (3,1,1) casts in the extra turn = 7 x 36.4%.' }
+    { kind: 'res', v: [36.4, 40.1, 38.6, 42.3], on: 'self:3', stacks: 7, aw: 6, why: 'A6 Dance of Love: after the Resonance the Edge lasts 1 more turn, regains up to 2 spent stacks, and resonates again: (2 regained + 4) plus 1 from the Skill 1 lufel\'s A6 rotation (3,1,1) casts in the extra turn = 7 x 36.4%.' },
+    { kind: 'hit', v: [70.8, 78.1, 75.2, 82.4], on: 'selfHL', notAfter: '3', notDur: 2, crit: false, why: 'Highlight (Spring mode): with Spring\'s Edge not active it deals 1 more hit to the selected target. lufel prints no value; read as one of its three hits, a third of 212.5-247.3%. A Highlight cannot crit (Nov 22 2026)' }
+  ],
+  'Ayaka Sakai': [
+    { kind: 'hit', v: [83.3, 91.8, 88.4, 96.9], on: 'self:1', byAtk: 'dps', costar: true, why: 'Distortion (Skill 1): while an ally is Costar, a bonus hit on the main target worth 83.3-96.9% of that ally\'s ATK. The Costar is the damage dealer: Unison Notes (Skill 2) for 3 turns, and from A1 Hard Rock at the start of battle for 3 turns (rounds 1-3). Priced as a teammate\'s own hit (Nov 22 2026)' }
   ],
   'Runa Dogenzaka': [
-    { kind: 'res', v: [109.8, 109.8, 116.6, 116.6], on: 'self:3', aw: 6, cond: 'Big Welcome and Furrocious Follow-Up both active (lufel\'s A6 rotations 3>2>1 / 3>1>2 hold both at each Skill 3; A6 also grants both at battle start)', why: 'Station Square Superstar (A6): with both active, Woof Woof Blaze fires both effects, adding Big Welcome\'s 109.8% ATK Fire hit (a Resonance) to the Follow-Up hit' }
+    { kind: 'res', v: [109.8, 109.8, 116.6, 116.6], on: 'self:3', prime: 'w', aoe: true, why: 'Woof Woof Blaze as Big Welcome (TC_PRIME: after Welcome Hug, or with both held): 109.8% of ATK to all foes, counted as a Resonance. Alone it replaces the Follow-Up hit (SKILL_DMG\'s 219.6, one foe); from A6 with both held (Station Square Superstar) both land' }
   ],
   'Yaoling Li [Firecracker]': [
     { kind: 'hit', v: [127.4, 140.4, 135.2, 148.2], on: 'tok:Melee', cond: 'Flaming Sword Dance active - lufel\'s rotations only use Melee inside it (\'3+Melee\', A1\'s second slash, permanent from A6)', why: 'Yanhua Slash: her Melee under Flaming Sword Dance deals 127.4% to all foes (Skill 3\'s level).' },
@@ -14234,7 +14276,7 @@ const DPS_KIT_SKIPS = {
   'YUI': [
     'Korean Jolly Cooperation reads "any thief" (임의의 괴도), which may include Yui\'s own Skill 1 (one more 35% x 80% roll per Skill 1); not entered, as the English and Japanese say "ally".',
     'Whether a Player 2 ally\'s skill can set off both the guaranteed Player 2 follow-up and a separate 35% Jolly Cooperation roll is not stated; both are entered.',
-    'Virtual Fertilizer (A4) is crit, not priced here; Skill 1\'s +30% and Virtual Landowner read the Shock the fight tracks on the boss; the 5-star weapon\'s extra for Electric-skill allies is team-specific.',
+    'Virtual Fertilizer (A4) is crit, not priced here; Skill 1\'s +30% and Virtual Landowner read the Shock the fight tracks on the boss; the 5-star weapon\'s extra is in full for an Electric ally\'s follow-ups and a third for the others (Player 2 is one ally, which the fight does not choose).',
     'Humongously Huge Harvest\'s 25% splash hits other foes only: nothing on a single boss.'
   ],
   'Yusuke Kitagawa': [
@@ -14250,7 +14292,7 @@ const DPS_KIT_SKIPS = {
     'Whether "after an ally acts" includes Tomoko\'s own action is not stated; only other thieves\' actions are counted.',
     'Sparks per skill-damage instance (per hit or per skill) is unclear in lufel\'s text; the 0.5 chance assumes the per-window cap of 5 is usually reached.',
     'A4: Highlight deals bonus damage (2 hits) - no coefficient printed, not entered.',
-    'A6: +35% crit rate on Resonance damage - a crit buff, not entered. A2 adds a Spark every 2 Resonances (slightly more frequent Resonance), not entered.'
+    "A2 adds a Spark every 2 Resonances (slightly more frequent Resonance), not entered. (A6's +35% crit rate on Resonance is a stat line.)"
   ],
   'Kira Kitazato': [
     'Bleed\'s Almighty part is priced at its cap, 60% of his ATK per stack (90% from Awareness 1), which only lufel\'s Korean and Chinese text print; if Global has no cap it is a share of the boss\'s max HP instead, which nothing here models.',
@@ -14273,20 +14315,18 @@ const DPS_KIT_SKIPS = {
     'Whether \'allies\' in Ailes au Vent includes Kotone herself is not clear; read as the other thieves. If it includes her, her own Wind skills in the Edge would add a 20% hit and a stack each.',
     'The Vestige stack cap is not printed (the Highlight \'can exceed the maximum limit\'); the counts assumed here are small.',
     'A6: Wind allies\' actions during the extended Edge turn are not counted (the after/dur windows above cover the first two rounds).',
-    'Spring Highlight outside the Edge deals 1 more hit, for which lufel prints no value; not in lufel\'s rotations, not priced. A6 pierce is a stat.',
+    'Spring Highlight outside the Edge: its 1 more hit has no printed value and is priced as a third of the Highlight. A6 pierce is a stat.',
     'Winter mode (with Ice allies) is not entered.'
   ],
   'Runa Dogenzaka': [
-    'Welcome Hug (Skill 1): 50% chance to Burn - no Burn damage coefficient published, not entered.',
-    'Furrocious\' Resonance damage taken is a TEAM_BUFFS line on the foe; in lufel\'s rotations her own next Resonance falls outside its window, which the fight plays out.',
-    'The A0 multi-target rotation (1 > 3) would use Big Welcome (109.8%) instead; on one boss the single-target one applies.'
+    "Welcome Hug (Skill 1): its Burn is played as a status (TC_AILMENTS); Burn damage itself has no published coefficient, not entered.",
+    'Furrocious\' Resonance damage taken is a TEAM_BUFFS line on the foe; in lufel\'s rotations her own next Resonance falls outside its window, which the fight plays out.'
   ],
   'Yaoling Li [Firecracker]': [
     'A6 permanent Scarlet Surprise double-counts with the after:\'1\' entry on the first slash after Skill 1 (once in lufel\'s A6 rotation).',
     'Year-End Flames: text says \'take Fire damage ... for 2 turns\' - read as one tick a turn; it does not say whether it can crit. A6\'s +1 turn on its enhanced effects is not entered.',
     'Burn (Skill 2, A2\'s permanent Burn): lufel\'s text gives Burn no damage figure; not priced.',
     'Fireburn, the 5-star weapon\'s Fire Technical bonus and Prosperity in Red count only while the foe Burns: her own Burn is Awareness 2\'s permanent stack, and below that Skill 2, which lufel\'s rotations never cast; the fitted rotation may put it on 2 of 6 turns (TC_ROT_ADD) when the fight says it pays, or a teammate supplies the Burn. Her stats and build score count Prosperity in Red as always on.',
-    'Happy New Year! becomes 51% ATK once she or an ally activates a Technical; it is counted at 42%.',
     'Windburn (Fire on a Windswept foe, 1% of its max HP) and Iceburn on a Frozen foe are not priced.'
   ],
   'Kasumi Yoshizawa': [
@@ -14321,12 +14361,12 @@ const DPS_KIT_SKIPS = {
     'If a Setup at A6 used Skill 1, the Skill 1 Havoc entry and the A6 turnEnd entry would overlap; lufel\'s A6 rotations do not.'
   ],
   'Mitsuru Kirijo': [
-    'Iceblade is priced on the triggering ally\'s ATK, as Global\'s English says (Nov 2026); was: lufel\'s English says "22.0% of that ally\'s Attack", the Korean says Mitsuru\'s Iceblade deals 19.5% of Attack (Global\'s 22.0 is used). If it is the ally\'s ATK, the simulator should scale it on the triggering ally\'s Attack, not hers.',
+    "Iceblade is priced on the triggering ally's ATK, as Global's English says (\"22.0% of that ally's Attack\"; the Korean reads as Mitsuru's): DPS_KIT `byAtk`",
     'Whether her own skill attacks on a Snowbound foe also trigger Iceblade ("an ally") is not clear; only other thieves are counted.'
   ],
   'Shoki Ikenami [Notte]': [
     'No damage beyond his numbered skills and Highlight: no Resonance, follow-up or DoT in his kit, Awareness or weapons. Skill 3\'s 5-Blessing bonus hit is already in SKILL_DMG (302).',
-    'The Highlight\'s up-to-60% damage at low HP depends on his own HP; not priced.'
+    'The Highlight\'s up-to-60% damage at 40% HP or lower depends on his own HP, which the fight does not play for him; not priced.'
   ],
   'Junpei Iori': [
     'Power Swing always crits; Junpei\'s CRIT_PROFILE locked share (0.35) is meant to cover it, so crit is left at the default here.',
@@ -14398,7 +14438,9 @@ const DPS_KIT_BONUS = {
   ],
   'Kiyoshi Kurotani': [
     { to: 'skill:2', v: 2, needAil: 'Burn', tech: 'fire', amp: true, why: 'Crimson Summon (Skill 2) activates a Fire Technical: Fireburn on a Burning foe, skill damage +2%, +10% of itself per 100 Technical Precision' },
-    { to: 'skill:3', v: 2, needAil: 'Burn', tech: 'fire', amp: true, why: 'Skill 3 activates a Fire Technical: Fireburn, as above' }
+    { to: 'skill:3', v: 2, needAil: 'Burn', tech: 'fire', amp: true, why: 'Skill 3 activates a Fire Technical: Fireburn, as above' },
+    { to: 'all', ladder: [6, 7.5, 7.5, 9, 9, 10.5, 10.5], weapon: '5', perChosen: true, stacks: 3, why: 'Baptism by Fire (5-star weapon): his damage +6-10.5% per Chosen One stack, at the count the fight keeps (TC_CHOSEN; the quick screen reads 3). Not priced until Nov 22 2026' },
+    { to: 'all', v: 6, perChosen: true, stacks: 3, after: '2', dur: 2, needAil: 'Burn', why: 'Uplifting Embers (passive 1): Fire and ailment damage to a foe with Sacred Flame +6% per Chosen One stack; Sacred Flame is Crimson Summon\'s (Skill 2) on a Burning foe for 2 turns, read as the round of a Crimson Summon and the next while the foe Burns. All his damage is Fire. Not priced until Nov 22 2026' }
   ],
   'Kotone Montagne': [
     { to: 'res', k: 'lock', v: 1, why: 'Blade Dancer (Awareness 0): the Resonance is a guaranteed critical hit (every res component is Blade Dancer; Nov 2026, until then not counted)' },
@@ -14441,8 +14483,8 @@ const DPS_KIT_BONUS = {
     { to: 'res', ladder: [26, 34, 34, 42, 42, 50, 50], weapon: '5', why: 'Cyber Jammers (5-star weapon): follow-up damage +26-50%' },
     { to: 'fu', ladder: [26, 34, 34, 42, 42, 50, 50], weapon: '5', why: 'Cyber Jammers: follow-up damage +26-50% (Player 2 and Highlight follow-ups)' },
     { to: 'fu', match: 'Player 2', ladder: [26, 34, 34, 42, 42, 50, 50], weapon: '5', why: 'Cyber Jammers: a follow-up set off by the Player 2 ally gets the same again; the Sparky Surprise follow-ups always are' },
-    { to: 'res', ladder: [26, 34, 34, 42, 42, 50, 50], weapon: '5', chance: 0.33, why: 'Cyber Jammers: the same again when the Player 2 ally sets off a Jolly Cooperation follow-up - one of the three other thieves, and Player 2 is up throughout. Electric-skill allies (the other trigger) are team-specific, not counted' },
-    { to: 'fu', match: 'Highlight', ladder: [26, 34, 34, 42, 42, 50, 50], weapon: '5', chance: 0.33, why: 'Cyber Jammers: the same again on the Highlight follow-ups the Player 2 ally sets off (one of three allies)' },
+    { to: 'res', ladder: [26, 34, 34, 42, 42, 50, 50], weapon: '5', chance: 0.33, byElem: ['Electric'], why: 'Cyber Jammers: the same again when the follow-up is set off by an ally dealing Electric damage with a skill (in full, as the fight has the ally: Nov 22 2026), or by the Player 2 ally - one of the three other thieves, counted at a third for the others' },
+    { to: 'fu', match: 'Highlight', ladder: [26, 34, 34, 42, 42, 50, 50], weapon: '5', chance: 0.33, byElem: ['Electric'], why: 'Cyber Jammers: the same again on the Highlight follow-ups an Electric-skill ally sets off (in full), or the Player 2 ally (a third for the others)' },
     { to: 'skill:2', v: 25, why: 'Meta Dynamite (Skill 2): damage to the main target +25%; on one boss every cast. Not in SKILL_DMG\'s 59.6 and not in lufel\'s rotation' },
     { to: 'all', v: 15, chance: 0.7, why: 'Jolly Cooperation (Awareness 0): after a follow-up the target\'s next Electric damage taken +15% (2 turns). She lands about 2 follow-ups a round and nearly all her damage is Electric follow-ups, so most of her hits after the first find one waiting: judged 0.7' },
     { to: 'all', ladder: [9.7, 12.6, 12.6, 15.5, 15.5, 18.4, 18.4], weapon: '4', stacks: 1.7, why: 'Meta Directors (4-star weapon): after a follow-up, Electric damage +9.7-18.4% for 1 turn, up to 2 stacks; about 2 follow-ups a round (Player 2 and Jolly Cooperation) keep it near 2: judged 1.7' }
@@ -14473,9 +14515,16 @@ const DPS_KIT_BONUS = {
     { to: 'hl', v: 25, selfHp: { above: 50 }, why: 'Highlight: +25% damage while her HP is above 50% (her Skill 1 in Summer Hype and Skill 3 spend 10% and 15%, Skill 2 and the Highlight restore 20%: TC_HP)' },
     { to: 'skill:3', ladder: [34, 44, 44, 54, 54, 64, 64], weapon: '5', why: 'Colorful Coast (5-star weapon): Surf \'n\' Shine +34-64% (Korean: the skill that enters the summer state; English: when cast in Summer Hype). Read as every cast, as Surf enters Hype itself' },
     { to: 'hit', match: 'Surf', ladder: [34, 44, 44, 54, 54, 64, 64], weapon: '5', why: 'Colorful Coast: as above, on the A6 Surf \'n\' Shine multiplier part' },
-    { to: 'skill:1', ladder: [34, 44, 44, 54, 54, 64, 64], weapon: '5', why: 'Colorful Coast: each Surf gives 1 Sunlight, spent by the next skill or Highlight for the same increase; every Skill 1 in lufel\'s rotations follows a Surf' },
-    { to: 'fu', match: 'Blue Sunrise', ladder: [34, 44, 44, 54, 54, 64, 64], weapon: '5', why: 'Colorful Coast Sunlight on the A6 extra Blue Sunrise bonus hits of the same Skill 1' },
-    { to: 'hl', ladder: [34, 44, 44, 54, 54, 64, 64], weapon: '5', chance: 0.75, why: 'Colorful Coast Sunlight on a Highlight: held unless a Skill 1 has just spent it (2 of 3 rounds in the 3,3,1 rotation, always at A6): judged 0.75. Read "Summer Hype and Sunlight do not stack" as the weapon\'s two increases on one Surf, not Summer Hype\'s own +29.3%' }
+    { to: 'skill', ladder: [34, 44, 44, 54, 54, 64, 64], weapon: '5', sun: true, why: 'Colorful Coast: each Surf gives 1 Sunlight, spent by her next skill or Highlight for the same increase; the fight counts the stack (a Surf spends it for nothing, its own increase not stacking)' },
+    { to: 'fu', match: 'Blue Sunrise', ladder: [34, 44, 44, 54, 54, 64, 64], weapon: '5', sun: true, why: 'Colorful Coast Sunlight on the A6 extra Blue Sunrise bonus hits of the same Skill 1' },
+    { to: 'hl', ladder: [34, 44, 44, 54, 54, 64, 64], weapon: '5', sun: true, why: 'Colorful Coast Sunlight on a Highlight, when she holds one (the fight counts it; it was judged at 0.75). "Summer Hype and Sunlight do not stack" is read as the weapon\'s two increases on one Surf, not Summer Hype\'s own +29.3%' }
+  ],
+  'Kotone Shiomi': [
+    { to: 'skill:2', v: 25, fewer: 5, why: 'Burning Moon\'s Cry (Skill 2): its damage +25% per foe fewer than 5 (+100% on a lone boss). Her own hit, as a teammate too (Nov 22 2026)' },
+    { to: 'skill:2', v: [292.8, 322.8, 310.8, 340.8], fortune: true, why: 'Burning Moon\'s Cry in the Fortune state (her burst turn, Go for Broke): its damage +292.8-340.8% more (Korean 추가 증가, read as a damage increase like the one above). Her own hit (Nov 22 2026)' }
+  ],
+  'Yaoling Li': [
+    { to: 'all', v: 30, hp: { above: 50 }, why: 'Up to Chance (passive 2): attacking a foe above 50% HP, its Curse damage taken +30%; no duration is printed, so read as her own hit only. All her damage is Curse; the boss\'s HP is the fight\'s (tcBossHp: above 50% in the first 3 of 6 rounds). Nov 22 2026' }
   ],
   'Kira Kitazato': [
     { to: 'skill:2', v: 2, stacks: 9, after: 'Transform', dur: 1, why: 'Pathology (Ripper Skill 2, lufel\'s Transform+2): +2% damage to this skill per Bleed stack on the target before it removes them. Nightfall needs 7+ and Bleed caps at 10: judged 9' },
@@ -14512,16 +14561,16 @@ const DPS_KIT_BONUS = {
   'Kotone Montagne [Frostgale]': [
     { to: 'res', v: 8, stacks: 2, aw: 1, why: 'Etched in Ice (A1): when Spring\'s Edge ends, Resonance damage +8% per Spring\'s Vestige stack (max 40%). Judged 2 stacks at the end of an Edge without Wind teammates: 1 from A1 on activation + 1 from the Skill 1 lufel casts inside it (more with a Wind ally or a Highlight inside the Edge)' },
     { to: 'res', match: 'Dance of Love', v: 8, aw: 6, why: 'Etched in Ice (A1) on the A6 second Resonance (Dance of Love): 2 regained stacks + 1 from the Skill 1 in the extended turn = 3 stacks, one more than the 2 the entry above gives every Resonance' },
-    { to: 'hl', v: 35, chance: 0.5, aw: 4, why: 'Queen of Ice and Wind (A4): Highlight damage +35% when Spring\'s Edge is not active. Judged 0.5: in lufel\'s 3,1 rotation the Edge is up from Skill 3 to the end of the next turn, so a Highlight lands outside it about half the time (about a third in the A6 3,1,1 rotation, so a little high there)' },
+    { to: 'hl', v: 35, notAfter: '3', notDur: 2, aw: 4, why: 'Queen of Ice and Wind (A4): Highlight damage +35% when Spring\'s Edge is not active; the Edge is the round of her Skill 3 and the next (the window the Edge lines use). Played since Nov 22 2026 (it was judged at half her Highlights)' },
     { to: 'all', k: 'cm', v: [29.3, 29.3, 31.1, 31.1], after: '1', dur: 2, why: 'Éclat de Vent (Skill 1) in Spring\'s Edge inflicts Spiral Sequence for 2 turns: attacking a foe with it, crit damage +29.3-31.1%; in lufel\'s 3,1 every Skill 1 is in the Edge (the window includes that Skill 1\'s own hit, a slight overcount; missing until Nov 2026)' },
     { to: 'all', v: 33, mateElem: ['Wind'], why: 'Performance Scoring (passive 1): with another Wind thief in the party (Korean 다른 질풍 속성 괴도), her Wind damage +33% from battle start; all her Spring-mode damage is Wind (missing until Nov 2026)' },
     { to: 'all', ladder: [27, 35, 35, 43, 43, 51, 51], weapon: '5', after: '3', dur: 2, why: 'Lame de l\'Amour (5-star weapon): on activating Spring\'s Edge (Skill 3), Wind damage +27/35/35/43/43/51/51% for 2 turns; all her Spring-mode damage is Wind. Not in KIT_STAT_BUFFS' }
   ],
   'Runa Dogenzaka': [
-    { to: 'skill', v: [39.1, 43.1, 41.5, 45.5], after: 'HL', dur: 2, chance: 0.5, why: 'Highlight Enthusiastic Fuse (2 stacks on the foe): her Fire skills and Resonances take +22.9% of her ailment accuracy (English; Korean prints 31.4%) up to 53.7-62.5% without spending a stack; at the tier targets above that is 39.1/43.1/41.5/45.5. Stacks are spent by teammates\' Fire/Ice/Electric/Wind skills and Resonances - lufel\'s teams for her are all such - so judged on for her next action or two after the Highlight, half the time' },
-    { to: 'res', v: [39.1, 43.1, 41.5, 45.5], after: 'HL', dur: 2, chance: 0.5, why: 'Enthusiastic Fuse, as above, on her Resonance (the A6 Big Welcome hit)' },
-    { to: 'skill', v: [39.1, 43.1, 41.5, 45.5], after: 'HL', dur: 2, chance: 0.5, aw: 4, why: 'Welcome to Shibuya! (A4): 4 Fuse stacks instead of 2, so they outlast a round of elemental teammates; adds the other half' },
-    { to: 'res', v: [39.1, 43.1, 41.5, 45.5], after: 'HL', dur: 2, chance: 0.5, aw: 4, why: 'A4 4 Fuse stacks, as above, on her Resonance' }
+    { to: 'skill', v: [53.7, 59.2, 57, 62.5], after: 'HL', dur: 2, chance: 0.5, why: 'Highlight Enthusiastic Fuse (2 stacks on the foe): her Fire skills and Resonances take +31.4% of her ailment accuracy up to 53.7-62.5% without spending a stack (the English now prints 31.4% like the Korean; it was 22.9% here, 39.1-45.5 at her tier targets, until Nov 22 2026); at her ~171% accuracy that is the cap. Stacks are spent by teammates\' Fire/Ice/Electric/Wind skills and Resonances - lufel\'s teams for her are all such - so judged on for her next action or two after the Highlight, half the time' },
+    { to: 'res', v: [53.7, 59.2, 57, 62.5], after: 'HL', dur: 2, chance: 0.5, why: 'Enthusiastic Fuse, as above, on her Resonance (the A6 Big Welcome hit)' },
+    { to: 'skill', v: [53.7, 59.2, 57, 62.5], after: 'HL', dur: 2, chance: 0.5, aw: 4, why: 'Welcome to Shibuya! (A4): 4 Fuse stacks instead of 2, so they outlast a round of elemental teammates; adds the other half' },
+    { to: 'res', v: [53.7, 59.2, 57, 62.5], after: 'HL', dur: 2, chance: 0.5, aw: 4, why: 'A4 4 Fuse stacks, as above, on her Resonance' }
   ],
   'Yaoling Li [Firecracker]': [
     { to: 'hit', match: 'Slash', v: [19.5, 21.5, 20.7, 22.7], after: 'HL', dur: 2, why: 'Highlight: Yanhua Slash damage +19.5-22.7% for 2 turns (4 from A4 Grand Lion Dance, which the format cannot extend; see notes)' },
@@ -14542,8 +14591,7 @@ const DPS_KIT_BONUS = {
     { to: 'hl', v: 15, aw: 1, why: 'Charming Invite (A1): Dance Partner lasts a second turn, a second partner Glow, so 3 Lead Steps (the cap) at the Highlight' },
     { to: 'hl', v: 15, awBelow: 1, mate: { n: 'Justine & Caroline', aw: 1 }, why: 'With J&C (Awareness 1+) as Dance Partner below her A1: their automatic Two Masks as One sets off a second partner Glow, one more Lead Step, so 3 (the cap) at the Highlight. Judged like the stacks above, not played out; from her A1 the cap is already reached' },
     { to: 'hl', v: 50, aw: 4, why: 'Toll the Hour (A4): Highlight damage +50% with 4 Step stacks: 3 Lead Steps (from A1, as above) + Invitation\'s Follow Step' },
-    { to: 'all', ladder: [8.4, 11.1, 11.1, 13.8, 13.8, 16.5, 16.5], stacks: 2, chance: 0.6, weapon: '5', why: 'Royal Etoile (5-star weapon): each ally Highlight/Theurgy gives a Glass Slipper, her damage +8.4-16.5% for 3 turns, 2 stacks. Her own Highlight costs no gauge, so the gauge goes to teammates; at about 0.5 ally Highlights a round, 3-turn stacks average about 1.2: judged 2 x 0.6' },
-    { to: 'hl', ladder: [30, 39, 39, 48, 48, 57, 57], chance: 0.45, weapon: '5', why: 'Royal Etoile (5-star weapon): her Highlight damage +30-57% more at 2 Glass Slipper stacks; with the rate above, 2 are held about 45% of the time' }
+    { to: 'hl', ladder: [30, 39, 39, 48, 48, 57, 57], weapon: '5', allyHl: { n: 2, dur: 3 }, why: 'Royal Etoile (5-star weapon): her Highlight damage +30-57% more while she holds 2 Glass Slipper stacks, i.e. two other allies\' Highlights or Theurgies in the last 3 rounds, as the fight has them (Nov 22 2026; it was judged at 45% of her Highlights). Her damage per stack is a KIT_STAT_BUFFS fight line' }
   ],
   'Goro Akechi': [
     { to: 'all', v: [19.5, 21.5, 20.7, 22.7], chance: 0.67, aw: 1, why: 'Detective Profile (A1): Deduction from battle start and 4 turns long. In lufel\'s A1 rotation (2,3,1,3,2,3) it covers all of the default 6 rounds (rounds 1-4 from battle start, 3-6 from the Skill 1 on turn 3) against the 2 the 2-turn window above gives: +0.67 as an average (10 of 12 against 4 over 12 rounds, +0.5)' },
@@ -14706,12 +14754,12 @@ const DPS_KIT_BONUS = {
     { to: 'all', ladder: [5.8, 7.7, 7.7, 9.6, 9.6, 11.5, 11.5], weapon: '4', stacks: 3, after: 'HL', dur: 1, why: 'Tidal Chant (4-star weapon): +5.8-11.5% damage for 1 turn per Star Wish gained, up to 3. Her HL(2) gives 3 Star Wish (HL(3) gives 5, capped at 3), right before Skill 3.' }
   ],
   'Shoki Ikenami [Notte]': [
-    { to: 'skill:3', v: 10, stacks: 2, why: 'Ti Incidero il Nome Mio (Skill 3): +10% skill damage per Night\'s Contract stack spent. Each Giuramento Incrollabile (Skill 2) gives 1; lufel\'s A0 rotation casts 2 before each Skill 3 (2+2+1, 3).' },
-    { to: 'skill:3', v: 10, stacks: 0.67, aw: 1, why: 'lufel\'s A1 rotation: 2, 2 and 4 Skill 2 casts before the three Skill 3 casts (mean 2.67).' },
-    { to: 'skill:3', v: 10, stacks: 1, aw: 2, why: 'With My Flesh and Bone (A2, cap 11): lufel\'s A2 rotation casts 3, 3 and 5 (mean 3.67).' },
-    { to: 'skill:3', v: 10, stacks: 3, aw: 6, why: 'A6 (cap 14): lufel\'s A6 rotation casts 6, 6 and 8 (mean 6.67).' },
-    { to: 'skill:3', v: 2, stacks: 6.67, aw: 6, why: 'Illuminating Passion for Life (A6): the Night\'s Contract skill damage increase becomes 120% of normal, 12% per stack at the 6.67 held.' },
-    { to: 'skill:3', ladder: [3.5, 4.5, 4.5, 5.5, 5.5, 6.5, 6.5], weapon: '4', stacks: 2, why: 'Emperor\'s Will (4-star weapon): +3.5-6.5% damage for 2 turns each time he gains Night\'s Blessing, up to 5. Spada dell\'Alba (Skill 1, every other turn) gives 2 stacks, judged 2 gains; the buff lands after Skill 1\'s own hit and covers the next turn\'s Skill 3. The 3 more at low HP are not counted.' }
+    { to: 'skill:3', v: 12, stacks: 2, why: 'Scolpire (Skill 3): +12% skill damage per Stellato stack spent (English; the Korean keeps 10%). Each Steadfast Vow (Skill 2) gives 1; lufel\'s A0 rotation casts 2 before each Skill 3 (2+2+1, 3).' },
+    { to: 'skill:3', v: 12, stacks: 0.67, aw: 1, why: 'lufel\'s A1 rotation: 2, 2 and 4 Skill 2 casts before the three Skill 3 casts (mean 2.67).' },
+    { to: 'skill:3', v: 12, stacks: 1, aw: 2, why: 'Dazzling Stage (A2, cap 11): lufel\'s A2 rotation casts 3, 3 and 5 (mean 3.67).' },
+    { to: 'skill:3', v: 12, stacks: 3, aw: 6, why: 'A6 (cap 14): lufel\'s A6 rotation casts 6, 6 and 8 (mean 6.67).' },
+    { to: 'skill:3', v: 3, stacks: 6.67, aw: 6, why: 'The Masks We Wear (A6): in Nightlord the Stellato skill damage increase becomes 125% of normal on Global (English; 120% in Korean), 15% per stack at the 6.67 held.' },
+    { to: 'skill:3', ladder: [3.5, 4.5, 4.5, 5.5, 5.5, 6.5, 6.5], weapon: '4', stacks: 2, why: 'Spada Vendetta (4-star weapon): +3.5-6.5% damage for 2 turns each time he gains Nocturnal Blessing, up to 5. Blade of Dawn (Skill 1, every other turn) gives 2 stacks, judged 2 gains; the buff lands after Skill 1\'s own hit and covers the next turn\'s Skill 3. The 3 more at low HP are not counted.' }
   ],
   'Ryuji Sakamoto': [
     { to: 'skill:1', v: 30, why: 'Pirate Tactics (Skill 1): without Rebound he spends 20% HP for +30% damage, and with Rebound he has Rebound\'s +30%, so the cast always has it. Not in lufel\'s rotation.' },
@@ -15436,6 +15484,18 @@ const tcOneFoe = e => e.foes ? e.foes === 'one' : !/all foes|all enemies|\bfoes\
    which says so with `foes: 'one'`. A buff on allies is never read as one-foe from its text, since "foe" there
    names whom the ally hits. */
 const tcMainOnly = e => e.to === 'enemy' ? tcOneFoe(e) : e.foes === 'one';
+/* A line limited to some allies — an element (`elem`, Wonder's `notElem`), a role (`arch`), S.E.E.S. members (`sees`:
+   those with a Theurgy). tcMemberCalc tests it against the damage dealer; in the fight a teammate's own hits test it
+   against the teammate (Nov 22 2026: until then a "Fire allies" line reached every teammate's hits beside a Fire
+   damage dealer). A limit on the foe's side (a debuff) is about the hit's element and is not this. Null: no limit. */
+const tcLimOf = e => !e || e.to === 'enemy' || !(e.elem || e.arch || e.sees || e.notElem) ? null : { elem: e.elem || null, arch: e.arch || null, sees: !!e.sees, notElem: e.notElem || null };
+function tcLimOk(lim, n) {
+  if (!lim) return true;
+  const d = charDef(n);
+  if (!d) return false;   // Wonder: no role, and his element is his Persona's
+  return !(lim.elem && !lim.elem.includes(d.e)) && !(lim.notElem && lim.notElem.includes(d.e)) &&
+    !(lim.arch && !lim.arch.includes(d.arch)) && !(lim.sees && tcHlKind(n) !== 'TH');
+}
 /* Effects that do not stack (TEAM_BUFFS `excl`), in the fight: `list` is what is up on one foe now, as
    { b, v } (the buff and what it adds); a buff's `excl` names its owner, group and stat, its `xs` the skill
    it comes from. Lines of one skill add up as one effect, and of the effects in a group only the largest
@@ -15571,7 +15631,8 @@ function tcSimPrep(D, names, fit, blank, opt) {
   const X0ownOf = {};
   // Starry Compass's Guidance lines (tcWonder `guid`), on while the fight's counter is at their threshold
   const guidX = [];
-  const addSim = (sm, owner) => { if (owner && sm.constsOwn) { const o = X0ownOf[owner] = X0ownOf[owner] || {}; Object.keys(sm.constsOwn).forEach(k => { o[k] = (o[k] || 0) + sm.constsOwn[k]; }); }
+  const limConsts = [];
+  const addSim = (sm, owner) => { (sm.constsLim || []).forEach(c => limConsts.push(Object.assign({ owner }, c))); if (owner && sm.constsOwn) { const o = X0ownOf[owner] = X0ownOf[owner] || {}; Object.keys(sm.constsOwn).forEach(k => { o[k] = (o[k] || 0) + sm.constsOwn[k]; }); }
     Object.keys(sm.constsAlly || {}).forEach(k => { X0ally[k] = (X0ally[k] || 0) + sm.constsAlly[k]; }); addConst(sm.consts); (sm.gated || []).forEach(g => gated.push(g)); Object.keys(sm.constsOne || {}).forEach(k => { X0one[k] = (X0one[k] || 0) + sm.constsOne[k]; }); (sm.constsMin || []).forEach(c => constsMin.push(c)); (sm.downConsts || []).forEach(c => downX.push(c)); };
   // the damage dealer's skill numbers at their skill-level tier; a Highlight crits only where its text says so
   const skill = SKILL_DMG[D.n] ? Object.assign({}, SKILL_DMG[D.n], { d: tcSkillD(D.n) }) : null;
@@ -15680,7 +15741,7 @@ function tcSimPrep(D, names, fit, blank, opt) {
   if (thieves.some(a => a.n && a.n !== 'Wonder' && state.cards.filter(c => c.equipped === a.n && c.set === 'Prosperity' && c.slot !== 'Space').length >= 4)) gauge0 += 25;
   const concerto = thieves.find(a => a.n === 'Ayaka Sakai [Summer]') || null;
   gauge0 = Math.min(gauge0, concerto ? (concerto.aw >= 2 ? 300 : 250) : 100);
-  return { D, E, F, X0, X0ally, X0ownOf, guidX, split: [0, 1, 2, 3].map(i => tcHitSplit(D.n, i, tcFoes())), ownT: tcRankMode() === 'team', unit: E.f0 * E.c0 * tcWeakF(D.e), skill, hlCrit, dpsWeak: tcWeakFor(D.e) === 'weak', foes: tcFoes(), aoe: (SKILL_DMG[D.n] || {}).aoe || [0, 0, 0, 0], alm: (SKILL_DMG[D.n] || {}).alm || [0, 0, 0, 0], dps, thieves, elu, concerto, gauge0, kit: tcKitFor(D, names), bonus: tcCurseBonus(tcKitBonusFor(D, names), X0.curse || 0), names, mems, blank, fuuka, gated, X0one, constsMin, copy,
+  return { D, E, F, X0, X0ally, X0ownOf, limConsts, guidX, split: [0, 1, 2, 3].map(i => tcHitSplit(D.n, i, tcFoes())), ownT: tcRankMode() === 'team', unit: E.f0 * E.c0 * tcWeakF(D.e), skill, hlCrit, dpsWeak: tcWeakFor(D.e) === 'weak', foes: tcFoes(), aoe: (SKILL_DMG[D.n] || {}).aoe || [0, 0, 0, 0], alm: (SKILL_DMG[D.n] || {}).alm || [0, 0, 0, 0], dps, thieves, elu, concerto, gauge0, kit: tcKitFor(D, names), bonus: tcCurseBonus(tcKitBonusFor(D, names), X0.curse || 0), names, mems, blank, fuuka, gated, X0one, constsMin, copy,
     ailSelf: (TC_AIL_SELF[D.n] || []).filter(c => c.aw == null || (+charLoadout(D.n).awareness || 0) >= c.aw)
       // their own stat lines on a foe with an ailment (Rin's Prosperity in Red), left out of the baseline (`noTimed`)
       .concat(kitStatBuffs(D, null).filter(b => b.needAil && TC_KIT_STAT_K[b.s] && b.v).map(b => ({ k: TC_KIT_STAT_K[b.s], v: b.v, needAil: b.needAil }))),
@@ -15767,6 +15828,8 @@ const TC_LV = { n: 'Ann Takamaki', need: 4, perSkill: 4, a6: 0.6, spentCap: 10 }
 const TC_TA = { n: 'Haru Okumura', main: [97.6, 97.6, 103.6, 103.6], other: [53.7, 53.7, 57, 57], dur: 3, cap: 3 };
 const TC_HYPE = { n: 'Motoha Arai [Tropical]', dur: 2, share: { 0: 29.3 / 117.1, 1: 34.2 / 170.8 } };
 const TC_FB = { n: 'Mitsuru Kirijo', cap: 5, capA6: 6, dur: 2, gain: { '1': 4, '3': 1, TH: 1 }, same: 3 };
+// Phantom Omen's (Skill 2) 2 Will of Rebellion come only with one foe present (its text; Nov 22 2026), which the fight applies
+const TC_CHOSEN = { n: 'Kiyoshi Kurotani', cap: 5, dur: 2, s1Burn: 1, s2Burn: 2 };
 const TC_WR = { n: 'Ren Amamiya', gain: [1, 2, 0], hl: 1, hlA4: 3, cap: 5, spend: 3 };
 /* Kotone Shiomi's Lunar Bond on the Arcana Link ally (Nov 2026): the damage dealer, when a Sweeper or Assassin
    (lufel's AoE / ST DPS). 0 at the start (5 from A1), +1 per Persona skill they cast and per Lyre's Melody or Lunar
@@ -15814,6 +15877,16 @@ function tcSimRun(P, order, hold) {
   const LV = D.n === TC_LV.n ? { p: 0, acc: 0, on: false, spent: 0, acts: 0, last: -9, n: 0, a6: (+charLoadout(D.n).awareness || 0) >= 6 } : null;
   // Ren's Will of Rebellion (TC_WR)
   const WR = D.n === TC_WR.n ? { will: 0, a4: (+charLoadout(D.n).awareness || 0) >= 4, peak: 0 } : null;
+  /* Tropical Motoha's Sunlight (Colorful Coast, her 5-star weapon; Nov 22 2026): a Surf 'n' Shine gives 1, her next skill or
+     Highlight spends 1 for the weapon's increase again (DPS_KIT_BONUS `sun`). A Surf takes its own increase instead, the two
+     not stacking, and still spends the stack. It was judged: every Skill 1, three quarters of her Highlights. */
+  const SUN = D.n === 'Motoha Arai [Tropical]' ? { n: 0, used: 0 } : null;
+  /* Kiyoshi's Chosen One stacks (TC_CHOSEN; Nov 22 2026): each lasts 2 of his turns on its own timer, at most 5. A skill
+     gives 1 as it is used (Make Sparks Fly, A0), Ring of Fire 1 more on a Burning foe, Crimson Summon 2 after its hit
+     when the foe Burns. His per-stack bonuses (DPS_KIT_BONUS `perChosen`) read the count at each hit. */
+  const CH = D.n === TC_CHOSEN.n ? { st: [], sum: 0, hits: 0 } : null;
+  const chAdd = k => { for (let i = 0; i < k; i++) CH.st.push(TC_CHOSEN.dur); CH.st.sort((x, y) => y - x); CH.st.length = Math.min(CH.st.length, TC_CHOSEN.cap); };
+  let sunOn = false;
   // Kotone Shiomi's Lunar Bond on the damage dealer (TC_LB), and the level it reached
   const KO = T.find(a => a.n === TC_LB.n && !a.isDps);
   const LB = KO && TC_LB.arch.includes(D.arch) ? { lv: (KO.aw || 0) >= 1 ? TC_LB.startA1 : TC_LB.start, at5: null, at10: null, rows: [] } : null;
@@ -15984,8 +16057,11 @@ function tcSimRun(P, order, hold) {
       if (mate && !cp && P.X0ally) Object.keys(P.X0ally).forEach(k => { X[k] -= P.X0ally[k]; });
       // a teammate's own `own: false` party lines are already in their own stats (X0ownOf, and the same buffs below)
       if (mate && mate.n && P.X0ownOf && P.X0ownOf[mate.n]) Object.keys(P.X0ownOf[mate.n]).forEach(k => { X[k] -= P.X0ownOf[mate.n][k]; });
+      // a party line limited to an element, a role or S.E.E.S. that this teammate is not (tcLimOf), taken back off
+      const lk = c => !mate || !c.lim || tcLimOk(c.lim, mate.n);
+      if (mate && P.limConsts) P.limConsts.forEach(c => { if (!tcLimOk(c.lim, mate.n) && !(c.ownFalse && c.owner === mate.n)) X[c.k] -= c.v; });
       // a self-buff (`self`: their own timed KIT_STAT_BUFFS, tcTimedKit) reaches its owner's hits only
-      const reach = b => !mate ? !(b.self && b.owner !== D.n) : b.enemy || (b.self ? b.owner === mate.n : (b.to === 'party' && !b.copy && !(b.ownFalse && b.owner === mate.n)) || (cp && b.owner !== D.n && b.owner !== mate.n && (b.to === 'ally' || b.copy)));
+      const reach = b => !mate ? !(b.self && b.owner !== D.n) : !lk(b) ? false : b.enemy || (b.self ? b.owner === mate.n : (b.to === 'party' && !b.copy && !(b.ownFalse && b.owner === mate.n)) || (cp && b.owner !== D.n && b.owner !== mate.n && (b.to === 'ally' || b.copy)));
       const al = c => mate && c.al && !cp;
       // a teammate's or Wonder's hit reads the party buffs as that holder has them (echoes), the foe's debuffs as they are
       const held = mate && mate.n ? echoes.get(mate.n) : null;
@@ -15995,15 +16071,15 @@ function tcSimRun(P, order, hold) {
       each(b => { if (reach(b) && (!b.vc || vc) && !(others && b.one) && !(b.minHits > h) && !(b.down && (!downed || others))) { if (b.excl) (ex = ex || []).push(b); else X[b.k] = (X[b.k] || 0) + b.v * ailF(b); } });
       if (ex) { const drop = tcExclDrop(ex.map(b => ({ b, v: b.v * ailF(b) }))); ex.forEach(b => { if (!drop.has(b)) X[b.k] = (X[b.k] || 0) + b.v * ailF(b); }); }
       // what holds only while the boss is knocked down (the main target's Down; the other foes are not tracked)
-      if (downed && !others) { (P.downX || []).forEach(c => { if (!al(c)) X[c.k] = (X[c.k] || 0) + c.v; }); if (!mate) (P.downSelf || []).forEach(c => { X[c.k] = (X[c.k] || 0) + c.v; }); }
+      if (downed && !others) { (P.downX || []).forEach(c => { if (!al(c) && lk(c)) X[c.k] = (X[c.k] || 0) + c.v; }); if (!mate) (P.downSelf || []).forEach(c => { X[c.k] = (X[c.k] || 0) + c.v; }); }
       // Starry Compass's lines, while its Guidance counter is at their threshold
       if (P.guidX && P.guidX.length) P.guidX.forEach(c => { if (guid >= c.guid) X[c.k] = (X[c.k] || 0) + c.v; });
-      (P.constsMin || []).forEach(c => { if (c.minHits <= h && !(others && c.one) && !al(c)) X[c.k] = (X[c.k] || 0) + c.v * ailF(c); });
+      (P.constsMin || []).forEach(c => { if (c.minHits <= h && !(others && c.one) && !al(c) && lk(c)) X[c.k] = (X[c.k] || 0) + c.v * ailF(c); });
       // the damage dealer's own lines that read the foe's ailments (Queen's Chief Strategist)
       if (!mate) (P.ailSelf || []).forEach(c => { if (c.after == null || (lastUse[c.after] != null && round - lastUse[c.after] < (c.dur || 1))) X[c.k] = (X[c.k] || 0) + c.v * ailF(c); });
       // lines on for part of the fight only, at their share in this round
       // (Kotone Shiomi's Lunar Bond lines, `lb`, at the level the fight has counted instead: TC_LB)
-      (P.gated || []).forEach(g => { if (!(others && g.one) && !al(g)) { const f = g.lb != null && LB ? (LB.lv >= g.lb ? 1 : 0) : g.ls && LS ? (g.col != null && LS.col < g.col ? 0 : Math.max(0, Math.min(g.ls[1], LS.n) - g.ls[0]) / (g.ls[1] - g.ls[0])) : g.gate(Math.max(1, round)); if (f) X[g.k] = (X[g.k] || 0) + g.v * f; } });
+      (P.gated || []).forEach(g => { if (!(others && g.one) && !al(g) && lk(g)) { const f = g.lb != null && LB ? (LB.lv >= g.lb ? 1 : 0) : g.ls && LS ? (g.col != null && LS.col < g.col ? 0 : Math.max(0, Math.min(g.ls[1], LS.n) - g.ls[0]) / (g.ls[1] - g.ls[0])) : g.gate(Math.max(1, round)); if (f) X[g.k] = (X[g.k] || 0) + g.v * f; } });
       // a Technical's effect grows with the Technical Precision up now (Cold Flames, Iceburn)
       if (X.tp) each(b => { if (b.tech && reach(b) && (!b.vc || vc) && !(others && b.one)) X[b.k] += b.v * ailF(b) * tcTechScale(b.tech, X.tp); });
       return X;
@@ -16078,6 +16154,8 @@ function tcSimRun(P, order, hold) {
       for (const b of a.mbonus || []) {
         if (b.down && !downed) continue;
         if (b.after != null && !(a.lastUse[b.after] != null && round - a.lastUse[b.after] < (b.dur || 1))) continue;
+        if (b.notAfter != null && a.lastUse[b.notAfter] != null && round - a.lastUse[b.notAfter] < (b.notDur || 1)) continue;
+        if (b.fortune && !a.fortuneNow) continue;
         if (!(b.to === 'all' || b.to === to || (b.to === 'skill' && to.startsWith('skill:')))) continue;
         if (b.re && !(comp && b.re.test(comp.why || ''))) continue;
         if (b.fbAt && !(a.fb && a.fb.n >= b.fbAt)) continue;
@@ -16095,9 +16173,11 @@ function tcSimRun(P, order, hold) {
     /* `byAtk`: a hit worth a share of the triggering ally's ATK, not its owner's (Mitsuru's Iceblade, Global text): the
        owner's hit scaled by the two in-battle ATKs on their panels (tcPanelAtk; Wonder's from his setup, unknown: the
        owner's), the buffs on it the owner's as they stand */
+    // `byFoes`: a component's value by the number of foes, [1 foe, 2, 3+...] (Seaside Tomoko's Resonance: 150/120/100%)
+    const foeF = c => c.byFoes ? c.byFoes[Math.min(P.foes, c.byFoes.length) - 1] : 1;
     const byAtkF = (c, owner, opts) => {
       if (!c.byAtk) return 1;
-      const b = opts && opts.by, ab = tcPanelAtk(b), ao = tcPanelAtk({ n: owner });
+      const b = c.byAtk === 'dps' ? dpsA : opts && opts.by, ab = tcPanelAtk(b), ao = tcPanelAtk({ n: owner });
       return ab > 0 && ao > 0 ? ab / ao : 1;
     };
     const mateKitFire = (a, on, opts) => {
@@ -16109,6 +16189,9 @@ function tcSimRun(P, order, hold) {
         if (c.on !== on) return;
         if (c.down && !downed) return;
         if (c.allyElem && !(opts && opts.by && opts.by.n && c.allyElem.includes((charDef(opts.by.n) || {}).e))) return;
+        // `prime`: only on a Skill 3 that fires that version (Runa's Big Welcome, TC_PRIME)
+        if (c.prime && !(a.prime3 || '').includes(c.prime)) return;
+        if (c.costar && !((a.lastUse['2'] != null && round - a.lastUse['2'] < 3) || ((a.aw != null ? a.aw : tmAw(a.n)) >= 1 && round <= 3))) return;
         if (c.after != null && !(a.lastUse[c.after] != null && round - a.lastUse[c.after] < (c.dur || 1))) return;
         if (c.max) { const k = round + '|' + a.n + '|' + i; const n = perRound.get(k) || 0; if (n >= c.max) return; perRound.set(k, n + 1); }
         if (c.notAfter != null && a.lastUse[c.notAfter] != null && round - a.lastUse[c.notAfter] < (c.notDur || 1)) return;
@@ -16121,7 +16204,7 @@ function tcSimRun(P, order, hold) {
         const add = c.kind === 'res' ? X.resDm || 0 : c.kind === 'dot' ? X.dotDm || 0 : 0;
         const ob = mateOwn(a, c.kind, c, X);
         const dotFin = c.kind === 'dot' ? 1 + (X.dotFinal || 0) / 100 : c.kind === 'res' ? 1 + (X.resFinal || 0) / 100 : 1;
-        mateHit(a, c.val * af * byAtkF(c, a.n, opts) * ob.amp * dotFin, c.aoe, c.noWeak ? 1 : a.mate.w, dot, false, { dm: add + ob.add, xs: ob.xs });
+        mateHit(a, c.val * af * foeF(c) * byAtkF(c, a.n, opts) * ob.amp * dotFin, c.aoe, c.noWeak ? 1 : a.mate.w, dot, false, { dm: add + ob.add, xs: ob.xs });
       });
     };
     // what one thief's action sets off in the other teammates' kits: 'ally' once, 'allySkill' per damaging skill, 'allyAtk' per attack
@@ -16150,7 +16233,7 @@ function tcSimRun(P, order, hold) {
     // a teammate's skills of a turn (with their own bonuses on each), and Wonder's attack or attacking cast
     const mateTurn = (a, step) => {
       if (a.mate) tcSkillUses(step).forEach((u, i) => {
-        if (!(u && i < 3 && a.mate.d[i] > 0)) return;
+        if (!(u && i < 3 && a.mate.d[i] > 0) || (i === 2 && a.prime3 === 'w')) return;
         const ob = mateOwn(a, 'skill:' + (i + 1), null, curX(false, 1, a)), sp = tcHitSplit(a.n, i, P.foes);
         mateHit(a, u * a.mate.d[i] * (sp ? sp.main : 1) * ob.amp, !!a.mate.aoe[i], a.mate.alm[i] ? 1 : a.mate.w, false, true, { dm: ob.add, xs: ob.xs }, sp ? sp.other / sp.main : 1);
         if (a.fb && TC_FB.gain[String(i + 1)]) for (let k = 0; k < u; k++) mateFbGain(a, String(i + 1));
@@ -16218,11 +16301,19 @@ function tcSimRun(P, order, hold) {
        ailment on the foe (`needAil`, a Technical) counts only while it is there, and Fireburn's (`tech`)
        grows with the Technical Precision in `X`; `tf`/`pf` (added) and `ta`/`pa` (multiplying) are their values
        whether or not (tcTechMix). */
-    const own = (to, comp, X) => {
+    const own = (to, comp, X, by) => {
       let add = 0, amp = 1, tf = 0, pf = 0, ta = 0, pa = 0, xs = null;
       for (const b of P.bonus || []) {
         if ((b.down && !downed) || (b.state && dpsA.stateOn !== b.state)) continue;
         if (b.after != null && !(lastUse[b.after] != null && round - lastUse[b.after] < (b.dur || 1))) continue;
+        if (b.sun && !sunOn) continue;
+        // `fortune`: only on a cast in Kotone Shiomi's Fortune state
+        if (b.fortune && !dpsA.fortuneNow) continue;
+        if (b.perChosen && !(CH && CH.st.length)) continue;
+        // `allyHl`: only with that many other allies' Highlights or Theurgies in the last `dur` rounds (Kasumi's Glass Slippers)
+        if (b.allyHl && allyHlR.filter(r => round - r < b.allyHl.dur).length < b.allyHl.n) continue;
+        // `notAfter`: only outside that window (Frostgale Kotone's Highlight when Spring's Edge is not up)
+        if (b.notAfter != null && lastUse[b.notAfter] != null && round - lastUse[b.notAfter] < (b.notDur || 1)) continue;
         if (!(b.to === 'all' || b.to === to || (b.to === 'skill' && to.startsWith('skill:')))) continue;
         if (b.re && !(comp && b.re.test(comp.why || ''))) continue;
         // Ichigo's Chains of Love (TC_LS): a line that needs that many, or one per stack (`perCol`)
@@ -16250,6 +16341,9 @@ function tcSimRun(P, order, hold) {
           (b.perWill ? (WR ? WR.will : 0) : 1) * (b.perFb && FB ? FB.n / (b.stacks || 1) : 1) *
           // `perBurnFoe`: per Burning foe, the whole at most `cap` (Ann's Rosethorn)
           (b.perBurnFoe ? Math.min(burnFoes(), b.cap ? b.cap / b.val : Infinity) : 1) *
+          // `byElem`: in full when the hit is set off by an ally of those elements, else at its `chance` (YUI's Cyber Jammers)
+          (b.byElem && by && by.n && b.byElem.includes((charDef(by.n) || {}).e) ? 1 / (b.chance || 1) : 1) *
+          (b.perChosen && CH ? CH.st.length / (b.stacks || 1) : 1) *
           (HT ? (b.ta ? taGe(b.ta) : 1) * (b.perTA ? taMean(b.perTA) / (b.stacks || 1) : 1) * (b.trGain ? HT.gainT : 1) : 1);
         if (!f) continue;
         // `k`: a stat on those hits, not damage (Ryuji's Pierce, Radiance Motoha's Highlight ATK and crit damage)
@@ -16266,6 +16360,9 @@ function tcSimRun(P, order, hold) {
         if (c.down && !downed) return;
         // `allyElem`: only a teammate of those elements sets it off ("an ally dealing Wind damage")
         if (c.allyElem && !(opts && opts.by && opts.by.n && c.allyElem.includes((charDef(opts.by.n) || {}).e))) return;
+        if (c.prime && !(dpsA.prime3 || '').includes(c.prime)) return;
+        // (the Costar is the damage dealer: as the damage dealer herself she gives it to another ally, not priced)
+        if (c.costar) return;
         if (c.after != null && !(lastUse[c.after] != null && round - lastUse[c.after] < (c.dur || 1))) return;
         /* `byTok`: only when the `mate` acts with that token in their turn, on their `byTurn` [first, last]
            action since the damage dealer last used `byAfter` (Kasumi's Dance Partner turns after Invitation) */
@@ -16287,9 +16384,9 @@ function tcSimRun(P, order, hold) {
         if (!af) return;
         const dot = c.kind === 'dot' || c.crit === false;
         const add = c.kind === 'res' ? X.resDm || 0 : c.kind === 'dot' ? X.dotDm || 0 : 0;
-        const ob = own(c.kind, c, X);
+        const ob = own(c.kind, c, X, opts && opts.by);
         const dotFin = c.kind === 'dot' ? 1 + (X.dotFinal || 0) / 100 : c.kind === 'res' ? 1 + (X.resFinal || 0) / 100 : 1;
-        const x = c.val * af * byAtkF(c, D.n, opts) * ob.amp * dotFin * spread(c.aoe, X, add + ob.add + ((opts && opts.dm) || 0), (opts && opts.xAtk) || 0, (opts && opts.fin) || 1, dot, !!c.noWeak, undefined, ob.xs);
+        const x = c.val * af * foeF(c) * byAtkF(c, D.n, opts) * ob.amp * dotFin * spread(c.aoe, X, add + ob.add + ((opts && opts.dm) || 0), (opts && opts.xAtk) || 0, (opts && opts.fin) || 1, dot, !!c.noWeak, undefined, ob.xs);
         gain(c.kind, x); techGain(ob, x);
         guidHit((c.n || 1) * (c.aoe ? P.foes : 1));
         if (c.kind === 'res') ckMix(D.e);
@@ -16348,14 +16445,14 @@ function tcSimRun(P, order, hold) {
         v = Math.min(v, (ev.full || v) - held);
         if (!(v > 0)) return;
         buffs.push({ k: ev.k, v, left: dur, enemy, owner: a.n, ref: ev.ref, self: !!ev.self, cp: !ev.self && tcCopyable(ev.e, ev.k), to: ev.e.to,
-          xs: ev.e.src, full: ev.full || 0, pc: ev.e.perCast, one: false, minHits: 0, ailMin: 0, perAil: 0, ailOfElem: false, tech: null, down: false, vc: false, excl: null, ownFalse: ev.e.own === false });
+          xs: ev.e.exclAs || ev.e.src, full: ev.full || 0, pc: ev.e.perCast, lim: tcLimOf(ev.e), one: false, minHits: 0, ailMin: 0, perAil: 0, ailOfElem: false, tech: null, down: false, vc: false, excl: null, ownFalse: ev.e.own === false });
         echo(buffs[buffs.length - 1], dur);
         return;
       }
       if (ex) { ex.left = dur; if (ev.gate || ev.ampAt || ev.e.fx != null || ev.e.ck || ev.e.spT ||(!ev.stackMax && (ampF !== 1 || ex.amped))) ex.v = v; ex.amped = ampF !== 1; if (ev.stackMax) ex.v = Math.min(ex.v + v, ev.full ? ev.full * ampF : v * ev.stackMax); echo(ex, dur); return; }
       if (!v) return;
       buffs.push({ k: ev.k, v, left: dur, enemy, down: !!ev.e.down, one: tcMainOnly(ev.e), minHits: ev.e.minHits || 0, ailMin: ev.e.ailMin || 0, perAil: ev.e.perAil || 0, ailOfElem: !!ev.e.ailOfElem, tech: ev.e.tech || null, owner: a.n, ref: ev.ref, self: !!ev.self, vc: tcIsVc(ev.e), cp: !ev.self && tcCopyable(ev.e, ev.k), to: ev.e.to,
-        excl: ev.e.excl ? a.n + '|' + ev.e.excl + '|' + ev.k : null, xs: ev.e.src, full: ev.full || 0, ownFalse: ev.e.own === false });
+        excl: ev.e.excl ? a.n + '|' + ev.e.excl + '|' + ev.k : null, xs: ev.e.exclAs || ev.e.src, full: ev.full || 0, ownFalse: ev.e.own === false, lim: tcLimOf(ev.e) });
       echo(buffs[buffs.length - 1], dur);
     };
     /* Kotone Shiomi's Lunar Phaseshift (TC_COPY): the buffs its target has on the damage dealer now — their
@@ -16435,6 +16532,15 @@ function tcSimRun(P, order, hold) {
       if (BUFFP && a !== dpsA && evs.some(ev => ev.e.to === 'party' || ev.e.to === 'ally')) { buffedN++; castBy(dpsA, new Set(['buffed'])); }
       if (a.medNext && evs.some(ev => ev.e.fx != null)) a.medNext = 0;
     };
+    /* a thief's damaging skills of an element set off the lines tied to attacks of that element, on whoever carries one
+       ('atkWind': Frostgale Kotone's Technical Scoring, a stack per Wind attack); one per damaging skill use */
+    const ATKON = new Set();
+    T.concat(BK ? [BK] : []).forEach(x => (x.events || []).forEach(ev => [].concat(ev.e.on || []).forEach(o => { if (/^atk[A-Z]/.test(o)) ATKON.add(o); })));
+    const elemAtk = (who, step) => {
+      if (!ATKON.size || !who || !who.n) return;
+      const t = 'atk' + ((charDef(who.n) || {}).e || ''), n = ATKON.has(t) ? tcDmgSkills(who.n, step) : 0;
+      for (let i = 0; i < n; i++) T.forEach(x => { if ((x.events || []).some(ev => [].concat(ev.e.on || []).includes(t))) castBy(x, new Set([t])); });
+    };
     const trigger = (on, who) => T.concat(elu ? [elu] : []).forEach(a => (a.events || []).forEach(ev => {
       if (ev.e.on === on && (on !== 'dpsHL' || who === dpsA) && !(ev.e.notSelf && who === a)) apply(a, ev);
     }));
@@ -16442,6 +16548,8 @@ function tcSimRun(P, order, hold) {
        (A2, her 'cocktail' lines) and, from A6, a Tailor-Made per 3 gained; `ckMix`: a Mixer of an element from a hit;
        `ckCast`: what her turn's skills do with them, returned as the factors her `ck` lines are cast at. */
     const ckRank = { T: 3, S: 2, B: 1 };
+    // Moonlit Feather's strength by the Cocktail spent: 120% Tailor-Made, 100% Standard, 50% Basic (whatever her Awareness)
+    const TC_CK_MF = { T: 1.2, S: 1, B: 0.5 };
     const ckGain = (q, bonus) => {
       if (CK.cks.length < CKP.cap) CK.cks.push(q); else CK.lost++;
       castBy(elu, new Set(['cocktail']));
@@ -16466,9 +16574,9 @@ function tcSimRun(P, order, hold) {
       if (toks.has('2')) { CK.cks.sort((a, b) => ckRank[a] - ckRank[b]); ckUp(['B', 'S'], ['T', 'T']); }
       if (CKP.aw >= 1 && (toks.has('1') || toks.has('3'))) { CK.cks.sort((a, b) => ckRank[a] - ckRank[b]); ckUp(['B', 'S'], ['S', 'T']); }
       CK.cks.sort((a, b) => ckRank[b] - ckRank[a]);
-      if (toks.has('1') && CK.cks.length) { const q = CK.cks.shift(); f.one = 1 + CKP.q[q] / 100; f.one1 = 1 / 3; CK.one++; CK.oneSum += f.one; CK.spent[q]++; }
+      if (toks.has('1') && CK.cks.length) { const q = CK.cks.shift(); f.one = 1 + CKP.q[q] / 100; f.one1 = TC_CK_MF[q] / 3; CK.one++; CK.oneSum += f.one; CK.spent[q]++; }
       if (toks.has('3') && CK.cks.length) {
-        f.share = Math.min(1, CK.cks.length / 3);
+        f.share = CK.cks.slice(0, 3).reduce((x, q) => x + TC_CK_MF[q], 0) / 3;
         f.all = CK.cks.reduce((s, q) => s + CKP.q[q], 0) / 100;
         f.std2 = CK.cks.filter(q => q !== 'B').length >= 2 ? 1 : 0;
         CK.casts++; CK.sum += f.all; CK.std2 += f.std2; CK.cks.forEach(q => { CK.spent[q]++; }); CK.cks = [];
@@ -16579,12 +16687,14 @@ function tcSimRun(P, order, hold) {
     };
     // what a trigger sets off in every member's heals but `not`'s (an ally's action is not their own)
     const healAll = (trig, not) => { if (HR) T.concat(elu ? [elu] : []).forEach(b => { if (b !== not) healFrom(b, new Set([trig])); }); };
+    const allyHlR = [];
     function fireHl(a, opt) {
       opt = opt || {};
       lg({ k: a.kind === 'TH' ? 'th' : 'hl', who: a.n, free: !!opt.free, why: opt.why || null, bk: a === BK });
       if (!opt.free) { if (a.kind === 'TH') a.th = 0; else gauge -= 100; }
       if (!opt.keepCool) a.since = 0;
       a.hlN++;
+      if (a !== dpsA) allyHlR.push(round);
       const tok = new Set([a.kind || 'HL']);
       castBy(a, tok, a === dpsA ? toAlly : null);
       if (a === dpsA) {
@@ -16593,7 +16703,9 @@ function tcSimRun(P, order, hold) {
         nx.forEach(p => { X[p.k] = (X[p.k] || 0) + p.v; });
         pending.length = 0;
         if (skill && skill.d[3]) {
+          if (SUN && SUN.n > 0) { SUN.n--; sunOn = true; SUN.used++; }
           const ob = own('hl', null, X), as = P.as[3];
+          sunOn = false;
           const sp3 = P.split[3];
           const x = skill.d[3] * (sp3 ? sp3.main : 1) * (SF && !SF.on ? SF.hlOff : 1) * ob.amp * (1 + as.dot * (X.dotFinal || 0) / 100) * (1 + as.res * (X.resFinal || 0) / 100) * spread(P.aoe[3], X, X.hlDm + (opt.bonus || 0) + ob.add + as.dot * (X.dotDm || 0) + as.res * (X.resDm || 0), 0, 1 + X.hlFinal / 100, !P.hlCrit, !!P.alm[3], P.hits[3], ob.xs, sp3 ? sp3.other / sp3.main : 1);
           gain('hl', x); techGain(ob, x);
@@ -16711,7 +16823,7 @@ function tcSimRun(P, order, hold) {
         if (BK.kind === 'TH' && BK.th >= BK.req) fireHl(BK);
         if (FU.a2 && BK.kind && round - lastA2 >= 3) { lastA2 = round; fireHl(BK, { free: true, keepCool: true, why: 'Oracle Shift' }); }
         stateStart(BK);
-        if (BK.skill) { castBy(BK, new Set([BK.skill])); mateUse(BK, BK.skill); mateTurn(BK, BK.skill); mateKitFire(BK, 'self'); mateKitFire(BK, 'self:' + BK.skill); mateAllyFire(BK, BK.skill); inflict(BK, new Set([BK.skill])); downAct(BK, BK.skill); if (HR) healFrom(BK, new Set([BK.skill])); }
+        if (BK.skill) { castBy(BK, new Set([BK.skill])); elemAtk(BK, BK.skill); mateUse(BK, BK.skill); mateTurn(BK, BK.skill); mateKitFire(BK, 'self'); mateKitFire(BK, 'self:' + BK.skill); mateAllyFire(BK, BK.skill); inflict(BK, new Set([BK.skill])); downAct(BK, BK.skill); if (HR) healFrom(BK, new Set([BK.skill])); }
         if (HR) healAll('ally', null);
         stateEnd(BK, BK.skill || '-');
         castBy(elu, new Set(['shift']));
@@ -16730,13 +16842,16 @@ function tcSimRun(P, order, hold) {
       stateStart(a);
       // Wonder's schedule names his casts ("w0"); everyone else's steps are skills and tokens
       const toks = a.wonder ? new Set([step]) : tcTurnSkills(step);
+      // Runa: which Woof Woof Blaze this Skill 3 is, from what she holds (TC_PRIME)
+      a.prime3 = a.n === TC_PRIME.n ? tcPrimeTurn(a, step, a.aw != null ? a.aw : tmAw(a.n)) : '';
+      if (a.prime3) tcPrimeToks(a.prime3).forEach(t => toks.add(t));
       // Tempest Riko's SP this turn, and what her Blossoming Season spends of it (TC_RK)
       if (a.rk) a.rkF = tcRkStep(a.rk, step);
       // a free Highlight lufel writes into the rotation (no gauge, no cooldown)
       if (a.freeHl) for (let i = tcKindCount(step, 'HL'); i > 0; i--) fireHl(a, { free: true, keepCool: true, why: 'rotation' });
       // Kotone Shiomi's Fortune (Go for Broke, her burst turn, once a battle, twice from A6): what she casts in it lasts
       // longer (TC_PB.fortune); from A1 entering it fires her Highlight free (Echoing Strings)
-      if (KO && a === KO) {
+      if ((KO && a === KO) || (a.isDps && a.n === TC_LB.n)) {
         a.fortuneNow = tcSkillUses(step).reduce((x, y) => x + y, 0) >= 2 && (a.fortuneDur || 0) < ((a.aw || 0) >= 6 ? 2 : 1);
         if (a.fortuneNow) a.fortuneDur = (a.fortuneDur || 0) + 1;
       }
@@ -16786,6 +16901,8 @@ function tcSimRun(P, order, hold) {
         const X = curX();
         const xd = extra ? X.xDm : 0, xa = extra ? X.xAtkPct : 0, fin = extra ? 1 + X.xFinal / 100 : 1;
         // each skill with what reaches a cast of its hit count, and what it counts as (continuous damage, Resonance)
+        if (CH) { const k = uses.reduce((x, y) => x + y, 0) + (uses[0] && ailOn('Burn') ? TC_CHOSEN.s1Burn : 0); if (k) chAdd(k); CH.sum += CH.st.length; CH.hits++; }
+        if (SUN && uses.some(u => u) && SUN.n > 0) { SUN.n--; sunOn = !uses[2]; if (sunOn) SUN.used++; }
         if (skill) uses.forEach((u, i) => {
           if (!u) return;
           // Ichigo's skills count as continuous damage from 2 Chains of Love, as the fight has counted them (TC_LS)
@@ -16794,7 +16911,9 @@ function tcSimRun(P, order, hold) {
           const asDm = as.dot * (Xi.dotDm || 0) + as.res * (Xi.resDm || 0) + (SF && i === 1 && SF.on ? SF.tide * SF.off : 0), asFin = (1 + as.dot * (Xi.dotFinal || 0) / 100) * (1 + as.res * (Xi.resFinal || 0) / 100);
           // Skill Amplification on them (the twins' Two Masks as One) is a multiplier of its own on a skill
           // Ichigo's My Beloved Prince deals its 10-stack bonus only with 10+ Lovesick on the boss (TC_LS)
-          const di = LS && i === 2 && LS.n < TC_LS.s3At ? skill.d[i] * (1 - TC_LS.s3Share) :
+          // Runa's Skill 3 as Big Welcome alone deals its all-foe hit, a DPS_KIT component (`prime: 'w'`), instead (TC_PRIME)
+          const di = i === 2 && a.prime3 === 'w' ? 0 :
+            LS && i === 2 && LS.n < TC_LS.s3At ? skill.d[i] * (1 - TC_LS.s3Share) :
             // Tropical Motoha's Skill 1 and 2 bonus hits land only in Summer Hype (TC_HYPE)
             HY && !HY.on && TC_HYPE.share[i] ? skill.d[i] * (1 - TC_HYPE.share[i]) : skill.d[i];
           // a decayed multi-hit area skill lands less on each other foe than on the main target (TC_HIT_SPREAD)
@@ -16804,13 +16923,14 @@ function tcSimRun(P, order, hold) {
           guidHit(u * (P.hits[i] || 1) * (P.aoe[i] ? P.foes : 1));
           if (skill.d[i] > 0) for (let k = 0; k < u; k++) ckMix(D.e);
           // Ren: this skill's Will of Rebellion comes after its hit (TC_WR)
-          if (WR) { WR.will = Math.min(TC_WR.cap, WR.will + u * TC_WR.gain[i]); WR.peak = Math.max(WR.peak, WR.will); }
+          if (WR) { WR.will = Math.min(TC_WR.cap, WR.will + u * (i === 1 && P.foes > 1 ? 0 : TC_WR.gain[i])); WR.peak = Math.max(WR.peak, WR.will); }
           // Mitsuru: Frostbound after this skill's hit (TC_FB)
           if (FB && TC_FB.gain[String(i + 1)]) for (let k = 0; k < u; k++) fbGain(String(i + 1));
           // Haru: Skill 1 gives Target Audience and the Focused Round, Skills 2 and 3 their Rounds, after the hit (TC_TA)
           if (HT) { if (i === 0) for (let k = 0; k < u; k++) taAdd(); trAdd(['F', 'P', 'S'][i]); }
         });
         if (a.events.length) castBy(a, mine, toFoe, uses);
+        elemAtk(a, step);
         downAct(a, step);
         markCover();
         kitFire('self', X, { xAtk: xa, fin });
@@ -16821,6 +16941,9 @@ function tcSimRun(P, order, hold) {
         // Haru's ranged attack spends her Rounds and clears Target Audience (TC_TA)
         if (HT && raw.some(m => /^Gunshot/.test(m))) { HT.shots.push(HT.tr.size); HT.tr.clear(); HT.d = [1]; HT.left = 0; }
         kitFire('turnEnd', X, { xAtk: xa, fin });
+        sunOn = false;
+        if (SUN && uses[2]) SUN.n += uses[2];
+        if (CH) { if (uses[1] && ailOn('Burn')) chAdd(TC_CHOSEN.s2Burn); CH.st = CH.st.map(x => x - 1).filter(x => x > 0); }
         /* Summer Ichigo's Ram at the end of the Helmsman's turn (TC_RAM): a Persona skill of theirs on every foe,
            its HP part priced with everything but ATK; below her A6 the Helmsman then steps down */
         if (P.ram && helm && !extra) {
@@ -16882,7 +17005,7 @@ function tcSimRun(P, order, hold) {
         // Kotone Shiomi's Lyre's Melody adds its Powerful Bond before her lines land (TC_PB: the tiers read it)
         if (PB && a === KO) { const u1 = tcSkillUses(step)[0]; if (u1) { PB.n = Math.min(TC_PB.max, pbNow() + u1); PB.until = Math.max(PB.until, round + TC_PB.dur + (a.fortuneNow ? TC_PB.fortune['1'] + ((a.aw || 0) >= 2 ? 1 : 0) : 0)); PB.peak = Math.max(PB.peak, PB.n); } }
         mateKitFire(a, 'turnStart');
-        castBy(a, mates, null, a.wonder ? null : tcSkillUses(step));
+        castBy(a, mates, null, a.wonder ? null : tcSkillUses(step)); if (!a.wonder) elemAtk(a, step);
         // their own hits (a teammate's skills, Wonder's attack), with what their casts just put up, then their own kit
         if (!a.wonder) mateUse(a, step);
         mateTurn(a, step);
